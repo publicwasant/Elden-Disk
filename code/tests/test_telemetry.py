@@ -263,3 +263,14 @@ def test_logger_refuses_game_dir_and_writes_atomically(tmp_path):
     lg = JsonLogger(tmp_path / "out", game)
     assert lg.write({"a": 1}) and json.loads(lg.path.read_text()) == {"a": 1}
     assert not (tmp_path / "out" / "telemetry-state.json.tmp").exists()
+
+
+def test_raw_effects_lists_everything_unclassified():
+    m = full_world()
+    entries, err = Sampler(m, make_profile(), effects(), BASE).raw_effects()
+    assert err is None and [e[0] for e in entries] == [100, 200, 999]
+    m.u64(BASE + 0x1000, 0)  # title screen
+    entries, err = Sampler(m, make_profile(), effects(), BASE).raw_effects()
+    assert entries is None
+    entries, err = Sampler(m, make_profile(sp=False), effects(), BASE).raw_effects()
+    assert entries is None and "sp_effect" in err
