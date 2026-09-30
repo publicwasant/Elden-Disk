@@ -1,5 +1,4 @@
 # Elden Ring Telemetry (offline, read-only)
-_produced by professional specification design: [elden-telemetry-spec-v1.1.0.md](docs/elden-telemetry-spec-v1.1.0.md)_
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes live character data to
 `output/telemetry-state.json`. Implements spec v1.1.0. Standard library only, Windows + 64-bit Python 3.11+.
@@ -23,7 +22,26 @@ Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes liv
 Already started the game yourself with `-eac-nop-loaded`? Use `python -m elden_telemetry run --attach`
 (same EAC/read-only checks apply). Ctrl+C stops the tool and leaves the game running.
 
-Options: `--game-dir`, `--out`, `--offsets`, `--effects`, `--hz 1..30`.
+## CLI Commands
+
+| Command                             | Description                                                                                                                                           |
+|-------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `python -m elden_telemetry hash`    | Calculates and prints the SHA-256 hash of `eldenring.exe` to use as the profile key in `offsets.json`.                                                |
+| `python -m elden_telemetry run`     | Launches Elden Ring offline (or attaches to a running instance) and polls telemetry memory, writing state snapshots to `output/telemetry-state.json`. |
+| `python -m elden_telemetry effects` | Live SpEffect inspector for discovering in-game buff/item IDs, tracking additions and removals in real time.                                          |
+
+### Option & Flag Details
+
+| Parameter / Flag   | Default          | Command Scope    | Description                                                                                        |
+|--------------------|------------------|------------------|----------------------------------------------------------------------------------------------------|
+| `--attach`         | `false`          | `run`            | Attach to an already-running `eldenring.exe` process instead of launching a new one.               |
+| `--game-dir <dir>` | Auto-detected    | `run`, `hash`    | Path to directory containing `eldenring.exe` (auto-detected via Steam Registry if omitted).        |
+| `--out <dir>`      | `./output`       | `run`            | Directory to write `telemetry-state.json` (must NOT be inside the game folder).                    |
+| `--offsets <path>` | `./offsets.json` | `run`, `effects` | Path to JSON file containing version-specific memory offsets.                                      |
+| `--effects <path>` | `./effects.json` | `run`            | Path to JSON file containing active/passive SpEffect ID mappings.                                  |
+| `--hz <rate>`      | `10.0`           | `run`            | Sampling frequency in Hz (valid range: 1 to 30 Hz).                                                |
+| `-v`, `--verbose`  | `false`          | `run`            | Enable verbose logging (prints state transitions and diagnostic errors).                           |
+| `-q`, `--quiet`    | `false`          | `effects`        | Filter out short-lived internal effects (`0 <= duration < 1s`), keeping permanent and timed buffs. |
 
 ## Adding a profile (once per game patch)
 Use Cheat Engine **in an offline session** (or any pointer tool). Work in two stages so stats work early.
