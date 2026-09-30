@@ -1,5 +1,11 @@
 {
   "_readme": "Fill from SpEffectParam / EquipParamAccessory of your game version. Keys are SpEffect IDs (as strings). Categories: TALISMAN, ARMOR, WEAPON, GREAT_RUNE.",
-  "active":  {},
-  "passive": {}
+  "active": {
+    "3971":    { "name": "Gold-Pickled Fowl Foot" },
+    "1605000": { "name": "Flame! Grant Me Strength" },
+    "1660000": { "name": "Golden Vow" }
+  },
+  "passive": {
+    "311100": { "name": "Gold Scarab", "category": "TALISMAN", "source_name": "Gold Scarab" }
+  }
 }
