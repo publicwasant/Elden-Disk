@@ -1,0 +1,237 @@
+"""CLI:  python -m elden_telemetry run | hash"""
+from __future__ import annotations
+
+import argparse
+import struct
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from . import game_launcher as gl
+from .json_logger import JsonLogger
+from .profile_loader import load_effects, load_profile
+from .telemetry import Sampler, build_document
+
+HERE = Path(__file__).resolve().parent.parent
+EXIT_UNSUPPORTED, EXIT_EAC = 2, 3
+
+
+def _require_windows_x64() -> None:
+    if sys.platform != "win32":
+        sys.exit("This tool only runs on Windows.")
+    if struct.calcsize("P") != 8:
+        sys.exit("64-bit Python is required.")
+
+
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr, flush=True)
+
+
+class Monitor:
+    def __init__(self, args, logger: JsonLogger):
+        self.args = args
+        self.logger = logger
+        self.pid: int | None = None
+        self.anti_cheat = "UNKNOWN"
+        self.sha: str | None = None
+        self.label: str | None = None
+        self.buffs = False
+        self.sampler: Sampler | None = None
+        self._last: tuple | None = None
+
+    def emit(self, state: str, sample=None, note: str | None = None) -> None:
+        doc = build_document(
+            now=datetime.now(timezone.utc), state=state, pid=self.pid, anti_cheat=self.anti_cheat,
+            exe_sha256=self.sha, profile_label=self.label, buffs_supported=self.buffs, sample=sample,
+            session_start_runes=self.sampler.session_start_runes if self.sampler else None, note=note,
+        )
+        if not self.logger.write(doc):
+            _log("warning: output file busy, sample skipped")
+        if self.args.verbose:
+            key = (state, doc["system_status"]["last_error"])
+            if key != self._last:
+                self._last = key
+                _log(f"[{state}]" + (f" {key[1]}" if key[1] else ""))
+
+
+def cmd_run(args) -> int:
+    _require_windows_x64()
+    from .memory_reader import ProcessMemory, find_pid, list_modules
+
+    try:
+        game_dir = gl.find_game_dir(args.game_dir)
+    except FileNotFoundError:
+        if not args.attach:
+            raise
+        game_dir = None
+
+    logger = JsonLogger(Path(args.out), game_dir)
+    mon = Monitor(args, logger)
+    mem = None
+    try:
+        # 1. get a PID
+        if args.attach:
+            mon.pid = find_pid(gl.GAME_EXE)
+            while mon.pid is None:
+                mon.emit("WAITING_FOR_PROCESS")
+                time.sleep(1)
+                mon.pid = find_pid(gl.GAME_EXE)
+        else:
+            mon.emit("WAITING_FOR_PROCESS")
+            mon.pid = gl.launch(game_dir).pid
+
+        # 2. wait for the main module
+        main_mod, deadline = None, time.monotonic() + 60
+        while main_mod is None and time.monotonic() < deadline:
+            mods = list_modules(mon.pid)
+            main_mod = next((m for m in mods or [] if m.name.lower() == gl.GAME_EXE), None)
+            if main_mod is None:
+                time.sleep(0.5)
+        if main_mod is None:
+            mon.emit("DISCONNECTED", note="eldenring.exe module not found within 60 s")
+            _log("error: could not find eldenring.exe module")
+            return 1
+
+        exe_path = Path(main_mod.path)
+        logger = mon.logger = JsonLogger(Path(args.out), exe_path.parent)  # re-check vs real game dir
+
+        # 3. never attach with EAC loaded
+        if gl.has_eac(m.name for m in mods):
+            mon.anti_cheat = "ACTIVE_EAC"
+            mon.emit("EAC_ACTIVE", note="EasyAntiCheat modules loaded; not attaching")
+            _log("EAC is loaded. Start the game with this tool (offline), not via Steam's normal Play.")
+            return EXIT_EAC
+        mon.anti_cheat = "DISABLED_OFFLINE"
+
+        # 4. version pin
+        mon.sha = gl.sha256_file(exe_path)
+        profile, reason = load_profile(Path(args.offsets), mon.sha)
+        if profile is None:
+            mon.emit("UNSUPPORTED_VERSION", note=reason)
+            _log(f"UNSUPPORTED_VERSION: {reason}\nexe sha256: {mon.sha}\nAdd a profile to {args.offsets} (see README).")
+            return EXIT_UNSUPPORTED
+        mon.label, mon.buffs = profile.label, profile.sp_effect is not None
+        if profile.buffs_note:
+            _log(f"note: {profile.buffs_note}")
+        mem = ProcessMemory(mon.pid)
+        mon.sampler = Sampler(mem, profile, load_effects(Path(args.effects)), main_mod.base)
+
+        # 5. poll
+        period, next_scan = 1.0 / args.hz, time.monotonic() + 2
+        while True:
+            if not mem.alive():
+                mon.emit("DISCONNECTED")
+                return 0
+            if time.monotonic() >= next_scan:
+                mods = list_modules(mon.pid)
+                if mods and gl.has_eac(m.name for m in mods):
+                    mon.anti_cheat = "ACTIVE_EAC"
+                    mon.emit("EAC_DETECTED", note="EasyAntiCheat module appeared; stopped reading")
+                    return EXIT_EAC
+                next_scan = time.monotonic() + 2
+            s = mon.sampler.sample()
+            mon.emit(s.state, s)
+            time.sleep(period)
+    except KeyboardInterrupt:
+        _log("stopped (the game keeps running)")
+        return 130
+    finally:
+        if mem is not None:
+            mem.close()
+
+
+def cmd_effects(args) -> int:
+    """Live SpEffect viewer: prints the list once, then only additions/removals."""
+    _require_windows_x64()
+    from .memory_reader import ProcessMemory, find_pid, list_modules
+    from .profile_loader import Effects
+
+    pid = find_pid(gl.GAME_EXE)
+    if pid is None:
+        raise RuntimeError("eldenring.exe is not running")
+    mods = list_modules(pid) or []
+    main_mod = next((m for m in mods if m.name.lower() == gl.GAME_EXE), None)
+    if main_mod is None:
+        raise RuntimeError("eldenring.exe module not found")
+    if gl.has_eac(m.name for m in mods):
+        raise RuntimeError("EAC is loaded; not attaching")
+    profile, reason = load_profile(Path(args.offsets), gl.sha256_file(Path(main_mod.path)))
+    if profile is None:
+        raise RuntimeError(reason)
+    if profile.sp_effect is None:
+        raise RuntimeError(profile.buffs_note or "sp_effect layout incomplete")
+
+    mem = ProcessMemory(pid)
+    sampler = Sampler(mem, profile, Effects({}, {}), main_mod.base)
+    prev: dict[int, tuple[float, float]] | None = None
+    last_err = None
+    print("Ctrl+C to stop. Format: id | duration | timer   (+ = appeared, - = disappeared)")
+    try:
+        while mem.alive():
+            entries, err = sampler.raw_effects()
+            if entries is None:
+                if err != last_err:
+                    print(f"[waiting] {err}")
+                    last_err = err
+            else:
+                last_err = None
+                cur = {eid: (dur, timer) for eid, dur, timer in entries}
+                if prev is None:
+                    print(f"--- {len(cur)} effects now active ---")
+                    for eid, (d, t) in sorted(cur.items()):
+                        print(f"  {eid:>10} | {d:10.2f} | {t:10.2f}")
+                else:
+                    for eid in sorted(cur.keys() - prev.keys()):
+                        print(f"+ {eid:>10} | {cur[eid][0]:10.2f} | {cur[eid][1]:10.2f}")
+                    for eid in sorted(prev.keys() - cur.keys()):
+                        print(f"- {eid:>10}")
+                prev = cur
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        mem.close()
+    return 0
+
+
+def cmd_hash(args) -> int:
+    d = gl.find_game_dir(args.game_dir)
+    print(gl.sha256_file(d / gl.GAME_EXE))
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="elden_telemetry", description=__doc__)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    r = sub.add_parser("run", help="launch the game offline and write telemetry JSON")
+    r.add_argument("--attach", action="store_true", help="attach to an already-running eldenring.exe instead of launching")
+    r.add_argument("--game-dir", help=r'folder containing eldenring.exe (auto-detected via Steam)')
+    r.add_argument("--out", default=str(HERE / "output"), help="output directory (default: ./output)")
+    r.add_argument("--offsets", default=str(HERE / "offsets.json"))
+    r.add_argument("--effects", default=str(HERE / "effects.json"))
+    r.add_argument("--hz", type=float, default=10.0, help="poll rate, 1-30 (default 10)")
+    r.add_argument("-v", "--verbose", action="store_true", help="print state changes and diagnostics")
+    r.set_defaults(fn=cmd_run)
+
+    e = sub.add_parser("effects", help="live SpEffect viewer for building effects.json (game must be running offline)")
+    e.add_argument("--offsets", default=str(HERE / "offsets.json"))
+    e.set_defaults(fn=cmd_effects)
+
+    h = sub.add_parser("hash", help="print SHA-256 of eldenring.exe (key for offsets.json)")
+    h.add_argument("--game-dir")
+    h.set_defaults(fn=cmd_hash)
+
+    args = ap.parse_args(argv)
+    if args.cmd == "run" and not 1 <= args.hz <= 30:
+        ap.error("--hz must be between 1 and 30")
+    try:
+        return args.fn(args)
+    except (FileNotFoundError, OSError, ValueError, RuntimeError) as exc:
+        _log(f"error: {exc}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

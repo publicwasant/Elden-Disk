@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EldenRingLiveTelemetry",
+  "type": "object",
+  "required": ["timestamp", "system_status", "character", "telemetry"],
+  "properties": {
+    "timestamp": { "type": "string", "format": "date-time" },
+    "system_status": {
+      "type": "object",
+      "required": ["state", "game_connected", "pid", "anti_cheat_status", "read_only", "exe_sha256", "profile", "buffs_supported", "ignored_effects", "last_error"],
+      "properties": {
+        "state": { "enum": ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "CONNECTED", "DISCONNECTED"] },
+        "game_connected": { "type": "boolean" },
+        "pid": { "type": ["integer", "null"] },
+        "anti_cheat_status": { "enum": ["DISABLED_OFFLINE", "ACTIVE_EAC", "UNKNOWN"] },
+        "read_only": { "const": true },
+        "exe_sha256": { "type": ["string", "null"] },
+        "profile": { "type": ["string", "null"] },
+        "buffs_supported": { "type": "boolean" },
+        "ignored_effects": { "type": "integer", "minimum": 0 },
+        "last_error": { "type": ["string", "null"] }
+      }
+    },
+    "character": {
+      "type": ["object", "null"],
+      "required": ["level", "runes", "attributes", "active_buffs", "passive_buffs"],
+      "properties": {
+        "level": { "type": "integer", "minimum": 1, "maximum": 713 },
+        "runes": { "type": "integer", "minimum": 0, "maximum": 999999999 },
+        "attributes": {
+          "type": "object",
+          "required": ["vigor", "mind", "endurance", "strength", "dexterity", "intelligence", "faith", "arcane"],
+          "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 99 }
+        },
+        "active_buffs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "remaining_seconds", "max_duration_seconds", "activation_timestamp_iso"],
+            "properties": {
+              "id": { "type": "integer" },
+              "name": { "type": "string" },
+              "remaining_seconds": { "type": "number", "minimum": 0 },
+              "max_duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
+              "activation_timestamp_iso": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "passive_buffs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "category", "source_name"],
+            "properties": {
+              "id": { "type": "integer" },
+              "name": { "type": "string" },
+              "category": { "enum": ["TALISMAN", "ARMOR", "WEAPON", "GREAT_RUNE"] },
+              "source_name": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "required": ["session_start_runes", "rune_delta"],
+      "properties": {
+        "session_start_runes": { "type": ["integer", "null"] },
+        "rune_delta": { "type": ["integer", "null"] }
+      }
+    }
+  }
+}

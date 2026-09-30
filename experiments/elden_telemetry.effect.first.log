@@ -1,0 +1,15 @@
+PS D:\StudioProjects\Elden-Ring-Telemetry-Tools\code>    python -m elden_telemetry effects
+Ctrl+C to stop. Format: id | duration | timer   (+ = appeared, - = disappeared)
+--- 12 effects now active ---
+          26 |      -1.00 |      -1.00
+          84 |       1.50 |       1.50
+        1922 |      -1.00 |      -1.00
+        4202 |      -1.00 |      -1.00
+        9530 |       0.06 |       0.06
+      100620 |      -1.00 |      -1.00
+      310210 |      -1.00 |      -1.00
+      311100 |      -1.00 |      -1.00
+      320500 |      -1.00 |      -1.00
+      350200 |      -1.00 |      -1.00
+      503045 |       0.10 |       0.10
+      503360 |      -1.00 |      -1.00

@@ -1,0 +1,17 @@
+{
+  "_readme": "Key = SHA-256 of eldenring.exe (python -m elden_telemetry hash). Hex strings. null = not set yet. See README section 'Adding a profile'.",
+  "profiles": {
+    "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891": {
+      "label": "Elden Ring 1.17.1",
+      "world_chr_man_rva": "0x3B16E30",
+      "world_chr_man_to_player": "0x0",
+      "player_to_game_data": "0x580",
+      "player_to_sp_effect": "0x178",
+      "game_data": { "level": "0x68", "runes": "0x6C", "attributes": "0x3C" },
+      "sp_effect": {
+        "head": "0x8",
+        "entry": { "id": "0x8", "next": "0x30", "duration": "0x48", "timer": "0x40", "timer_mode": "remaining" }
+      }
+    }
+  }
+}

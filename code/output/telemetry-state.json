@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-09-30T01:41:58.962Z",
+  "system_status": {
+    "state": "DISCONNECTED",
+    "game_connected": false,
+    "pid": 20384,
+    "anti_cheat_status": "DISABLED_OFFLINE",
+    "read_only": true,
+    "exe_sha256": "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891",
+    "profile": "ER <version>",
+    "buffs_supported": true,
+    "ignored_effects": 0,
+    "last_error": null
+  },
+  "character": null,
+  "telemetry": {
+    "session_start_runes": 10271107,
+    "rune_delta": null
+  }
+}

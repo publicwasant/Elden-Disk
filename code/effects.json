@@ -1,0 +1,5 @@
+{
+  "_readme": "Fill from SpEffectParam / EquipParamAccessory of your game version. Keys are SpEffect IDs (as strings). Categories: TALISMAN, ARMOR, WEAPON, GREAT_RUNE.",
+  "active":  {},
+  "passive": {}
+}
