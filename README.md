@@ -1,4 +1,5 @@
 # Elden Ring Telemetry (offline, read-only)
+_produced by professional specification design: [elden-telemetry-spec-v1.1.0.md](docs/elden-telemetry-spec-v1.1.0.md)_
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes live character data to
 `output/telemetry-state.json`. Implements spec v1.1.0. Standard library only, Windows + 64-bit Python 3.11+.

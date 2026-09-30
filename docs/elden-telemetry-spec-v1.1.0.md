@@ -1,9 +1,9 @@
-# Elden Ring Telemetry Tool
-> **Proof of Concept (PoC) Specification**
-> **Document Version:** 1.1.0 (revised from 1.0.0)
-> **Date of Issue:** 2026-09-30
-> **Target Platform:** Windows 10 / 11 (x64), Python 3.11+ (64-bit)
-> **Game:** Elden Ring (Steam). Supported exe versions are listed in `offsets.json` (see §4.1)
+# Elden Ring Telemetry Tool 
+> **Proof of Concept (PoC) Specification**  
+> **Document Version:** 1.1.0 (revised from 1.0.0)  
+> **Date of Issue:** 2026-09-30     
+> **Target Platform:** Windows 10 / 11 (x64), Python 3.11+ (64-bit)     
+> **Game:** Elden Ring (Steam). Supported exe versions are listed in `offsets.json` (see §4.1)          
 
 ---
 
