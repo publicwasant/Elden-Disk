@@ -4,20 +4,20 @@ A **profile** tells the tool where things live inside one specific build of `eld
 use the tool and again after every game patch (a patch changes the exe, so the tool refuses to read until it has a profile
 for the new exe — this is intentional, it never guesses).
 
-> **Short on time?** If your exe hash is `1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891`
-> (Elden Ring 1.17.1) you do **not** need Cheat Engine at all: use the ready-made profile in the
-> [Appendix](#appendix--reference-profile-for-elden-ring-1171) and jump to [Part D](#part-d--fill-in-the-profile-and-verify-the-stats).
+> **Short on time?**    
+> If your exe hash is `1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891` (Elden Ring 1.17.1)    
+> You do **not** need Cheat Engine at all: use the ready-made profile in the [**Appendix**](adding-a-profile.md#appendix--reference-profile-for-elden-ring-1171) and jump to [**Part D**](adding-a-profile.md#part-d--fill-in-the-profile-and-verify-the-stats).
 
 ## What you will do
 
-| Part | Goal | Rough time (first time) | You can stop here and already have… |
-|---|---|---|---|
-| A | Prepare: hash, profile skeleton, game open in-world, Cheat Engine attached | 10 min | — |
-| B | Find the memory address of your **runes** | 10 min | — |
-| C | Turn that address into a permanent **pointer path** (Pointer Scan) | 10–30 min (mostly waiting) | the numbers for the profile |
-| D | Put the numbers in `offsets.json` and verify level, runes and attributes | 10 min | **working stats telemetry** |
-| E | Buffs: verify the effect-list layout and fill `effects.json` | 30+ min | buffs telemetry |
-| F | Wrap-up: back up, record, patch-day shortcut | 5 min | — |
+| Part | Goal                                                                        | Rough time (first time)     | You can stop here and already have…  |
+|:----:|:----------------------------------------------------------------------------|:----------------------------|:-------------------------------------|
+|  A   | Prepare: hash, profile skeleton, game open in-world, Cheat Engine attached  | 10 min                      | —                                    |
+|  B   | Find the memory address of your **runes**                                   | 10 min                      | —                                    |
+|  C   | Turn that address into a permanent **pointer path** (Pointer Scan)          | 10–30 min (mostly waiting)  | the numbers for the profile          |
+|  D   | Put the numbers in `offsets.json` and verify level, runes and attributes    | 10 min                      | **working stats telemetry**          |
+|  E   | Buffs: verify the effect-list layout and fill `effects.json`                | 30+ min                     | buffs telemetry                      |
+|  F   | Wrap-up: back up, record, patch-day shortcut                                | 5 min                       | —                                    |
 
 Times are rough guesses for a first attempt. Later patches are much faster because you already know the routine.
 Each part ends with a **🟢 Checkpoint** — if you do not see it, do not continue; use the troubleshooting table of that part.
@@ -43,7 +43,7 @@ Offset 2      6C                         ──►  game_data.runes            =
 ## What you need
 
 - Windows 10/11, **64-bit** Python 3.11+, this project, the Steam client installed and logged in
-- [Cheat Engine](https://www.cheatengine.org/) (any recent version), run **as Administrator**
+- **Cheat Engine** installed, **[download](https://www.cheatengine.org/)** any recent version, run **as Administrator**
 - A character you can load into the world, and a way to change your runes (defeat an enemy or spend at a merchant)
 - **Offline only.** The tool starts the game without EasyAntiCheat; never do this while playing online
 
@@ -110,12 +110,12 @@ Load your character and stand somewhere safe. Alt-Tab is fine (the game does not
 
 > 🟢 **Checkpoint A:** the game is open in-world, Cheat Engine shows `eldenring.exe` in its title bar.
 
-| Problem | Fix |
-|---|---|
-| `no profile for exe sha256` | Hash key in `offsets.json` differs from `hash` output |
-| `EAC_ACTIVE` | You started the game from Steam's normal Play button. Close it and use `run -v` |
-| Cheat Engine cannot open the process | Run Cheat Engine as Administrator; make sure the game was started by `run -v` (no EAC) |
-| `No module named elden_telemetry` | You are in the wrong folder. `cd` to the folder that *contains* the `elden_telemetry` folder |
+| Problem                              | Fix                                                                                          |
+|--------------------------------------|----------------------------------------------------------------------------------------------|
+| `no profile for exe sha256`          | Hash key in `offsets.json` differs from `hash` output                                        |
+| `EAC_ACTIVE`                         | You started the game from Steam's normal Play button. Close it and use `run -v`              |
+| Cheat Engine cannot open the process | Run Cheat Engine as Administrator; make sure the game was started by `run -v` (no EAC)       |
+| `No module named elden_telemetry`    | You are in the wrong folder. `cd` to the folder that *contains* the `elden_telemetry` folder |
 
 ---
 
@@ -128,12 +128,12 @@ Goal: an address that currently holds your runes. It only needs to be right *rig
 
 **B2.** In Cheat Engine set:
 
-| Setting | Value |
-|---|---|
-| Scan Type | `Exact Value` |
-| Value Type | `4 Bytes` |
-| Hex (checkbox next to Value) | **unticked** |
-| Value | your runes, digits only (no commas, no spaces) |
+| Setting                      | Value                                          |
+|------------------------------|------------------------------------------------|
+| Scan Type                    | `Exact Value`                                  |
+| Value Type                   | `4 Bytes`                                      |
+| Hex (checkbox next to Value) | **unticked**                                   |
+| Value                        | your runes, digits only (no commas, no spaces) |
 
 **B3.** Click **First Scan**. Top-left shows `Found: N`.
 
@@ -150,12 +150,12 @@ of the number (UI, buffers).
 
 > 🟢 **Checkpoint B:** the lower table contains a row whose Value equals your current runes, and changes when your runes change.
 
-| Problem | Fix |
-|---|---|
-| Error `Scan error: thread 0: please fill something in (100)` | The *Value* box is empty or not a plain number |
-| `Found: 0` | *Value Type* is not `4 Bytes`, *Hex* is ticked, the number is wrong, or the process is not attached |
-| Huge `Found` count | Keep changing your runes and use Next Scan; each round removes most false matches |
-| `Found` stays at 2–3 | Normal. Go to Part C with the first candidate |
+| Problem                                                      | Fix                                                                                                 |
+|--------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| Error `Scan error: thread 0: please fill something in (100)` | The *Value* box is empty or not a plain number                                                      |
+| `Found: 0`                                                   | *Value Type* is not `4 Bytes`, *Hex* is ticked, the number is wrong, or the process is not attached |
+| Huge `Found` count                                           | Keep changing your runes and use Next Scan; each round removes most false matches                   |
+| `Found` stays at 2–3                                         | Normal. Go to Part C with the first candidate                                                       |
 
 ---
 
@@ -166,16 +166,16 @@ of the number (UI, buffers).
 
 **C2.** Set the dialog exactly like this:
 
-| Option | Value |
-|---|---|
-| Scan for address | selected (default) |
-| Max different offsets per node | `3` |
-| **Pointers must end with specific offsets** | **ticked** |
-| — offset list | type `6C` → click **Add**; type `580` → click **Add** |
-| Max deviation | `0` |
-| Nr of threads scanning | default |
-| **Maximum offset value** | `200000` (default 4095 is too small) |
-| **Max level** | `4` |
+| Option                                      | Value                                                 |
+|---------------------------------------------|-------------------------------------------------------|
+| Scan for address                            | selected (default)                                    |
+| Max different offsets per node              | `3`                                                   |
+| **Pointers must end with specific offsets** | **ticked**                                            |
+| — offset list                               | type `6C` → click **Add**; type `580` → click **Add** |
+| Max deviation                               | `0`                                                   |
+| Nr of threads scanning                      | default                                               |
+| **Maximum offset value**                    | `200000` (default 4095 is too small)                  |
+| **Max level**                               | `4`                                                   |
 
 The offset list must show two entries: `6C` (labelled *Last offset*) and then `580`. Two classic mistakes:
 
@@ -206,31 +206,31 @@ with the fewest offsets; if two look equal, try each in Part D.
 
 Example from the reference build (1.17.1) — two rows were found:
 
-| Base Address | Offset 0 | Offset 1 | Offset 2 | Offset 3 |
-|---|---|---|---|---|
-| `"eldenring.exe"+03B16E30` | 0 | 580 | 6C | |
-| `"eldenring.exe"+03D66170` | 8 | 0 | 580 | 6C |
+| Base Address               | Offset 0 | Offset 1 | Offset 2 | Offset 3 |
+|----------------------------|----------|----------|----------|----------|
+| `"eldenring.exe"+03B16E30` | 0        | 580      | 6C       |          |
+| `"eldenring.exe"+03D66170` | 8        | 0        | 580      | 6C       |
 
 The first row has three offsets → use it. The second has four (one extra hop) and does not fit the profile format.
 
 **C7.** Copy the numbers into the profile fields (add `0x` in front; leading zeros do not matter):
 
-| Cheat Engine | offsets.json field | Reference build value |
-|---|---|---|
-| Base Address `+ RVA` | `world_chr_man_rva` | `"0x3B16E30"` |
-| Offset 0 | `world_chr_man_to_player` | `"0x0"` (yes, zero is correct) |
-| Offset 1 | `player_to_game_data` | `"0x580"` |
-| Offset 2 | `game_data.runes` | `"0x6C"` |
+| Cheat Engine         | offsets.json field        | Reference build value          |
+|----------------------|---------------------------|--------------------------------|
+| Base Address `+ RVA` | `world_chr_man_rva`       | `"0x3B16E30"`                  |
+| Offset 0             | `world_chr_man_to_player` | `"0x0"` (yes, zero is correct) |
+| Offset 1             | `player_to_game_data`     | `"0x580"`                      |
+| Offset 2             | `game_data.runes`         | `"0x6C"`                       |
 
 > 🟢 **Checkpoint C:** you have one row with three offsets ending `580, 6C`, and you have written its numbers down.
 
-| Problem | Fix |
-|---|---|
-| Menu item not found | You right-clicked the upper list. Add the address to the lower table first (B7) |
-| Zero paths found | (1) did you stay in the world and keep the runes unchanged during the scan? (2) try the next candidate address from B5 (3) redo the scan **without** ticking *must end with specific offsets* and with Max level `5`, then look at the last two offsets of the paths: they are `player_to_game_data` and `game_data.runes` for your build (level and attributes are then unknown; Part D will show whether the defaults still fit) |
-| Only paths with 4 or more offsets | The profile has room for exactly three hops. Save the result window as a screenshot and ask for help (see Part F) |
-| Scan seems frozen | Wait; the pointermap step is long. Check RAM in Task Manager before giving up |
-| Windows runs out of memory | Close other programs, or lower *Max level* to `3` and retry |
+| Problem                           | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                |
+|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Menu item not found               | You right-clicked the upper list. Add the address to the lower table first (B7)                                                                                                                                                                                                                                                                                                                                                    |
+| Zero paths found                  | (1) did you stay in the world and keep the runes unchanged during the scan? (2) try the next candidate address from B5 (3) redo the scan **without** ticking *must end with specific offsets* and with Max level `5`, then look at the last two offsets of the paths: they are `player_to_game_data` and `game_data.runes` for your build (level and attributes are then unknown; Part D will show whether the defaults still fit) |
+| Only paths with 4 or more offsets | The profile has room for exactly three hops. Save the result window as a screenshot and ask for help (see Part F)                                                                                                                                                                                                                                                                                                                  |
+| Scan seems frozen                 | Wait; the pointermap step is long. Check RAM in Task Manager before giving up                                                                                                                                                                                                                                                                                                                                                      |
+| Windows runs out of memory        | Close other programs, or lower *Max level* to `3` and retry                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -259,12 +259,12 @@ Expected: `[CONNECTED]`. A line like `note: buffs disabled: …` is fine at this
 **D3.** `[CONNECTED]` only means the numbers were *plausible*. Now check they are *true*. Open `output\telemetry-state.json`
 and compare with the in-game Status screen — **every row must match exactly**:
 
-| Field | In game | JSON |
-|---|---|---|
-| level | | `character.level` |
-| runes (after the counter stops) | | `character.runes` |
-| vigor, mind, endurance, strength | | `character.attributes.*` |
-| dexterity, intelligence, faith, arcane | | `character.attributes.*` |
+| Field                                  | In game | JSON                     |
+|----------------------------------------|---------|--------------------------|
+| level                                  |         | `character.level`        |
+| runes (after the counter stops)        |         | `character.runes`        |
+| vigor, mind, endurance, strength       |         | `character.attributes.*` |
+| dexterity, intelligence, faith, arcane |         | `character.attributes.*` |
 
 **D4.** Change your runes (gain some, spend some). `telemetry.rune_delta` must go up when you gain and down when you spend.
 
@@ -276,16 +276,16 @@ identical. On a throwaway character raise **one** attribute by one point and con
 
 > 🟢 **Checkpoint D:** level, runes and all eight attributes match the game, `rune_delta` follows your runes, and it still works after a restart. **Stats telemetry is done.** Back up `offsets.json` now.
 
-| What you see | Meaning | Fix |
-|---|---|---|
-| `[UNSUPPORTED_VERSION] profile incomplete: <field> is not set` | a `null` is left in the profile | fill the named field |
-| `no profile for exe sha256 …` | hash key does not match | copy the hash again from `hash` |
-| `[EAC_ACTIVE]` | the game was started with EAC (Steam Play button) | close it; start with `run -v` |
-| stays `[WAITING_FOR_WORLD]` and nothing is printed | you are on the title screen / loading | load your character |
-| `[WAITING_FOR_WORLD] invalid pointer …` or `read failed: …` | RVA or first offsets wrong | recheck C7 numbers against the result row |
-| `[WAITING_FOR_WORLD] level=0 outside (1, 713) (PlayerGameData+0x68)` | chain reaches an object but `level` offset is wrong | offsets inside `PlayerGameData` differ on this build |
-| `[WAITING_FOR_WORLD] runes=… outside 0..999999999` | `game_data.runes` wrong | recheck Offset 2 from C7 |
-| `[CONNECTED]` but numbers differ from the game | plausible but wrong offset | the field offsets are shifted; compare in Cheat Engine or ask for help |
+| What you see                                                         | Meaning                                             | Fix                                                                    |
+|----------------------------------------------------------------------|-----------------------------------------------------|------------------------------------------------------------------------|
+| `[UNSUPPORTED_VERSION] profile incomplete: <field> is not set`       | a `null` is left in the profile                     | fill the named field                                                   |
+| `no profile for exe sha256 …`                                        | hash key does not match                             | copy the hash again from `hash`                                        |
+| `[EAC_ACTIVE]`                                                       | the game was started with EAC (Steam Play button)   | close it; start with `run -v`                                          |
+| stays `[WAITING_FOR_WORLD]` and nothing is printed                   | you are on the title screen / loading               | load your character                                                    |
+| `[WAITING_FOR_WORLD] invalid pointer …` or `read failed: …`          | RVA or first offsets wrong                          | recheck C7 numbers against the result row                              |
+| `[WAITING_FOR_WORLD] level=0 outside (1, 713) (PlayerGameData+0x68)` | chain reaches an object but `level` offset is wrong | offsets inside `PlayerGameData` differ on this build                   |
+| `[WAITING_FOR_WORLD] runes=… outside 0..999999999`                   | `game_data.runes` wrong                             | recheck Offset 2 from C7                                               |
+| `[CONNECTED]` but numbers differ from the game                       | plausible but wrong offset                          | the field offsets are shifted; compare in Cheat Engine or ask for help |
 
 ---
 
@@ -303,13 +303,13 @@ python -m elden_telemetry effects -q
 You should see a list, e.g. `--- 8 effects now active ---` with lines `id | duration | timer`, and it should stay stable.
 Equip and unequip one talisman at a Site of Grace: exactly one permanent line (`-1.00 | -1.00`) must disappear and come back.
 
-| Message | Suspect field |
-|---|---|
-| `[waiting] read failed: SpecialEffect pointer` / `invalid pointer SpecialEffect=…` | `player_to_sp_effect` |
-| `read failed: SpEffect list head` | `sp_effect.head` |
-| `invalid SpEffect entry pointer` / `cycle in SpEffect list` | `sp_effect.entry.next` |
-| IDs look random | `sp_effect.entry.id` |
-| permanent effects do not show `-1.00` | `sp_effect.entry.duration` / `timer` |
+| Message                                                                            | Suspect field                        |
+|------------------------------------------------------------------------------------|--------------------------------------|
+| `[waiting] read failed: SpecialEffect pointer` / `invalid pointer SpecialEffect=…` | `player_to_sp_effect`                |
+| `read failed: SpEffect list head`                                                  | `sp_effect.head`                     |
+| `invalid SpEffect entry pointer` / `cycle in SpEffect list`                        | `sp_effect.entry.next`               |
+| IDs look random                                                                    | `sp_effect.entry.id`                 |
+| permanent effects do not show `-1.00`                                              | `sp_effect.entry.duration` / `timer` |
 
 **E2. Timer direction.** Use a buff that lasts at least 30 s (for example Golden Vow) and watch its line in `effects`:
 
@@ -320,11 +320,11 @@ Set it in the profile. A wrong value does not crash — it reports wrong times w
 
 **E3. Collect IDs.** Keep `effects` running and do one thing at a time. Note the `+` lines:
 
-| You do | You see (reference build) |
-|---|---|
-| unequip / equip Gold Scarab | `- 311100` then `+ 311100 │ -1.00 │ -1.00` → permanent (passive) |
-| use Gold-Pickled Fowl Foot | `+ 3971 │ 180.00 │ …` → timed (active) |
-| cast Golden Vow | `+ 1660000 │ 80.00 │ …` (plus tiny `…001`, `…002` helpers: ignore) |
+| You do                      | You see (reference build)                                          |
+|-----------------------------|--------------------------------------------------------------------|
+| unequip / equip Gold Scarab | `- 311100` then `+ 311100 │ -1.00 │ -1.00` → permanent (passive)   |
+| use Gold-Pickled Fowl Foot  | `+ 3971 │ 180.00 │ …` → timed (active)                             |
+| cast Golden Vow             | `+ 1660000 │ 80.00 │ …` (plus tiny `…001`, `…002` helpers: ignore) |
 
 Ignore anything that flickers with duration under 1 s (internal engine effects) and anything whose timer stays equal to its duration forever (refreshed every frame, not a real countdown).
 
@@ -413,10 +413,10 @@ Starter `effects.json` for the same build (IDs observed in-game):
 
 ## Quick glossary
 
-| Term | Meaning |
-|---|---|
-| **Profile** | the block in `offsets.json` for one exe hash |
-| **RVA** | distance from the start of `eldenring.exe` in memory; the `+03B16E30` part of a Cheat Engine base address |
-| **Offset** | a distance added to an address to reach a field inside an object |
-| **Pointer path** | base + a few offsets that leads from a fixed spot in the exe to your character |
-| **Pointer Scan** | the Cheat Engine feature that searches for such paths |
+| Term             | Meaning                                                                                                   |
+|------------------|-----------------------------------------------------------------------------------------------------------|
+| **Profile**      | the block in `offsets.json` for one exe hash                                                              |
+| **RVA**          | distance from the start of `eldenring.exe` in memory; the `+03B16E30` part of a Cheat Engine base address |
+| **Offset**       | a distance added to an address to reach a field inside an object                                          |
+| **Pointer path** | base + a few offsets that leads from a fixed spot in the exe to your character                            |
+| **Pointer Scan** | the Cheat Engine feature that searches for such paths                                                     |
