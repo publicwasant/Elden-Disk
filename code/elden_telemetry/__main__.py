@@ -1,4 +1,4 @@
-"""CLI:  python -m elden_telemetry run | hash"""
+"""CLI:  python -m elden_telemetry run | effects | hash"""
 from __future__ import annotations
 
 import argparse
@@ -208,22 +208,23 @@ def main(argv=None) -> int:
 
     r = sub.add_parser("run", help="launch the game offline and write telemetry JSON")
     r.add_argument("--attach", action="store_true", help="attach to an already-running eldenring.exe instead of launching")
-    r.add_argument("--game-dir", help=r'folder containing eldenring.exe (auto-detected via Steam)')
-    r.add_argument("--out", default=str(HERE / "output"), help="output directory (default: ./output)")
-    r.add_argument("--offsets", default=str(HERE / "offsets.json"))
-    r.add_argument("--effects", default=str(HERE / "effects.json"))
-    r.add_argument("--hz", type=float, default=10.0, help="poll rate, 1-30 (default 10)")
+    r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
+    r.add_argument("--out", default=str(HERE / "output"),
+                   help="directory for telemetry-state.json (default: <project>/output)")
+    r.add_argument("--offsets", default=str(HERE / "offsets.json"), help="offsets.json (default: <project>/offsets.json)")
+    r.add_argument("--effects", default=str(HERE / "effects.json"), help="effects.json (default: <project>/effects.json)")
+    r.add_argument("--hz", type=float, default=10.0, help="polls per second, 1-30 (default: 10)")
     r.add_argument("-v", "--verbose", action="store_true", help="print state changes and diagnostics")
     r.set_defaults(fn=cmd_run)
 
     e = sub.add_parser("effects", help="live SpEffect viewer for building effects.json (game must be running offline)")
-    e.add_argument("--offsets", default=str(HERE / "offsets.json"))
+    e.add_argument("--offsets", default=str(HERE / "offsets.json"), help="offsets.json (default: <project>/offsets.json)")
     e.add_argument("-q", "--quiet", action="store_true",
                    help="hide short-lived internal effects (0 <= duration < 1 s); keeps permanent (-1) and timed buffs")
     e.set_defaults(fn=cmd_effects)
 
     h = sub.add_parser("hash", help="print SHA-256 of eldenring.exe (key for offsets.json)")
-    h.add_argument("--game-dir")
+    h.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     h.set_defaults(fn=cmd_hash)
 
     args = ap.parse_args(argv)
