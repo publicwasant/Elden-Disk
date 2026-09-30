@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-09-30T03:27:23.350Z",
+  "system_status": {
+    "state": "CONNECTED",
+    "game_connected": true,
+    "pid": 23200,
+    "anti_cheat_status": "DISABLED_OFFLINE",
+    "read_only": true,
+    "exe_sha256": "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891",
+    "profile": "Elden Ring 1.17.1",
+    "buffs_supported": true,
+    "ignored_effects": 11,
+    "last_error": null
+  },
+  "character": {
+    "level": 386,
+    "runes": 10666261,
+    "attributes": {
+      "vigor": 80,
+      "mind": 60,
+      "endurance": 60,
+      "strength": 90,
+      "dexterity": 90,
+      "intelligence": 15,
+      "faith": 60,
+      "arcane": 10
+    },
+    "active_buffs": [
+      {
+        "id": 1605000,
+        "name": "Flame! Grant Me Strength",
+        "remaining_seconds": 21.84,
+        "max_duration_seconds": 30.0,
+        "activation_timestamp_iso": "2026-09-30T03:27:15.191Z"
+      },
+      {
+        "id": 1660000,
+        "name": "Golden Vow",
+        "remaining_seconds": 76.04,
+        "max_duration_seconds": 80.0,
+        "activation_timestamp_iso": "2026-09-30T03:27:19.391Z"
+      }
+    ],
+    "passive_buffs": [
+      {
+        "id": 311100,
+        "name": "Gold Scarab",
+        "category": "TALISMAN",
+        "source_name": "Gold Scarab"
+      }
+    ]
+  },
+  "telemetry": {
+    "session_start_runes": 10626532,
+    "rune_delta": 39729
+  }
+}

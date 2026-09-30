@@ -1,20 +1,20 @@
 {
-  "timestamp": "2026-09-30T01:41:58.962Z",
+  "timestamp": "2026-09-30T03:28:01.441Z",
   "system_status": {
     "state": "DISCONNECTED",
     "game_connected": false,
-    "pid": 20384,
+    "pid": 23200,
     "anti_cheat_status": "DISABLED_OFFLINE",
     "read_only": true,
     "exe_sha256": "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891",
-    "profile": "ER <version>",
+    "profile": "Elden Ring 1.17.1",
     "buffs_supported": true,
     "ignored_effects": 0,
     "last_error": null
   },
   "character": null,
   "telemetry": {
-    "session_start_runes": 10271107,
+    "session_start_runes": 10626532,
     "rune_delta": null
   }
 }
