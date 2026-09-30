@@ -176,7 +176,8 @@ def cmd_effects(args) -> int:
                     last_err = err
             else:
                 last_err = None
-                cur = {eid: (dur, timer) for eid, dur, timer in entries}
+                cur = {eid: (dur, timer) for eid, dur, timer in entries
+                       if not args.quiet or dur < 0 or dur >= 1.0}
                 if prev is None:
                     print(f"--- {len(cur)} effects now active ---")
                     for eid, (d, t) in sorted(cur.items()):
@@ -217,6 +218,8 @@ def main(argv=None) -> int:
 
     e = sub.add_parser("effects", help="live SpEffect viewer for building effects.json (game must be running offline)")
     e.add_argument("--offsets", default=str(HERE / "offsets.json"))
+    e.add_argument("-q", "--quiet", action="store_true",
+                   help="hide short-lived internal effects (0 <= duration < 1 s); keeps permanent (-1) and timed buffs")
     e.set_defaults(fn=cmd_effects)
 
     h = sub.add_parser("hash", help="print SHA-256 of eldenring.exe (key for offsets.json)")
