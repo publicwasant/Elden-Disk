@@ -167,11 +167,7 @@ class Sampler:
 
             if dur <= 0:
                 kind = "PERMANENT"
-                times = {
-                    "buff_duration": None,
-                    "max_duration": None,
-                    "last_activated_at": None,
-                }
+                times = None
             else:
                 remaining = timer if mode == "remaining" else dur - timer
                 if remaining <= 0 or remaining > dur + 1.0:

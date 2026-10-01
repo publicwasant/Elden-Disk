@@ -43,13 +43,18 @@
               "category": { "type": "string" },
               "ability": { "type": "string" },
               "times": {
-                "type": "object",
-                "required": ["buff_duration", "max_duration", "last_activated_at"],
-                "properties": {
-                  "buff_duration": { "type": ["number", "null"], "minimum": 0 },
-                  "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-                  "last_activated_at": { "type": ["string", "null"], "format": "date-time" }
-                }
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": ["buff_duration", "max_duration", "last_activated_at"],
+                    "properties": {
+                      "buff_duration": { "type": ["number", "null"], "minimum": 0 },
+                      "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                      "last_activated_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                  },
+                  { "type": "null" }
+                ]
               }
             }
           }

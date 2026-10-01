@@ -113,7 +113,7 @@ def test_connected_sample(mode):
     assert p["name"] == "Gold Scarab"
     assert p["kind"] == "PERMANENT"
     assert p["category"] == "TALISMANS"
-    assert p["times"] == {"buff_duration": None, "max_duration": None, "last_activated_at": None}
+    assert p["times"] is None
     assert r.ignored_effects == 1  # id 999 not in tables
     valid(doc_for(s, r))
 
