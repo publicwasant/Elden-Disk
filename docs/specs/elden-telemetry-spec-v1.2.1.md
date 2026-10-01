@@ -11,22 +11,22 @@
 
 ### 1.2.0 → 1.2.1
 
-| # | Change | Reason |
-|---|---|---|
-| 1 | Merged `active_buffs` and `passive_buffs` into a single `effects` map in `character` | Both active and passive buffs represent character status effects originating from the same status bar. Unifying them simplifies telemetry parsing. |
-| 2 | Introduced `kind` field (`"TIMED"` / `"PERMANENT"`) and nested time metadata in a `times` object | Clean separation between effect type classification and timing details (`buff_duration`, `max_duration`, `last_activated_at`). |
-| 3 | Restructured `effects.json` into a flat key-value object map keyed by SpEffect ID | Eliminates separate top-level `"active"` and `"passive"` blocks in favor of unified lookup metadata (`name`, `category`, `ability`). |
-| 4 | Renamed `activation_timestamp_iso` to `last_activated_at` and ensured stable persistence | Once a `TIMED` object's `last_activated_at` is set, it remains unchanged until the player uses it again or re-casts it. When `buff_duration` times out, it is removed from the set. |
+| **#** | **Change**                                                                                                                                         | **Reason**                                                                                                                                                                                  |
+|:-----:|:---------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|   1   | Merged `active_buffs` and `passive_buffs` into a single `effects` map in `character`                                                               | Both active and passive buffs represent character status effects originating from the same status bar. Unifying them simplifies telemetry parsing.                                          |
+|   2   | Introduced `kind` field (`"TIMED"` / `"PERMANENT"`) and nested time metadata in a `times` object                                                   | Clean separation between effect type classification and timing details (`buff_duration`, `max_duration`, `last_activated_at`).                                                              |
+|   3   | Restructured `effects.json` into a flat key-value object map keyed by SpEffect ID                                                                  | Eliminates separate top-level `"active"` and `"passive"` blocks in favor of unified lookup metadata (`name`, `category`, `ability`).                                                        |
+|   4   | Renamed `activation_timestamp_iso` to `last_activated_at`, set `times` to `null` for `PERMANENT` effects, and ensured stable timestamp persistence | Once a `TIMED` object's `last_activated_at` is set, it remains unchanged until re-cast. `PERMANENT` objects have `times: null`. When `buff_duration` times out, it is removed from the set. |
 
 ### 1.1.0 → 1.2.0
 
-| # | Change | Reason |
-|---|---|---|
-| 1 | §7 rewritten with steps, commands, reference outputs (ER 1.17.1) and pass/fail rules for every check | The checklist said *what* to verify but not *how* |
-| 2 | Added profile status **PROVISIONAL** (V-01..V-05) vs **VERIFIED** (V-01..V-06) and a sign-off table (§7.8) | The reference profile passed V-01..V-05 but V-06 is still open |
-| 3 | V-03 split into **V-03a** (exact match) and **V-03b** (single-attribute increment) | Repeated attribute values (e.g. mind = endurance = faith) hide swapped offsets |
-| 4 | V-02 now records behaviour on the title screen instead of assuming "null" | Not yet observed for quit-to-title |
-| 5 | New helper `tools\soak_check.py` for V-06; `run --attach` and `effects [-q]` documented in §7.0 | These commands exist in the implementation but were not in the spec |
+| **#** | **Change**                                                                                                 | **Reason**                                                                     |
+|:-----:|:-----------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------|
+|   1   | 7 rewritten with steps, commands, reference outputs (ER 1.17.1) and pass/fail rules for every check        | The checklist said *what* to verify but not *how*                              |
+|   2   | Added profile status **PROVISIONAL** (V-01..V-05) vs **VERIFIED** (V-01..V-06) and a sign-off table (§7.8) | The reference profile passed V-01..V-05 but V-06 is still open                 |
+|   3   | V-03 split into **V-03a** (exact match) and **V-03b** (single-attribute increment)                         | Repeated attribute values (e.g. mind = endurance = faith) hide swapped offsets |
+|   4   | V-02 now records behaviour on the title screen instead of assuming "null"                                  | Not yet observed for quit-to-title                                             |
+|   5   | New helper `tools\soak_check.py` for V-06; `run --attach` and `effects [-q]` documented in §7.0            | These commands exist in the implementation but were not in the spec            |
 
 ---
 
@@ -120,35 +120,35 @@ On attach, compute SHA-256 of `eldenring.exe` and look it up:
 
 ```text
 eldenring.exe base
- └─ + world_chr_man_rva ─────────► [WorldChrMan]              (RVA changes per version, in profile)
-     └─ + world_chr_man_to_player ─► [PlayerIns]              (changes per version, in profile)
-         ├─ + 0x580 ─► [PlayerGameData]                       (VERIFY)
-         │     ├─ + 0x68  Level    (uint32)
-         │     ├─ + 0x6C  Runes    (uint32)
-         │     └─ + 0x3C  Attributes (8 × uint32)
-         └─ + 0x178 ─► [SpecialEffect]                        (VERIFY)
-               └─ + 0x8 ─► head of linked list of entries
+ └─ + world_chr_man_rva ─────────────────► [WorldChrMan] ─────────────────► (RVA changes per version, in profile)
+     └─ + world_chr_man_to_player ───────► [PlayerIns] ───────────────────► (changes per version, in profile)
+         ├─ + 0x580 ─────────────────────► [PlayerGameData] ──────────────► (VERIFY)
+         │     ├─ + 0x68  Level ─────────► (uint32) 
+         │     ├─ + 0x6C  Runes ─────────► (uint32)
+         │     └─ + 0x3C  Attributes ────► (8 × uint32)
+         └─ + 0x178 ─────────────────────► [SpecialEffect] ───────────────► (VERIFY)
+               └─ + 0x8 ─────────────────► head of linked list of entries
 ```
 
 ---
 
 ### 4.3 Field table
 
-| Field | Parent | Offset | Type | Valid range | Status |
-|---|---|---|---|---|---|
-| WorldChrMan | module base | profile `world_chr_man_rva` | ptr64 | non-null, user-space | per-version |
-| PlayerIns | WorldChrMan | profile `world_chr_man_to_player` | ptr64 | non-null, user-space | per-version |
-| PlayerGameData | PlayerIns | `+0x580` | ptr64 | non-null, user-space | VERIFY |
-| Level | PlayerGameData | `+0x68` | uint32 | 1–713 | stable |
-| Runes | PlayerGameData | `+0x6C` | uint32 | 0–999,999,999 | stable |
-| Vigor | PlayerGameData | `+0x3C` | uint32 | 1–99 | stable |
-| Mind | PlayerGameData | `+0x40` | uint32 | 1–99 | stable |
-| Endurance | PlayerGameData | `+0x44` | uint32 | 1–99 | stable |
-| Strength | PlayerGameData | `+0x48` | uint32 | 1–99 | stable |
-| Dexterity | PlayerGameData | `+0x4C` | uint32 | 1–99 | stable |
-| Intelligence | PlayerGameData | `+0x50` | uint32 | 1–99 | stable |
-| Faith | PlayerGameData | `+0x54` | uint32 | 1–99 | stable |
-| Arcane | PlayerGameData | `+0x58` | uint32 | 1–99 | stable |
+| **Field**      | **Parent**     | **Offset**                        | **Type** | **Valid range**      | **Status**  |
+|:---------------|:---------------|:----------------------------------|:--------:|:---------------------|:-----------:|
+| WorldChrMan    | module base    | profile `world_chr_man_rva`       |  ptr64   | non-null, user-space | per-version |
+| PlayerIns      | WorldChrMan    | profile `world_chr_man_to_player` |  ptr64   | non-null, user-space | per-version |
+| PlayerGameData | PlayerIns      | `+0x580`                          |  ptr64   | non-null, user-space |   VERIFY    |
+| Level          | PlayerGameData | `+0x68`                           |  uint32  | 1–713                |   stable    |
+| Runes          | PlayerGameData | `+0x6C`                           |  uint32  | 0–999,999,999        |   stable    |
+| Vigor          | PlayerGameData | `+0x3C`                           |  uint32  | 1–99                 |   stable    |
+| Mind           | PlayerGameData | `+0x40`                           |  uint32  | 1–99                 |   stable    |
+| Endurance      | PlayerGameData | `+0x44`                           |  uint32  | 1–99                 |   stable    |
+| Strength       | PlayerGameData | `+0x48`                           |  uint32  | 1–99                 |   stable    |
+| Dexterity      | PlayerGameData | `+0x4C`                           |  uint32  | 1–99                 |   stable    |
+| Intelligence   | PlayerGameData | `+0x50`                           |  uint32  | 1–99                 |   stable    |
+| Faith          | PlayerGameData | `+0x54`                           |  uint32  | 1–99                 |   stable    |
+| Arcane         | PlayerGameData | `+0x58`                           |  uint32  | 1–99                 |   stable    |
 
 ---
 
@@ -179,7 +179,7 @@ Traversal rules (all mandatory):
 ```
 
 - Each present SpEffect ID found in memory that matches a key in `effects.json` is mapped into the `character.effects` object set:
-  - **`kind: "PERMANENT"`**: Selected when `duration <= 0` or timer indicates an infinite effect (e.g. equipped Talisman). Timing fields in `times` are set to `null`.
+  - **`kind: "PERMANENT"`**: Selected when `duration <= 0` or timer indicates an infinite effect (e.g. equipped Talisman). `times` is set to `null`.
   - **`kind: "TIMED"`**: Selected when `duration > 0` and `remaining > 0`. Timing fields `buff_duration`, `max_duration`, and `last_activated_at` are populated. 
     - Gimmick 1: When a `TIMED` effect's `buff_duration` times out (reaches <= 0), it is automatically removed from the `effects` set until activated again.
     - Gimmick 2: Once `last_activated_at` is set, it remains unchanged and stable across samples until re-cast or re-activated.
@@ -196,14 +196,14 @@ Traversal rules (all mandatory):
 
 ### 4.6 Connection state machine
 
-| State | Meaning | JSON `character` |
-|---|---|---|
-| `WAITING_FOR_PROCESS` | Game not running | `null` |
-| `EAC_ACTIVE` / `EAC_DETECTED` | EAC present; tool refuses to attach | `null` |
-| `UNSUPPORTED_VERSION` | Exe hash not in `offsets.json` | `null` |
-| `WAITING_FOR_WORLD` | Process up but pointer chain is null (title screen, loading) | `null` |
-| `CONNECTED` | All validations pass | full object |
-| `DISCONNECTED` | Process exited | `null` |
+| **State**                     | **Meaning**                                                  | **JSON `character`** |
+|:------------------------------|:-------------------------------------------------------------|:--------------------:|
+| `WAITING_FOR_PROCESS`         | Game not running                                             |        `null`        |
+| `EAC_ACTIVE` / `EAC_DETECTED` | EAC present; tool refuses to attach                          |        `null`        |
+| `UNSUPPORTED_VERSION`         | Exe hash not in `offsets.json`                               |        `null`        |
+| `WAITING_FOR_WORLD`           | Process up but pointer chain is null (title screen, loading) |        `null`        |
+| `CONNECTED`                   | All validations pass                                         |     full object      |
+| `DISCONNECTED`                | Process exited                                               |        `null`        |
 
 ---
 
@@ -260,13 +260,18 @@ Traversal rules (all mandatory):
               "category": { "type": "string" },
               "ability": { "type": "string" },
               "times": {
-                "type": "object",
-                "required": ["buff_duration", "max_duration", "last_activated_at"],
-                "properties": {
-                  "buff_duration": { "type": ["number", "null"], "minimum": 0 },
-                  "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-                  "last_activated_at": { "type": ["string", "null"], "format": "date-time" }
-                }
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": ["buff_duration", "max_duration", "last_activated_at"],
+                    "properties": {
+                      "buff_duration": { "type": ["number", "null"], "minimum": 0 },
+                      "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                      "last_activated_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                  },
+                  { "type": "null" }
+                ]
               }
             }
           }
@@ -323,11 +328,7 @@ Traversal rules (all mandatory):
         "kind": "PERMANENT",
         "category": "TALISMANS",
         "ability": "Permanently increases Runes gained by 20% while equipped.",
-        "times": {
-          "buff_duration": null,
-          "max_duration": null,
-          "last_activated_at": null
-        }
+        "times": null
       },
       "3971": {
         "name": "Gold-Pickled Fowl Foot",
@@ -353,14 +354,14 @@ Traversal rules (all mandatory):
 
 ## 6. Safety Audit Checklist
 
-| Domain | Standard | How it is enforced |
-|---|---|---|
-| Memory rights | `PROCESS_VM_READ \| PROCESS_QUERY_LIMITED_INFORMATION` only | Single `OpenProcess` call site; unit test asserts the flag mask |
-| No writes | No `WriteProcessMemory`, injection, remote threads | Static grep in CI for forbidden API names |
-| Game dir hygiene | Zero files created or changed | Test: hash-tree of game dir before and after a session must match |
-| EAC | Never attach with EAC loaded | Module scan in §3.4 |
-| Online | Offline launch only | `-eac-nop-loaded`; tool does not launch any other mode |
-| Data integrity | No unverified data emitted | §4.5 validation and §4.6 state machine |
+| **Domain**       | **Standard**                                                | **How it is enforced**                                            |
+|:-----------------|:------------------------------------------------------------|:------------------------------------------------------------------|
+| Memory rights    | `PROCESS_VM_READ \| PROCESS_QUERY_LIMITED_INFORMATION` only | Single `OpenProcess` call site; unit test asserts the flag mask   |
+| No writes        | No `WriteProcessMemory`, injection, remote threads          | Static grep in CI for forbidden API names                         |
+| Game dir hygiene | Zero files created or changed                               | Test: hash-tree of game dir before and after a session must match |
+| EAC              | Never attach with EAC loaded                                | Module scan in §3.4                                               |
+| Online           | Offline launch only                                         | `-eac-nop-loaded`; tool does not launch any other mode            |
+| Data integrity   | No unverified data emitted                                  | §4.5 validation and §4.6 state machine                            |
 
 ---
 
