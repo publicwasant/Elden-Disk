@@ -76,7 +76,7 @@ _(Refactoring data structures)_
 | kind     | `STRING` |     ✔     |    ✔     | Effect type (referenced from the game community): <br> - `TIMED` <br> - `PERMANENT`                                                                                                                                                                                                                                              | **TIMED**                                           |
 | category | `STRING` |           |          | Effect category (referenced from the game community): <br> - `CONSUMABLES` <br> - `PERFUME_BOTTLES` <br> - `FLASK_OF_WONDROUS_PHYSICK` <br> - `GREASES` <br> - `INCANTATIONS` <br> - `SORCERIES` <br> - `ASHES_OF_WAR` <br> - `TALISMANS` <br> - `ARMOR_WITH_SPECIAL_EFFECTS` <br> - `PASSIVE_WEAPON_BUFFS` <br> - `GREAT_RUNES` | **CONSUMABLES**                                     |
 | ability  | `STRING` |           |          | Effect ability (referenced from the game community)                                                                                                                                                                                                                                                                              | Increases Runes gained by **30%** for **3 minutes** |
-| times    | `OBJECT` |     ✔     |    ✔     | Object containing time-related metadata fields: <br> - `buff_duration` <br> - `max_duration` <br> - `last_activated_at`                                                                                                                                                                                                          | **`<OBJECT>`**                                      |
+| times    | `OBJECT` |     ✔     |          | Object containing time-related metadata fields: <br> - `buff_duration` <br> - `max_duration` <br> - `last_activated_at`                                                                                                                                                                                                          | **`<OBJECT>`**                                      |
 
 **We have also refactored the time-related fields by mapping:** 
 - `remaining_seconds` → `buff_duration`
@@ -101,11 +101,7 @@ _(Refactoring data structures)_
       "kind": "PERMANENT",
       "category": "TALISMANS",
       "ability": "Permanently increases Runes gained by 20% while equipped.",
-      "times": {
-        "buff_duration": null,
-        "max_duration": null,
-        "last_activated_at": null
-      }
+      "times": null
     },
     "3971": {
       "name": "Gold-Pickled Fowl Foot",
@@ -124,8 +120,9 @@ _(Refactoring data structures)_
 
 > [!IMPORTANT]
 > **Gimmick:**
-> 1. Whenever a **TIMED** object's **`buff_duration`** times out, remove that object from the set. When the player uses it again, it will reappear ✔
-> 2. Once a **TIMED** object's **`last_activated_at`** is set, it remains unchanged until the player uses it again. ✔ 
+> 1. Whenever a **TIMED** object's **`times.buff_duration`** times out, remove that object from the set. When the player uses it again, it will reappear ✔
+> 2. Once a **TIMED** object's **`times.last_activated_at`** is set, it remains unchanged until the player uses it again. ✔ 
+> 3. Every **PERMANENT** object's **`times`** is `null` ✔
 
 #### 1.2 Restructured `effects.json` configuration file:
 
