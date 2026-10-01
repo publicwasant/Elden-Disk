@@ -54,9 +54,9 @@ _(Refactoring data structures)_
 
 **Key-Object Pair:**
 
-| Field   |   Type    | Mandatory | Not-Null | Description               | Example |
-|:--------|:---------:|:---------:|:--------:|:--------------------------|:--------|
-| `<KEY>` | `INTEGER` |     ✔     |    ✔     | Game's memory address ID. | 311100  |
+| Field   |   Type    | Mandatory | Not-Null | Description    | Example |
+|:--------|:---------:|:---------:|:--------:|:---------------|:--------|
+| `<KEY>` | `INTEGER` |     ✔     |    ✔     | `SpEffect` ID. | 311100  |
 
 **Major-Object:**
 
@@ -110,7 +110,7 @@ _We have also refactored the time-related fields by mapping `remaining_seconds` 
 ```
 
 > [!IMPORTANT]
-> **Gimmick:** Whenever a **PERMANENT** object's **`buff_duration`** times out, remove that object from the set.
+> **Gimmick:** Whenever a **TIMED** object's **`buff_duration`** times out, remove that object from the set. When the player uses it again, it will reappear ✔
 
 #### 1.2 Restructured `effects.json` configuration file:
 
