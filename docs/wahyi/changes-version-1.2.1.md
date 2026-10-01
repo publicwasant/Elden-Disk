@@ -113,9 +113,9 @@ _We have also refactored the time-related fields by mapping `remaining_seconds` 
 
 **Key-Object Pair:**
 
-| Field     |   Type    | Mandatory | Not-Null | Description               | Example |
-|:----------|:---------:|:---------:|:--------:|:--------------------------|:--------|
-| `<KEY>`   | `INTEGER` |     ✔     |    ✔     | Game's memory address ID. | 311100  |
+| Field   |   Type    | Mandatory | Not-Null | Description    | Example |
+|:--------|:---------:|:---------:|:--------:|:---------------|:--------|
+| `<KEY>` | `INTEGER` |     ✔     |    ✔     | `SpEffect` ID. | 311100  |
 
 **Major-Object:**
 
