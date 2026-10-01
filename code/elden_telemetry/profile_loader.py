@@ -5,7 +5,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-CATEGORIES = {"TALISMAN", "ARMOR", "WEAPON", "GREAT_RUNE"}
 TIMER_MODES = {"elapsed", "remaining"}
 
 
@@ -111,42 +110,37 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
 
 
 @dataclass(frozen=True)
-class ActiveEffect:
+class EffectConfig:
     name: str
-
-
-@dataclass(frozen=True)
-class PassiveEffect:
-    name: str
-    category: str
-    source_name: str
+    category: str | None = None
+    ability: str | None = None
 
 
 @dataclass(frozen=True)
 class Effects:
-    active: dict[int, ActiveEffect]
-    passive: dict[int, PassiveEffect]
+    table: dict[int, EffectConfig]
 
 
 def load_effects(path: Path) -> Effects:
     """A missing file means empty tables. Malformed content raises ValueError."""
     p = Path(path)
     if not p.exists():
-        return Effects({}, {})
+        return Effects({})
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
-        active: dict[int, ActiveEffect] = {}
-        passive: dict[int, PassiveEffect] = {}
-        for k, v in (data.get("active") or {}).items():
-            if not str(k).startswith("_"):
-                active[int(k)] = ActiveEffect(name=str(v["name"]))
-        for k, v in (data.get("passive") or {}).items():
+        if not isinstance(data, dict):
+            raise ValueError(f"malformed {p}: expected JSON object")
+        table: dict[int, EffectConfig] = {}
+        for k, v in data.items():
             if str(k).startswith("_"):
                 continue
-            cat = v["category"]
-            if cat not in CATEGORIES:
-                raise ValueError(f"passive {k}: category must be one of {sorted(CATEGORIES)}")
-            passive[int(k)] = PassiveEffect(str(v["name"]), cat, str(v.get("source_name") or v["name"]))
-        return Effects(active, passive)
-    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            if not isinstance(v, dict) or "name" not in v:
+                raise ValueError(f"malformed effect item {k}: missing name")
+            table[int(k)] = EffectConfig(
+                name=str(v["name"]),
+                category=str(v["category"]) if v.get("category") is not None else None,
+                ability=str(v["ability"]) if v.get("ability") is not None else None,
+            )
+        return Effects(table)
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise ValueError(f"malformed {p}: {exc!r}") from exc

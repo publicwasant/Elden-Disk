@@ -8,7 +8,7 @@ import pytest
 
 from elden_telemetry import memory_reader
 from elden_telemetry.json_logger import JsonLogger
-from elden_telemetry.profile_loader import (ActiveEffect, EntryLayout, Effects, PassiveEffect, Profile,
+from elden_telemetry.profile_loader import (EffectConfig, EntryLayout, Effects, Profile,
                                             SpEffectLayout, load_effects, load_profile)
 from elden_telemetry.telemetry import Sampler, build_document
 
@@ -48,8 +48,10 @@ def make_profile(mode="remaining", sp=True):
 
 def effects():
     return Effects(
-        active={100: ActiveEffect("Golden Vow")},
-        passive={200: PassiveEffect("Gold Scarab", "TALISMAN", "Gold Scarab Talisman")},
+        table={
+            100: EffectConfig("Golden Vow", category="INCANTATIONS", ability="Buff"),
+            200: EffectConfig("Gold Scarab", category="TALISMANS", ability="More runes"),
+        }
     )
 
 
@@ -99,12 +101,19 @@ def test_connected_sample(mode):
     c = r.character
     assert (c["level"], c["runes"]) == (386, 10_008_626)
     assert c["attributes"]["strength"] == 90 and c["attributes"]["arcane"] == 10
-    assert [b["id"] for b in c["active_buffs"]] == [100]
-    b = c["active_buffs"][0]
-    assert b["remaining_seconds"] == 45.0 and b["max_duration_seconds"] == 80.0
-    assert b["activation_timestamp_iso"] == "2026-09-30T11:59:25.000Z"  # now - (80-45)
-    assert c["passive_buffs"] == [{"id": 200, "name": "Gold Scarab", "category": "TALISMAN",
-                                   "source_name": "Gold Scarab Talisman"}]
+    assert "100" in c["effects"]
+    b = c["effects"]["100"]
+    assert b["name"] == "Golden Vow"
+    assert b["kind"] == "TIMED"
+    assert b["category"] == "INCANTATIONS"
+    assert b["times"]["buff_duration"] == 45.0 and b["times"]["max_duration"] == 80.0
+    assert b["times"]["last_activated_at"] == "2026-09-30T11:59:25.000Z"  # now - (80-45)
+    assert "200" in c["effects"]
+    p = c["effects"]["200"]
+    assert p["name"] == "Gold Scarab"
+    assert p["kind"] == "PERMANENT"
+    assert p["category"] == "TALISMANS"
+    assert p["times"] == {"buff_duration": None, "max_duration": None, "last_activated_at": None}
     assert r.ignored_effects == 1  # id 999 not in tables
     valid(doc_for(s, r))
 
@@ -176,13 +185,13 @@ def test_expired_or_bad_timer_ignored():
     m = full_world()
     entry(m, E1, 100, 80.0, 0.0, E2)  # remaining 0 -> not active
     r = Sampler(m, make_profile(), effects(), BASE).sample(NOW)
-    assert r.character["active_buffs"] == []
+    assert "100" not in r.character["effects"]
 
 
 def test_buffs_disabled_when_sp_layout_missing():
     m = full_world()
     r = Sampler(m, make_profile(sp=False), effects(), BASE).sample(NOW)
-    assert r.state == "CONNECTED" and r.character["active_buffs"] == [] and r.ignored_effects == 0
+    assert r.state == "CONNECTED" and r.character["effects"] == {} and r.ignored_effects == 0
 
 
 def test_non_connected_states_validate():
@@ -234,12 +243,12 @@ def test_profile_partial_buffs_disables_only_buffs(tmp_path):
 
 
 def test_effects_loader(tmp_path):
-    assert load_effects(tmp_path / "missing.json") == Effects({}, {})
-    p = write_json(tmp_path, "e.json", {"_readme": "x", "active": {"100": {"name": "A"}},
-                                        "passive": {"200": {"name": "P", "category": "TALISMAN"}}})
+    assert load_effects(tmp_path / "missing.json") == Effects({})
+    p = write_json(tmp_path, "e.json", {"_readme": "x", "100": {"name": "A", "category": "CONSUMABLES"},
+                                        "200": {"name": "P", "category": "TALISMANS"}})
     e = load_effects(p)
-    assert e.active[100].name == "A" and e.passive[200].source_name == "P"
-    p = write_json(tmp_path, "e2.json", {"passive": {"1": {"name": "P", "category": "NOPE"}}})
+    assert e.table[100].name == "A" and e.table[200].category == "TALISMANS"
+    p = write_json(tmp_path, "e2.json", {"1": "NOT_AN_OBJECT"})
     with pytest.raises(ValueError):
         load_effects(p)
 

@@ -39,6 +39,7 @@ class Sampler:
         self.effects = effects
         self.base = module_base
         self.session_start_runes: int | None = None
+        self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
 
     # -- helpers ---------------------------------------------------------
     @staticmethod
@@ -85,14 +86,13 @@ class Sampler:
             if not ATTR_RANGE[0] <= v <= ATTR_RANGE[1]:
                 return self._wait(f"{name}={v} outside {ATTR_RANGE} (PlayerGameData+0x{p.attributes:X})")
 
-        active: list[dict] = []
-        passive: list[dict] = []
+        effects: dict[str, dict] = {}
         ignored = 0
         if p.sp_effect is not None:
             entries, err = self._read_effect_list(player)
             if err is not None:
                 return self._wait(err)
-            active, passive, ignored = self._classify(entries, now)
+            effects, ignored = self._classify(entries, now)
 
         if self.session_start_runes is None:
             self.session_start_runes = runes
@@ -100,8 +100,7 @@ class Sampler:
             "level": level,
             "runes": runes,
             "attributes": dict(zip(ATTR_NAMES, attrs)),
-            "active_buffs": active,
-            "passive_buffs": passive,
+            "effects": effects,
         }
         return Sample("CONNECTED", character, ignored, None, runes)
 
@@ -154,36 +153,77 @@ class Sampler:
             cur = nxt
         return out, None
 
-    def _classify(self, entries, now: datetime):
+    def _classify(self, entries, now: datetime) -> tuple[dict[str, dict], int]:
         mode = self.profile.sp_effect.entry.timer_mode
-        passive: dict[int, dict] = {}
-        active: dict[int, dict] = {}
+        effects: dict[str, dict] = {}
         ignored = 0
+        active_eids: set[int] = set()
+
         for eid, dur, timer in entries:
-            pe = self.effects.passive.get(eid)
-            if pe is not None:
-                passive.setdefault(eid, {
-                    "id": eid, "name": pe.name, "category": pe.category, "source_name": pe.source_name,
-                })
-                continue
-            ae = self.effects.active.get(eid)
-            if ae is None or not (math.isfinite(dur) and math.isfinite(timer)) or dur <= 0:
+            cfg = self.effects.table.get(eid)
+            if cfg is None or not (math.isfinite(dur) and math.isfinite(timer)):
                 ignored += 1
                 continue
-            remaining = timer if mode == "remaining" else dur - timer
-            if remaining <= 0 or remaining > dur + 1.0:
-                ignored += 1
-                continue
-            prev = active.get(eid)
-            if prev is None or remaining > prev["remaining_seconds"]:
-                active[eid] = {
-                    "id": eid,
-                    "name": ae.name,
-                    "remaining_seconds": round(remaining, 2),
-                    "max_duration_seconds": round(dur, 2),
-                    "activation_timestamp_iso": iso(now - timedelta(seconds=dur - remaining)),
+
+            if dur <= 0:
+                kind = "PERMANENT"
+                times = {
+                    "buff_duration": None,
+                    "max_duration": None,
+                    "last_activated_at": None,
                 }
-        return list(active.values()), list(passive.values()), ignored
+            else:
+                remaining = timer if mode == "remaining" else dur - timer
+                if remaining <= 0 or remaining > dur + 1.0:
+                    ignored += 1
+                    continue
+                kind = "TIMED"
+
+                # Stable activation timestamp (Gimmick 2: remains unchanged until re-cast/re-activated)
+                if eid in self._activations:
+                    act_time, prev_rem = self._activations[eid]
+                    # If remaining jumped up significantly (> 2s), it was re-cast/re-activated
+                    if remaining > prev_rem + 2.0:
+                        act_time = now - timedelta(seconds=dur - remaining)
+                else:
+                    act_time = now - timedelta(seconds=dur - remaining)
+
+                self._activations[eid] = (act_time, remaining)
+                active_eids.add(eid)
+
+                times = {
+                    "buff_duration": round(remaining, 2),
+                    "max_duration": round(dur, 2),
+                    "last_activated_at": iso(act_time),
+                }
+
+            key = str(eid)
+            eff = {
+                "name": cfg.name,
+                "kind": kind,
+            }
+            if cfg.category is not None:
+                eff["category"] = cfg.category
+            if cfg.ability is not None:
+                eff["ability"] = cfg.ability
+            eff["times"] = times
+
+            if key in effects:
+                existing = effects[key]
+                if existing["kind"] == "PERMANENT" and kind == "TIMED":
+                    effects[key] = eff
+                elif existing["kind"] == "TIMED" and kind == "TIMED":
+                    if times["buff_duration"] > existing["times"]["buff_duration"]:
+                        effects[key] = eff
+            else:
+                effects[key] = eff
+
+        # Prune expired or inactive buffs from activation tracking
+        for stale_eid in list(self._activations.keys()):
+            if stale_eid not in active_eids:
+                del self._activations[stale_eid]
+
+        return effects, ignored
 
 
 def build_document(*, now: datetime, state: str, pid: int | None, anti_cheat: str,

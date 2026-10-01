@@ -210,9 +210,9 @@ def main(argv=None) -> int:
     r.add_argument("--attach", action="store_true", help="attach to an already-running eldenring.exe instead of launching")
     r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     r.add_argument("--out", default=str(HERE / "output"),
-                   help="directory for telemetry-state.json (default: <project>/output)")
+                   help="directory for telemetry-state.json (default: <project>/code/output)")
     r.add_argument("--offsets", default=str(HERE / "offsets.json"), help="offsets.json (default: <project>/offsets.json)")
-    r.add_argument("--effects", default=str(HERE / "effects.json"), help="effects.json (default: <project>/effects.json)")
+    r.add_argument("--effects", default=str(HERE / "effects.json"), help="effects.json (default: <project>/offsets.json)")
     r.add_argument("--hz", type=float, default=10.0, help="polls per second, 1-30 (default: 10)")
     r.add_argument("-v", "--verbose", action="store_true", help="print state changes and diagnostics")
     r.set_defaults(fn=cmd_run)

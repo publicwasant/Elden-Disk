@@ -1,11 +1,22 @@
 {
-  "_readme": "Fill from SpEffectParam / EquipParamAccessory of your game version. Keys are SpEffect IDs (as strings). Categories: TALISMAN, ARMOR, WEAPON, GREAT_RUNE.",
-  "active": {
-    "3971":    { "name": "Gold-Pickled Fowl Foot" },
-    "1605000": { "name": "Flame! Grant Me Strength" },
-    "1660000": { "name": "Golden Vow" }
+  "311100": {
+    "name": "Gold Scarab",
+    "category": "TALISMANS",
+    "ability": "Permanently increases Runes gained by 20% while equipped."
   },
-  "passive": {
-    "311100": { "name": "Gold Scarab", "category": "TALISMAN", "source_name": "Gold Scarab" }
+  "3971": {
+    "name": "Gold-Pickled Fowl Foot",
+    "category": "CONSUMABLES",
+    "ability": "Increases Runes gained by 30% for 3 minutes."
+  },
+  "1605000": {
+    "name": "Flame! Grant Me Strength",
+    "category": "INCANTATIONS",
+    "ability": "Raises physical and fire-alignment attack power."
+  },
+  "1660000": {
+    "name": "Golden Vow",
+    "category": "INCANTATIONS",
+    "ability": "Increases attack power and defense for self and nearby allies."
   }
 }

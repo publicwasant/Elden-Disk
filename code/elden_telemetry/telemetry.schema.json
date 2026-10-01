@@ -23,7 +23,7 @@
     },
     "character": {
       "type": ["object", "null"],
-      "required": ["level", "runes", "attributes", "active_buffs", "passive_buffs"],
+      "required": ["level", "runes", "attributes", "effects"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
         "runes": { "type": "integer", "minimum": 0, "maximum": 999999999 },
@@ -32,30 +32,25 @@
           "required": ["vigor", "mind", "endurance", "strength", "dexterity", "intelligence", "faith", "arcane"],
           "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 99 }
         },
-        "active_buffs": {
-          "type": "array",
-          "items": {
+        "effects": {
+          "type": "object",
+          "additionalProperties": {
             "type": "object",
-            "required": ["id", "name", "remaining_seconds", "max_duration_seconds", "activation_timestamp_iso"],
+            "required": ["name", "kind", "times"],
             "properties": {
-              "id": { "type": "integer" },
               "name": { "type": "string" },
-              "remaining_seconds": { "type": "number", "minimum": 0 },
-              "max_duration_seconds": { "type": "number", "exclusiveMinimum": 0 },
-              "activation_timestamp_iso": { "type": "string", "format": "date-time" }
-            }
-          }
-        },
-        "passive_buffs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["id", "name", "category", "source_name"],
-            "properties": {
-              "id": { "type": "integer" },
-              "name": { "type": "string" },
-              "category": { "enum": ["TALISMAN", "ARMOR", "WEAPON", "GREAT_RUNE"] },
-              "source_name": { "type": "string" }
+              "kind": { "type": "string", "enum": ["TIMED", "PERMANENT"] },
+              "category": { "type": "string" },
+              "ability": { "type": "string" },
+              "times": {
+                "type": "object",
+                "required": ["buff_duration", "max_duration", "last_activated_at"],
+                "properties": {
+                  "buff_duration": { "type": ["number", "null"], "minimum": 0 },
+                  "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                  "last_activated_at": { "type": ["string", "null"], "format": "date-time" }
+                }
+              }
             }
           }
         }

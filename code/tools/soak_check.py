@@ -47,9 +47,12 @@ def check(doc: dict) -> list[str]:
     for name in ATTRS:
         if not 1 <= attrs.get(name, 0) <= 99:
             out.append(f"attribute {name}={attrs.get(name)} out of range")
-    for b in ch.get("active_buffs", []):
-        if b["remaining_seconds"] < 0 or b["max_duration_seconds"] <= 0 or b["remaining_seconds"] > b["max_duration_seconds"] + 1:
-            out.append(f"buff {b['id']} has impossible timer {b['remaining_seconds']}/{b['max_duration_seconds']}")
+    for eid, eff in ch.get("effects", {}).items():
+        if eff.get("kind") == "TIMED":
+            t = eff.get("times", {})
+            rem, mx = t.get("buff_duration"), t.get("max_duration")
+            if rem is None or mx is None or rem < 0 or mx <= 0 or rem > mx + 1:
+                out.append(f"buff {eid} has impossible timer {rem}/{mx}")
     start = tel.get("session_start_runes")
     if start is None or tel.get("rune_delta") != ch["runes"] - start:
         out.append("rune_delta inconsistent with session_start_runes")

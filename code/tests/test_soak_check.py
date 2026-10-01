@@ -7,7 +7,7 @@ import soak_check  # noqa: E402
 
 def doc(state="CONNECTED", **over):
     ch = {"level": 386, "runes": 1000, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
-          "active_buffs": [], "passive_buffs": []}
+          "effects": {}}
     d = {"system_status": {"state": state, "read_only": True}, "character": ch if state == "CONNECTED" else None,
          "telemetry": {"session_start_runes": 900, "rune_delta": 100}}
     d.update(over)
@@ -26,6 +26,9 @@ def test_detects_problems():
     assert any("rune_delta" in p for p in soak_check.check(bad))
     bad = doc("WAITING_FOR_WORLD"); bad["character"] = {"level": 1}
     assert any("character present" in p for p in soak_check.check(bad))
-    bad = doc(); bad["character"]["active_buffs"] = [{"id": 1, "remaining_seconds": 90.0, "max_duration_seconds": 30.0}]
+    bad = doc()
+    bad["character"]["effects"] = {
+        "1": {"name": "Test", "kind": "TIMED", "times": {"buff_duration": 90.0, "max_duration": 30.0}}
+    }
     assert any("impossible timer" in p for p in soak_check.check(bad))
     assert soak_check.check({}) == ["missing top-level keys"]
