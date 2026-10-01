@@ -109,6 +109,9 @@ _We have also refactored the time-related fields by mapping `remaining_seconds` 
 }
 ```
 
+> [!IMPORTANT]
+> **Gimmick:** Whenever a **PERMANENT** object's **`buff_duration`** times out, remove that object from the set.
+
 #### 1.2 Restructured `effects.json` configuration file:
 
 **Key-Object Pair:**
