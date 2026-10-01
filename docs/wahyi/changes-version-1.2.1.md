@@ -1,4 +1,10 @@
 # Changes
+
+> [!NOTE]
+> **Summary:** Unified buffs into `effects`, structured `effects.json`, added `last_activated_at`, and passed all v1.2.1 unit tests.  
+> **Status:** APPROVED ✔    
+> **Last Updated:** _2026-09-30_      
+
 _(Previous version: **[elden-telemetry-spec-v1.2.0.md](../specs/elden-telemetry-spec-v1.2.0.md)**)_
 
 ---
@@ -156,7 +162,7 @@ _(Refactoring data structures)_
 
 ### 2. Requirements
 
-#### Documentations
+#### 2.1 Documentations
 - **New Specification Version `1.2.1`:** 
   - Derived from _**[elden-telemetry-spec-v1.0.0.md](../specs/elden-telemetry-spec-v1.0.0.md) → [elden-telemetry-spec-v1.1.0.md](../specs/elden-telemetry-spec-v1.1.0.md) → [elden-telemetry-spec-v1.2.0.md](../specs/elden-telemetry-spec-v1.2.0.md) → elden-telemetry-spec-v1.2.1.md**_
   - Save at `./docs/specs/elden-telemetry-spec-v1.2.1.md`
@@ -164,7 +170,7 @@ _(Refactoring data structures)_
   - Scan the whole project, every details of source cods and design a **implementation_plan_v1.2.1.md**.
   - Save at `./docs/impls/implementation_plan_v1.2.1.md`
 
-#### Integrations
+#### 2.2 Integrations
 - Development according to the **[elden-telemetry-spec-v1.2.1.md](../specs/elden-telemetry-spec-v1.2.1.md)** and the **[implementation_plan_v1.2.1.md](../impls/implementation_plan_v1.2.1.md)**
 - Verification by **Unit-Test**
 - Update **Tool-Version** and all the documentations that exist the **Changes.**
