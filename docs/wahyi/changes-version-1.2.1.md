@@ -16,14 +16,14 @@ Regarding the **character buffs** section:
       "name": "Flame! Grant Me Strength",
       "remaining_seconds": 21.84,
       "max_duration_seconds": 30.0,
-      "activation_timestamp_iso": "2026-09-30T03:27:15.191Z"
+      "last_activated_at": "2026-09-30T03:27:15.191Z"
     },
     {
       "id": 1660000,
       "name": "Golden Vow",
       "remaining_seconds": 76.04,
       "max_duration_seconds": 80.0,
-      "activation_timestamp_iso": "2026-09-30T03:27:19.391Z"
+      "last_activated_at": "2026-09-30T03:27:19.391Z"
     }
   ],
   "passive_buffs": [
@@ -52,6 +52,10 @@ _(Refactoring data structures)_
 
 #### 1.1 Merge `active_buffs` and `passive_buffs` into a single `effects` object set:
 
+> [!NOTE]
+> The `SpEffect` ID comes from `profiles.<SHA-256>.sp_effect.entry.id` in **[offsets.json](../../code/offsets.json)**. It was observed using the CLI `python -m elden_telemetry effects -q` and manually configured in **[effects.json](../../code/effects.json)**.
+
+
 **Key-Object Pair:**
 
 | Field   |   Type    | Mandatory | Not-Null | Description    | Example |
@@ -66,17 +70,20 @@ _(Refactoring data structures)_
 | kind     | `STRING` |     ✔     |    ✔     | Effect type (referenced from the game community): <br> - `TIMED` <br> - `PERMANENT`                                                                                                                                                                                                                                              | **TIMED**                                           |
 | category | `STRING` |           |          | Effect category (referenced from the game community): <br> - `CONSUMABLES` <br> - `PERFUME_BOTTLES` <br> - `FLASK_OF_WONDROUS_PHYSICK` <br> - `GREASES` <br> - `INCANTATIONS` <br> - `SORCERIES` <br> - `ASHES_OF_WAR` <br> - `TALISMANS` <br> - `ARMOR_WITH_SPECIAL_EFFECTS` <br> - `PASSIVE_WEAPON_BUFFS` <br> - `GREAT_RUNES` | **CONSUMABLES**                                     |
 | ability  | `STRING` |           |          | Effect ability (referenced from the game community)                                                                                                                                                                                                                                                                              | Increases Runes gained by **30%** for **3 minutes** |
-| times    | `OBJECT` |     ✔     |    ✔     | Object containing time-related metadata fields: <br> - `buff_duration` <br> - `max_duration` <br> - `activation_timestamp_iso`                                                                                                                                                                                                   | **`<OBJECT>`**                                      |
+| times    | `OBJECT` |     ✔     |    ✔     | Object containing time-related metadata fields: <br> - `buff_duration` <br> - `max_duration` <br> - `last_activated_at`                                                                                                                                                                                                          | **`<OBJECT>`**                                      |
 
-_We have also refactored the time-related fields by mapping `remaining_seconds` → `buff_duration`, `max_duration_seconds` → `max_duration`, and nesting them alongside `activation_timestamp_iso` into a new `times` **object**._
+**We have also refactored the time-related fields by mapping:** 
+- `remaining_seconds` → `buff_duration`
+- `max_duration_seconds` → `max_duration`
+- `activation_timestamp_iso` → `last_activated_at`
 
-**Sub-Object (`times`):**
+**Into a Sub-Object (`times`):**
 
-| Field                     |   Type   | Mandatory | Not-Null | Description                                     | Example                  |
-|:--------------------------|:--------:|:---------:|:--------:|:------------------------------------------------|:-------------------------|
-| buff_duration             | `FLOAT`  |     ✔     |          | Remaining duration of the effect in seconds.    | 67.16                    |
-| max_duration              | `FLOAT`  |     ✔     |          | Maximum duration of the effect in seconds.      | 180.0                    |
-| activation_timestamp_iso  | `STRING` |     ✔     |          | ISO timestamp of when the effect was activated. | 2026-09-30T14:36:15.598Z |
+| Field             |   Type   | Mandatory | Not-Null | Description                                                    | Example                  |
+|:------------------|:--------:|:---------:|:--------:|:---------------------------------------------------------------|:-------------------------|
+| buff_duration     | `FLOAT`  |     ✔     |          | Remaining duration of the effect in **seconds**.               | 67.16                    |
+| max_duration      | `FLOAT`  |     ✔     |          | Maximum duration of the effect in **seconds**.                 | 180.0                    |
+| last_activated_at | `STRING` |     ✔     |          | Records the time of the last activation **(ISO 8601 format)**. | 2026-09-30T14:36:15.598Z |
 
 **Output (Json-Object):**
 
@@ -91,7 +98,7 @@ _We have also refactored the time-related fields by mapping `remaining_seconds` 
       "times": {
         "buff_duration": null,
         "max_duration": null,
-        "activation_timestamp_iso": null
+        "last_activated_at": null
       }
     },
     "3971": {
@@ -102,7 +109,7 @@ _We have also refactored the time-related fields by mapping `remaining_seconds` 
       "times": {
         "buff_duration": 67.16,
         "max_duration": 180.0,
-        "activation_timestamp_iso": "2026-09-30T14:36:15.598Z"
+        "last_activated_at": "2026-09-30T14:36:15.598Z"
       }
     }
   }
@@ -110,7 +117,9 @@ _We have also refactored the time-related fields by mapping `remaining_seconds` 
 ```
 
 > [!IMPORTANT]
-> **Gimmick:** Whenever a **TIMED** object's **`buff_duration`** times out, remove that object from the set. When the player uses it again, it will reappear ✔
+> **Gimmick:**
+> 1. Whenever a **TIMED** object's **`buff_duration`** times out, remove that object from the set. When the player uses it again, it will reappear ✔
+> 2. Once a **TIMED** object's **`last_activated_at`** is set, it remains unchanged until the player uses it again. ✔ 
 
 #### 1.2 Restructured `effects.json` configuration file:
 
