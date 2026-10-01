@@ -1,7 +1,7 @@
 # Elden Ring Telemetry (offline, read-only)
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes live character data to
-`output/telemetry-state.json`. Implements spec v1.1.0. Standard library only, Windows + 64-bit Python 3.11+.
+`output/telemetry-state.json`. Implements spec v1.2.1. Standard library only, Windows + 64-bit Python 3.11+.
 
 ## Guarantees
 - Read-only: the only access mask requested is `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`.

@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-09-30T14:38:08.437Z",
+  "system_status": {
+    "state": "CONNECTED",
+    "game_connected": true,
+    "pid": 20988,
+    "anti_cheat_status": "DISABLED_OFFLINE",
+    "read_only": true,
+    "exe_sha256": "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891",
+    "profile": "Elden Ring 1.17.1",
+    "buffs_supported": true,
+    "ignored_effects": 7,
+    "last_error": null
+  },
+  "character": {
+    "level": 386,
+    "runes": 20154651,
+    "attributes": {
+      "vigor": 80,
+      "mind": 60,
+      "endurance": 60,
+      "strength": 90,
+      "dexterity": 90,
+      "intelligence": 15,
+      "faith": 60,
+      "arcane": 10
+    },
+    "effects": [
+      {
+        "id": 3971,
+        "name": "Gold-Pickled Fowl Foot",
+        "kind": "TIMED",
+        "category": null,
+        "remaining_seconds": 67.16,
+        "max_duration_seconds": 180.0,
+        "activation_timestamp_iso": "2026-09-30T14:36:15.598Z"
+      },
+      {
+        "id": 311100,
+        "name": "Gold Scarab",
+        "kind": "PERMANENT",
+        "category": "TALISMAN",
+        "remaining_seconds": null,
+        "max_duration_seconds": null,
+        "activation_timestamp_iso": null
+      }
+    ]
+  },
+  "telemetry": {
+    "session_start_runes": 10737375,
+    "rune_delta": 9417276
+  }
+}
