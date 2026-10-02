@@ -125,6 +125,9 @@ The **`delta`** calculates the real-time difference **($\Delta = \text{total} - 
 
 The **`metrics`** object is where we turn raw math into actual optimization. The moment **`baseline`** is set, a hidden stopwatch starts tracking **`elapsed_seconds`**. We then divide the live **`delta`** by this time to spit out your **`runes_per_minute` (RPM)**. This proves exactly which farming route at Mohgwyn Palace gives you the ultimate Time-to-Rune ratio.
 
+> [!WARNING]
+> Since we've expanded the `runes` data object above, the `telemetry` object in `./output/disk-state.json` is now redundant. Remove it entirely.
+
 ---
 
 ## Requirements
