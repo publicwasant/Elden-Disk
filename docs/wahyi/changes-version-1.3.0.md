@@ -104,6 +104,7 @@ _(Scan the entire project—combing through every detail of the source code and 
 **Refactoring Target Mapping:**
 - **Repository Name**: `Elden-Disk` (formerly `Elden-Ring-Telemetry-Tools`)
 - **Python Code Package Name**: `eldendisk` (formerly `elden_telemetry`)
+- **Files name**: `disk` (formerly `telemetry`)
 - **Executable / Release Binary Name**: `eldendisk.exe`
 
 ### 2. Add New Connection State Machine
