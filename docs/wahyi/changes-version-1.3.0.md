@@ -1,8 +1,8 @@
 # Changes
 
 > [!NOTE]
-> **Summary:** _Writing._     
-> **Status:** _Writing._    
+> **Summary:** Refactored project/package to `Elden-Disk`/`eldendisk`/`disk`, added `IDLE` state with window focus detection, implemented 60FPS pacing & Event-Driven Persistence Architecture, removed `timestamp`, and passed all v1.3.0 unit tests.    
+> **Status:** APPROVED ✔    
 > **Last Updated:** _2026-10-01_
 
 _(Previous version: Wahy: **[changes-version-1.2.1.md](changes-version-1.2.1.md)** and the spec: **[elden-telemetry-spec-v1.2.1.md](../specs/elden-telemetry-spec-v1.2.1.md)**)_
