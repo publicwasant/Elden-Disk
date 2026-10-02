@@ -186,7 +186,7 @@ Remove the top-level `timestamp` field from the output schema in `/code/output/t
     - Save at `./docs/impls/implementation_plan_v1.3.0.md`
 
 #### 5.2 Integrations
-- Development according to the **[elden-disk-spec-v1.3.0.md](../specs/elden-telemetry-spec-v1.2.1.md)** and the **[implementation_plan_v1.3.0.md](../impls/implementation_plan_v1.2.1.md)**
+- Development according to the **[elden-disk-spec-v1.3.0.md](../specs/elden-telemetry-spec-v1.2.1.md)** and the **[implementation_plan_v1.3.0.md](../implementations/implementation_plan_v1.2.1.md)**
 - Verification by **Unit-Test**
 - Update **Tool-Version** and all the documentations that exist the **Changes.**
 

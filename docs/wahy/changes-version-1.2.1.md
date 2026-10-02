@@ -168,7 +168,7 @@ _(Refactoring data structures)_
   - Save at `./docs/impls/implementation_plan_v1.2.1.md`
 
 #### 2.2 Integrations
-- Development according to the **[elden-telemetry-spec-v1.2.1.md](../specs/elden-telemetry-spec-v1.2.1.md)** and the **[implementation_plan_v1.2.1.md](../impls/implementation_plan_v1.2.1.md)**
+- Development according to the **[elden-telemetry-spec-v1.2.1.md](../specs/elden-telemetry-spec-v1.2.1.md)** and the **[implementation_plan_v1.2.1.md](../implementations/implementation_plan_v1.2.1.md)**
 - Verification by **Unit-Test**
 - Update **Tool-Version** and all the documentations that exist the **Changes.**
 

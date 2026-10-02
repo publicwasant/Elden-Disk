@@ -3,7 +3,7 @@
 Implementing project renaming to **EldenDisk**, module/file renames (`telemetry` → `disk`), window active focus detection (`IDLE` state), 60FPS pacing lock, Event-Driven Persistence architecture, and schema updates according to specification `v1.3.0`.
 
 ## Overview
-This plan details the full implementation steps for **EldenDisk v1.3.0** based on [elden-disk-spec-v1.3.0.md](../specs/elden-disk-spec-v1.3.0.md) and [changes-version-1.3.0.md](../wahyi/changes-version-1.3.0.md).
+This plan details the full implementation steps for **EldenDisk v1.3.0** based on [elden-disk-spec-v1.3.0.md](../specs/elden-disk-spec-v1.3.0.md) and [changes-version-1.3.0.md](../wahy/changes-version-1.3.0.md).
 
 Key Goals:
 1. **Refactor naming across project**:
