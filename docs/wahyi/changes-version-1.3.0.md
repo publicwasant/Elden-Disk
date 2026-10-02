@@ -96,9 +96,97 @@ Or in advanced objects such as a **TIMED** effect, where it has a **`buff_durati
 ---
 
 ## Wahyi
-_(?????????????????)_
 
-### 1. ?????????????????
-### 2. ?????????????????
+### 1. Replace All `Elden-Ring-Telemetry-Tools` → `Elden-Disk`
+
+_(Scan the entire project—combing through every detail of the source code and package structures—to locate and replace all legacy naming references.)_
+
+**Refactoring Target Mapping:**
+- **Repository Name**: `Elden-Disk` (formerly `Elden-Ring-Telemetry-Tools`)
+- **Python Code Package Name**: `eldendisk` (formerly `elden_telemetry`)
+- **Executable / Release Binary Name**: `eldendisk.exe`
+
+### 2. Add New Connection State Machine
+
+*(Introduce the `IDLE` state to the connection state machine)*
+
+| **State**                     | **Meaning**                                                  | **JSON `character`** |
+|:------------------------------|:-------------------------------------------------------------|:--------------------:|
+| `WAITING_FOR_PROCESS`         | Game not running                                             |        `null`        |
+| `EAC_ACTIVE` / `EAC_DETECTED` | EAC present; tool refuses to attach                          |        `null`        |
+| `UNSUPPORTED_VERSION`         | Exe hash not in `offsets.json`                               |        `null`        |
+| `WAITING_FOR_WORLD`           | Process up but pointer chain is null (title screen, loading) |        `null`        |
+| `CONNECTED`                   | All validations pass                                         |   `<full-object>`    |
+| `DISCONNECTED`                | Process exited                                               |        `null`        |
+| `IDLE`                        | Game's window is not active                                  |   `<full-object>`    |
+
+The core behavior of the `IDLE` state is to freeze the entire read/write loop—essentially putting **EldenDisk** into sleep mode—to eliminate unnecessary background processing. This saves the computer from that Red Bull-fueled, brute-force programming shit.
+
+### 3. Integrate 60FPS Pacing and Event-Driven Persistence
+
+*(Assuming you've read the Murmur's pacing section, I expect you already understand exactly what's going on here. In this section, we're going to expand on it.)*
+
+**Forget everything you know about the previous sequence of processes, and wrap your head around this redesigned diagram:**
+
+```text
+[LAUNCH] → [READ MEMORY AND UPDATE STATE (In RAM) @ 60FPS LOCKED] → [JSON WRITE (To Disk)]
+
+or, for short-term recognition:
+
+[LAUNCH] → [READ] → [WRITE]
+```
+
+As I said before, **[LAUNCH]** is working perfectly—change nothing. Now, we're going to talk about the **[READ]** and **[WRITE]** mechanisms.
+
+Regarding the memory reading specifications in **[elden-telemetry-spec-v1.2.1.md](../specs/elden-telemetry-spec-v1.2.1.md#4-memory-reading)**[cite: 4]: we are keeping the process strictly bound to this. That includes **Version pinning (offsets.json)**, the **Pointer chain**, the **Field table**, and the **Special effects (linked list) & Refactored `effects` Object**[cite: 4]. We are not changing *anything* in those sections because they are working perfectly, exactly as they should be.
+
+However, to keep the mechanism of our tool aligned with the core concept of **A Very Lightweight Memory Read Tool**, we must integrate the two major methods I introduced earlier.
+
+#### 3.1 60FPS Pacing
+
+On PC, Elden Ring’s frame-rate is capped at 60fps, making it incredibly easy to sync the frequency of the game's pacing with our tool's reading mechanism. This means our loop will look like this:
+
+```text
+REPEATING PROCESS IN THREAD (60 Executions Per Second)
+    └─► READ MEMORY ─────────────► UPDATE STATE (IN TOOL'S RAM)
+```
+
+#### 3.2 Event-Driven Persistence
+
+Instead of writing the output immediately to the JSON file, we keep that data in our tool's RAM first. You know the base addresses. The pointer chain guides you like a holy treasure map, and when you reach the destination, you grab that treasure and hold it in your hand.
+
+But when exactly do we *actually* need to write this data down?
+
+**Check out this logic flow:**
+
+```text
+REPEATING PROCESS IN THREAD (60 Executions Per Second)
+    └─► READ MEMORY ─────────────► UPDATE STATE (IN TOOL'S RAM)
+                                      └─► STATE DIFF CHECKING LOGIC
+                                            └─► IF TRUE (CHANGED) ────────► WRITE JSON FILE 
+                                            └─► IF FALSE (UNCHANGED) ─────► DO NOTHING
+```
+
+> [!IMPORTANT]
+> **Exception for Active Timers:** For objects classified as a **TIMED** effect, which feature an active **`buff_duration`** countdown. In this specific scenario, we are permitted to continuously write to the JSON file to reflect the ticking timer until the duration runs out. Even here, the **60FPS pacing constraint** must be strictly respected.
+
+### 4. (Schema Update)
+
+Remove the top-level `timestamp` field from the output schema in `/code/output/telemetry-state.json`. We simply do not need it anymore.
+
+### 5. Requirements
+
+#### 5.1 Documentations
+- **New Specification Version `1.3.0`:**
+    - Derived from:<br>[elden-telemetry-spec-v1.0.0.md](../specs/elden-telemetry-spec-v1.0.0.md)<br>[elden-telemetry-spec-v1.1.0.md](../specs/elden-telemetry-spec-v1.1.0.md)<br>[elden-telemetry-spec-v1.2.0.md](../specs/elden-telemetry-spec-v1.2.0.md)<br>[elden-telemetry-spec-v1.2.1.md](../specs/elden-telemetry-spec-v1.2.1.md)<br>**[NEW] elden-disk-spec-v1.3.0.md**
+    - Save at `./docs/specs/elden-disk-spec-v1.3.0.md`
+- **New Implementation Plan:**
+    - Scan the whole project, every details of source cods and design a **implementation_plan_v1.3.0.md**.
+    - Save at `./docs/impls/implementation_plan_v1.3.0.md`
+
+#### 5.2 Integrations
+- Development according to the **[elden-disk-spec-v1.3.0.md](../specs/elden-telemetry-spec-v1.2.1.md)** and the **[implementation_plan_v1.3.0.md](../impls/implementation_plan_v1.2.1.md)**
+- Verification by **Unit-Test**
+- Update **Tool-Version** and all the documentations that exist the **Changes.**
 
 ---
