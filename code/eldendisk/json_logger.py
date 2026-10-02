@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 class JsonLogger:
-    def __init__(self, out_dir: Path, game_dir: Path | None = None, filename: str = "telemetry-state.json"):
+    def __init__(self, out_dir: Path, game_dir: Path | None = None, filename: str = "disk-state.json"):
         out = Path(out_dir).resolve()
         if game_dir is not None:
             g = Path(game_dir).resolve()

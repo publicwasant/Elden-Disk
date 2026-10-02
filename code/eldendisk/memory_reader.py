@@ -39,6 +39,7 @@ if IS_WINDOWS:
     from ctypes import wintypes
 
     _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _u32 = ctypes.WinDLL("user32", use_last_error=True)
     INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
     class MODULEENTRY32W(ctypes.Structure):
@@ -88,6 +89,22 @@ if IS_WINDOWS:
     for _fn in (_k32.Process32FirstW, _k32.Process32NextW):
         _fn.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
         _fn.restype = wintypes.BOOL
+
+    _u32.GetForegroundWindow.restype = wintypes.HWND
+    _u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    _u32.GetWindowThreadProcessId.restype = wintypes.DWORD
+
+
+def is_window_active(pid: int | None) -> bool:
+    """True if the foreground window belongs to process `pid`, or if pid is None / non-Windows."""
+    if not IS_WINDOWS or pid is None:
+        return True
+    hwnd = _u32.GetForegroundWindow()
+    if not hwnd:
+        return False
+    fg_pid = wintypes.DWORD(0)
+    _u32.GetWindowThreadProcessId(hwnd, ctypes.byref(fg_pid))
+    return fg_pid.value == pid
 
 
 def _snapshot(flags: int, pid: int):

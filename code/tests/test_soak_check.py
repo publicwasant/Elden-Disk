@@ -8,7 +8,7 @@ import soak_check  # noqa: E402
 def doc(state="CONNECTED", **over):
     ch = {"level": 386, "runes": 1000, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
           "effects": {}}
-    d = {"system_status": {"state": state, "read_only": True}, "character": ch if state == "CONNECTED" else None,
+    d = {"system_status": {"state": state, "read_only": True}, "character": ch if state in ("CONNECTED", "IDLE") else None,
          "telemetry": {"session_start_runes": 900, "rune_delta": 100}}
     d.update(over)
     return d
@@ -16,6 +16,7 @@ def doc(state="CONNECTED", **over):
 
 def test_valid_documents_have_no_problems():
     assert soak_check.check(doc()) == []
+    assert soak_check.check(doc("IDLE")) == []
     assert soak_check.check(doc("WAITING_FOR_WORLD")) == []
 
 

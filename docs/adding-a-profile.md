@@ -54,7 +54,7 @@ Offset 2      6C                         ──►  game_data.runes            =
 **A1. Get the hash of your `eldenring.exe`**
 
 ```powershell
-python -m elden_telemetry hash
+python -m eldendisk hash
 ```
 
 It prints one 64-character line. Copy it. (If it says the game was not found, add `--game-dir "<folder with eldenring.exe>"`.)
@@ -86,7 +86,7 @@ The file must stay valid JSON: a comma between profiles, none after the last one
 **A3. Launch the game through the tool**
 
 ```powershell
-python -m elden_telemetry run -v
+python -m eldendisk run -v
 ```
 
 Expected: the game starts, and the tool prints
@@ -115,7 +115,7 @@ Load your character and stand somewhere safe. Alt-Tab is fine (the game does not
 | `no profile for exe sha256`          | Hash key in `offsets.json` differs from `hash` output                                        |
 | `EAC_ACTIVE`                         | You started the game from Steam's normal Play button. Close it and use `run -v`              |
 | Cheat Engine cannot open the process | Run Cheat Engine as Administrator; make sure the game was started by `run -v` (no EAC)       |
-| `No module named elden_telemetry`    | You are in the wrong folder. `cd` to the folder that *contains* the `elden_telemetry` folder |
+| `No module named eldendisk`    | You are in the wrong folder. `cd` to the folder that *contains* the `eldendisk` folder |
 
 ---
 
@@ -248,7 +248,7 @@ Save the file. It must still be valid JSON.
 **D2.** With the game still open and in-world, run:
 
 ```powershell
-python -m elden_telemetry run --attach -v
+python -m eldendisk run --attach -v
 ```
 
 > ⚠️ **Use `--attach` here.** Without it the tool starts a second copy of the game. And `--attach` only works while the game is
@@ -256,7 +256,7 @@ python -m elden_telemetry run --attach -v
 
 Expected: `[CONNECTED]`. A line like `note: buffs disabled: …` is fine at this point.
 
-**D3.** `[CONNECTED]` only means the numbers were *plausible*. Now check they are *true*. Open `output\telemetry-state.json`
+**D3.** `[CONNECTED]` only means the numbers were *plausible*. Now check they are *true*. Open `output\disk-state.json`
 and compare with the in-game Status screen — **every row must match exactly**:
 
 | Field                                  | In game | JSON                     |
@@ -268,7 +268,7 @@ and compare with the in-game Status screen — **every row must match exactly**:
 
 **D4.** Change your runes (gain some, spend some). `telemetry.rune_delta` must go up when you gain and down when you spend.
 
-**D5. Restart test (recommended).** Close the game, run `python -m elden_telemetry run -v` (this time *without* `--attach`),
+**D5. Restart test (recommended).** Close the game, run `python -m eldendisk run -v` (this time *without* `--attach`),
 load your character and check again. A pointer path that only works for one launch would fail here.
 
 **D6. Order test (only if some attributes have the same value).** If e.g. mind and endurance are both 60, swapped fields look
@@ -297,7 +297,7 @@ table of **effect IDs** with names (`effects.json`).
 **E1. Verify the layout.** In-world, run:
 
 ```powershell
-python -m elden_telemetry effects -q
+python -m eldendisk effects -q
 ```
 
 You should see a list, e.g. `--- 8 effects now active ---` with lines `id | duration | timer`, and it should stay stable.
@@ -345,7 +345,7 @@ Ignore anything that flickers with duration under 1 s (internal engine effects) 
 
 Allowed `category` values: `TALISMAN`, `ARMOR`, `WEAPON`, `GREAT_RUNE`. Keys are the IDs as strings.
 
-**E5. End-to-end test.** While a buff is running: `python -m elden_telemetry run --attach -v`, open the JSON twice about five seconds apart.
+**E5. End-to-end test.** While a buff is running: `python -m eldendisk run --attach -v`, open the JSON twice about five seconds apart.
 `remaining_seconds` must have dropped by about five, `max_duration_seconds` must equal the duration you saw, and the buff must vanish when it ends.
 
 > 🟢 **Checkpoint E:** the buffs you configured show correct names and counting-down times in `active_buffs`, talismans appear in `passive_buffs`.
@@ -366,9 +366,9 @@ Mapping every ID to an item name can wait. A param editor such as Smithbox lists
 
 **Asking for help — please include:**
 
-- the output of `python -m elden_telemetry hash`, and the game version shown on the title screen
+- the output of `python -m eldendisk hash`, and the game version shown on the title screen
 - your profile block from `offsets.json`
-- the last lines of `python -m elden_telemetry run -v` (state and `last_error`)
+- the last lines of `python -m eldendisk run -v` (state and `last_error`)
 - a screenshot of the Cheat Engine pointer-scan options dialog and of the result window
 
 ---

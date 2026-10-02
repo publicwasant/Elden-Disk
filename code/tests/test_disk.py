@@ -6,14 +6,14 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from elden_telemetry import memory_reader
-from elden_telemetry.json_logger import JsonLogger
-from elden_telemetry.profile_loader import (EffectConfig, EntryLayout, Effects, Profile,
-                                            SpEffectLayout, load_effects, load_profile)
-from elden_telemetry.telemetry import Sampler, build_document
+from eldendisk import memory_reader
+from eldendisk.disk import Sampler, build_document
+from eldendisk.json_logger import JsonLogger
+from eldendisk.profile_loader import (EffectConfig, EntryLayout, Effects, Profile,
+                                       SpEffectLayout, load_effects, load_profile)
 
 PKG = Path(memory_reader.__file__).parent
-SCHEMA = json.loads((PKG / "telemetry.schema.json").read_text())
+SCHEMA = json.loads((PKG / "disk.schema.json").read_text())
 
 BASE, WCM, PLAYER, GD, SP = 0x140000000, 0x200000000, 0x210000000, 0x220000000, 0x230000000
 E1, E2, E3 = 0x240000000, 0x240001000, 0x240002000
@@ -118,6 +118,21 @@ def test_connected_sample(mode):
     valid(doc_for(s, r))
 
 
+def test_idle_state_retains_character_data():
+    m = full_world()
+    s = Sampler(m, make_profile(), effects(), BASE)
+    r = s.sample(NOW)
+    assert r.state == "CONNECTED"
+    d = build_document(now=NOW, state="IDLE", pid=1, anti_cheat="DISABLED_OFFLINE",
+                       exe_sha256="x", profile_label="test", buffs_supported=True, sample=r,
+                       session_start_runes=s.session_start_runes)
+    assert d["system_status"]["state"] == "IDLE"
+    assert d["system_status"]["game_connected"] is True
+    assert d["character"] is not None
+    assert d["character"]["level"] == 386
+    valid(d)
+
+
 def test_rune_delta_and_session_start():
     m = full_world()
     s = Sampler(m, make_profile(), effects(), BASE)
@@ -195,7 +210,7 @@ def test_buffs_disabled_when_sp_layout_missing():
 
 
 def test_non_connected_states_validate():
-    for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "DISCONNECTED"]:
+    for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "DISCONNECTED", "IDLE"]:
         d = build_document(now=NOW, state=state, pid=None, anti_cheat="UNKNOWN", exe_sha256=None,
                            profile_label=None, buffs_supported=False, sample=None,
                            session_start_runes=None, note="x")
@@ -271,7 +286,7 @@ def test_logger_refuses_game_dir_and_writes_atomically(tmp_path):
         JsonLogger(game / "out", game)
     lg = JsonLogger(tmp_path / "out", game)
     assert lg.write({"a": 1}) and json.loads(lg.path.read_text()) == {"a": 1}
-    assert not (tmp_path / "out" / "telemetry-state.json.tmp").exists()
+    assert not (tmp_path / "out" / "disk-state.json.tmp").exists()
 
 
 def test_raw_effects_lists_everything_unclassified():

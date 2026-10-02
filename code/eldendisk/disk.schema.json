@@ -1,15 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "EldenRingLiveTelemetry",
+  "title": "EldenDiskLiveState",
   "type": "object",
-  "required": ["timestamp", "system_status", "character", "telemetry"],
+  "required": ["system_status", "character", "telemetry"],
   "properties": {
-    "timestamp": { "type": "string", "format": "date-time" },
     "system_status": {
       "type": "object",
       "required": ["state", "game_connected", "pid", "anti_cheat_status", "read_only", "exe_sha256", "profile", "buffs_supported", "ignored_effects", "last_error"],
       "properties": {
-        "state": { "enum": ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "CONNECTED", "DISCONNECTED"] },
+        "state": { "enum": ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "CONNECTED", "DISCONNECTED", "IDLE"] },
         "game_connected": { "type": "boolean" },
         "pid": { "type": ["integer", "null"] },
         "anti_cheat_status": { "enum": ["DISABLED_OFFLINE", "ACTIVE_EAC", "UNKNOWN"] },

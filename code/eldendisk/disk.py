@@ -25,7 +25,7 @@ def iso(dt: datetime) -> str:
 
 @dataclass
 class Sample:
-    state: str  # WAITING_FOR_WORLD | CONNECTED
+    state: str  # WAITING_FOR_WORLD | CONNECTED | IDLE
     character: dict | None = None
     ignored_effects: int = 0
     error: str | None = None  # diagnostic only; None for the normal title-screen case
@@ -175,10 +175,9 @@ class Sampler:
                     continue
                 kind = "TIMED"
 
-                # Stable activation timestamp (Gimmick 2: remains unchanged until re-cast/re-activated)
+                # Stable activation timestamp (remains unchanged until re-cast/re-activated)
                 if eid in self._activations:
                     act_time, prev_rem = self._activations[eid]
-                    # If remaining jumped up significantly (> 2s), it was re-cast/re-activated
                     if remaining > prev_rem + 2.0:
                         act_time = now - timedelta(seconds=dur - remaining)
                 else:
@@ -222,18 +221,22 @@ class Sampler:
         return effects, ignored
 
 
-def build_document(*, now: datetime, state: str, pid: int | None, anti_cheat: str,
+def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
                    exe_sha256: str | None, profile_label: str | None, buffs_supported: bool,
                    sample: Sample | None, session_start_runes: int | None,
                    note: str | None = None) -> dict:
-    connected = state == "CONNECTED" and sample is not None and sample.character is not None
-    character = sample.character if connected else None
-    delta = (sample.runes - session_start_runes) if connected and session_start_runes is not None else None
+    has_character = sample is not None and sample.character is not None
+    is_connected = state == "CONNECTED" and has_character
+    is_idle = state == "IDLE" and has_character
+    game_connected = is_connected or is_idle
+    character = sample.character if game_connected else None
+    current_runes = sample.runes if sample else None
+    delta = (current_runes - session_start_runes) if (game_connected and current_runes is not None and session_start_runes is not None) else None
+
     return {
-        "timestamp": iso(now),
         "system_status": {
             "state": state,
-            "game_connected": connected,
+            "game_connected": game_connected,
             "pid": pid,
             "anti_cheat_status": anti_cheat,
             "read_only": True,

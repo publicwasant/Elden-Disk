@@ -1,17 +1,17 @@
-"""CLI:  python -m elden_telemetry run | effects | hash"""
+"""CLI: python -m eldendisk run | effects | hash"""
 from __future__ import annotations
 
 import argparse
 import struct
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 from . import game_launcher as gl
+from .disk import Sampler, build_document
 from .json_logger import JsonLogger
+from .memory_reader import is_window_active
 from .profile_loader import load_effects, load_profile
-from .telemetry import Sampler, build_document
 
 HERE = Path(__file__).resolve().parent.parent
 EXIT_UNSUPPORTED, EXIT_EAC = 2, 3
@@ -38,20 +38,39 @@ class Monitor:
         self.label: str | None = None
         self.buffs = False
         self.sampler: Sampler | None = None
-        self._last: tuple | None = None
+        self._last_verbose: tuple | None = None
+        self._last_written_doc: dict | None = None
+
+    def _should_write(self, doc: dict) -> bool:
+        if self._last_written_doc is None:
+            return True
+        # State differential checking logic
+        if doc != self._last_written_doc:
+            return True
+        # Exception for active TIMED effects countdown
+        ch = doc.get("character")
+        if ch and isinstance(ch, dict) and "effects" in ch:
+            for eff in ch["effects"].values():
+                if eff.get("kind") == "TIMED":
+                    return True
+        return False
 
     def emit(self, state: str, sample=None, note: str | None = None) -> None:
         doc = build_document(
-            now=datetime.now(timezone.utc), state=state, pid=self.pid, anti_cheat=self.anti_cheat,
+            now=None, state=state, pid=self.pid, anti_cheat=self.anti_cheat,
             exe_sha256=self.sha, profile_label=self.label, buffs_supported=self.buffs, sample=sample,
             session_start_runes=self.sampler.session_start_runes if self.sampler else None, note=note,
         )
-        if not self.logger.write(doc):
-            _log("warning: output file busy, sample skipped")
+        if self._should_write(doc):
+            if self.logger.write(doc):
+                self._last_written_doc = doc
+            else:
+                _log("warning: output file busy, sample skipped")
+
         if self.args.verbose:
             key = (state, doc["system_status"]["last_error"])
-            if key != self._last:
-                self._last = key
+            if key != self._last_verbose:
+                self._last_verbose = key
                 _log(f"[{state}]" + (f" {key[1]}" if key[1] else ""))
 
 
@@ -66,7 +85,7 @@ def cmd_run(args) -> int:
             raise
         game_dir = None
 
-    logger = JsonLogger(Path(args.out), game_dir)
+    logger = JsonLogger(Path(args.out), game_dir, filename="disk-state.json")
     mon = Monitor(args, logger)
     mem = None
     try:
@@ -94,7 +113,7 @@ def cmd_run(args) -> int:
             return 1
 
         exe_path = Path(main_mod.path)
-        logger = mon.logger = JsonLogger(Path(args.out), exe_path.parent)  # re-check vs real game dir
+        logger = mon.logger = JsonLogger(Path(args.out), exe_path.parent, filename="disk-state.json")
 
         # 3. never attach with EAC loaded
         if gl.has_eac(m.name for m in mods):
@@ -117,12 +136,16 @@ def cmd_run(args) -> int:
         mem = ProcessMemory(mon.pid)
         mon.sampler = Sampler(mem, profile, load_effects(Path(args.effects)), main_mod.base)
 
-        # 5. poll
-        period, next_scan = 1.0 / args.hz, time.monotonic() + 2
+        # 5. poll at 60FPS
+        period = 1.0 / args.hz
+        next_scan = time.monotonic() + 2
+        last_sample = None
+
         while True:
             if not mem.alive():
                 mon.emit("DISCONNECTED")
                 return 0
+
             if time.monotonic() >= next_scan:
                 mods = list_modules(mon.pid)
                 if mods and gl.has_eac(m.name for m in mods):
@@ -130,7 +153,15 @@ def cmd_run(args) -> int:
                     mon.emit("EAC_DETECTED", note="EasyAntiCheat module appeared; stopped reading")
                     return EXIT_EAC
                 next_scan = time.monotonic() + 2
+
+            # Check window active focus -> IDLE state
+            if not is_window_active(mon.pid):
+                mon.emit("IDLE", sample=last_sample)
+                time.sleep(period)
+                continue
+
             s = mon.sampler.sample()
+            last_sample = s
             mon.emit(s.state, s)
             time.sleep(period)
     except KeyboardInterrupt:
@@ -163,7 +194,7 @@ def cmd_effects(args) -> int:
         raise RuntimeError(profile.buffs_note or "sp_effect layout incomplete")
 
     mem = ProcessMemory(pid)
-    sampler = Sampler(mem, profile, Effects({}, {}), main_mod.base)
+    sampler = Sampler(mem, profile, Effects({}), main_mod.base)
     prev: dict[int, tuple[float, float]] | None = None
     last_err = None
     print("Ctrl+C to stop. Format: id | duration | timer   (+ = appeared, - = disappeared)")
@@ -203,17 +234,17 @@ def cmd_hash(args) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="elden_telemetry", description=__doc__)
+    ap = argparse.ArgumentParser(prog="eldendisk", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     r = sub.add_parser("run", help="launch the game offline and write telemetry JSON")
     r.add_argument("--attach", action="store_true", help="attach to an already-running eldenring.exe instead of launching")
     r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     r.add_argument("--out", default=str(HERE / "output"),
-                   help="directory for telemetry-state.json (default: <project>/code/output)")
+                   help="directory for disk-state.json (default: <project>/code/output)")
     r.add_argument("--offsets", default=str(HERE / "offsets.json"), help="offsets.json (default: <project>/offsets.json)")
-    r.add_argument("--effects", default=str(HERE / "effects.json"), help="effects.json (default: <project>/offsets.json)")
-    r.add_argument("--hz", type=float, default=10.0, help="polls per second, 1-30 (default: 10)")
+    r.add_argument("--effects", default=str(HERE / "effects.json"), help="effects.json (default: <project>/effects.json)")
+    r.add_argument("--hz", type=float, default=60.0, help="polls per second, 1-120 (default: 60)")
     r.add_argument("-v", "--verbose", action="store_true", help="print state changes and diagnostics")
     r.set_defaults(fn=cmd_run)
 
@@ -228,8 +259,8 @@ def main(argv=None) -> int:
     h.set_defaults(fn=cmd_hash)
 
     args = ap.parse_args(argv)
-    if args.cmd == "run" and not 1 <= args.hz <= 30:
-        ap.error("--hz must be between 1 and 30")
+    if args.cmd == "run" and not 1 <= args.hz <= 120:
+        ap.error("--hz must be between 1 and 120")
     try:
         return args.fn(args)
     except (FileNotFoundError, OSError, ValueError, RuntimeError) as exc:
