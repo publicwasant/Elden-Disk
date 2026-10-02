@@ -298,3 +298,26 @@ def test_raw_effects_lists_everything_unclassified():
     assert entries is None
     entries, err = Sampler(m, make_profile(sp=False), effects(), BASE).raw_effects()
     assert entries is None and "sp_effect" in err
+
+
+def test_monitor_should_write_state_differential(tmp_path):
+    from eldendisk.__main__ import Monitor
+    lg = JsonLogger(tmp_path / "out")
+    mon = Monitor(None, lg)
+    doc1 = {"system_status": {"state": "CONNECTED"}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
+    doc2 = {"system_status": {"state": "CONNECTED"}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
+    doc3 = {"system_status": {"state": "IDLE"}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
+
+    assert mon._should_write(doc1) is True
+    mon._last_written_doc = doc1
+
+    # Identical document (even with TIMED effect) should NOT write
+    assert mon._should_write(doc2) is False
+
+    # State transition to IDLE should write once
+    assert mon._should_write(doc3) is True
+    mon._last_written_doc = doc3
+
+    # Consecutive IDLE ticks with identical document should NOT write
+    assert mon._should_write(doc3) is False
+

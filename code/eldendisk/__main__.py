@@ -44,16 +44,7 @@ class Monitor:
     def _should_write(self, doc: dict) -> bool:
         if self._last_written_doc is None:
             return True
-        # State differential checking logic
-        if doc != self._last_written_doc:
-            return True
-        # Exception for active TIMED effects countdown
-        ch = doc.get("character")
-        if ch and isinstance(ch, dict) and "effects" in ch:
-            for eff in ch["effects"].values():
-                if eff.get("kind") == "TIMED":
-                    return True
-        return False
+        return doc != self._last_written_doc
 
     def emit(self, state: str, sample=None, note: str | None = None) -> None:
         doc = build_document(
