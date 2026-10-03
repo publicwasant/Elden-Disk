@@ -174,7 +174,7 @@ _**(Notice that the `kind` field is missing? Don't jump to conclusions—we aren
       "times": {
         "buff_duration": 67.16,
         "max_duration": 180.0,
-        "last_activated_at": "2026-09-30T14:36:15.598Z"
+        "last_activated_at": "2026-09-30 14:36:15.598000"
       }
     }
   }
