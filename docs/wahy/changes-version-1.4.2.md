@@ -38,7 +38,26 @@ Yeah, that's literally it.
 
 ## Requirements
 
-### 1. Documentation
+### 1. Catch up with previous versions:
+- **Changes:**
+  - **[changes-version-1.2.1.md](changes-version-1.2.1.md)**
+  - **[changes-version-1.3.0.md](changes-version-1.3.0.md)**
+  - **[changes-version-1.4.0.md](changes-version-1.4.0.md)**
+  - **[changes-version-1.4.1.md](changes-version-1.4.1.md)**
+- **Specification:**
+  - **[elden-telemetry-spec-v1.0.0.md](../specs/elden-telemetry-spec-v1.0.0.md)**
+  - **[elden-telemetry-spec-v1.1.0.md](../specs/elden-telemetry-spec-v1.1.0.md)**
+  - **[elden-telemetry-spec-v1.2.0.md](../specs/elden-telemetry-spec-v1.2.0.md)**
+  - **[elden-disk-spec-v1.3.0.md](../specs/elden-disk-spec-v1.3.0.md)**
+  - **[elden-disk-spec-v1.4.0.md](../specs/elden-disk-spec-v1.4.0.md)**
+  - **[elden-disk-spec-v1.4.1.md](../specs/elden-disk-spec-v1.4.1.md)**
+- **Implementation Plan:**
+  - **[implementation_plan_v1.2.1.md](../implementations/implementation_plan_v1.2.1.md)**
+  - **[implementation_plan_v1.3.0.md](../implementations/implementation_plan_v1.3.0.md)**
+  - **[implementation_plan_v1.4.0.md](../implementations/implementation_plan_v1.4.0.md)**
+  - **[implementation_plan_v1.4.1.md](../implementations/implementation_plan_v1.4.1.md)**
+
+### 2. Documentation
 - **New Specification Version `1.4.2`:**
   - Write **[NEW] elden-disk-spec-v1.4.2.md**
   - Save at `./docs/specs/elden-disk-spec-v1.4.2.md`
@@ -46,7 +65,7 @@ Yeah, that's literally it.
   - Scan the whole project and every detail of the source code to draft an **implementation_plan_v1.4.2.md**.
   - Save at `./docs/implementations/implementation_plan_v1.4.2.md`
 
-### 2. Integration
+### 3. Integration
 - Develop features according to **elden-disk-spec-v1.4.2.md** and **implementation_plan_v1.4.2.md**.
 - Verification via **Unit Tests**.
 - Update the **Tool-Version** and all documentation affected by these **Changes**.
