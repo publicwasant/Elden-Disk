@@ -20,7 +20,7 @@ ATTR_NAMES = ("vigor", "mind", "endurance", "strength", "dexterity", "intelligen
 
 
 def iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 @dataclass
@@ -40,6 +40,7 @@ class Sampler:
         self.base = module_base
         self.baseline_runes: int | None = None
         self._was_at_grace: bool = False
+        self._last_animation: dict[str, dict] = {}
         self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
 
     def reset_baseline(self, runes: int) -> None:
@@ -124,7 +125,26 @@ class Sampler:
             effects, ignored = self._classify(entries, now)
 
         # Read Site of Grace interaction/resting state directly from CSChrTimeActModule in game memory
-        is_at_grace = self._is_at_grace(player)
+        anim_id = self._read_anim_id(player)
+        is_at_grace = anim_id is not None and self.profile.at_grace is not None and anim_id in self.profile.at_grace.equals
+
+        if anim_id is not None and anim_id > 0:
+            cfg = self.effects.table.get(anim_id)
+            if cfg is not None:
+                anim_obj = {
+                    "name": cfg.name,
+                    "categories": cfg.categories or "MANNER",
+                }
+                if cfg.abilities:
+                    anim_obj["abilities"] = cfg.abilities
+                self._last_animation = {str(anim_id): anim_obj}
+            else:
+                self._last_animation = {
+                    str(anim_id): {
+                        "name": f"Animation {anim_id}",
+                        "categories": "MANNER",
+                    }
+                }
 
         # Event: Entered Site of Grace (state transition: False -> True)
         entered_grace = is_at_grace and not self._was_at_grace
@@ -151,6 +171,7 @@ class Sampler:
             "runes": runes_obj,
             "attributes": dict(zip(ATTR_NAMES, attrs)),
             "effects": effects,
+            "animations": self._last_animation,
         }
         return Sample("CONNECTED", character, ignored, None, runes)
 
@@ -211,7 +232,7 @@ class Sampler:
 
         for eid, dur, timer in entries:
             cfg = self.effects.table.get(eid)
-            if cfg is None or not (math.isfinite(dur) and math.isfinite(timer)):
+            if cfg is None or cfg.sources == "ANIMATIONS" or not (math.isfinite(dur) and math.isfinite(timer)):
                 ignored += 1
                 continue
 
@@ -245,19 +266,19 @@ class Sampler:
             key = str(eid)
             eff = {
                 "name": cfg.name,
-                "kind": kind,
+                "categories": cfg.categories or "CONSUMABLES",
             }
-            if cfg.category is not None:
-                eff["category"] = cfg.category
-            if cfg.ability is not None:
-                eff["ability"] = cfg.ability
-            eff["times"] = times
+            if cfg.abilities:
+                eff["abilities"] = cfg.abilities
+            if kind == "TIMED":
+                eff["times"] = times
 
             if key in effects:
                 existing = effects[key]
-                if existing["kind"] == "PERMANENT" and kind == "TIMED":
+                has_times = "times" in existing
+                if not has_times and kind == "TIMED":
                     effects[key] = eff
-                elif existing["kind"] == "TIMED" and kind == "TIMED":
+                elif has_times and kind == "TIMED":
                     if times["buff_duration"] > existing["times"]["buff_duration"]:
                         effects[key] = eff
             else:

@@ -1,0 +1,58 @@
+{
+  "311100": {
+    "name": "Gold Scarab",
+    "sources": "EFFECTS",
+    "categories": "TALISMANS",
+    "abilities": "Permanently increases Runes gained by 20% while equipped."
+  },
+  "3971": {
+    "name": "Gold-Pickled Fowl Foot",
+    "sources": "EFFECTS",
+    "categories": "CONSUMABLES",
+    "abilities": "Increases Runes gained by 30% for 3 minutes."
+  },
+  "1605000": {
+    "name": "Flame! Grant Me Strength",
+    "sources": "EFFECTS",
+    "categories": "INCANTATIONS",
+    "abilities": "Raises physical and fire-alignment attack power."
+  },
+  "1660000": {
+    "name": "Golden Vow",
+    "sources": "EFFECTS",
+    "categories": "INCANTATIONS",
+    "abilities": "Increases attack power and defense for self and nearby allies."
+  },
+  "2000000": {
+    "name": "Standing",
+    "sources": "ANIMATIONS",
+    "categories": "MANNER"
+  },
+  "2020110": {
+    "name": "Running",
+    "sources": "ANIMATIONS",
+    "categories": "MANNER"
+  },
+  "2020210": {
+    "name": "Sprint",
+    "sources": "ANIMATIONS",
+    "categories": "MANNER"
+  },
+  "27110": {
+    "name": "Dodge",
+    "sources": "ANIMATIONS",
+    "categories": "MANNER",
+    "abilities": "Provides invincibility frames (i-frames) for a few milliseconds."
+  },
+  "26030000": {
+    "name": "Attacking (R1)",
+    "sources": "ANIMATIONS",
+    "categories": "MANNER"
+  },
+  "68011": {
+    "name": "Resting",
+    "sources": "ANIMATIONS",
+    "categories": "MANNER",
+    "abilities": "Resets: HP, FP, Stamina, etc."
+  }
+}

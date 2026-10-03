@@ -63,11 +63,14 @@ def check(doc: dict) -> list[str]:
         if not 1 <= attrs.get(name, 0) <= 99:
             out.append(f"attribute {name}={attrs.get(name)} out of range")
     for eid, eff in ch.get("effects", {}).items():
-        if eff.get("kind") == "TIMED":
+        if "times" in eff:
             t = eff.get("times", {}) or {}
             rem, mx = t.get("buff_duration"), t.get("max_duration")
             if rem is None or mx is None or rem < 0 or mx <= 0 or rem > mx + 1:
                 out.append(f"buff {eid} has impossible timer {rem}/{mx}")
+    anim = ch.get("animations")
+    if not isinstance(anim, dict):
+        out.append(f"animations {anim!r} is not an object")
     return out
 
 

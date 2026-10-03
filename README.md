@@ -1,7 +1,7 @@
 # EldenDisk (offline, read-only memory read tool)
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes live character state to
-`output/disk-state.json`. Implements spec v1.4.0. Standard library only, Windows + 64-bit Python 3.11+.
+`output/disk-state.json`. Implements spec v1.4.1. Standard library only, Windows + 64-bit Python 3.11+.
 
 ## Guarantees
 - Read-only: the only access mask requested is `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`.
@@ -32,11 +32,12 @@ Run as `python -m eldendisk <command> [options]` from the project folder. Every 
 
 ### Commands at a glance
 
-| Command   | Usage                                 | Description                                                                                 |
-|-----------|---------------------------------------|---------------------------------------------------------------------------------------------|
-| `run`     | `python -m eldendisk run [options]`   | Launches (or attaches via `--attach`) and writes live state to `output/disk-state.json`    |
-| `effects` | `python -m eldendisk effects [-q]`    | Live SpEffect viewer: streams active buffs and status effects to stdout                     |
-| `hash`    | `python -m eldendisk hash`            | Prints the SHA-256 hash of `eldenring.exe` (used as profile key in `offsets.json`)          |
+| Command      | Usage                                     | Description                                                                                 |
+|--------------|-------------------------------------------|---------------------------------------------------------------------------------------------|
+| `run`        | `python -m eldendisk run [options]`       | Launches (or attaches via `--attach`) and writes live state to `output/disk-state.json`    |
+| `effects`    | `python -m eldendisk effects [-q]`        | Live SpEffect viewer: streams active buffs and status effects to stdout                     |
+| `animations` | `python -m eldendisk animations [-q]`     | Live character animation state viewer: streams active animation IDs to stdout              |
+| `hash`       | `python -m eldendisk hash`                | Prints the SHA-256 hash of `eldenring.exe` (used as profile key in `offsets.json`)          |
 
 ### Common recipes
 
@@ -47,6 +48,7 @@ Run as `python -m eldendisk <command> [options]` from the project folder. Every 
 | Attach to already running game | `python -m eldendisk run --attach -v`                           |
 | Custom sampling rate           | `python -m eldendisk run --hz 60`                               |
 | View active buffs / SpEffects  | `python -m eldendisk effects -q`                                |
+| View active animation states   | `python -m eldendisk animations -q`                             |
 | Run soak test (V-06)           | Terminal A: `run -v` · Terminal B: `python tools/soak_check.py` |
 
 **Full reference:** For full flag tables, execution logic, exit codes, and auxiliary scripts, see **[cli-commands.md](docs/cli-commands.md)**.

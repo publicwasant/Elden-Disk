@@ -49,8 +49,10 @@ def make_profile(mode="remaining", sp=True):
 def effects():
     return Effects(
         table={
-            100: EffectConfig("Golden Vow", category="INCANTATIONS", ability="Buff"),
-            200: EffectConfig("Gold Scarab", category="TALISMANS", ability="More runes"),
+            100: EffectConfig("Golden Vow", sources="EFFECTS", categories="INCANTATIONS", abilities="Buff"),
+            200: EffectConfig("Gold Scarab", sources="EFFECTS", categories="TALISMANS", abilities="More runes"),
+            2020210: EffectConfig("Sprint", sources="ANIMATIONS", categories="MANNER"),
+            68011: EffectConfig("Resting", sources="ANIMATIONS", categories="MANNER", abilities="Resets: HP, FP, Stamina, etc."),
         }
     )
 
@@ -108,16 +110,18 @@ def test_connected_sample(mode):
     assert "100" in c["effects"]
     b = c["effects"]["100"]
     assert b["name"] == "Golden Vow"
-    assert b["kind"] == "TIMED"
-    assert b["category"] == "INCANTATIONS"
+    assert "kind" not in b
+    assert b["categories"] == "INCANTATIONS"
+    assert b["abilities"] == "Buff"
     assert b["times"]["buff_duration"] == 45.0 and b["times"]["max_duration"] == 80.0
-    assert b["times"]["last_activated_at"] == "2026-09-30T11:59:25.000Z"  # now - (80-45)
+    assert b["times"]["last_activated_at"] == "2026-09-30 11:59:25.000000"  # now - (80-45)
     assert "200" in c["effects"]
     p = c["effects"]["200"]
     assert p["name"] == "Gold Scarab"
-    assert p["kind"] == "PERMANENT"
-    assert p["category"] == "TALISMANS"
-    assert p["times"] is None
+    assert "kind" not in p
+    assert p["categories"] == "TALISMANS"
+    assert p["abilities"] == "More runes"
+    assert "times" not in p
     assert r.ignored_effects == 1  # id 999 not in tables
     valid(doc_for(s, r))
 
@@ -173,7 +177,7 @@ def test_grace_reset_baseline():
     m.u64(PLAYER + 0x190, ANIM_MOD)
     m.u64(ANIM_MOD + 0x18, ANIM_SUB)
     m.u32(ANIM_SUB + 0xC4, 7)  # read_idx = 7
-    m.u32(ANIM_SUB + 0x20 + 7 * 0x10, 2000000)  # Standing animation
+    m.u32(ANIM_SUB + 0x20 + 7 * 0x10, 2020210)  # Sprint animation
 
     anim_lay = AnimLayout(0x190, 0x18, 0xC4, 0x20, 0x10)
     at_grace_lay = AtGraceConfig("anim", (68011,))
@@ -181,7 +185,9 @@ def test_grace_reset_baseline():
                 SpEffectLayout(0x178, 0x8, EntryLayout(0x08, 0x30, 0x14, 0x10, "remaining")),
                 anim=anim_lay, at_grace=at_grace_lay)
     s = Sampler(m, p, effects(), BASE)
-    s.sample(NOW)  # Initial Connect: baseline = 10_008_626
+    r0 = s.sample(NOW)  # Initial Connect: baseline = 10_008_626
+    assert r0.character["animations"] == {"2020210": {"name": "Sprint", "categories": "MANNER"}}
+    valid(doc_for(s, r0))
 
     # Player gains runes in-world (baseline stays frozen)
     m.u32(GD + 0x6C, 10_050_000)
@@ -196,14 +202,15 @@ def test_grace_reset_baseline():
     assert r2.character["runes"]["total"] == 10_050_000
     assert r2.character["runes"]["baseline"] == 10_050_000  # reset to total!
     assert r2.character["runes"]["delta"] == 0
+    assert r2.character["animations"] == {"68011": {"name": "Resting", "categories": "MANNER", "abilities": "Resets: HP, FP, Stamina, etc."}}
+    valid(doc_for(s, r2))
 
-    # Player exits Grace (anim_id = 2020110 running) and continues farming (baseline remains frozen at 10_050_000)
-    m.u32(ANIM_SUB + 0x20 + 7 * 0x10, 2020110)  # Running animation
-    m.u32(GD + 0x6C, 10_070_000)  # Killed mob
+    # Player exits Grace (anim_id = 0, loading/transitioning) -> animation state remains frozen at Resting (68011)
+    m.u32(ANIM_SUB + 0x20 + 7 * 0x10, 0)
+    m.u32(GD + 0x6C, 10_070_000)
     r3 = s.sample(NOW)
-    assert r3.character["runes"]["total"] == 10_070_000
-    assert r3.character["runes"]["baseline"] == 10_050_000  # stays frozen!
-    assert r3.character["runes"]["delta"] == 20_000
+    assert r3.character["animations"] == {"68011": {"name": "Resting", "categories": "MANNER", "abilities": "Resets: HP, FP, Stamina, etc."}}
+    valid(doc_for(s, r3))
 
 
 def test_null_world_is_silent_waiting():

@@ -12,7 +12,7 @@ def doc(state="CONNECTED", **over):
         "delta": 100,
     }
     ch = {"level": 386, "runes": runes, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
-          "effects": {}}
+          "effects": {}, "animations": {}}
     d = {"system_status": {"state": state, "read_only": True},
          "character": ch if state in ("CONNECTED", "IDLE", "DISCONNECTED") else None}
     d.update(over)

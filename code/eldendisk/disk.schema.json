@@ -22,7 +22,7 @@
     },
     "character": {
       "type": ["object", "null"],
-      "required": ["level", "runes", "attributes", "effects"],
+      "required": ["level", "runes", "attributes", "effects", "animations"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
         "runes": {
@@ -43,26 +43,32 @@
           "type": "object",
           "additionalProperties": {
             "type": "object",
-            "required": ["name", "kind", "times"],
+            "required": ["name", "categories"],
             "properties": {
               "name": { "type": "string" },
-              "kind": { "type": "string", "enum": ["TIMED", "PERMANENT"] },
-              "category": { "type": "string" },
-              "ability": { "type": "string" },
+              "categories": { "type": "string" },
+              "abilities": { "type": "string" },
               "times": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "required": ["buff_duration", "max_duration", "last_activated_at"],
-                    "properties": {
-                      "buff_duration": { "type": ["number", "null"], "minimum": 0 },
-                      "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-                      "last_activated_at": { "type": ["string", "null"], "format": "date-time" }
-                    }
-                  },
-                  { "type": "null" }
-                ]
+                "type": "object",
+                "required": ["buff_duration", "max_duration", "last_activated_at"],
+                "properties": {
+                  "buff_duration": { "type": ["number", "null"], "minimum": 0 },
+                  "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                  "last_activated_at": { "type": ["string", "null"] }
+                }
               }
+            }
+          }
+        },
+        "animations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["name", "categories"],
+            "properties": {
+              "name": { "type": "string" },
+              "categories": { "type": "string" },
+              "abilities": { "type": "string" }
             }
           }
         }

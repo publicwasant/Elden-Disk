@@ -22,6 +22,7 @@ from the root folder of the project (containing the `eldendisk/` package directo
 |-----------------------|------------------------------------------------------------------------|-----------------------------------------------------------|-------------------------|
 | [`run`](#run)         | Launches/attaches to game, polls memory, writes `disk-state.json`      | Not running (launch mode) or running offline (`--attach`) | Required in launch mode |
 | [`effects`](#effects) | Live SpEffect viewer: monitors active effects/buffs                    | Running offline (in-world for useful data)                | Not needed              |
+| [`animations`](#animations) | Live character animation state viewer: monitors animation IDs    | Running offline (in-world for useful data)                | Not needed              |
 | [`hash`](#hash)       | Calculates SHA-256 hash of `eldenring.exe` for profile key             | Any (reads file on disk)                                  | Not needed              |
 
 ---
@@ -42,7 +43,7 @@ Launches Elden Ring offline (or attaches to an already-running process), polls c
 | `--game-dir DIR`  | path           | auto-detect              | Path to folder containing `eldenring.exe`. Auto-detection reads Windows Registry `SteamPath` + `libraryfolders.vdf` → `steamapps\common\ELDEN RING\Game`. Required if auto-detect fails. (In `--attach` mode, a failed auto-detect is ignored and the path is retrieved directly from the running process). |
 | `--out DIR`       | path           | `<project>/output`       | Output directory where `disk-state.json` is saved (created automatically if missing). **Refused with an error if located inside the game folder.**                                                                                                                                                         |
 | `--offsets FILE`  | path           | `<project>/offsets.json` | Path to profiles JSON file, keyed by `eldenring.exe` SHA-256 hash.                                                                                                                                                                                                                                          |
-| `--effects FILE`  | path           | `<project>/effects.json` | Path to SpEffect ID lookup table. A missing file is treated as empty tables; a malformed file triggers an error.                                                                                                                                                                                            |
+| `--effects FILE`  | path           | `<project>/chr_state_ids.json` | Path to unified state IDs lookup table (`chr_state_ids.json` or legacy `effects.json`). A missing file is treated as empty tables; a malformed file triggers an error. |
 | `--hz N`          | number (1–120) | `60`                     | Sampling rate in polls per second (decimals allowed, e.g. `60.0`). Values outside 1–120 trigger a usage error.                                                                                                                                                                                               |
 | `-v`, `--verbose` | switch         | off                      | Enable verbose logging to stderr: logs state changes and the reason for discarded samples (`last_error`).                                                                                                                                                                                                   |
 | `-h`, `--help`    | switch         | —                        | Display help message for `run`.                                                                                                                                                                                                                                                                             |
@@ -72,11 +73,29 @@ Attaches to a running `eldenring.exe` instance (never launches the game) and str
 
 #### Flags & Options
 
-| Flag             | Value Type | Default                  | Description                                                                                                           |
-|------------------|------------|--------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| `--offsets FILE` | path       | `<project>/offsets.json` | Path to profiles JSON file. The active profile must contain a complete `sp_effect` block.                             |
-| `-q`, `--quiet`  | switch     | off                      | Hide short-lived internal effects (`0 <= duration < 1s`). Retains permanent buffs (`duration == -1`) and timed buffs. |
-| `-h`, `--help`   | switch     | —                        | Display help message for `effects`.                                                                                   |
+| Flag             | Value Type | Default                        | Description                                                                                                           |
+|------------------|------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `--offsets FILE` | path       | `<project>/offsets.json`       | Path to profiles JSON file. The active profile must contain a complete `sp_effect` block.                             |
+| `--effects FILE` | path       | `<project>/chr_state_ids.json` | Path to state configuration file (`chr_state_ids.json`).                                                               |
+| `-q`, `--quiet`  | switch     | off                            | Hide short-lived internal effects (`0 <= duration < 1s`). Retains permanent buffs (`duration == -1`) and timed buffs. |
+| `-h`, `--help`   | switch     | —                              | Display help message for `effects`.                                                                                   |
+
+---
+
+### `animations`
+
+`python -m eldendisk animations [options]`
+
+Attaches to a running `eldenring.exe` instance and streams character animation state ID transitions with timestamps to standard output in real-time.
+
+#### Flags & Options
+
+| Flag             | Value Type | Default                        | Description                                                                                 |
+|------------------|------------|--------------------------------|---------------------------------------------------------------------------------------------|
+| `--offsets FILE` | path       | `<project>/offsets.json`       | Path to profiles JSON file. The active profile must contain a complete `anim` block.        |
+| `--effects FILE` | path       | `<project>/chr_state_ids.json` | Path to state configuration file (`chr_state_ids.json`).                                   |
+| `-q`, `--quiet`  | switch     | off                            | Quiet mode.                                                                                 |
+| `-h`, `--help`   | switch     | —                              | Display help message for `animations`.                                                      |
 
 ---
 

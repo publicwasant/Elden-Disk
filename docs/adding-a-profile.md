@@ -16,7 +16,7 @@ for the new exe — this is intentional, it never guesses).
 |  B   | Find the memory address of your **runes**                                   | 10 min                      | —                                    |
 |  C   | Turn that address into a permanent **pointer path** (Pointer Scan)          | 10–30 min (mostly waiting)  | the numbers for the profile          |
 |  D   | Put the numbers in `offsets.json` and verify level, runes and attributes    | 10 min                      | **working stats telemetry**          |
-|  E   | Buffs: verify the effect-list layout and fill `effects.json`                | 30+ min                     | buffs telemetry                      |
+|  E   | Buffs & Animations: verify layout and fill `chr_state_ids.json`             | 30+ min                     | buffs and animations telemetry       |
 |  F   | Wrap-up: back up, record, patch-day shortcut                                | 5 min                       | —                                    |
 
 Times are rough guesses for a first attempt. Later patches are much faster because you already know the routine.

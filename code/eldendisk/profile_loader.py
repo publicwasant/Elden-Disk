@@ -177,8 +177,17 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
 @dataclass(frozen=True)
 class EffectConfig:
     name: str
-    category: str | None = None
-    ability: str | None = None
+    sources: str = "EFFECTS"
+    categories: str | None = None
+    abilities: str | None = None
+
+    @property
+    def category(self) -> str | None:
+        return self.categories
+
+    @property
+    def ability(self) -> str | None:
+        return self.abilities
 
 
 @dataclass(frozen=True)
@@ -187,10 +196,17 @@ class Effects:
 
 
 def load_effects(path: Path) -> Effects:
-    """A missing file means empty tables. Malformed content raises ValueError."""
+    """A missing file means empty tables. Malformed content raises ValueError.
+    Falls back to legacy effects.json or chr_state_ids.json in same dir if needed.
+    """
     p = Path(path)
     if not p.exists():
-        return Effects({})
+        if p.name == "effects.json" and (p.parent / "chr_state_ids.json").exists():
+            p = p.parent / "chr_state_ids.json"
+        elif p.name == "chr_state_ids.json" and (p.parent / "effects.json").exists():
+            p = p.parent / "effects.json"
+        else:
+            return Effects({})
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
@@ -201,10 +217,14 @@ def load_effects(path: Path) -> Effects:
                 continue
             if not isinstance(v, dict) or "name" not in v:
                 raise ValueError(f"malformed effect item {k}: missing name")
+            cat = v.get("categories") if v.get("categories") is not None else v.get("category")
+            ab = v.get("abilities") if v.get("abilities") is not None else v.get("ability")
+            src = v.get("sources", "EFFECTS")
             table[int(k)] = EffectConfig(
                 name=str(v["name"]),
-                category=str(v["category"]) if v.get("category") is not None else None,
-                ability=str(v["ability"]) if v.get("ability") is not None else None,
+                sources=str(src),
+                categories=str(cat) if cat is not None else None,
+                abilities=str(ab) if ab is not None else None,
             )
         return Effects(table)
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
