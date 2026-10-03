@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "EldenDiskLiveState",
   "type": "object",
-  "required": ["system_status", "character", "telemetry"],
+  "required": ["system_status", "character"],
   "properties": {
     "system_status": {
       "type": "object",
@@ -25,7 +25,15 @@
       "required": ["level", "runes", "attributes", "effects"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
-        "runes": { "type": "integer", "minimum": 0, "maximum": 999999999 },
+        "runes": {
+          "type": "object",
+          "required": ["total", "baseline", "delta"],
+          "properties": {
+            "total": { "type": "integer", "minimum": 0, "maximum": 999999999 },
+            "baseline": { "type": "integer", "minimum": 0, "maximum": 999999999 },
+            "delta": { "type": "integer" }
+          }
+        },
         "attributes": {
           "type": "object",
           "required": ["vigor", "mind", "endurance", "strength", "dexterity", "intelligence", "faith", "arcane"],
@@ -58,14 +66,6 @@
             }
           }
         }
-      }
-    },
-    "telemetry": {
-      "type": "object",
-      "required": ["session_start_runes", "rune_delta"],
-      "properties": {
-        "session_start_runes": { "type": ["integer", "null"] },
-        "rune_delta": { "type": ["integer", "null"] }
       }
     }
   }

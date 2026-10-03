@@ -266,7 +266,7 @@ and compare with the in-game Status screen — **every row must match exactly**:
 | vigor, mind, endurance, strength       |         | `character.attributes.*` |
 | dexterity, intelligence, faith, arcane |         | `character.attributes.*` |
 
-**D4.** Change your runes (gain some, spend some). `telemetry.rune_delta` must go up when you gain and down when you spend.
+**D4.** Change your runes (gain some, spend some). `character.runes.delta` must go up when you gain and down when you spend.
 
 **D5. Restart test (recommended).** Close the game, run `python -m eldendisk run -v` (this time *without* `--attach`),
 load your character and check again. A pointer path that only works for one launch would fail here.
@@ -274,7 +274,7 @@ load your character and check again. A pointer path that only works for one laun
 **D6. Order test (only if some attributes have the same value).** If e.g. mind and endurance are both 60, swapped fields look
 identical. On a throwaway character raise **one** attribute by one point and confirm that exactly that JSON field (and `level`) goes up by 1.
 
-> 🟢 **Checkpoint D:** level, runes and all eight attributes match the game, `rune_delta` follows your runes, and it still works after a restart. **Stats telemetry is done.** Back up `offsets.json` now.
+> 🟢 **Checkpoint D:** level, runes and all eight attributes match the game, `runes.delta` follows your runes, and it still works after a restart. **Stats telemetry is done.** Back up `offsets.json` now.
 
 | What you see                                                         | Meaning                                             | Fix                                                                    |
 |----------------------------------------------------------------------|-----------------------------------------------------|------------------------------------------------------------------------|

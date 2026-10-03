@@ -1,6 +1,6 @@
 import json
 import struct
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import jsonschema
@@ -88,8 +88,7 @@ def valid(doc):
 
 def doc_for(sampler, sample, state=None):
     return build_document(now=NOW, state=state or sample.state, pid=1, anti_cheat="DISABLED_OFFLINE",
-                          exe_sha256="x", profile_label="test", buffs_supported=True, sample=sample,
-                          session_start_runes=sampler.session_start_runes)
+                          exe_sha256="x", profile_label="test", buffs_supported=True, sample=sample)
 
 
 @pytest.mark.parametrize("mode", ["remaining", "elapsed"])
@@ -99,7 +98,12 @@ def test_connected_sample(mode):
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     c = r.character
-    assert (c["level"], c["runes"]) == (386, 10_008_626)
+    assert c["level"] == 386
+    assert c["runes"] == {
+        "total": 10_008_626,
+        "baseline": 10_008_626,
+        "delta": 0,
+    }
     assert c["attributes"]["strength"] == 90 and c["attributes"]["arcane"] == 10
     assert "100" in c["effects"]
     b = c["effects"]["100"]
@@ -124,8 +128,7 @@ def test_idle_state_retains_character_data():
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     d = build_document(now=NOW, state="IDLE", pid=1, anti_cheat="DISABLED_OFFLINE",
-                       exe_sha256="x", profile_label="test", buffs_supported=True, sample=r,
-                       session_start_runes=s.session_start_runes)
+                       exe_sha256="x", profile_label="test", buffs_supported=True, sample=r)
     assert d["system_status"]["state"] == "IDLE"
     assert d["system_status"]["game_connected"] is True
     assert d["character"] is not None
@@ -133,15 +136,72 @@ def test_idle_state_retains_character_data():
     valid(d)
 
 
-def test_rune_delta_and_session_start():
+def test_disconnected_state_retains_character_data():
     m = full_world()
     s = Sampler(m, make_profile(), effects(), BASE)
-    s.sample(NOW)
-    m.u32(GD + 0x6C, 10_508_626)
     r = s.sample(NOW)
-    d = doc_for(s, r)
-    assert d["telemetry"] == {"session_start_runes": 10_008_626, "rune_delta": 500_000}
+    assert r.state == "CONNECTED"
+    d = build_document(now=NOW, state="DISCONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE",
+                       exe_sha256="x", profile_label="test", buffs_supported=True, sample=r)
+    assert d["system_status"]["state"] == "DISCONNECTED"
+    assert d["system_status"]["game_connected"] is False
+    assert d["character"] is not None
+    assert d["character"]["level"] == 386
     valid(d)
+
+
+def test_rune_delta_and_baseline():
+    m = full_world()
+    s = Sampler(m, make_profile(), effects(), BASE)
+    s.sample(NOW)  # baseline set to 10_008_626 at NOW
+
+    later = NOW + timedelta(seconds=150)
+    m.u32(GD + 0x6C, 10_558_626)  # total: 10_558_626, delta: 550_000
+    r = s.sample(later)
+    d = doc_for(s, r)
+    runes = d["character"]["runes"]
+    assert runes["total"] == 10_558_626
+    assert runes["baseline"] == 10_008_626
+    assert runes["delta"] == 550_000
+    valid(d)
+
+
+def test_grace_reset_baseline():
+    from eldendisk.profile_loader import AnimationLayout
+    m = full_world()
+    ANIM_MOD, ANIM_SUB = 0x250000000, 0x260000000
+    m.u64(PLAYER + 0x190, ANIM_MOD)
+    m.u64(ANIM_MOD + 0x18, ANIM_SUB)
+    m.u32(ANIM_SUB + 0x90, 2000000)  # Standing animation
+
+    anim_lay = AnimationLayout(0x190, (0x18, 0x90), 68011)
+    p = Profile("ab" * 32, "test", 0x1000, 0x10, 0x580, 0x68, 0x6C, 0x3C,
+                SpEffectLayout(0x178, 0x8, EntryLayout(0x08, 0x30, 0x14, 0x10, "remaining")),
+                animation=anim_lay)
+    s = Sampler(m, p, effects(), BASE)
+    s.sample(NOW)  # Initial Connect: baseline = 10_008_626
+
+    # Player gains runes in-world (baseline stays frozen)
+    m.u32(GD + 0x6C, 10_050_000)
+    r1 = s.sample(NOW)
+    assert r1.character["runes"]["baseline"] == 10_008_626
+    assert r1.character["runes"]["delta"] == 41_374
+
+    # Player sits at Site of Grace (anim_id = 68011) -> triggers baseline reset & freeze
+    m.u32(ANIM_SUB + 0x90, 68011)  # Enter Grace animation!
+    m.u32(GD + 0x6C, 10_050_000)
+    r2 = s.sample(NOW)
+    assert r2.character["runes"]["total"] == 10_050_000
+    assert r2.character["runes"]["baseline"] == 10_050_000  # reset to total!
+    assert r2.character["runes"]["delta"] == 0
+
+    # Player exits Grace (anim_id = 2020110 running) and continues farming (baseline remains frozen at 10_050_000)
+    m.u32(ANIM_SUB + 0x90, 2020110)  # Running animation
+    m.u32(GD + 0x6C, 10_070_000)  # Killed mob
+    r3 = s.sample(NOW)
+    assert r3.character["runes"]["total"] == 10_070_000
+    assert r3.character["runes"]["baseline"] == 10_050_000  # stays frozen!
+    assert r3.character["runes"]["delta"] == 20_000
 
 
 def test_null_world_is_silent_waiting():
@@ -212,8 +272,7 @@ def test_buffs_disabled_when_sp_layout_missing():
 def test_non_connected_states_validate():
     for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "DISCONNECTED", "IDLE"]:
         d = build_document(now=NOW, state=state, pid=None, anti_cheat="UNKNOWN", exe_sha256=None,
-                           profile_label=None, buffs_supported=False, sample=None,
-                           session_start_runes=None, note="x")
+                           profile_label=None, buffs_supported=False, sample=None, note="x")
         valid(d)
 
 
@@ -320,4 +379,3 @@ def test_monitor_should_write_state_differential(tmp_path):
 
     # Consecutive IDLE ticks with identical document should NOT write
     assert mon._should_write(doc3) is False
-

@@ -44,6 +44,13 @@ class SpEffectLayout:
 
 
 @dataclass(frozen=True)
+class AnimationLayout:
+    player_to_anim_module: int
+    offsets: tuple[int, ...]
+    grace_anim_id: int
+
+
+@dataclass(frozen=True)
 class Profile:
     sha256: str
     label: str
@@ -54,6 +61,7 @@ class Profile:
     runes: int
     attributes: int
     sp_effect: SpEffectLayout | None  # None -> buffs unsupported (stats still work)
+    animation: AnimationLayout | None = None
     buffs_note: str | None = None
 
 
@@ -80,6 +88,22 @@ def _parse_sp_effect(d: dict) -> tuple[SpEffectLayout | None, str | None]:
         return None, f"buffs disabled: {exc}"
 
 
+def _parse_animation(d: dict) -> AnimationLayout | None:
+    anim = d.get("animation")
+    if not isinstance(anim, dict):
+        return None
+    try:
+        mod = _num(anim.get("player_to_anim_module"), "animation.player_to_anim_module")
+        raw_offsets = anim.get("offsets")
+        if not isinstance(raw_offsets, list) or not raw_offsets:
+            return None
+        offsets = tuple(_num(o, f"animation.offsets[{i}]") for i, o in enumerate(raw_offsets))
+        grace_id = int(anim.get("grace_anim_id", 68011))
+        return AnimationLayout(player_to_anim_module=mod, offsets=offsets, grace_anim_id=grace_id)
+    except Incomplete:
+        return None
+
+
 def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | None]:
     """Returns (profile, None) or (None, reason)."""
     try:
@@ -93,6 +117,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
     try:
         gd = raw.get("game_data") or {}
         sp, note = _parse_sp_effect(raw)
+        anim = _parse_animation(raw)
         return Profile(
             sha256=exe_sha256.lower(),
             label=str(raw.get("label") or exe_sha256[:12]),
@@ -103,6 +128,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
             runes=_num(gd.get("runes"), "game_data.runes"),
             attributes=_num(gd.get("attributes"), "game_data.attributes"),
             sp_effect=sp,
+            animation=anim,
             buffs_note=note,
         ), None
     except Incomplete as exc:

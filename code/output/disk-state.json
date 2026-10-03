@@ -2,18 +2,40 @@
   "system_status": {
     "state": "DISCONNECTED",
     "game_connected": false,
-    "pid": 10236,
+    "pid": 11564,
     "anti_cheat_status": "DISABLED_OFFLINE",
     "read_only": true,
     "exe_sha256": "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891",
     "profile": "Elden Ring 1.17.1",
     "buffs_supported": true,
-    "ignored_effects": 0,
+    "ignored_effects": 7,
     "last_error": null
   },
-  "character": null,
-  "telemetry": {
-    "session_start_runes": 20324552,
-    "rune_delta": null
+  "character": {
+    "level": 386,
+    "runes": {
+      "total": 20846134,
+      "baseline": 20846134,
+      "delta": 0
+    },
+    "attributes": {
+      "vigor": 80,
+      "mind": 60,
+      "endurance": 60,
+      "strength": 90,
+      "dexterity": 90,
+      "intelligence": 15,
+      "faith": 60,
+      "arcane": 10
+    },
+    "effects": {
+      "311100": {
+        "name": "Gold Scarab",
+        "kind": "PERMANENT",
+        "category": "TALISMANS",
+        "ability": "Permanently increases Runes gained by 20% while equipped.",
+        "times": null
+      }
+    }
   }
 }

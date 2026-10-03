@@ -6,10 +6,15 @@ import soak_check  # noqa: E402
 
 
 def doc(state="CONNECTED", **over):
-    ch = {"level": 386, "runes": 1000, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
+    runes = {
+        "total": 1000,
+        "baseline": 900,
+        "delta": 100,
+    }
+    ch = {"level": 386, "runes": runes, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
           "effects": {}}
-    d = {"system_status": {"state": state, "read_only": True}, "character": ch if state in ("CONNECTED", "IDLE") else None,
-         "telemetry": {"session_start_runes": 900, "rune_delta": 100}}
+    d = {"system_status": {"state": state, "read_only": True},
+         "character": ch if state in ("CONNECTED", "IDLE", "DISCONNECTED") else None}
     d.update(over)
     return d
 
@@ -17,14 +22,15 @@ def doc(state="CONNECTED", **over):
 def test_valid_documents_have_no_problems():
     assert soak_check.check(doc()) == []
     assert soak_check.check(doc("IDLE")) == []
+    assert soak_check.check(doc("DISCONNECTED")) == []
     assert soak_check.check(doc("WAITING_FOR_WORLD")) == []
 
 
 def test_detects_problems():
     bad = doc(); bad["character"]["level"] = 0
     assert any("level" in p for p in soak_check.check(bad))
-    bad = doc(); bad["telemetry"]["rune_delta"] = 5
-    assert any("rune_delta" in p for p in soak_check.check(bad))
+    bad = doc(); bad["character"]["runes"]["delta"] = 5
+    assert any("runes.delta" in p for p in soak_check.check(bad))
     bad = doc("WAITING_FOR_WORLD"); bad["character"] = {"level": 1}
     assert any("character present" in p for p in soak_check.check(bad))
     bad = doc()

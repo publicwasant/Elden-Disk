@@ -11,6 +11,11 @@
       "sp_effect": {
         "head": "0x8",
         "entry": { "id": "0x8", "next": "0x30", "duration": "0x48", "timer": "0x40", "timer_mode": "remaining" }
+      },
+      "animation": {
+        "player_to_anim_module": "0x190",
+        "offsets": ["0x18", "0x90"],
+        "grace_anim_id": 68011
       }
     }
   }

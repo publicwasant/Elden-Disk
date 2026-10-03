@@ -50,7 +50,7 @@ class Monitor:
         doc = build_document(
             now=None, state=state, pid=self.pid, anti_cheat=self.anti_cheat,
             exe_sha256=self.sha, profile_label=self.label, buffs_supported=self.buffs, sample=sample,
-            session_start_runes=self.sampler.session_start_runes if self.sampler else None, note=note,
+            note=note,
         )
         if self._should_write(doc):
             if self.logger.write(doc):
@@ -134,7 +134,7 @@ def cmd_run(args) -> int:
 
         while True:
             if not mem.alive():
-                mon.emit("DISCONNECTED")
+                mon.emit("DISCONNECTED", sample=last_sample)
                 return 0
 
             if time.monotonic() >= next_scan:

@@ -38,8 +38,26 @@ class Sampler:
         self.profile = profile
         self.effects = effects
         self.base = module_base
-        self.session_start_runes: int | None = None
+        self.baseline_runes: int | None = None
+        self._was_at_grace: bool = False
         self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
+
+    def reset_baseline(self, runes: int) -> None:
+        """Lock in a new farming cycle baseline."""
+        self.baseline_runes = runes
+
+    def _read_anim_id(self, player: int) -> int | None:
+        anim = self.profile.animation
+        if anim is None:
+            return None
+        cur = read_ptr(self.mem, player + anim.player_to_anim_module)
+        if cur is None or cur == 0 or not is_user_ptr(cur):
+            return None
+        for off in anim.offsets[:-1]:
+            cur = read_ptr(self.mem, cur + off)
+            if cur is None or cur == 0 or not is_user_ptr(cur):
+                return None
+        return read_u32(self.mem, cur + anim.offsets[-1])
 
     # -- helpers ---------------------------------------------------------
     @staticmethod
@@ -94,11 +112,36 @@ class Sampler:
                 return self._wait(err)
             effects, ignored = self._classify(entries, now)
 
-        if self.session_start_runes is None:
-            self.session_start_runes = runes
+        # Read Animation ID directly from game memory to detect resting at Site of Grace
+        is_at_grace = False
+        if p.animation is not None:
+            anim_id = self._read_anim_id(player)
+            if anim_id == p.animation.grace_anim_id:
+                is_at_grace = True
+
+        # Event: Entered Site of Grace (state transition: False -> True)
+        entered_grace = is_at_grace and not self._was_at_grace
+
+        # Baseline snapshot & freeze conditions:
+        # 1. Initial Connect: read total -> set baseline = total -> freeze baseline
+        # 2. Enter Site Of Grace: read total -> set baseline = total -> freeze baseline
+        if self.baseline_runes is None or entered_grace:
+            self.reset_baseline(runes)
+
+        self._was_at_grace = is_at_grace
+
+        baseline = self.baseline_runes
+        delta = runes - baseline
+
+        runes_obj = {
+            "total": runes,
+            "baseline": baseline,
+            "delta": delta,
+        }
+
         character = {
             "level": level,
-            "runes": runes,
+            "runes": runes_obj,
             "attributes": dict(zip(ATTR_NAMES, attrs)),
             "effects": effects,
         }
@@ -223,15 +266,17 @@ class Sampler:
 
 def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
                    exe_sha256: str | None, profile_label: str | None, buffs_supported: bool,
-                   sample: Sample | None, session_start_runes: int | None,
+                   sample: Sample | None, session_start_runes: int | None = None,
                    note: str | None = None) -> dict:
     has_character = sample is not None and sample.character is not None
     is_connected = state == "CONNECTED" and has_character
     is_idle = state == "IDLE" and has_character
     game_connected = is_connected or is_idle
-    character = sample.character if game_connected else None
-    current_runes = sample.runes if sample else None
-    delta = (current_runes - session_start_runes) if (game_connected and current_runes is not None and session_start_runes is not None) else None
+
+    if state in ("CONNECTED", "IDLE", "DISCONNECTED") and has_character:
+        character = sample.character
+    else:
+        character = None
 
     return {
         "system_status": {
@@ -247,5 +292,4 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
             "last_error": note or (sample.error if sample else None),
         },
         "character": character,
-        "telemetry": {"session_start_runes": session_start_runes, "rune_delta": delta},
     }

@@ -1,7 +1,7 @@
 # EldenDisk (offline, read-only memory read tool)
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes live character state to
-`output/disk-state.json`. Implements spec v1.3.0. Standard library only, Windows + 64-bit Python 3.11+.
+`output/disk-state.json`. Implements spec v1.4.0. Standard library only, Windows + 64-bit Python 3.11+.
 
 ## Guarantees
 - Read-only: the only access mask requested is `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`.
@@ -93,7 +93,7 @@ A **profile** tells the tool memory offsets for a specific build of `eldenring.e
 | `UNSUPPORTED_VERSION`        | no complete profile for this exe hash; tool exits (code 2)  |
 | `WAITING_FOR_WORLD`          | title screen, loading, or a check failed (see `last_error`) |
 | `CONNECTED`                  | all checks passed; `character` filled                       |
-| `DISCONNECTED`               | game exited                                                 |
+| `DISCONNECTED`               | game exited; retains last known `<full-object>` character state |
 | `IDLE`                       | game window is out of focus; reading/writing paused         |
 
 ## Troubleshooting

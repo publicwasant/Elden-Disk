@@ -24,7 +24,7 @@ ATTRS = ("vigor", "mind", "endurance", "strength", "dexterity", "intelligence", 
 def check(doc: dict) -> list[str]:
     """Problems found in one document (empty list = fine)."""
     try:
-        st, ch, tel = doc["system_status"], doc["character"], doc["telemetry"]
+        st, ch = doc["system_status"], doc["character"]
         state = st["state"]
     except (KeyError, TypeError):
         return ["missing top-level keys"]
@@ -33,16 +33,31 @@ def check(doc: dict) -> list[str]:
         out.append(f"unknown state {state!r}")
     if st.get("read_only") is not True:
         out.append("read_only is not true")
-    if state not in ("CONNECTED", "IDLE"):
+    if state not in ("CONNECTED", "IDLE", "DISCONNECTED"):
         if ch is not None:
             out.append(f"character present while state={state}")
         return out
+    if ch is None:
+        if state in ("CONNECTED", "IDLE"):
+            return out + [f"{state} but character is null"]
+        return out
     if not isinstance(ch, dict):
-        return out + [f"{state} but character is null"]
+        return out + [f"{state} but character is not dict"]
     if not 1 <= ch["level"] <= 713:
         out.append(f"level {ch['level']} out of range")
-    if not 0 <= ch["runes"] <= 999_999_999:
-        out.append(f"runes {ch['runes']} out of range")
+    runes_obj = ch.get("runes")
+    if not isinstance(runes_obj, dict):
+        out.append(f"runes {runes_obj!r} is not an object")
+    else:
+        total = runes_obj.get("total", -1)
+        baseline = runes_obj.get("baseline", -1)
+        delta = runes_obj.get("delta")
+        if not 0 <= total <= 999_999_999:
+            out.append(f"runes.total {total} out of range")
+        if not 0 <= baseline <= 999_999_999:
+            out.append(f"runes.baseline {baseline} out of range")
+        if delta != total - baseline:
+            out.append(f"runes.delta {delta} inconsistent with total {total} - baseline {baseline}")
     attrs = ch.get("attributes", {})
     for name in ATTRS:
         if not 1 <= attrs.get(name, 0) <= 99:
@@ -53,9 +68,6 @@ def check(doc: dict) -> list[str]:
             rem, mx = t.get("buff_duration"), t.get("max_duration")
             if rem is None or mx is None or rem < 0 or mx <= 0 or rem > mx + 1:
                 out.append(f"buff {eid} has impossible timer {rem}/{mx}")
-    start = tel.get("session_start_runes")
-    if start is None or tel.get("rune_delta") != ch["runes"] - start:
-        out.append("rune_delta inconsistent with session_start_runes")
     return out
 
 
