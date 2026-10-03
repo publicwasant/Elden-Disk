@@ -47,17 +47,28 @@ class Sampler:
         self.baseline_runes = runes
 
     def _read_anim_id(self, player: int) -> int | None:
-        anim = self.profile.animation
+        anim = self.profile.anim
         if anim is None:
             return None
-        cur = read_ptr(self.mem, player + anim.player_to_anim_module)
-        if cur is None or cur == 0 or not is_user_ptr(cur):
+        modules = read_ptr(self.mem, player + anim.player_to_modules)
+        if modules is None or modules == 0 or not is_user_ptr(modules):
             return None
-        for off in anim.offsets[:-1]:
-            cur = read_ptr(self.mem, cur + off)
-            if cur is None or cur == 0 or not is_user_ptr(cur):
-                return None
-        return read_u32(self.mem, cur + anim.offsets[-1])
+        time_act = read_ptr(self.mem, modules + anim.modules_to_time_act)
+        if time_act is None or time_act == 0 or not is_user_ptr(time_act):
+            return None
+        read_idx = read_u32(self.mem, time_act + anim.time_act_read_idx)
+        if read_idx is None:
+            return None
+        entry_addr = time_act + anim.time_act_queue + (read_idx * anim.queue_entry_size)
+        return read_u32(self.mem, entry_addr)
+
+    def _is_at_grace(self, player: int) -> bool:
+        ag = self.profile.at_grace
+        if ag is not None and ag.source == "anim":
+            anim_id = self._read_anim_id(player)
+            if anim_id is not None:
+                return anim_id in ag.equals
+        return False
 
     # -- helpers ---------------------------------------------------------
     @staticmethod
@@ -112,12 +123,8 @@ class Sampler:
                 return self._wait(err)
             effects, ignored = self._classify(entries, now)
 
-        # Read Animation ID directly from game memory to detect resting at Site of Grace
-        is_at_grace = False
-        if p.animation is not None:
-            anim_id = self._read_anim_id(player)
-            if anim_id == p.animation.grace_anim_id:
-                is_at_grace = True
+        # Read Site of Grace interaction/resting state directly from CSChrTimeActModule in game memory
+        is_at_grace = self._is_at_grace(player)
 
         # Event: Entered Site of Grace (state transition: False -> True)
         entered_grace = is_at_grace and not self._was_at_grace

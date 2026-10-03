@@ -167,17 +167,19 @@ def test_rune_delta_and_baseline():
 
 
 def test_grace_reset_baseline():
-    from eldendisk.profile_loader import AnimationLayout
+    from eldendisk.profile_loader import AnimLayout, AtGraceConfig
     m = full_world()
     ANIM_MOD, ANIM_SUB = 0x250000000, 0x260000000
     m.u64(PLAYER + 0x190, ANIM_MOD)
     m.u64(ANIM_MOD + 0x18, ANIM_SUB)
-    m.u32(ANIM_SUB + 0x90, 2000000)  # Standing animation
+    m.u32(ANIM_SUB + 0xC4, 7)  # read_idx = 7
+    m.u32(ANIM_SUB + 0x20 + 7 * 0x10, 2000000)  # Standing animation
 
-    anim_lay = AnimationLayout(0x190, (0x18, 0x90), 68011)
+    anim_lay = AnimLayout(0x190, 0x18, 0xC4, 0x20, 0x10)
+    at_grace_lay = AtGraceConfig("anim", (68011,))
     p = Profile("ab" * 32, "test", 0x1000, 0x10, 0x580, 0x68, 0x6C, 0x3C,
                 SpEffectLayout(0x178, 0x8, EntryLayout(0x08, 0x30, 0x14, 0x10, "remaining")),
-                animation=anim_lay)
+                anim=anim_lay, at_grace=at_grace_lay)
     s = Sampler(m, p, effects(), BASE)
     s.sample(NOW)  # Initial Connect: baseline = 10_008_626
 
@@ -188,7 +190,7 @@ def test_grace_reset_baseline():
     assert r1.character["runes"]["delta"] == 41_374
 
     # Player sits at Site of Grace (anim_id = 68011) -> triggers baseline reset & freeze
-    m.u32(ANIM_SUB + 0x90, 68011)  # Enter Grace animation!
+    m.u32(ANIM_SUB + 0x20 + 7 * 0x10, 68011)  # Enter Grace animation!
     m.u32(GD + 0x6C, 10_050_000)
     r2 = s.sample(NOW)
     assert r2.character["runes"]["total"] == 10_050_000
@@ -196,7 +198,7 @@ def test_grace_reset_baseline():
     assert r2.character["runes"]["delta"] == 0
 
     # Player exits Grace (anim_id = 2020110 running) and continues farming (baseline remains frozen at 10_050_000)
-    m.u32(ANIM_SUB + 0x90, 2020110)  # Running animation
+    m.u32(ANIM_SUB + 0x20 + 7 * 0x10, 2020110)  # Running animation
     m.u32(GD + 0x6C, 10_070_000)  # Killed mob
     r3 = s.sample(NOW)
     assert r3.character["runes"]["total"] == 10_070_000

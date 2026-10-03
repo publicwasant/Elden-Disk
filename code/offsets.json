@@ -1,5 +1,5 @@
 {
-  "_readme": "Key = SHA-256 of eldenring.exe (python -m elden_telemetry hash). Hex strings. null = not set yet. See README section 'Adding a profile'.",
+  "_readme": "Key = SHA-256 of eldenring.exe (python -m elden_telemetry hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. See README section 'Adding a profile'.",
   "profiles": {
     "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891": {
       "label": "Elden Ring 1.17.1",
@@ -12,11 +12,14 @@
         "head": "0x8",
         "entry": { "id": "0x8", "next": "0x30", "duration": "0x48", "timer": "0x40", "timer_mode": "remaining" }
       },
-      "animation": {
-        "player_to_anim_module": "0x190",
-        "offsets": ["0x18", "0x90"],
-        "grace_anim_id": 68011
-      }
+      "anim": {
+        "player_to_modules": "0x190",
+        "modules_to_time_act": "0x18",
+        "time_act_read_idx": "0xC4",
+        "time_act_queue": "0x20",
+        "queue_entry_size": "0x10"
+      },
+      "at_grace": { "source": "anim", "equals": ["0x109AB"] }
     }
   }
 }
