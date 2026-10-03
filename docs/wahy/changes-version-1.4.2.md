@@ -5,8 +5,6 @@
 
 **Summary:** Retains the `character` object data in `disk-state.json` across all connection states instead of clearing it to `null`.
 
-_(baseline version: Wahy: **[changes-version-1.4.1.md](changes-version-1.4.0.md)** and the spec: **[elden-disk-spec-v1.4.1.md](../specs/elden-disk-spec-v1.3.0.md)**)_
-
 ---
 
 ## Murmur
