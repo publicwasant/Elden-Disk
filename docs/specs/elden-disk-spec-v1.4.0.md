@@ -14,8 +14,9 @@
 | **#** | **Change** | **Reason** |
 |:-----:|:-----------|:-----------|
 |   1   | Retain `character` State on `DISCONNECTED` | Retains last known `<full-object>` character data in `disk-state.json` when game process exits instead of reverting to `null`. |
-|   2   | Expanded `runes` Data Structure | Transformed `character.runes` from a single `uint32` integer into an object containing `total`, `baseline`, and `delta`. Baseline is reset and frozen (`baseline = total`) on Initial Connect and on entering Site of Grace (detected via Animation ID `68011` at `PlayerIns + 0x190 -> +0x18 -> +0x90`). |
-|   3   | Removed Top-Level `telemetry` Object | Streamlined JSON output by removing the now redundant top-level `telemetry` block (`session_start_runes`, `rune_delta`). |
+|   2   | Expanded `runes` Data Structure | Transformed `character.runes` from a single `uint32` integer into an object containing `total`, `baseline`, and `delta`. Baseline is reset and frozen (`baseline = total`) on Initial Connect and on entering Site of Grace (detected via Animation ID `68011` / `0x109AB` in `CSChrTimeActModule`). |
+|   3   | Dynamic Animation State Verification (`CSChrTimeActModule`) | Added pointer chain and layout verification for `ChrInsModuleContainer` (`+0x190`) and `CSChrTimeActModule` (`+0x18`) reading dynamic `read_idx` (`+0xC4`) to accurately detect Grace resting states across all locations. |
+|   4   | Removed Top-Level `telemetry` Object | Streamlined JSON output by removing the now redundant top-level `telemetry` block (`session_start_runes`, `rune_delta`). |
 
 ---
 
@@ -98,7 +99,14 @@ On attach, compute SHA-256 of `eldenring.exe` and look it up:
       "player_to_sp_effect": "0x178",
       "game_data": { "level": "0x68", "runes": "0x6C", "attributes": "0x3C" },
       "sp_effect": { "head": "0x8", "entry": { "id": "0x..", "next": "0x..", "duration": "0x..", "timer": "0x..", "timer_mode": "elapsed|remaining" } },
-      "animation": { "player_to_anim_module": "0x190", "offsets": ["0x18", "0x90"], "grace_anim_id": 68011 }
+      "anim": {
+        "player_to_modules": "0x190",
+        "modules_to_time_act": "0x18",
+        "time_act_read_idx": "0xC4",
+        "time_act_queue": "0x20",
+        "queue_entry_size": "0x10"
+      },
+      "at_grace": { "source": "anim", "equals": ["0x109AB"] }
     }
   }
 }
@@ -108,33 +116,41 @@ On attach, compute SHA-256 of `eldenring.exe` and look it up:
 
 ```text
 eldenring.exe base
- └─ + world_chr_man_rva ─────────────────► [WorldChrMan] ─────────────────► (RVA changes per version, in profile)
-     └─ + world_chr_man_to_player ───────► [PlayerIns] ───────────────────► (changes per version, in profile)
-         ├─ + 0x580 ─────────────────────► [PlayerGameData] ──────────────► (VERIFY)
+ └─ + world_chr_man_rva ─────────────────► [WorldChrMan]
+     └─ + world_chr_man_to_player ───────► [PlayerIns]
+         ├─ + 0x580 ─────────────────────► [PlayerGameData]
          │     ├─ + 0x68  Level ─────────► (uint32) 
          │     ├─ + 0x6C  Runes ─────────► (uint32)
          │     └─ + 0x3C  Attributes ────► (8 × uint32)
-         └─ + 0x178 ─────────────────────► [SpecialEffect] ───────────────► (VERIFY)
-               └─ + 0x8 ─────────────────► head of linked list of entries
+         ├─ + 0x178 ─────────────────────► [SpecialEffect]
+         │     └─ + 0x8 ─────────────────► head of linked list of entries
+         └─ + 0x190 ─────────────────────► [ChrInsModuleContainer]
+               └─ + 0x18 ────────────────► [CSChrTimeActModule]
+                     ├─ + 0xC4 ──────────► read_idx (uint32)
+                     └─ + 0x20 + (read_idx * 0x10) ► anim_id (uint32)
 ```
 
 ### 4.3 Field table
 
-| **Field**      | **Parent**     | **Offset**                        | **Type** | **Valid range**      | **Status**  |
-|:---------------|:---------------|:----------------------------------|:--------:|:---------------------|:-----------:|
-| WorldChrMan    | module base    | profile `world_chr_man_rva`       |  ptr64   | non-null, user-space | per-version |
-| PlayerIns      | WorldChrMan    | profile `world_chr_man_to_player` |  ptr64   | non-null, user-space | per-version |
-| PlayerGameData | PlayerIns      | `+0x580`                          |  ptr64   | non-null, user-space |   VERIFY    |
-| Level          | PlayerGameData | `+0x68`                           |  uint32  | 1–713                |   stable    |
-| Runes          | PlayerGameData | `+0x6C`                           |  uint32  | 0–999,999,999        |   stable    |
-| Vigor          | PlayerGameData | `+0x3C`                           |  uint32  | 1–99                 |   stable    |
-| Mind           | PlayerGameData | `+0x40`                           |  uint32  | 1–99                 |   stable    |
-| Endurance      | PlayerGameData | `+0x44`                           |  uint32  | 1–99                 |   stable    |
-| Strength       | PlayerGameData | `+0x48`                           |  uint32  | 1–99                 |   stable    |
-| Dexterity      | PlayerGameData | `+0x4C`                           |  uint32  | 1–99                 |   stable    |
-| Intelligence   | PlayerGameData | `+0x50`                           |  uint32  | 1–99                 |   stable    |
-| Faith          | PlayerGameData | `+0x54`                           |  uint32  | 1–99                 |   stable    |
-| Arcane         | PlayerGameData | `+0x58`                           |  uint32  | 1–99                 |   stable    |
+| **Field**              | **Parent**            | **Offset**                         | **Type** | **Valid range**                                   | **Status**  |
+|:-----------------------|:----------------------|:-----------------------------------|:--------:|:--------------------------------------------------|:-----------:|
+| WorldChrMan            | module base           | profile `world_chr_man_rva`        |  ptr64   | non-null, user-space                              | per-version |
+| PlayerIns              | WorldChrMan           | profile `world_chr_man_to_player`  |  ptr64   | non-null, user-space                              | per-version |
+| PlayerGameData         | PlayerIns             | `+0x580`                           |  ptr64   | non-null, user-space                              |   VERIFY    |
+| ChrInsModuleContainer  | PlayerIns             | `+0x190`                           |  ptr64   | non-null, user-space                              |   VERIFY    |
+| CSChrTimeActModule     | ChrInsModuleContainer | `+0x18`                            |  ptr64   | non-null, user-space                              |   VERIFY    |
+| read_idx               | CSChrTimeActModule    | `+0xC4`                            |  uint32  | 0–9                                               |   stable    |
+| anim_id                | CSChrTimeActModule    | `+0x20 + (read_idx * 0x10)`        |  uint32  | valid animation ID (`68011` / `0x109AB` at Grace) |   stable    |
+| Level                  | PlayerGameData        | `+0x68`                            |  uint32  | 1–713                                             |   stable    |
+| Runes                  | PlayerGameData        | `+0x6C`                            |  uint32  | 0–999,999,999                                     |   stable    |
+| Vigor                  | PlayerGameData        | `+0x3C`                            |  uint32  | 1–99                                              |   stable    |
+| Mind                   | PlayerGameData        | `+0x40`                            |  uint32  | 1–99                                              |   stable    |
+| Endurance              | PlayerGameData        | `+0x44`                            |  uint32  | 1–99                                              |   stable    |
+| Strength               | PlayerGameData        | `+0x48`                            |  uint32  | 1–99                                              |   stable    |
+| Dexterity              | PlayerGameData        | `+0x4C`                            |  uint32  | 1–99                                              |   stable    |
+| Intelligence           | PlayerGameData        | `+0x50`                            |  uint32  | 1–99                                              |   stable    |
+| Faith                  | PlayerGameData        | `+0x54`                            |  uint32  | 1–99                                              |   stable    |
+| Arcane                 | PlayerGameData        | `+0x58`                            |  uint32  | 1–99                                              |   stable    |
 
 ### 4.4 Special effects (linked list) & Refactored `effects` Object
 
@@ -144,7 +160,22 @@ Classification uses `effects.json` (flat key-value map keyed by SpEffect ID):
 - **`kind: "PERMANENT"`**: Selected when `duration <= 0` or timer indicates an infinite effect (e.g., equipped Talisman). `times` is set to `null`.
 - **`kind: "TIMED"`**: Selected when `duration > 0` and `remaining > 0`. Timing fields `buff_duration`, `max_duration`, and `last_activated_at` are populated.
 
-### 4.5 60FPS Pacing & Window Active Focus Detection (`IDLE`)
+### 4.5 Site of Grace Detection & Baseline Snapshot Logic
+
+1. **Dynamic Animation State Reading:**
+   - The tool dereferences `PlayerIns + 0x190` (`ChrInsModuleContainer`) -> `+0x18` (`CSChrTimeActModule`).
+   - Reads `read_idx` (`uint32`) at `time_act + 0xC4`.
+   - Reads the current `anim_id` (`uint32`) at `time_act + 0x20 + (read_idx * 0x10)`.
+   - Evaluates whether `anim_id` matches `0x109AB` (`68011` in decimal).
+2. **State Transition Event (`entered_grace`):**
+   - Triggers when `is_at_grace` transitions from `False` to `True`.
+3. **Baseline Reset & Freeze:**
+   - Baseline is reset (`baseline = total`) and frozen strictly on:
+     - **Initial Connect:** First successful memory read in world session (`baseline_runes is None`).
+     - **Enter Site of Grace:** `entered_grace == True`.
+   - Between Grace rests, `baseline` remains completely frozen, allowing accurate calculation of `delta = total - baseline`.
+
+### 4.6 60FPS Pacing & Window Active Focus Detection (`IDLE`)
 
 1. **60FPS Locked Pacing**: Memory sampling is executed inside a loop locked at 60 executions per second (~16.67 ms per tick).
 2. **Window Focus Check**: Before executing memory sampling, the tool inspects the active foreground window (`GetForegroundWindow` / `GetWindowThreadProcessId`).
@@ -153,7 +184,7 @@ Classification uses `effects.json` (flat key-value map keyed by SpEffect ID):
    - The JSON `character` block retains the last valid `<full-object>` data.
    - Once focus returns to the game window, normal polling resumes seamlessly.
 
-### 4.6 Event-Driven Persistence Architecture
+### 4.7 Event-Driven Persistence Architecture
 
 Rather than writing to disk unconditionally on every frame:
 1. The tool updates telemetry state in RAM at 60FPS.
