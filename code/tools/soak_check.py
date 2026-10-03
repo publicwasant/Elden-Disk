@@ -33,10 +33,6 @@ def check(doc: dict) -> list[str]:
         out.append(f"unknown state {state!r}")
     if st.get("read_only") is not True:
         out.append("read_only is not true")
-    if state not in ("CONNECTED", "IDLE", "DISCONNECTED"):
-        if ch is not None:
-            out.append(f"character present while state={state}")
-        return out
     if ch is None:
         if state in ("CONNECTED", "IDLE"):
             return out + [f"{state} but character is null"]

@@ -295,14 +295,14 @@ class Sampler:
 def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
                    exe_sha256: str | None, profile_label: str | None, buffs_supported: bool,
                    sample: Sample | None, session_start_runes: int | None = None,
-                   note: str | None = None) -> dict:
+                   note: str | None = None, last_character: dict | None = None) -> dict:
     has_character = sample is not None and sample.character is not None
-    is_connected = state == "CONNECTED" and has_character
-    is_idle = state == "IDLE" and has_character
-    game_connected = is_connected or is_idle
+    game_connected = state in ("CONNECTED", "IDLE")
 
-    if state in ("CONNECTED", "IDLE", "DISCONNECTED") and has_character:
+    if has_character:
         character = sample.character
+    elif last_character is not None:
+        character = last_character
     else:
         character = None
 

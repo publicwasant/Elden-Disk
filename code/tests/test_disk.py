@@ -154,6 +154,34 @@ def test_disconnected_state_retains_character_data():
     valid(d)
 
 
+def test_character_retained_across_all_states():
+    m = full_world()
+    s = Sampler(m, make_profile(), effects(), BASE)
+    r = s.sample(NOW)
+    assert r.state == "CONNECTED"
+    cached_char = r.character
+    assert cached_char is not None
+
+    for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "DISCONNECTED", "IDLE"]:
+        d = build_document(now=NOW, state=state, pid=1, anti_cheat="DISABLED_OFFLINE",
+                           exe_sha256="x", profile_label="test", buffs_supported=True,
+                           sample=None, last_character=cached_char)
+        assert d["system_status"]["state"] == state
+        assert d["character"] is not None
+        assert d["character"]["level"] == 386
+        valid(d)
+
+
+def test_cold_boot_character_is_null():
+    for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "DISCONNECTED"]:
+        d = build_document(now=NOW, state=state, pid=None, anti_cheat="UNKNOWN",
+                           exe_sha256=None, profile_label=None, buffs_supported=False,
+                           sample=None, last_character=None)
+        assert d["system_status"]["state"] == state
+        assert d["character"] is None
+        valid(d)
+
+
 def test_rune_delta_and_baseline():
     m = full_world()
     s = Sampler(m, make_profile(), effects(), BASE)

@@ -2,7 +2,7 @@
   "system_status": {
     "state": "DISCONNECTED",
     "game_connected": false,
-    "pid": 22072,
+    "pid": 19780,
     "anti_cheat_status": "DISABLED_OFFLINE",
     "read_only": true,
     "exe_sha256": "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891",

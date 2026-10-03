@@ -14,7 +14,7 @@ def doc(state="CONNECTED", **over):
     ch = {"level": 386, "runes": runes, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
           "effects": {}, "animations": {}}
     d = {"system_status": {"state": state, "read_only": True},
-         "character": ch if state in ("CONNECTED", "IDLE", "DISCONNECTED") else None}
+         "character": ch}
     d.update(over)
     return d
 
@@ -24,6 +24,10 @@ def test_valid_documents_have_no_problems():
     assert soak_check.check(doc("IDLE")) == []
     assert soak_check.check(doc("DISCONNECTED")) == []
     assert soak_check.check(doc("WAITING_FOR_WORLD")) == []
+    assert soak_check.check(doc("WAITING_FOR_PROCESS")) == []
+    assert soak_check.check(doc("EAC_ACTIVE")) == []
+    assert soak_check.check(doc("UNSUPPORTED_VERSION")) == []
+    assert soak_check.check(doc("WAITING_FOR_WORLD", character=None)) == []
 
 
 def test_detects_problems():
@@ -31,8 +35,8 @@ def test_detects_problems():
     assert any("level" in p for p in soak_check.check(bad))
     bad = doc(); bad["character"]["runes"]["delta"] = 5
     assert any("runes.delta" in p for p in soak_check.check(bad))
-    bad = doc("WAITING_FOR_WORLD"); bad["character"] = {"level": 1}
-    assert any("character present" in p for p in soak_check.check(bad))
+    bad = doc("WAITING_FOR_WORLD"); bad["character"]["level"] = 0
+    assert any("level" in p for p in soak_check.check(bad))
     bad = doc()
     bad["character"]["effects"] = {
         "1": {"name": "Test", "kind": "TIMED", "times": {"buff_duration": 90.0, "max_duration": 30.0}}

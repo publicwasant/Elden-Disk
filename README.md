@@ -1,7 +1,7 @@
 # EldenDisk (offline, read-only memory read tool)
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes live character state to
-`output/disk-state.json`. Implements spec v1.4.1. Standard library only, Windows + 64-bit Python 3.11+.
+`output/disk-state.json`. Implements spec v1.4.2. Standard library only, Windows + 64-bit Python 3.11+.
 
 ## Guarantees
 - Read-only: the only access mask requested is `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`.
@@ -90,13 +90,13 @@ A **profile** tells the tool memory offsets for a specific build of `eldenring.e
 ## States
 | `state`                      | Meaning                                                     |
 |------------------------------|-------------------------------------------------------------|
-| `WAITING_FOR_PROCESS`        | game not running / not found                                |
-| `EAC_ACTIVE`, `EAC_DETECTED` | EAC loaded; tool exits (code 3) without reading             |
-| `UNSUPPORTED_VERSION`        | no complete profile for this exe hash; tool exits (code 2)  |
-| `WAITING_FOR_WORLD`          | title screen, loading, or a check failed (see `last_error`) |
-| `CONNECTED`                  | all checks passed; `character` filled                       |
+| `WAITING_FOR_PROCESS`        | game not running / not found; retains character state if available |
+| `EAC_ACTIVE`, `EAC_DETECTED` | EAC loaded; tool exits (code 3) without reading; retains character state if available |
+| `UNSUPPORTED_VERSION`        | no complete profile for this exe hash; tool exits (code 2); retains character state if available |
+| `WAITING_FOR_WORLD`          | title screen, loading, or a check failed (see `last_error`); retains character state if available |
+| `CONNECTED`                  | all checks passed; `character` filled in real-time |
 | `DISCONNECTED`               | game exited; retains last known `<full-object>` character state |
-| `IDLE`                       | game window is out of focus; reading/writing paused         |
+| `IDLE`                       | game window is out of focus; reading/writing paused; retains character state |
 
 ## Troubleshooting
 - **Game won't start / Steam error on direct launch:** the tool passes `SteamAppId`/`SteamGameId` via environment. If that

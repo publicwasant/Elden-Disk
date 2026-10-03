@@ -51,6 +51,7 @@ class Monitor:
         self.sampler: Sampler | None = None
         self._last_verbose: tuple | None = None
         self._last_written_doc: dict | None = None
+        self._last_character: dict | None = None
 
     def _should_write(self, doc: dict) -> bool:
         if self._last_written_doc is None:
@@ -58,10 +59,13 @@ class Monitor:
         return doc != self._last_written_doc
 
     def emit(self, state: str, sample=None, note: str | None = None) -> None:
+        if sample is not None and sample.character is not None:
+            self._last_character = sample.character
+
         doc = build_document(
             now=None, state=state, pid=self.pid, anti_cheat=self.anti_cheat,
             exe_sha256=self.sha, profile_label=self.label, buffs_supported=self.buffs, sample=sample,
-            note=note,
+            last_character=self._last_character, note=note,
         )
         if self._should_write(doc):
             if self.logger.write(doc):
