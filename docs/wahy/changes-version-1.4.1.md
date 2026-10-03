@@ -181,11 +181,15 @@ _**(Notice that the `kind` field is missing? Don't jump to conclusions—we aren
 }
 ```
 
-**2.1 `character.animations`**
+**2.2 `character.animations`**
 
-**As seen in the table above, the `abilities` field is non-mandatory and nullable. This means if the value is null or empty, we simply omit the field from the output object entirely to keep the payload clean.**
+As seen in the table above, the `abilities` field is non-mandatory and nullable. This means if the value is null or empty, we simply omit the field from the output object entirely to keep the payload clean.
+
+The output mechanism is pretty straightforward. The `character.animations` object will only ever contain **ONE** key-value pair at any given time. After all, the character cannot sprint, dodge, and rest at the exact same time, right? Therefore, the output is strictly 1:1 and remains frozen on the last active animation state.
 
 **Output (JSON Object):**
+
+**In-game Sprinting:**
 
 ```json
 {
@@ -193,12 +197,30 @@ _**(Notice that the `kind` field is missing? Don't jump to conclusions—we aren
     "2020210": {
       "name": "Sprint",
       "categories": "MANNER"
-    },
+    }
+  }
+}
+```
+
+**In-game Dodging:**
+
+```json
+{
+  "animations": {
     "27110": {
       "name": "Dodge",
       "categories": "MANNER",
       "abilities": "Provides invincibility frames (i-frames) for a few milliseconds."
-    },
+    }
+  }
+}
+```
+
+**In-game Resting:**
+
+```json
+{
+  "animations": {
     "68011": {
       "name": "Resting",
       "categories": "MANNER",
@@ -207,6 +229,9 @@ _**(Notice that the `kind` field is missing? Don't jump to conclusions—we aren
   }
 }
 ```
+
+> [!IMPORTANT]
+> Once the `animations` object is updated, the data remains frozen to reflect the last known active animation state until a new state overrides it.
 
 ### 3. Character's Animation State Live-Monitor
 
