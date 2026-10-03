@@ -5,7 +5,7 @@
 > **Status:** APPROVED ✔     
 > **Last Updated:** _2026-10-03_
 
-**Summary:** Retains the `character` state after process exit and expands the `runes` object with real-time farming metrics (baseline, delta, RPM).
+**Summary:** Retains the `character` state after process exit and expands the `runes` object with baseline and delta.
 
 _(baseline version: Wahy: **[changes-version-1.3.0.md](changes-version-1.3.0.md)** and the spec: **[elden-telemetry-spec-v1.3.0.md](../specs/elden-disk-spec-v1.3.0.md)**)_
 
@@ -36,11 +36,7 @@ I'm the type of player who actually enjoys the long farming grinds and never get
   "runes": {
     "total": 1050000,
     "baseline": 1000000,
-    "delta": 50000,
-    "metrics": {
-      "elapsed_seconds": 150.0,
-      "runes_per_minute": 20000
-    }
+    "delta": 50000
   }
 }
 ```
@@ -93,14 +89,6 @@ A bit annoying, right? What if I want to use the latest updated data after exiti
 | `total`    | `uint32` | `1050000`        | Current runes held by the player.                                           |
 | `baseline` | `uint32` | `1000000`        | Snapshot of runes at the start of the cycle (e.g., leaving a Grace).        |
 | `delta`    | `int32`  | `50000`          | Net runes gained this cycle (`total - baseline`). Can be negative on death. |
-| `metrics`  | `object` | `<object>`       | Container for farming analytics. `null` if inactive.                        |
-
-**Expanding the `metrics` sub-object:**
-
-| **Field**          | **Type** | **Example Data** | **Description**                               |
-|:-------------------|:--------:|:-----------------|:----------------------------------------------|
-| `elapsed_seconds`  | `float`  | `150.0`          | Seconds elapsed since the cycle started.      |
-| `runes_per_minute` | `int32`  | `20000`          | Estimated runes gained per minute (RPM).      |
 
 **Output (JSON Object):**
 
@@ -109,21 +97,19 @@ A bit annoying, right? What if I want to use the latest updated data after exiti
   "runes": {
     "total": 1050000,
     "baseline": 1000000,
-    "delta": 50000,
-    "metrics": {
-      "elapsed_seconds": 150.0,
-      "runes_per_minute": 20000
-    }
+    "delta": 50000
   }
 }
 ```
 **Breaking down how each value works:**
 
-The **`baseline`** value acts as our farming cycle anchor. The exact millisecond you stand up or close the Site of Grace menu, the tool snapshots your total runes and locks them in. Mechanically, this requires monitoring the memory pointer tied to the Grace interaction event flag or animation ID. By triggering the snapshot on the exact state transition from "resting" to "idle," we guarantee it captures your true baseline after you've spent runes on leveling or shopping. This ensures clean data right before you engage the first mob.
+The **`baseline`** value acts as our farming cycle anchor. It is set and frozen (`baseline = total`) strictly under two conditions:
+1. **Initial Connect:** When the tool first connects and reads world memory: `read total -> set baseline = total -> freeze baseline`.
+2. **Enter / Rest at Site Of Grace:** When the player enters/rests at a Site of Grace (extracted directly from game memory via character Animation ID `68011` over pointer path `PlayerIns + 0x190 -> +0x18 -> +0x90` verified in **[chr_ins_track.md](../experiments/animation-state-verification/chr_ins_track.md)**): `read total -> set baseline = total -> freeze baseline`.
+
+While playing (between Grace rests), `baseline` remains completely frozen. Triggering the snapshot on entering the Site of Grace menu guarantees it captures your true baseline right before you engage the next farming cycle.
 
 The **`delta`** calculates the real-time difference **($\Delta = \text{total} - \text{baseline}$)** at our locked **60FPS pacing**. Every kill drives this number up, but since it's a signed **int32**, dying and dropping your runes will instantly plummet this value into the negatives. You can see exactly how deep in the hole you are without pulling out a calculator.
-
-The **`metrics`** object is where we turn raw math into actual optimization. The moment **`baseline`** is set, a hidden stopwatch starts tracking **`elapsed_seconds`**. We then divide the live **`delta`** by this time to spit out your **`runes_per_minute` (RPM)**. This proves exactly which farming route at Mohgwyn Palace gives you the ultimate Time-to-Rune ratio.
 
 > [!WARNING]
 > Since we've expanded the `runes` data object above, the `telemetry` object in `./output/disk-state.json` is now redundant. Remove it entirely.
