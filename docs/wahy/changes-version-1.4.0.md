@@ -105,7 +105,7 @@ A bit annoying, right? What if I want to use the latest updated data after exiti
 
 The **`baseline`** value acts as our farming cycle anchor. It is set and frozen (`baseline = total`) strictly under two conditions:
 1. **Initial Connect:** When the tool first connects and reads world memory: `read total -> set baseline = total -> freeze baseline`.
-2. **Enter / Rest at Site Of Grace:** When the player enters/rests at a Site of Grace (extracted directly from game memory via character Animation ID `68011` over pointer path `PlayerIns + 0x190 -> +0x18 -> +0x90` verified in **[chr_ins_track.md](../experiments/animation-state-verification/chr_ins_track.md)**): `read total -> set baseline = total -> freeze baseline`.
+2. **Enter / Rest at Site Of Grace:** When the player enters/rests at a Site of Grace (extracted directly from game memory via character Animation ID `68011` / `0x109AB` over pointer path `PlayerIns + 0x190 -> +0x18 -> +0x90` verified in **[at_grace_report.md](../experiments/animation-state-verification/at_grace_report.md)** and **[chr_ins_track.md](../experiments/animation-state-verification/chr_ins_track.md)**): `read total -> set baseline = total -> freeze baseline`.
 
 While playing (between Grace rests), `baseline` remains completely frozen. Triggering the snapshot on entering the Site of Grace menu guarantees it captures your true baseline right before you engage the next farming cycle.
 
