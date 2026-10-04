@@ -119,12 +119,35 @@ Calculates and prints the SHA-256 hash of the target `eldenring.exe`.
 
 ---
 
+### `build`
+
+`python -m eldendisk build [options]`
+
+Compiles the EldenDisk project into a standalone single executable (`eldendisk.exe`) located in `./dist`.
+
+| Flag | Value Type | Default | Description |
+|:---|:---:|:---|:---|
+| `-e`, `--engine` | enum | `pyinstaller` | Select build engine: `pyinstaller` or `nuitka`. |
+| `-c`, `--clean` | switch | off | Clean `./build` and `./dist` cache directories prior to compilation. |
+| `-em`, `--embed-configs` | switch | off | Embed `offsets.json` and `chr_state_ids.json` directly into the `.exe`. Defaults to `True` in E2E pipeline. |
+| `-i`, `--icon FILE` | path | `None` | Path to an `.ico` icon file. |
+
+---
+
 ## Other Utility Scripts
 
-### Soak Test Helper (`tools/soak_check.py`)
+### End-to-End Development Pipeline (`code/tools/dev_pipeline.py`)
+
+Automates pre-check unit testing, executable compilation, and telemetry verification.
+
+```cmd
+python code/tools/dev_pipeline.py [--dry-run] [--no-embed] [--skip-tests]
+```
+
+### Soak Test Helper (`code/tools/soak_check.py`)
 
 Watches `disk-state.json` to validate continuous compliance with Specification V-06 (stability over long sessions).
 
 ```cmd
-python tools/soak_check.py [path] [--interval S]
+python code/tools/soak_check.py [path] [--interval S]
 ```
