@@ -3,7 +3,7 @@
 > **Status:** APPROVED ✔     
 > **Last Updated:** _2026-10-04_
 
-**Summary:** Introduces the `build` CLI command to compile the Elden-Disk project into a standalone single executable (`eldendisk.exe`) and details its dedicated CLI documentation.
+**Summary:** Introduces the `build` CLI command to compile the Elden-Disk project into a standalone single executable (`eldendisk.exe`), defines its dedicated CLI documentation, and establishes an automated End-to-End development pipeline.
 
 _(baseline version: Wahy: **[changes-version-1.5.0.md](changes-version-1.5.0.md)** and the spec: **[elden-disk-spec-v1.5.0.md](../specs/elden-disk-spec-v1.5.0.md)**)_
 
@@ -63,6 +63,23 @@ Create a new file named `cli-commands-exe.md` mirroring the existing **[cli-comm
 *   **Flags & Options:** Document all flags (e.g., `--attach`, `--game-dir`, `--hz`) and their default behaviours.[cite: 7]
 *   **Exit Codes:** Outline standard exit codes (`0` for success, `1` for error, `2` for profile/usage errors, `3` for EAC detection, `130` for user interrupt).[cite: 7]
 
+### 4. Setup End-to-End (E2E) Development Run Pipeline
+
+To ensure the Python source code and the compiled `.exe` work seamlessly together, we are introducing a standard End-to-End development pipeline script. Instead of manually running the Python module and then separately building and testing the `.exe`, developers will use a single unified cycle.
+
+**Pipeline Script:** `tools/dev_pipeline.py`
+
+**Execution Flow:**
+1. **Pre-check:** Executes Python unit tests or a dry-run to validate the source code.
+2. **Build:** Executes `python -m eldendisk build -c` to compile the standalone executable.
+3. **Launch:** Executes `./dist/eldendisk.exe run -v`, which automatically launches the game and begins the telemetry process via the newly built executable.
+
+**Usage:**
+```commandline
+python tools/dev_pipeline.py
+```
+This standardizes the development and testing cycle, guaranteeing that what works in the source code exactly matches the behavior of the final distributed executable.
+
 ---
 
 ## Requirements
@@ -111,5 +128,6 @@ _**Scan the whole project and every detail of the source code to draft perfectly
 
 ### 3. Integration (Take actions)
 - Develop features according to **elden-disk-spec-v1.5.1.md** and **implementation_plan_v1.5.1.md**.
+- Create **`tools/dev_pipeline.py`** to automate the build and run cycle.
 - Verification via **Unit Tests** (Ensure the `.exe` builds successfully and runs independently).
 - Update the **Tool-Version** and all documentation affected by these **Changes**.
