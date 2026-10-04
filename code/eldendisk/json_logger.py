@@ -6,6 +6,9 @@ import os
 import time
 from pathlib import Path
 
+RETRIES = 5
+RETRY_DELAY_S = 0.01
+
 
 class JsonLogger:
     def __init__(self, out_dir: Path, game_dir: Path | None = None, filename: str = "disk-state.json"):
@@ -19,11 +22,13 @@ class JsonLogger:
         self._tmp = out / (filename + ".tmp")
 
     def write(self, doc: dict) -> bool:
-        self._tmp.write_text(json.dumps(doc, indent=2), encoding="utf-8")
-        for _ in range(5):
+        """True when the file was replaced. False if a reader/antivirus held the file (caller skips this sample)."""
+        text = json.dumps(doc, indent=2)
+        for _ in range(RETRIES):
             try:
+                self._tmp.write_text(text, encoding="utf-8")
                 os.replace(self._tmp, self.path)
                 return True
-            except PermissionError:  # a reader has the file open
-                time.sleep(0.02)
+            except PermissionError:  # tmp or target locked by another process
+                time.sleep(RETRY_DELAY_S)
         return False

@@ -134,47 +134,30 @@ def _parse_anim(d: dict) -> AnimLayout | None:
         return None
 
 
-def _parse_vitals(d: dict) -> VitalsLayout | None:
+def _parse_vitals(d: dict) -> VitalsLayout:
+    """Required: a profile is pinned to one exe, so offsets are never borrowed from another version."""
     vit = d.get("vitals")
-    if isinstance(vit, dict):
-        try:
-            return VitalsLayout(
-                player_to_modules=_num(vit.get("player_to_modules"), "vitals.player_to_modules"),
-                modules_to_data=_num(vit.get("modules_to_data"), "vitals.modules_to_data"),
-                data_to_vitals=_num(vit.get("data_to_vitals"), "vitals.data_to_vitals"),
-            )
-        except Incomplete:
-            return None
-    anim = d.get("anim") or d.get("animation")
-    player_to_mod = 0x190
-    if isinstance(anim, dict) and "player_to_modules" in anim:
-        try:
-            player_to_mod = _num(anim.get("player_to_modules"), "anim.player_to_modules")
-        except Incomplete:
-            pass
-    try:
-        return VitalsLayout(
-            player_to_modules=player_to_mod,
-            modules_to_data=0x0,
-            data_to_vitals=0x138,
-        )
-    except Incomplete:
-        return None
+    if not isinstance(vit, dict):
+        raise Incomplete("vitals is not set (add a 'vitals' block, see docs/adding-a-profile.md)")
+    return VitalsLayout(
+        player_to_modules=_num(vit.get("player_to_modules"), "vitals.player_to_modules"),
+        modules_to_data=_num(vit.get("modules_to_data"), "vitals.modules_to_data"),
+        data_to_vitals=_num(vit.get("data_to_vitals"), "vitals.data_to_vitals"),
+    )
 
 
 def _parse_at_grace(d: dict) -> AtGraceConfig | None:
     ag = d.get("at_grace")
-    if isinstance(ag, dict):
-        src = str(ag.get("source", "anim"))
-        eq_raw = ag.get("equals") or [68011]
-        if isinstance(eq_raw, list):
-            eq = tuple(_num(v, "at_grace.equals") for v in eq_raw)
-        else:
-            eq = (_num(eq_raw, "at_grace.equals"),)
-        return AtGraceConfig(source=src, equals=eq)
-    elif ag is not None:
-        return AtGraceConfig(source="anim", equals=(68011,))
-    return None
+    if ag is None:
+        return None  # feature off: at-grace is never detected, so the baseline never re-locks at a Grace
+    if not isinstance(ag, dict):
+        raise Incomplete("at_grace must be an object {source, equals} or null")
+    eq_raw = ag.get("equals")
+    if eq_raw is None or eq_raw == []:
+        raise Incomplete("at_grace.equals is not set")
+    items = eq_raw if isinstance(eq_raw, list) else [eq_raw]
+    return AtGraceConfig(source=str(ag.get("source", "anim")),
+                         equals=tuple(_num(v, "at_grace.equals") for v in items))
 
 
 def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | None]:

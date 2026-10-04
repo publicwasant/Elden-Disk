@@ -45,7 +45,9 @@ Launches Elden Ring offline (or attaches to an already-running process), polls c
 | `--offsets FILE`  | path           | `<project>/offsets.json` | Path to profiles JSON file, keyed by `eldenring.exe` SHA-256 hash.                                                                                                                                                                                                                                          |
 | `--effects FILE`  | path           | `<project>/chr_state_ids.json` | Path to unified state IDs lookup table (`chr_state_ids.json` or legacy `effects.json`). A missing file is treated as empty tables; a malformed file triggers an error. |
 | `--hz N`          | number (1–120) | `60`                     | Sampling rate in polls per second (decimals allowed, e.g. `60.0`). Values outside 1–120 trigger a usage error.                                                                                                                                                                                               |
-| `-v`, `--verbose` | switch         | off                      | Enable verbose logging to stderr: logs state changes and the reason for discarded samples (`last_error`).                                                                                                                                                                                                   |
+| `--timer-interval SEC` | number (≥0) | `0.5`              | Minimum seconds between disk writes that change **only** a buff countdown (`buff_duration`). Any other change is written immediately. `0` = write every change (old behaviour, ~60 writes/s while a timed buff is active). |
+| `--no-idle`       | switch         | off                      | Keep reading while the game window is unfocused instead of pausing in `IDLE` (for overlays on a second monitor / stream).                                                                                                                                                                                  |
+| `-v`, `--verbose` | switch         | off                      | Enable verbose logging to stderr: logs state changes, the reason for discarded samples (`last_error`) and which config files are used (`embedded` / `external` / `source`).                                                                                                                                                                                                   |
 | `-h`, `--help`    | switch         | —                        | Display help message for `run`.                                                                                                                                                                                                                                                                             |
 
 #### Execution Flow & Safety Logic
@@ -76,7 +78,6 @@ Attaches to a running `eldenring.exe` instance (never launches the game) and str
 | Flag             | Value Type | Default                        | Description                                                                                                           |
 |------------------|------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------|
 | `--offsets FILE` | path       | `<project>/offsets.json`       | Path to profiles JSON file. The active profile must contain a complete `sp_effect` block.                             |
-| `--effects FILE` | path       | `<project>/chr_state_ids.json` | Path to state configuration file (`chr_state_ids.json`).                                                               |
 | `-q`, `--quiet`  | switch     | off                            | Hide short-lived internal effects (`0 <= duration < 1s`). Retains permanent buffs (`duration == -1`) and timed buffs. |
 | `-h`, `--help`   | switch     | —                              | Display help message for `effects`.                                                                                   |
 
@@ -93,8 +94,6 @@ Attaches to a running `eldenring.exe` instance and streams character animation s
 | Flag             | Value Type | Default                        | Description                                                                                 |
 |------------------|------------|--------------------------------|---------------------------------------------------------------------------------------------|
 | `--offsets FILE` | path       | `<project>/offsets.json`       | Path to profiles JSON file. The active profile must contain a complete `anim` block.        |
-| `--effects FILE` | path       | `<project>/chr_state_ids.json` | Path to state configuration file (`chr_state_ids.json`).                                   |
-| `-q`, `--quiet`  | switch     | off                            | Quiet mode.                                                                                 |
 | `-h`, `--help`   | switch     | —                              | Display help message for `animations`.                                                      |
 
 ---
@@ -151,3 +150,5 @@ Watches `disk-state.json` to validate continuous compliance with Specification V
 ```cmd
 python code/tools/soak_check.py [path] [--interval S]
 ```
+
+> **Deprecated (1.5.2):** `effects --effects FILE` and `animations -q` never had an effect. They are still accepted (hidden from `--help`) so old scripts keep working, and will be removed in a future version.

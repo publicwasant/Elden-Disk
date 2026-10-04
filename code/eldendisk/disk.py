@@ -15,12 +15,16 @@ from .profile_loader import Effects, Profile
 MAX_EFFECTS = 512
 LEVEL_RANGE = (1, 713)
 RUNES_MAX = 999_999_999
+WORLD_LOST_RESET_S = 10.0  # title screen / long load this long -> forget baseline + animation
 ATTR_RANGE = (1, 99)
 ATTR_NAMES = ("vigor", "mind", "endurance", "strength", "dexterity", "intelligence", "faith", "arcane")
 
 
 def iso(dt: datetime) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+    """'YYYY-MM-DD HH:MM:SS.ffffff+HH:MM'. The UTC offset is always present (naive input is taken as local time)."""
+    if dt.tzinfo is None:
+        dt = dt.astimezone()
+    return dt.isoformat(sep=" ", timespec="microseconds")
 
 
 @dataclass
@@ -42,12 +46,20 @@ class Sampler:
         self._was_at_grace: bool = False
         self._last_animation: dict[str, dict] = {}
         self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
+        self._world_lost_at: datetime | None = None
+
+    def _reset_session(self) -> None:
+        """Forget per-character state (the player left the world, possibly to load another character)."""
+        self.baseline_runes = None
+        self._was_at_grace = False
+        self._last_animation = {}
+        self._activations.clear()
 
     def reset_baseline(self, runes: int) -> None:
         """Lock in a new farming cycle baseline."""
         self.baseline_runes = runes
 
-    def _read_anim_id(self, player: int) -> int | None:
+    def read_animation_id(self, player: int) -> int | None:
         anim = self.profile.anim
         if anim is None:
             return None
@@ -62,14 +74,6 @@ class Sampler:
             return None
         entry_addr = time_act + anim.time_act_queue + (read_idx * anim.queue_entry_size)
         return read_u32(self.mem, entry_addr)
-
-    def _is_at_grace(self, player: int) -> bool:
-        ag = self.profile.at_grace
-        if ag is not None and ag.source == "anim":
-            anim_id = self._read_anim_id(player)
-            if anim_id is not None:
-                return anim_id in ag.equals
-        return False
 
     def _read_vitals(self, player: int) -> tuple[dict | None, str | None]:
         vit = self.profile.vitals
@@ -128,9 +132,30 @@ class Sampler:
             return None, self._wait(f"invalid pointer {name}=0x{v:X}")
         return v, None
 
+    def locate_player(self) -> tuple[int | None, str | None]:
+        """(PlayerIns address, None), or (None, reason) while the world/player is not available."""
+        p = self.profile
+        wcm, w = self._follow(self.base + p.world_chr_man_rva, "WorldChrMan")
+        if w is None:
+            player, w = self._follow(wcm + p.world_chr_man_to_player, "PlayerIns")
+            if w is None:
+                return player, None
+        return None, w.error or "world not loaded"
+
     # -- main ------------------------------------------------------------
     def sample(self, now: datetime | None = None) -> Sample:
         now = now or datetime.now(timezone.utc)
+        s = self._sample(now)
+        if s.state == "CONNECTED":
+            self._world_lost_at = None
+        elif s.error is None:  # normal title-screen / loading wait (not a read failure)
+            if self._world_lost_at is None:
+                self._world_lost_at = now
+            elif (now - self._world_lost_at).total_seconds() >= WORLD_LOST_RESET_S:
+                self._reset_session()
+        return s
+
+    def _sample(self, now: datetime) -> Sample:
         p = self.profile
 
         wcm, w = self._follow(self.base + p.world_chr_man_rva, "WorldChrMan")
@@ -171,7 +196,7 @@ class Sampler:
             effects, ignored = self._classify(entries, now)
 
         # Read Site of Grace interaction/resting state directly from CSChrTimeActModule in game memory
-        anim_id = self._read_anim_id(player)
+        anim_id = self.read_animation_id(player)
         is_at_grace = anim_id is not None and self.profile.at_grace is not None and anim_id in self.profile.at_grace.equals
 
         if anim_id is not None and anim_id > 0:
@@ -227,11 +252,9 @@ class Sampler:
         if self.profile.sp_effect is None:
             return None, "profile has no complete sp_effect layout"
         p = self.profile
-        wcm, w = self._follow(self.base + p.world_chr_man_rva, "WorldChrMan")
-        if w is None:
-            player, w = self._follow(wcm + p.world_chr_man_to_player, "PlayerIns")
-        if w is not None:
-            return None, w.error or "world not loaded"
+        player, reason = self.locate_player()
+        if player is None:
+            return None, reason
         return self._read_effect_list(player)
 
     # -- SpEffect linked list -------------------------------------------
@@ -341,7 +364,7 @@ class Sampler:
 
 def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
                    exe_sha256: str | None, profile_label: str | None, buffs_supported: bool,
-                   sample: Sample | None, session_start_runes: int | None = None,
+                   sample: Sample | None,
                    note: str | None = None, last_character: dict | None = None) -> dict:
     has_character = sample is not None and sample.character is not None
     game_connected = state in ("CONNECTED", "IDLE")
@@ -368,3 +391,17 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
         },
         "character": character,
     }
+
+
+def doc_signature(doc: dict) -> dict:
+    """The document minus the per-tick countdown (`buff_duration`): equal signatures mean only timers moved."""
+    ch = doc.get("character")
+    if not isinstance(ch, dict) or not ch.get("effects"):
+        return doc
+    effects = {}
+    for eid, eff in ch["effects"].items():
+        times = eff.get("times")
+        if times is not None:
+            eff = {**eff, "times": {k: v for k, v in times.items() if k != "buff_duration"}}
+        effects[eid] = eff
+    return {**doc, "character": {**ch, "effects": effects}}

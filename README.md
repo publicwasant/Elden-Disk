@@ -1,7 +1,7 @@
 # EldenDisk Tool
 
 > **Offline, Read-Only Memory Read Service & Standalone Executable for Elden Ring**  
-> **Version:** `1.5.1` | **Spec Version:** `1.5.1` | **Platform:** Windows 10/11 (x64) | **Runtime:** Python 3.11+ or Standalone Executable
+> **Version:** `1.5.2` | **Spec Version:** `1.5.2` | **Platform:** Windows 10/11 (x64) | **Runtime:** Python 3.11+ or Standalone Executable
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes real-time character state snapshots to `output/disk-state.json`. EldenDisk is designed from the ground up for high reliability, zero anti-cheat risk, minimal CPU/disk footprint, and effortless distribution.
 
@@ -12,10 +12,10 @@ Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes rea
 1. **Strictly Read-Only Memory Access:** Requests only `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`. Performs zero memory writes (`WriteProcessMemory`), allocations, thread injections, or code modifications.
 2. **Zero Disk Changes in Game Folder:** Never creates, modifies, renames, or deletes any file inside the Elden Ring installation directory.
 3. **Anti-Cheat Guard (EAC Safe):** Continuously scans loaded modules. Refuses to attach and immediately exits if EasyAntiCheat modules (`easyanticheat.dll`, etc.) are present.
-4. **Event-Driven Persistence Architecture:** Polling runs in RAM at a locked 60FPS. Atomic disk writes (`disk-state.json`) occur **only** when state data changes or active timed buff timers update, eliminating unnecessary SSD wear.
-5. **Window Focus Detection (`IDLE` State):** Uses Windows API focus detection (`GetForegroundWindow`). Pauses polling and disk writes when the game is unfocused, preserving CPU resources while retaining character data.
+4. **Event-Driven Persistence Architecture:** Polling runs in RAM at a locked 60FPS. Atomic disk writes (`disk-state.json`) occur only when state data changes; buff countdown ticks alone are written at most every `--timer-interval` (0.5 s), eliminating unnecessary SSD wear.
+5. **Window Focus Detection (`IDLE` State):** Uses Windows API focus detection (`GetForegroundWindow`). Pauses polling and disk writes when the game is unfocused, preserving CPU resources while retaining character data. Pass `--no-idle` to keep reading while unfocused.
 6. **Correct-or-Silent Validation:** Discards incomplete or malformed memory samples (null pointers, unreadable addresses, out-of-range stats) and safely retains the last known valid state snapshot.
-7. **Standalone Executable Distribution:** Compiles into a zero-dependency, single-file executable (`./build/dist/1.5.1/eldendisk.exe`) via PyInstaller.
+7. **Standalone Executable Distribution:** Compiles into a zero-dependency, single-file executable (`./build/dist/1.5.2/eldendisk.exe`) via PyInstaller.
 
 ---
 
@@ -40,14 +40,14 @@ python -m eldendisk run --attach -v
 
 ### 2. Building Standalone Executable (`.exe`)
 ```cmd
-# Build single embedded executable into ./build/dist/1.5.1/eldendisk.exe
+# Build single embedded executable into ./build/dist/1.5.2/eldendisk.exe
 python -m eldendisk build -c -em
 ```
 
 ### 3. Running Standalone Executable
 ```cmd
 # Launch game offline + write state via compiled binary
-.\build\dist\1.5.1\eldendisk.exe run -v
+.\build\dist\1.5.2\eldendisk.exe run -v
 ```
 
 ### 4. Running End-to-End Pipeline (Test + Build + Run)
@@ -95,7 +95,7 @@ Run via `python -m eldendisk <command> [options]` or `eldendisk.exe <command> [o
 
 ## 📦 Standalone Executable Build & E2E Pipeline
 
-Version 1.5.1 introduces native compilation and end-to-end pipeline automation.
+Version 1.5.1 introduced native compilation and end-to-end pipeline automation; 1.5.2 hardens it (Nuitka parity, config lookup rules, throttled writes).
 
 ### Build Subcommand (`build`)
 ```cmd
@@ -103,12 +103,12 @@ python -m eldendisk build [OPTIONS]
 ```
 
 - **Single Embedded Binary (`-em` / `--embed-configs`):**
-  Embeds `offsets.json`, `chr_state_ids.json`, and `disk.schema.json` directly inside `eldendisk.exe`. Generates a single file in `./build/dist/1.5.1/eldendisk.exe` with no external dependencies.
+  Embeds `offsets.json` and `chr_state_ids.json` directly inside `eldendisk.exe` (both engines). A same-named file placed next to the exe still overrides the embedded one. Generates a single file in `./build/dist/1.5.2/eldendisk.exe` with no external dependencies.
   ```cmd
   python -m eldendisk build -c -em
   ```
 - **Modular Distribution (External Configs):**
-  Compiles `eldendisk.exe` and copies editable `offsets.json` and `chr_state_ids.json` into `./build/dist/1.5.1/` alongside the executable.
+  Compiles `eldendisk.exe` and copies editable `offsets.json` and `chr_state_ids.json` into `./build/dist/1.5.2/` alongside the executable (both PyInstaller and Nuitka).
   ```cmd
   python -m eldendisk build -c
   ```
@@ -135,7 +135,7 @@ python code/tools/dev_pipeline.py
 | `WAITING_FOR_WORLD` | Process attached, but game pointers/world not initialized. | Retained last known |
 | `CONNECTED` | Polling active; real-time character state live. | Live full object |
 | `DISCONNECTED` | Game process closed cleanly or crashed. | Retained last known |
-| `IDLE` | Game window out of focus; polling paused to save CPU. | Retained last known |
+| `IDLE` | Game window out of focus; polling paused to save CPU (disabled by `--no-idle`). | Retained last known |
 
 ---
 
@@ -154,6 +154,9 @@ When FromSoftware updates Elden Ring, memory offsets change. Adding a profile al
 | `game_data.runes` | Rune offset | `"0x6C"` |
 | `vitals` | HP (`0x138`), FP (`0x148`), Stamina (`0x154`) offsets | `"0x190"`, `"0x0"`, `"0x138"` |
 | `player_to_sp_effect` | SpEffect linked list head offset | `"0x178"` |
+| `at_grace` | `null` (off) or `{source, equals}`; `equals` is required, there is no default ID | `{"source":"anim","equals":["0x109AB"]}` |
+
+> A profile **must** include `vitals`; since 1.5.2 a profile without it is rejected (`UNSUPPORTED_VERSION: profile incomplete`) instead of silently reusing the 1.17.1 layout.
 
 **Full Step-by-Step Guide:** **[docs/adding-a-profile.md](docs/adding-a-profile.md)** — Includes Cheat Engine scanning checkpoints and step-by-step instructions.
 

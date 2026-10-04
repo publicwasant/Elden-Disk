@@ -128,7 +128,7 @@ def test_connected_sample(mode):
     assert b["categories"] == "INCANTATIONS"
     assert b["abilities"] == "Buff"
     assert b["times"]["buff_duration"] == 45.0 and b["times"]["max_duration"] == 80.0
-    assert b["times"]["last_activated_at"] == "2026-09-30 11:59:25.000000"  # now - (80-45)
+    assert b["times"]["last_activated_at"] == "2026-09-30 11:59:25.000000+00:00"  # now - (80-45), UTC offset always present
     assert "200" in c["effects"]
     p = c["effects"]["200"]
     assert p["name"] == "Gold Scarab"

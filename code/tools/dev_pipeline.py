@@ -2,7 +2,7 @@
 
 Execution Flow:
 1. Pre-check: Executes unit tests to validate source code.
-2. Build: Executes `python -m eldendisk build -c -em` to compile standalone executable.
+2. Build: Executes `python -m eldendisk build -c -em` (embedded configs; `--no-embed` to disable) to compile the executable.
 3. Launch: Executes `./build/dist/<version>/eldendisk.exe run -v` to launch telemetry via compiled binary.
 """
 

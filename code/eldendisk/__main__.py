@@ -14,14 +14,14 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from eldendisk import __version__
     import eldendisk.game_launcher as gl
-    from eldendisk.disk import Sampler, build_document
+    from eldendisk.disk import Sampler, build_document, doc_signature, iso
     from eldendisk.json_logger import JsonLogger
     from eldendisk.memory_reader import is_window_active
     from eldendisk.profile_loader import load_effects, load_profile
 else:
     from . import __version__
     from . import game_launcher as gl
-    from .disk import Sampler, build_document
+    from .disk import Sampler, build_document, doc_signature, iso
     from .json_logger import JsonLogger
     from .memory_reader import is_window_active
     from .profile_loader import load_effects, load_profile
@@ -30,22 +30,35 @@ HERE = Path(__file__).resolve().parent.parent
 EXIT_UNSUPPORTED, EXIT_EAC = 2, 3
 
 
-def get_resource_path(filename: str, default_dir: Path | None = None) -> Path:
-    """Resolve file path dynamically, supporting sys._MEIPASS when frozen."""
-    if getattr(sys, "frozen", False):
-        exe_dir = Path(sys.executable).resolve().parent
-        if (exe_dir / filename).exists():
-            return exe_dir / filename
+def runtime_dirs() -> tuple[Path | None, Path | None]:
+    """(external_dir, embedded_dir) when running as a compiled exe, else (None, None).
+
+    external_dir: the folder the user sees the exe in. embedded_dir: where bundled data is unpacked at runtime
+    (PyInstaller: sys._MEIPASS; Nuitka: next to the compiled __main__).
+    """
+    if getattr(sys, "frozen", False):  # PyInstaller
         meipass = getattr(sys, "_MEIPASS", None)
-        if meipass:
-            p = Path(meipass) / filename
-            if p.exists():
-                return p
-        for ancestor in (exe_dir.parent, exe_dir.parent.parent, exe_dir.parent.parent.parent):
-            if (ancestor / filename).exists():
-                return ancestor / filename
-            if (ancestor / "code" / filename).exists():
-                return ancestor / "code" / filename
+        return Path(sys.executable).resolve().parent, (Path(meipass) if meipass else None)
+    compiled = globals().get("__compiled__")  # Nuitka
+    if compiled is not None:
+        containing = getattr(compiled, "containing_dir", None)
+        external = Path(containing) if containing else Path(sys.argv[0]).resolve().parent
+        return external, Path(__file__).resolve().parent
+    return None, None
+
+
+def get_resource_path(filename: str, default_dir: Path | None = None) -> Path:
+    """Resolve a config file.
+
+    Compiled exe: a file next to the exe wins (so users can update offsets without rebuilding), then the copy
+    embedded by `build --embed-configs`. Source run: default_dir, then the project folders.
+    """
+    external, embedded = runtime_dirs()
+    if external is not None:
+        if (external / filename).exists():
+            return external / filename
+        if embedded is not None and (embedded / filename).exists():
+            return embedded / filename
     if default_dir is not None and (default_dir / filename).exists():
         return default_dir / filename
     if (HERE / filename).exists():
@@ -53,6 +66,21 @@ def get_resource_path(filename: str, default_dir: Path | None = None) -> Path:
     if (HERE.parent / filename).exists():
         return HERE.parent / filename
     return Path(filename)
+
+
+def describe_resource(path: Path | str) -> str:
+    """'embedded' | 'external' | 'source' | 'missing' - where a resolved config file lives (for -v output)."""
+    p = Path(path)
+    if not p.exists():
+        return "missing"
+    external, embedded = runtime_dirs()
+    if embedded is not None:
+        try:
+            p.resolve().relative_to(embedded.resolve())
+            return "embedded"
+        except ValueError:
+            pass
+    return "external" if external is not None else "source"
 
 
 def _require_windows_x64() -> None:
@@ -78,14 +106,24 @@ class Monitor:
         self.sampler: Sampler | None = None
         self._last_verbose: tuple | None = None
         self._last_written_doc: dict | None = None
+        self._last_written_sig: dict | None = None
+        self._last_write_t = 0.0
+        self._busy_warned = False
         self._last_character: dict | None = None
 
-    def _should_write(self, doc: dict) -> bool:
+    def _should_write(self, doc: dict, sig: dict | None = None, now_mono: float | None = None) -> bool:
+        """Write at once when anything but a buff countdown changed; countdown-only changes at most every timer_interval."""
         if self._last_written_doc is None:
             return True
-        return doc != self._last_written_doc
+        if doc == self._last_written_doc:
+            return False
+        sig = doc_signature(doc) if sig is None else sig
+        now_mono = time.monotonic() if now_mono is None else now_mono
+        if sig != self._last_written_sig:
+            return True
+        return now_mono - self._last_write_t >= getattr(self.args, "timer_interval", 0.5)
 
-    def emit(self, state: str, sample=None, note: str | None = None) -> None:
+    def emit(self, state: str, sample=None, note: str | None = None, now_mono: float | None = None) -> None:
         if sample is not None and sample.character is not None:
             self._last_character = sample.character
 
@@ -94,11 +132,15 @@ class Monitor:
             exe_sha256=self.sha, profile_label=self.label, buffs_supported=self.buffs, sample=sample,
             last_character=self._last_character, note=note,
         )
-        if self._should_write(doc):
+        mono = time.monotonic() if now_mono is None else now_mono
+        sig = doc_signature(doc)
+        if self._should_write(doc, sig, mono):
             if self.logger.write(doc):
-                self._last_written_doc = doc
-            else:
-                _log("warning: output file busy, sample skipped")
+                self._last_written_doc, self._last_written_sig, self._last_write_t = doc, sig, mono
+                self._busy_warned = False
+            elif not self._busy_warned:
+                self._busy_warned = True
+                _log("warning: output file busy, sample skipped (further skips are not repeated)")
 
         if self.args.verbose:
             key = (state, doc["system_status"]["last_error"])
@@ -123,6 +165,9 @@ def cmd_run(args) -> int:
 
     logger = JsonLogger(Path(args.out), game_dir, filename="disk-state.json")
     mon = Monitor(args, logger)
+    if args.verbose:
+        _log(f"[config] offsets={args.offsets} ({describe_resource(args.offsets)})")
+        _log(f"[config] effects={args.effects} ({describe_resource(args.effects)})")
     mem = None
     try:
         # 1. get a PID
@@ -191,7 +236,7 @@ def cmd_run(args) -> int:
                 next_scan = time.monotonic() + 2
 
             # Check window active focus -> IDLE state
-            if not is_window_active(mon.pid):
+            if not args.no_idle and not is_window_active(mon.pid):
                 mon.emit("IDLE", sample=last_sample)
                 time.sleep(period)
                 continue
@@ -300,26 +345,18 @@ def cmd_animations(args) -> int:
 
     try:
         while mem.alive():
-            wcm, w = sampler._follow(sampler.base + profile.world_chr_man_rva, "WorldChrMan")
-            if w is not None:
-                if w.error != last_err:
-                    print(f"[waiting] {w.error or 'world not loaded'}")
-                    last_err = w.error
-                time.sleep(0.5)
-                continue
-
-            player, w = sampler._follow(wcm + profile.world_chr_man_to_player, "PlayerIns")
-            if w is not None:
-                if w.error != last_err:
-                    print(f"[waiting] {w.error or 'player not loaded'}")
-                    last_err = w.error
+            player, reason = sampler.locate_player()
+            if player is None:
+                if reason != last_err:
+                    print(f"[waiting] {reason}")
+                    last_err = reason
                 time.sleep(0.5)
                 continue
 
             last_err = None
-            cur_anim = sampler._read_anim_id(player)
+            cur_anim = sampler.read_animation_id(player)
             if cur_anim is not None and cur_anim > 0:
-                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+                ts = iso(datetime.now().astimezone())
                 if first:
                     print("--- 1 animations now active ---")
                     print(f"+   {cur_anim:>10} |   {ts}")
@@ -345,114 +382,97 @@ def cmd_hash(args) -> int:
     return 0
 
 
+def _build_layout() -> dict:
+    code_dir = HERE
+    project_root = code_dir.parent if code_dir.name == "code" else code_dir
+    build_root = project_root / "build"
+    return {
+        "code_dir": code_dir,
+        "project_root": project_root,
+        "build_root": build_root,
+        "dist_dir": build_root / "dist" / __version__,
+        "work_dir": build_root / "work",
+        "entry_point": code_dir / "eldendisk" / "__main__.py",
+    }
+
+
+def _config_files(layout: dict) -> list[Path]:
+    """offsets.json and chr_state_ids.json, from code/ or the project root (only those that exist)."""
+    out = []
+    for name in ("offsets.json", "chr_state_ids.json"):
+        for base in (layout["code_dir"], layout["project_root"]):
+            if (base / name).exists():
+                out.append(base / name)
+                break
+    return out
+
+
+def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, configs: list[Path]) -> list[str]:
+    """The compiler command line for `engine` (pure, so it can be unit-tested without compiling)."""
+    entry, dist_dir = layout["entry_point"], layout["dist_dir"]
+    icon_path = Path(icon).resolve() if icon and Path(icon).exists() else None
+    if icon and icon_path is None:
+        _log(f"warning: icon file not found: {icon}")
+    sep = ";" if sys.platform == "win32" else ":"
+
+    if engine == "pyinstaller":
+        cmd = [sys.executable, "-m", "PyInstaller", "--onefile", "--name=eldendisk",
+               f"--distpath={dist_dir}", f"--workpath={layout['work_dir']}", f"--specpath={layout['work_dir']}"]
+        if icon_path:
+            cmd.append(f"--icon={icon_path}")
+        if embed:
+            cmd += [f"--add-data={c}{sep}." for c in configs]
+    else:  # nuitka
+        cmd = [sys.executable, "-m", "nuitka", "--onefile", f"--output-dir={dist_dir}",
+               "--output-filename=eldendisk.exe"]
+        if icon_path:
+            cmd.append(f"--windows-icon-from-ico={icon_path}")
+        if embed:
+            cmd += [f"--include-data-files={c}={c.name}" for c in configs]
+    cmd.append(str(entry))
+    return cmd
+
+
 def cmd_build(args) -> int:
+    import shutil
+    import subprocess
+
     engine = (args.engine or "pyinstaller").lower()
     if engine not in ("pyinstaller", "nuitka"):
         _log(f"error: unsupported build engine '{args.engine}'")
         return 1
 
-    code_dir = HERE
-    project_root = code_dir.parent if code_dir.name == "code" else code_dir
-    build_root = project_root / "build"
-    dist_dir = build_root / "dist" / __version__
-    work_dir = build_root / "work"
-    entry_point = code_dir / "eldendisk" / "__main__.py"
+    layout = _build_layout()
+    dist_dir = layout["dist_dir"]
 
     if args.clean:
         _log("[INFO] Cleaning previous build artifacts...")
-        import shutil
-        if build_root.exists():
-            shutil.rmtree(build_root, ignore_errors=True)
+        if layout["build_root"].exists():
+            shutil.rmtree(layout["build_root"], ignore_errors=True)
 
-    if engine == "pyinstaller":
-        _log("[INFO] Initializing PyInstaller engine...")
-        _log(f"[INFO] Building eldendisk.exe (Onefile mode) for version {__version__}...")
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    layout["work_dir"].mkdir(parents=True, exist_ok=True)
+    configs = _config_files(layout)
+    label = "PyInstaller" if engine == "pyinstaller" else "Nuitka"
+    _log(f"[INFO] Initializing {label} engine...")
+    _log(f"[INFO] Building eldendisk.exe (Onefile mode) for version {__version__}...")
 
-        dist_dir.mkdir(parents=True, exist_ok=True)
-        work_dir.mkdir(parents=True, exist_ok=True)
+    cmd = build_command(engine, embed=args.embed_configs, icon=args.icon, layout=layout, configs=configs)
+    try:
+        res = subprocess.run(cmd, check=False)
+    except OSError as exc:
+        _log(f"error during build: {exc}")
+        return 1
+    if res.returncode != 0:
+        _log(f"[ERROR] {label} build failed.")
+        return 1
 
-        cmd = [
-            sys.executable, "-m", "PyInstaller",
-            "--onefile",
-            "--name=eldendisk",
-            f"--distpath={dist_dir}",
-            f"--workpath={work_dir}",
-            f"--specpath={work_dir}",
-        ]
+    if not args.embed_configs:  # editable configs travel next to the exe, for both engines
+        for c in configs:
+            shutil.copy2(c, dist_dir / c.name)
 
-        if args.icon:
-            icon_path = Path(args.icon).resolve()
-            if icon_path.exists():
-                cmd.append(f"--icon={icon_path}")
-            else:
-                _log(f"warning: icon file not found: {args.icon}")
-
-        offsets_src = code_dir / "offsets.json" if (code_dir / "offsets.json").exists() else project_root / "offsets.json"
-        chr_src = code_dir / "chr_state_ids.json" if (code_dir / "chr_state_ids.json").exists() else project_root / "chr_state_ids.json"
-        schema_src = code_dir / "eldendisk" / "disk.schema.json"
-
-        sep = ";" if sys.platform == "win32" else ":"
-        if schema_src.exists():
-            cmd.append(f"--add-data={schema_src}{sep}eldendisk")
-
-        if args.embed_configs:
-            if offsets_src.exists():
-                cmd.append(f"--add-data={offsets_src}{sep}.")
-            if chr_src.exists():
-                cmd.append(f"--add-data={chr_src}{sep}.")
-
-        cmd.append(str(entry_point))
-
-        try:
-            import subprocess
-            res = subprocess.run(cmd, check=False)
-            if res.returncode != 0:
-                _log("[ERROR] PyInstaller build failed.")
-                return 1
-
-            # Copy external config files to dist directory only for non-embedded distribution
-            if not args.embed_configs:
-                import shutil
-                if offsets_src.exists():
-                    shutil.copy2(offsets_src, dist_dir / "offsets.json")
-                if chr_src.exists():
-                    shutil.copy2(chr_src, dist_dir / "chr_state_ids.json")
-        except Exception as exc:
-            _log(f"error during build: {exc}")
-            return 1
-
-        _log(f"[SUCCESS] Build complete! Standalone executable located at: ./build/dist/{__version__}/eldendisk.exe")
-        return 0
-
-    elif engine == "nuitka":
-        _log("[INFO] Initializing Nuitka engine...")
-        _log(f"[INFO] Building eldendisk.exe (Onefile mode) for version {__version__}...")
-        dist_dir.mkdir(parents=True, exist_ok=True)
-        cmd = [
-            sys.executable, "-m", "nuitka",
-            "--standalone",
-            "--onefile",
-            f"--output-dir={dist_dir}",
-            "--target-filename=eldendisk.exe",
-        ]
-        if args.icon:
-            cmd.append(f"--windows-icon-from-ico={args.icon}")
-        cmd.append(str(entry_point))
-
-        try:
-            import subprocess
-            res = subprocess.run(cmd, check=False)
-            if res.returncode != 0:
-                _log("[ERROR] Nuitka build failed.")
-                return 1
-        except Exception as exc:
-            _log(f"error during build: {exc}")
-            return 1
-
-        _log(f"[SUCCESS] Build complete! Standalone executable located at: ./build/dist/{__version__}/eldendisk.exe")
-        return 0
-
-    return 1
+    _log(f"[SUCCESS] Build complete! Standalone executable located at: ./build/dist/{__version__}/eldendisk.exe")
+    return 0
 
 
 def main(argv=None) -> int:
@@ -463,30 +483,35 @@ def main(argv=None) -> int:
     effects_default = str(get_resource_path("chr_state_ids.json", default_dir=HERE))
     if not Path(effects_default).exists() and (HERE / "effects.json").exists():
         effects_default = str(get_resource_path("effects.json", default_dir=HERE))
-    out_default = str(Path(sys.executable).parent / "output") if getattr(sys, "frozen", False) else str(HERE / "output")
+    external_dir, _embedded = runtime_dirs()
+    out_default = str((external_dir or HERE) / "output")
 
     r = sub.add_parser("run", help="launch the game offline and write telemetry JSON")
     r.add_argument("--attach", action="store_true", help="attach to an already-running eldenring.exe instead of launching")
     r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     r.add_argument("--out", default=out_default,
                    help="directory for disk-state.json (default: <project>/code/output)")
-    r.add_argument("--offsets", default=offsets_default, help="offsets.json (default: <project>/offsets.json)")
-    r.add_argument("--effects", default=effects_default, help="chr_state_ids.json (default: <project>/chr_state_ids.json)")
+    r.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
+    r.add_argument("--effects", default=effects_default, help="chr_state_ids.json (default: %(default)s)")
     r.add_argument("--hz", type=float, default=60.0, help="polls per second, 1-120 (default: 60)")
+    r.add_argument("--timer-interval", type=float, default=0.5, metavar="SEC",
+                   help="min seconds between writes that only change a buff countdown; 0 = every change (default: 0.5)")
+    r.add_argument("--no-idle", action="store_true",
+                   help="keep reading while the game window is unfocused (default: pause and report IDLE)")
     r.add_argument("-v", "--verbose", action="store_true", help="print state changes and diagnostics")
     r.set_defaults(fn=cmd_run)
 
     e = sub.add_parser("effects", help="live SpEffect viewer for building chr_state_ids.json (game must be running offline)")
-    e.add_argument("--offsets", default=offsets_default, help="offsets.json (default: <project>/offsets.json)")
-    e.add_argument("--effects", default=effects_default, help="chr_state_ids.json (default: <project>/chr_state_ids.json)")
+    e.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
+    e.add_argument("--effects", default=effects_default, help=argparse.SUPPRESS)  # deprecated no-op (kept for old scripts)
     e.add_argument("-q", "--quiet", action="store_true",
                    help="hide short-lived internal effects (0 <= duration < 1 s); keeps permanent (-1) and timed buffs")
     e.set_defaults(fn=cmd_effects)
 
     a = sub.add_parser("animations", help="live character animation state viewer for building chr_state_ids.json")
-    a.add_argument("--offsets", default=offsets_default, help="offsets.json (default: <project>/offsets.json)")
-    a.add_argument("--effects", default=effects_default, help="chr_state_ids.json (default: <project>/chr_state_ids.json)")
-    a.add_argument("-q", "--quiet", action="store_true", help="quiet mode")
+    a.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
+    a.add_argument("--effects", default=effects_default, help="chr_state_ids.json (default: %(default)s)")
+    a.add_argument("-q", "--quiet", action="store_true", help=argparse.SUPPRESS)  # deprecated no-op (kept for old scripts)
     a.set_defaults(fn=cmd_animations)
 
     h = sub.add_parser("hash", help="print SHA-256 of eldenring.exe (key for offsets.json)")
@@ -507,7 +532,7 @@ def main(argv=None) -> int:
         ap.error("--hz must be between 1 and 120")
     try:
         return args.fn(args)
-    except (FileNotFoundError, OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         _log(f"error: {exc}")
         return 1
 

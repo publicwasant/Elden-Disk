@@ -50,8 +50,12 @@ Launches Elden Ring offline (or attaches to an active offline process), polls me
 | `--offsets FILE` | path | `./offsets.json` | Path to profiles JSON file. In embedded builds (`--embed-configs`), defaults to bundled resources if external file is missing. |
 | `--effects FILE` | path | `./chr_state_ids.json` | Path to state IDs configuration file (`chr_state_ids.json` or `effects.json`). |
 | `--hz N` | number (1–120) | `60` | Polling rate in samples per second. |
-| `-v`, `--verbose` | switch | off | Enable verbose diagnostic logging to stderr. |
+| `--timer-interval SEC` | number (≥0) | `0.5` | Minimum seconds between writes that change only a buff countdown; other changes are written immediately. `0` = every change. |
+| `--no-idle` | switch | off | Keep reading while the game window is unfocused (default: pause and report `IDLE`). |
+| `-v`, `--verbose` | switch | off | Verbose diagnostics to stderr, including which config files are used (`embedded` / `external`). |
 | `-h`, `--help` | switch | — | Display command help. |
+
+**Config lookup order:** a file next to `eldendisk.exe` always wins (edit `offsets.json` without rebuilding); otherwise the copy embedded by `build --embed-configs` is used. `run -h` prints the resolved paths.
 
 ---
 
@@ -68,7 +72,6 @@ Attaches to active `eldenring.exe` and streams active character SpEffect IDs and
 | Flag | Type | Default | Description |
 |:---|:---:|:---|:---|
 | `--offsets FILE` | path | `./offsets.json` | Path to profiles JSON file. |
-| `--effects FILE` | path | `./chr_state_ids.json` | Path to state IDs JSON file. |
 | `-q`, `--quiet` | switch | off | Hide internal short-duration effects (< 1s). |
 | `-h`, `--help` | switch | — | Display help. |
 
@@ -87,8 +90,6 @@ Attaches to active `eldenring.exe` and streams animation state ID transitions wi
 | Flag | Type | Default | Description |
 |:---|:---:|:---|:---|
 | `--offsets FILE` | path | `./offsets.json` | Path to profiles JSON file. |
-| `--effects FILE` | path | `./chr_state_ids.json` | Path to state IDs JSON file. |
-| `-q`, `--quiet` | switch | off | Quiet mode. |
 | `-h`, `--help` | switch | — | Display help. |
 
 ---
@@ -120,3 +121,5 @@ Calculates and prints the SHA-256 hash of the target `eldenring.exe`.
 When running `eldendisk.exe`:
 1. **External Configs (Default):** The application looks for `offsets.json` and `chr_state_ids.json` in the same directory as `eldendisk.exe`. This allows modifying offsets or state IDs without re-compiling the executable.
 2. **Embedded Configs (`--embed-configs` build):** If built with embedded configurations, `eldendisk.exe` reads fallback configurations directly from its internal temporary bundle directory (`sys._MEIPASS`) when external JSON files are absent.
+
+> **Deprecated (1.5.2):** `effects --effects FILE` and `animations -q` never had an effect; they are still accepted (hidden from `--help`) and will be removed later.

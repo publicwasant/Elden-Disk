@@ -420,3 +420,13 @@ Starter `effects.json` for the same build (IDs observed in-game):
 | **Offset**       | a distance added to an address to reach a field inside an object                                          |
 | **Pointer path** | base + a few offsets that leads from a fixed spot in the exe to your character                            |
 | **Pointer Scan** | the Cheat Engine feature that searches for such paths                                                     |
+
+
+---
+
+## Required blocks (since 1.5.2)
+
+A profile is pinned to one `eldenring.exe` hash, so nothing is borrowed from another version:
+
+- `vitals` is **required** (`player_to_modules`, `modules_to_data`, `data_to_vitals`). Without it the profile is rejected with `UNSUPPORTED_VERSION: profile incomplete`.
+- `at_grace` is `null` (Grace detection off) or `{ "source": "anim", "equals": ["0x109AB"] }`. `equals` is required; there is no default ID.
