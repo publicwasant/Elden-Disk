@@ -12,12 +12,14 @@ if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from eldendisk import __version__
     import eldendisk.game_launcher as gl
     from eldendisk.disk import Sampler, build_document
     from eldendisk.json_logger import JsonLogger
     from eldendisk.memory_reader import is_window_active
     from eldendisk.profile_loader import load_effects, load_profile
 else:
+    from . import __version__
     from . import game_launcher as gl
     from .disk import Sampler, build_document
     from .json_logger import JsonLogger
@@ -39,10 +41,11 @@ def get_resource_path(filename: str, default_dir: Path | None = None) -> Path:
             p = Path(meipass) / filename
             if p.exists():
                 return p
-        if (exe_dir.parent / filename).exists():
-            return exe_dir.parent / filename
-        if (exe_dir.parent / "code" / filename).exists():
-            return exe_dir.parent / "code" / filename
+        for ancestor in (exe_dir.parent, exe_dir.parent.parent, exe_dir.parent.parent.parent):
+            if (ancestor / filename).exists():
+                return ancestor / filename
+            if (ancestor / "code" / filename).exists():
+                return ancestor / "code" / filename
     if default_dir is not None and (default_dir / filename).exists():
         return default_dir / filename
     if (HERE / filename).exists():
@@ -350,32 +353,31 @@ def cmd_build(args) -> int:
 
     code_dir = HERE
     project_root = code_dir.parent if code_dir.name == "code" else code_dir
-    build_dir = project_root / "build"
-    dist_dir = project_root / "dist"
+    build_root = project_root / "build"
+    dist_dir = build_root / "dist" / __version__
+    work_dir = build_root / "work"
     entry_point = code_dir / "eldendisk" / "__main__.py"
 
     if args.clean:
         _log("[INFO] Cleaning previous build artifacts...")
         import shutil
-        if build_dir.exists():
-            shutil.rmtree(build_dir, ignore_errors=True)
-        if dist_dir.exists():
-            shutil.rmtree(dist_dir, ignore_errors=True)
+        if build_root.exists():
+            shutil.rmtree(build_root, ignore_errors=True)
 
     if engine == "pyinstaller":
         _log("[INFO] Initializing PyInstaller engine...")
-        _log("[INFO] Building eldendisk.exe (Onefile mode)...")
+        _log(f"[INFO] Building eldendisk.exe (Onefile mode) for version {__version__}...")
 
         dist_dir.mkdir(parents=True, exist_ok=True)
-        build_dir.mkdir(parents=True, exist_ok=True)
+        work_dir.mkdir(parents=True, exist_ok=True)
 
         cmd = [
             sys.executable, "-m", "PyInstaller",
             "--onefile",
             "--name=eldendisk",
             f"--distpath={dist_dir}",
-            f"--workpath={build_dir}",
-            f"--specpath={build_dir}",
+            f"--workpath={work_dir}",
+            f"--specpath={work_dir}",
         ]
 
         if args.icon:
@@ -419,12 +421,12 @@ def cmd_build(args) -> int:
             _log(f"error during build: {exc}")
             return 1
 
-        _log("[SUCCESS] Build complete! Standalone executable located at: ./dist/eldendisk.exe")
+        _log(f"[SUCCESS] Build complete! Standalone executable located at: ./build/dist/{__version__}/eldendisk.exe")
         return 0
 
     elif engine == "nuitka":
         _log("[INFO] Initializing Nuitka engine...")
-        _log("[INFO] Building eldendisk.exe (Onefile mode)...")
+        _log(f"[INFO] Building eldendisk.exe (Onefile mode) for version {__version__}...")
         dist_dir.mkdir(parents=True, exist_ok=True)
         cmd = [
             sys.executable, "-m", "nuitka",
@@ -447,7 +449,7 @@ def cmd_build(args) -> int:
             _log(f"error during build: {exc}")
             return 1
 
-        _log("[SUCCESS] Build complete! Standalone executable located at: ./dist/eldendisk.exe")
+        _log(f"[SUCCESS] Build complete! Standalone executable located at: ./build/dist/{__version__}/eldendisk.exe")
         return 0
 
     return 1

@@ -123,7 +123,7 @@ Calculates and prints the SHA-256 hash of the target `eldenring.exe`.
 
 `python -m eldendisk build [options]`
 
-Compiles the EldenDisk project into a standalone single executable (`eldendisk.exe`) located in `./dist`.
+Compiles the EldenDisk project into a standalone single executable (`eldendisk.exe`) located in `./build/dist/<version>/`.
 
 | Flag | Value Type | Default | Description |
 |:---|:---:|:---|:---|

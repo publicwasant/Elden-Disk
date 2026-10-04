@@ -10,7 +10,7 @@ eldendisk.exe <command> [options]
 ```
 or from standard powershell/cmd:
 ```cmd
-.\dist\eldendisk.exe <command> [options]
+.\build\dist\<version>\eldendisk.exe <command> [options]
 ```
 
 - **OS:** Windows 10/11 (64-bit)

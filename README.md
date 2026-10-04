@@ -15,7 +15,7 @@ Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes rea
 4. **Event-Driven Persistence Architecture:** Polling runs in RAM at a locked 60FPS. Atomic disk writes (`disk-state.json`) occur **only** when state data changes or active timed buff timers update, eliminating unnecessary SSD wear.
 5. **Window Focus Detection (`IDLE` State):** Uses Windows API focus detection (`GetForegroundWindow`). Pauses polling and disk writes when the game is unfocused, preserving CPU resources while retaining character data.
 6. **Correct-or-Silent Validation:** Discards incomplete or malformed memory samples (null pointers, unreadable addresses, out-of-range stats) and safely retains the last known valid state snapshot.
-7. **Standalone Executable Distribution:** Compiles into a zero-dependency, single-file executable (`./dist/eldendisk.exe`) via PyInstaller.
+7. **Standalone Executable Distribution:** Compiles into a zero-dependency, single-file executable (`./build/dist/1.5.1/eldendisk.exe`) via PyInstaller.
 
 ---
 
@@ -40,14 +40,14 @@ python -m eldendisk run --attach -v
 
 ### 2. Building Standalone Executable (`.exe`)
 ```cmd
-# Build single embedded executable into ./dist/eldendisk.exe
+# Build single embedded executable into ./build/dist/1.5.1/eldendisk.exe
 python -m eldendisk build -c -em
 ```
 
 ### 3. Running Standalone Executable
 ```cmd
 # Launch game offline + write state via compiled binary
-.\dist\eldendisk.exe run -v
+.\build\dist\1.5.1\eldendisk.exe run -v
 ```
 
 ### 4. Running End-to-End Pipeline (Test + Build + Run)
@@ -70,7 +70,7 @@ Run via `python -m eldendisk <command> [options]` or `eldendisk.exe <command> [o
 | [`effects`](#effects) | `python -m eldendisk effects [-q]` | Live SpEffect viewer: streams active buffs and status effects to stdout |
 | [`animations`](#animations) | `python -m eldendisk animations [-q]` | Live character animation state viewer: streams active animation IDs to stdout |
 | [`hash`](#hash) | `python -m eldendisk hash` | Calculates SHA-256 hash of `eldenring.exe` (used as profile key in `offsets.json`) |
-| [`build`](#build) | `python -m eldendisk build [options]` | Compiles project into standalone executable (`./dist/eldendisk.exe`) |
+| [`build`](#build) | `python -m eldendisk build [options]` | Compiles project into standalone executable (`./build/dist/<version>/eldendisk.exe`) |
 
 ### Common Recipes
 
@@ -103,12 +103,12 @@ python -m eldendisk build [OPTIONS]
 ```
 
 - **Single Embedded Binary (`-em` / `--embed-configs`):**
-  Embeds `offsets.json`, `chr_state_ids.json`, and `disk.schema.json` directly inside `eldendisk.exe`. Generates a single file in `./dist/eldendisk.exe` with no external dependencies.
+  Embeds `offsets.json`, `chr_state_ids.json`, and `disk.schema.json` directly inside `eldendisk.exe`. Generates a single file in `./build/dist/1.5.1/eldendisk.exe` with no external dependencies.
   ```cmd
   python -m eldendisk build -c -em
   ```
 - **Modular Distribution (External Configs):**
-  Compiles `eldendisk.exe` and copies editable `offsets.json` and `chr_state_ids.json` into `./dist/` alongside the executable.
+  Compiles `eldendisk.exe` and copies editable `offsets.json` and `chr_state_ids.json` into `./build/dist/1.5.1/` alongside the executable.
   ```cmd
   python -m eldendisk build -c
   ```

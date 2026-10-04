@@ -3,7 +3,7 @@
 Execution Flow:
 1. Pre-check: Executes unit tests to validate source code.
 2. Build: Executes `python -m eldendisk build -c -em` to compile standalone executable.
-3. Launch: Executes `./dist/eldendisk.exe run -v` to launch telemetry via compiled binary.
+3. Launch: Executes `./build/dist/<version>/eldendisk.exe run -v` to launch telemetry via compiled binary.
 """
 
 from __future__ import annotations
@@ -20,6 +20,9 @@ if (ROOT_DIR / "code").exists():
     CODE_DIR = ROOT_DIR / "code"
 else:
     CODE_DIR = ROOT_DIR
+
+sys.path.insert(0, str(CODE_DIR))
+from eldendisk import __version__
 
 
 def log(msg: str) -> None:
@@ -38,7 +41,7 @@ def run_precheck() -> bool:
 
 
 def run_build(clean: bool = True, embed: bool = True) -> bool:
-    log("Step 2/3: Building standalone eldendisk.exe...")
+    log(f"Step 2/3: Building standalone eldendisk.exe for version {__version__}...")
     cmd = [sys.executable, "-m", "eldendisk", "build"]
     if clean:
         cmd.append("-c")
@@ -53,16 +56,17 @@ def run_build(clean: bool = True, embed: bool = True) -> bool:
 
 
 def run_launch(dry_run: bool = False) -> int:
-    exe_path = ROOT_DIR / "dist" / "eldendisk.exe"
+    exe_path = ROOT_DIR / "build" / "dist" / __version__ / "eldendisk.exe"
     if not exe_path.exists():
         log(f"ERROR: Executable not found at {exe_path}")
         return 1
 
+    rel_path = f"./build/dist/{__version__}/eldendisk.exe"
     if dry_run:
-        log("Step 3/3: [Dry Run] Executing ./dist/eldendisk.exe --help ...")
+        log(f"Step 3/3: [Dry Run] Executing {rel_path} --help ...")
         cmd = [str(exe_path), "--help"]
     else:
-        log("Step 3/3: Executing ./dist/eldendisk.exe run -v ...")
+        log(f"Step 3/3: Executing {rel_path} run -v ...")
         cmd = [str(exe_path), "run", "-v"]
 
     res = subprocess.run(cmd)
