@@ -41,6 +41,20 @@ def check(doc: dict) -> list[str]:
         return out + [f"{state} but character is not dict"]
     if not 1 <= ch["level"] <= 713:
         out.append(f"level {ch['level']} out of range")
+    vitals = ch.get("vitals")
+    if not isinstance(vitals, dict):
+        out.append(f"vitals {vitals!r} is not an object")
+    else:
+        for vkey in ("hit_point", "focus_point", "stamina"):
+            vobj = vitals.get(vkey)
+            if not isinstance(vobj, dict):
+                out.append(f"vitals.{vkey} {vobj!r} is not an object")
+            else:
+                curr = vobj.get("current")
+                mx = vobj.get("maximum")
+                base = vobj.get("base")
+                if not isinstance(curr, int) or not isinstance(mx, int) or not isinstance(base, int):
+                    out.append(f"vitals.{vkey} fields (current={curr}, maximum={mx}, base={base}) must be integers")
     runes_obj = ch.get("runes")
     if not isinstance(runes_obj, dict):
         out.append(f"runes {runes_obj!r} is not an object")

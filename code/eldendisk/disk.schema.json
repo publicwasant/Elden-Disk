@@ -22,9 +22,42 @@
     },
     "character": {
       "type": ["object", "null"],
-      "required": ["level", "runes", "attributes", "effects", "animations"],
+      "required": ["level", "vitals", "runes", "attributes", "effects", "animations"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
+        "vitals": {
+          "type": "object",
+          "required": ["hit_point", "focus_point", "stamina"],
+          "properties": {
+            "hit_point": {
+              "type": "object",
+              "required": ["current", "maximum", "base"],
+              "properties": {
+                "current": { "type": "integer" },
+                "maximum": { "type": "integer" },
+                "base": { "type": "integer" }
+              }
+            },
+            "focus_point": {
+              "type": "object",
+              "required": ["current", "maximum", "base"],
+              "properties": {
+                "current": { "type": "integer" },
+                "maximum": { "type": "integer" },
+                "base": { "type": "integer" }
+              }
+            },
+            "stamina": {
+              "type": "object",
+              "required": ["current", "maximum", "base"],
+              "properties": {
+                "current": { "type": "integer" },
+                "maximum": { "type": "integer" },
+                "base": { "type": "integer" }
+              }
+            }
+          }
+        },
         "runes": {
           "type": "object",
           "required": ["total", "baseline", "delta"],

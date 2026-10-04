@@ -1,7 +1,7 @@
 # EldenDisk (offline, read-only memory read tool)
 
 Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes live character state to
-`output/disk-state.json`. Implements spec v1.4.2. Standard library only, Windows + 64-bit Python 3.11+.
+`output/disk-state.json`. Implements spec v1.5.0. Standard library only, Windows + 64-bit Python 3.11+.
 
 ## Guarantees
 - Read-only: the only access mask requested is `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`.

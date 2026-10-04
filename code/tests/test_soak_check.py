@@ -11,7 +11,12 @@ def doc(state="CONNECTED", **over):
         "baseline": 900,
         "delta": 100,
     }
-    ch = {"level": 386, "runes": runes, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
+    vitals = {
+        "hit_point": {"current": 890, "maximum": 1914, "base": 2015},
+        "focus_point": {"current": 350, "maximum": 350, "base": 350},
+        "stamina": {"current": 178, "maximum": 178, "base": 158},
+    }
+    ch = {"level": 386, "vitals": vitals, "runes": runes, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
           "effects": {}, "animations": {}}
     d = {"system_status": {"state": state, "read_only": True},
          "character": ch}

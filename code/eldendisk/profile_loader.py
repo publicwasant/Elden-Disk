@@ -53,6 +53,13 @@ class AnimLayout:
 
 
 @dataclass(frozen=True)
+class VitalsLayout:
+    player_to_modules: int
+    modules_to_data: int
+    data_to_vitals: int
+
+
+@dataclass(frozen=True)
 class AtGraceConfig:
     source: str
     equals: tuple[int, ...]
@@ -70,6 +77,7 @@ class Profile:
     attributes: int
     sp_effect: SpEffectLayout | None  # None -> buffs unsupported (stats still work)
     anim: AnimLayout | None = None
+    vitals: VitalsLayout | None = None
     at_grace: AtGraceConfig | None = None
     buffs_note: str | None = None
 
@@ -126,6 +134,34 @@ def _parse_anim(d: dict) -> AnimLayout | None:
         return None
 
 
+def _parse_vitals(d: dict) -> VitalsLayout | None:
+    vit = d.get("vitals")
+    if isinstance(vit, dict):
+        try:
+            return VitalsLayout(
+                player_to_modules=_num(vit.get("player_to_modules"), "vitals.player_to_modules"),
+                modules_to_data=_num(vit.get("modules_to_data"), "vitals.modules_to_data"),
+                data_to_vitals=_num(vit.get("data_to_vitals"), "vitals.data_to_vitals"),
+            )
+        except Incomplete:
+            return None
+    anim = d.get("anim") or d.get("animation")
+    player_to_mod = 0x190
+    if isinstance(anim, dict) and "player_to_modules" in anim:
+        try:
+            player_to_mod = _num(anim.get("player_to_modules"), "anim.player_to_modules")
+        except Incomplete:
+            pass
+    try:
+        return VitalsLayout(
+            player_to_modules=player_to_mod,
+            modules_to_data=0x0,
+            data_to_vitals=0x138,
+        )
+    except Incomplete:
+        return None
+
+
 def _parse_at_grace(d: dict) -> AtGraceConfig | None:
     ag = d.get("at_grace")
     if isinstance(ag, dict):
@@ -155,6 +191,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
         gd = raw.get("game_data") or {}
         sp, note = _parse_sp_effect(raw)
         anim = _parse_anim(raw)
+        vitals = _parse_vitals(raw)
         at_grace = _parse_at_grace(raw)
         return Profile(
             sha256=exe_sha256.lower(),
@@ -167,6 +204,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
             attributes=_num(gd.get("attributes"), "game_data.attributes"),
             sp_effect=sp,
             anim=anim,
+            vitals=vitals,
             at_grace=at_grace,
             buffs_note=note,
         ), None

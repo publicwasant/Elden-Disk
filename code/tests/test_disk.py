@@ -10,12 +10,13 @@ from eldendisk import memory_reader
 from eldendisk.disk import Sampler, build_document
 from eldendisk.json_logger import JsonLogger
 from eldendisk.profile_loader import (EffectConfig, EntryLayout, Effects, Profile,
-                                       SpEffectLayout, load_effects, load_profile)
+                                       SpEffectLayout, VitalsLayout, load_effects, load_profile)
 
 PKG = Path(memory_reader.__file__).parent
 SCHEMA = json.loads((PKG / "disk.schema.json").read_text())
 
 BASE, WCM, PLAYER, GD, SP = 0x140000000, 0x200000000, 0x210000000, 0x220000000, 0x230000000
+MODULES, DATA_MOD = 0x250000000, 0x260000000
 E1, E2, E3 = 0x240000000, 0x240001000, 0x240002000
 NOW = datetime(2026, 9, 30, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -43,7 +44,8 @@ class FakeMem:
 
 def make_profile(mode="remaining", sp=True):
     lay = SpEffectLayout(0x178, 0x8, EntryLayout(0x08, 0x30, 0x14, 0x10, mode)) if sp else None
-    return Profile("ab" * 32, "test", 0x1000, 0x10, 0x580, 0x68, 0x6C, 0x3C, lay)
+    return Profile("ab" * 32, "test", 0x1000, 0x10, 0x580, 0x68, 0x6C, 0x3C, lay,
+                   vitals=VitalsLayout(0x190, 0x0, 0x138))
 
 
 def effects():
@@ -67,9 +69,16 @@ def world(m, runes=10_008_626, level=386, attrs=(80, 60, 60, 90, 90, 15, 60, 10)
     m.u64(WCM + 0x10, PLAYER)
     m.u64(PLAYER + 0x580, GD)
     m.u64(PLAYER + 0x178, SP)
+    m.u64(PLAYER + 0x190, MODULES)
+    m.u64(MODULES + 0x0, DATA_MOD)
     m.u64(SP + 0x8, head)
     m.u32(GD + 0x68, level); m.u32(GD + 0x6C, runes)
     m.put(GD + 0x3C, struct.pack("<8I", *attrs))
+
+    # hp=890, max_hp=1914, max_uncapped_hp=1914, base_hp=2015
+    # fp=350, max_fp=350, base_fp=350
+    # stamina=178, max_stamina=178, base_stamina=158
+    m.put(DATA_MOD + 0x138, struct.pack("<10i", 890, 1914, 1914, 2015, 350, 350, 350, 178, 178, 158))
 
 
 def full_world(mode="remaining"):
@@ -101,6 +110,11 @@ def test_connected_sample(mode):
     assert r.state == "CONNECTED"
     c = r.character
     assert c["level"] == 386
+    assert c["vitals"] == {
+        "hit_point": {"current": 890, "maximum": 1914, "base": 2015},
+        "focus_point": {"current": 350, "maximum": 350, "base": 350},
+        "stamina": {"current": 178, "maximum": 178, "base": 158},
+    }
     assert c["runes"] == {
         "total": 10_008_626,
         "baseline": 10_008_626,
@@ -201,7 +215,7 @@ def test_rune_delta_and_baseline():
 def test_grace_reset_baseline():
     from eldendisk.profile_loader import AnimLayout, AtGraceConfig
     m = full_world()
-    ANIM_MOD, ANIM_SUB = 0x250000000, 0x260000000
+    ANIM_MOD, ANIM_SUB = 0x250000000, 0x270000000
     m.u64(PLAYER + 0x190, ANIM_MOD)
     m.u64(ANIM_MOD + 0x18, ANIM_SUB)
     m.u32(ANIM_SUB + 0xC4, 7)  # read_idx = 7
@@ -211,7 +225,7 @@ def test_grace_reset_baseline():
     at_grace_lay = AtGraceConfig("anim", (68011,))
     p = Profile("ab" * 32, "test", 0x1000, 0x10, 0x580, 0x68, 0x6C, 0x3C,
                 SpEffectLayout(0x178, 0x8, EntryLayout(0x08, 0x30, 0x14, 0x10, "remaining")),
-                anim=anim_lay, at_grace=at_grace_lay)
+                anim=anim_lay, vitals=VitalsLayout(0x190, 0x0, 0x138), at_grace=at_grace_lay)
     s = Sampler(m, p, effects(), BASE)
     r0 = s.sample(NOW)  # Initial Connect: baseline = 10_008_626
     assert r0.character["animations"] == {"2020210": {"name": "Sprint", "categories": "MANNER"}}
@@ -326,6 +340,7 @@ FULL = {
     "game_data": {"level": "0x68", "runes": "0x6C", "attributes": "0x3C"},
     "sp_effect": {"head": "0x8", "entry": {"id": "0x8", "next": "0x30", "duration": "0x14",
                                            "timer": "0x10", "timer_mode": "elapsed"}},
+    "vitals": {"player_to_modules": "0x190", "modules_to_data": "0x0", "data_to_vitals": "0x138"},
 }
 
 
@@ -334,6 +349,14 @@ def test_profile_ok_and_hex(tmp_path):
     prof, why = load_profile(p, "ab" * 32)
     assert why is None and prof.world_chr_man_rva == 0x3D5E700 and prof.runes == 0x6C
     assert prof.sp_effect.entry.timer_mode == "elapsed"
+    assert prof.vitals.player_to_modules == 0x190 and prof.vitals.data_to_vitals == 0x138
+
+
+def test_vitals_invalid_memory_discards_sample():
+    m = full_world()
+    m.put(DATA_MOD + 0x138, struct.pack("<10i", 890, 0, 1914, 2015, 350, 350, 350, 178, 178, 158))
+    r = Sampler(m, make_profile(), effects(), BASE).sample(NOW)
+    assert r.state == "WAITING_FOR_WORLD" and "invalid HP vitals" in r.error
 
 
 def test_profile_unknown_hash_and_incomplete(tmp_path):

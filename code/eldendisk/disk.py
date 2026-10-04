@@ -71,6 +71,48 @@ class Sampler:
                 return anim_id in ag.equals
         return False
 
+    def _read_vitals(self, player: int) -> tuple[dict | None, str | None]:
+        vit = self.profile.vitals
+        if vit is None:
+            return None, "profile has no vitals layout"
+        modules = read_ptr(self.mem, player + vit.player_to_modules)
+        if modules is None or modules == 0 or not is_user_ptr(modules):
+            return None, "read failed: ChrInsModuleContainer pointer"
+        data_mod = read_ptr(self.mem, modules + vit.modules_to_data)
+        if data_mod is None or data_mod == 0 or not is_user_ptr(data_mod):
+            return None, "read failed: CSChrDataModule pointer"
+        raw = self.mem.read(data_mod + vit.data_to_vitals, 40)
+        if raw is None:
+            return None, "read failed: CSChrDataModule vitals block"
+
+        hp, max_hp, _, base_hp, fp, max_fp, base_fp, stamina, max_stamina, base_stamina = struct.unpack("<10i", raw)
+
+        if hp < 0 or max_hp <= 0 or base_hp <= 0:
+            return None, f"invalid HP vitals: hp={hp}, max_hp={max_hp}, base_hp={base_hp}"
+        if fp < 0 or max_fp <= 0 or base_fp <= 0:
+            return None, f"invalid FP vitals: fp={fp}, max_fp={max_fp}, base_fp={base_fp}"
+        if max_stamina <= 0 or base_stamina <= 0:
+            return None, f"invalid Stamina vitals: stamina={stamina}, max_stamina={max_stamina}, base_stamina={base_stamina}"
+
+        vitals_obj = {
+            "hit_point": {
+                "current": hp,
+                "maximum": max_hp,
+                "base": base_hp,
+            },
+            "focus_point": {
+                "current": fp,
+                "maximum": max_fp,
+                "base": base_fp,
+            },
+            "stamina": {
+                "current": stamina,
+                "maximum": max_stamina,
+                "base": base_stamina,
+            },
+        }
+        return vitals_obj, None
+
     # -- helpers ---------------------------------------------------------
     @staticmethod
     def _wait(error: str | None = None) -> Sample:
@@ -115,6 +157,10 @@ class Sampler:
         for name, v in zip(ATTR_NAMES, attrs):
             if not ATTR_RANGE[0] <= v <= ATTR_RANGE[1]:
                 return self._wait(f"{name}={v} outside {ATTR_RANGE} (PlayerGameData+0x{p.attributes:X})")
+
+        vitals, err = self._read_vitals(player)
+        if err is not None:
+            return self._wait(err)
 
         effects: dict[str, dict] = {}
         ignored = 0
@@ -168,6 +214,7 @@ class Sampler:
 
         character = {
             "level": level,
+            "vitals": vitals,
             "runes": runes_obj,
             "attributes": dict(zip(ATTR_NAMES, attrs)),
             "effects": effects,

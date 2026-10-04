@@ -19,6 +19,11 @@
         "time_act_queue": "0x20",
         "queue_entry_size": "0x10"
       },
+      "vitals": {
+        "player_to_modules": "0x190",
+        "modules_to_data": "0x0",
+        "data_to_vitals": "0x138"
+      },
       "at_grace": { "source": "anim", "equals": ["0x109AB"] }
     }
   }
