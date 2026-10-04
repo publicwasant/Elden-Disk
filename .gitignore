@@ -1,0 +1,27 @@
+# Build & Distribution artifacts
+build/
+dist/
+*.spec
+
+# Python cache & virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+
+# Output directories
+output/
+code/output/
+dist/output/
+
+# IDE & Editor files
+.idea/
+.vscode/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
