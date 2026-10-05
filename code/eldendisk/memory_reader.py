@@ -1,6 +1,7 @@
 """Read-only process memory access (Windows, ctypes).
 
-Only PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION is ever requested.
+This module only ever requests PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION. Writing lives in
+memory_writer.py (sandbox sessions only) and is never imported by `run`, `effects` or `animations`.
 """
 from __future__ import annotations
 
@@ -149,11 +150,29 @@ def find_pid(exe_name: str) -> int | None:
         _k32.CloseHandle(snap)
 
 
-class ProcessMemory:
-    """Read-only handle to another process."""
+def list_process_names() -> list[str]:
+    """Image names of all running processes (empty list if the snapshot failed)."""
+    snap = _snapshot(TH32CS_SNAPPROCESS, 0)
+    if snap is None:
+        return []
+    try:
+        entry = PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(entry)
+        out: list[str] = []
+        ok = _k32.Process32FirstW(snap, ctypes.byref(entry))
+        while ok:
+            out.append(entry.szExeFile)
+            ok = _k32.Process32NextW(snap, ctypes.byref(entry))
+        return out
+    finally:
+        _k32.CloseHandle(snap)
 
-    def __init__(self, pid: int):
-        h = _k32.OpenProcess(ACCESS_MASK, False, pid)
+
+class ProcessMemory:
+    """Read-only handle to another process (`access` is only widened by memory_writer.WritableProcessMemory)."""
+
+    def __init__(self, pid: int, access: int = ACCESS_MASK):
+        h = _k32.OpenProcess(access, False, pid)
         if not h:
             raise OSError(ctypes.get_last_error(), f"OpenProcess failed for pid {pid}")
         self.pid = pid

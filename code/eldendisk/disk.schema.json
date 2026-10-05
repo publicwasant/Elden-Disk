@@ -2,22 +2,67 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "EldenDiskLiveState",
   "type": "object",
-  "required": ["system_status", "character"],
+  "required": ["systems", "character"],
   "properties": {
-    "system_status": {
+    "systems": {
       "type": "object",
-      "required": ["state", "game_connected", "pid", "anti_cheat_status", "read_only", "exe_sha256", "profile", "buffs_supported", "ignored_effects", "last_error"],
+      "required": ["profile", "features", "status", "session"],
       "properties": {
-        "state": { "enum": ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "CONNECTED", "DISCONNECTED", "IDLE"] },
-        "game_connected": { "type": "boolean" },
-        "pid": { "type": ["integer", "null"] },
-        "anti_cheat_status": { "enum": ["DISABLED_OFFLINE", "ACTIVE_EAC", "UNKNOWN"] },
-        "read_only": { "const": true },
-        "exe_sha256": { "type": ["string", "null"] },
-        "profile": { "type": ["string", "null"] },
-        "buffs_supported": { "type": "boolean" },
-        "ignored_effects": { "type": "integer", "minimum": 0 },
-        "last_error": { "type": ["string", "null"] }
+        "profile": {
+          "type": "object",
+          "required": ["sha256", "game", "version"],
+          "properties": {
+            "sha256": { "type": ["string", "null"] },
+            "game": { "type": "string" },
+            "version": { "type": ["string", "null"] }
+          }
+        },
+        "features": {
+          "type": "object",
+          "required": ["effects_supported", "animations_supported", "sandbox_supported"],
+          "properties": {
+            "effects_supported": { "type": "boolean" },
+            "animations_supported": { "type": "boolean" },
+            "sandbox_supported": { "type": "boolean" }
+          }
+        },
+        "status": {
+          "type": "object",
+          "required": ["pid", "tool_state", "anti_cheat_state", "game_connected", "ignored"],
+          "properties": {
+            "pid": { "type": ["integer", "null"] },
+            "tool_state": { "enum": ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "CONNECTED", "DISCONNECTED", "IDLE"] },
+            "anti_cheat_state": { "enum": ["DISABLED_OFFLINE", "ACTIVE_EAC", "UNKNOWN"] },
+            "game_connected": { "type": "boolean" },
+            "ignored": {
+              "type": "object",
+              "required": ["effects", "animations"],
+              "properties": {
+                "effects": { "type": "integer", "minimum": 0 },
+                "animations": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        },
+        "session": {
+          "type": "object",
+          "required": ["mode", "read_only", "sandbox"],
+          "properties": {
+            "mode": { "type": "string" },
+            "read_only": { "type": "boolean" },
+            "sandbox": { "type": "boolean" }
+          }
+        },
+        "errors": {
+          "type": ["object", "null"],
+          "required": ["code", "message", "details", "timestamp"],
+          "properties": {
+            "code": { "type": "integer" },
+            "message": { "type": "string" },
+            "details": { "type": ["string", "null"] },
+            "timestamp": { "type": "string" }
+          }
+        }
       }
     },
     "character": {

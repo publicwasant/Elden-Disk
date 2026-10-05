@@ -3,6 +3,11 @@ build/
 dist/
 *.spec
 
+# Local Runtime Configuration
+config.json
+code/config.json
+dist/config.json
+
 # Python cache & virtual environments
 __pycache__/
 *.pyc
@@ -12,10 +17,9 @@ __pycache__/
 venv/
 ENV/
 
-# Output directories
-output/
-code/output/
-dist/output/
+# Output and Backup/Vault directories
+/code/output
+/code/backup
 
 # IDE & Editor files
 .idea/

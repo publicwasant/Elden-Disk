@@ -56,12 +56,12 @@ def run_build(clean: bool = True, embed: bool = True) -> bool:
 
 
 def run_launch(dry_run: bool = False) -> int:
-    exe_path = ROOT_DIR / "build" / "dist" / __version__ / "eldendisk.exe"
+    exe_path = ROOT_DIR / "build" / "dist" / __version__ / f"eldendisk-v{__version__}-x64" / "eldendisk" / "eldendisk.exe"
     if not exe_path.exists():
         log(f"ERROR: Executable not found at {exe_path}")
         return 1
 
-    rel_path = f"./build/dist/{__version__}/eldendisk.exe"
+    rel_path = f"./build/dist/{__version__}/eldendisk-v{__version__}-x64/eldendisk/eldendisk.exe"
     if dry_run:
         log(f"Step 3/3: [Dry Run] Executing {rel_path} --help ...")
         cmd = [str(exe_path), "--help"]

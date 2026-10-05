@@ -1,154 +1,325 @@
-# CLI Commands Reference
+# Python CLI Commands Reference (`python -m eldendisk`)
 
-This document provides a comprehensive reference for all command-line interface (CLI) commands, flags, exit codes, and utility scripts in **EldenDisk**.
+Complete reference for command-line interface interactions when running EldenDisk via Python source (`python -m eldendisk <command> [options]`).
 
-## Overview & Requirements
+---
 
-Run commands as:
-```cmd
-python -m eldendisk <command> [options]
+## Architecture Overview: Host / Client Workflow
+
+> [!IMPORTANT]
+> **🌌 Parallel Dimension Guarantee (100% Clean Save Safety):**  
+> All memory edits exist **only during the active offline session (a temporary parallel dimension)**. When the game closes, `run` restores your live save folder byte-for-byte back to the exact pre-session snapshot taken before the game opened. Nothing from your sandbox modifications ever pollutes your real character save or account.
+
+EldenDisk uses a **Host / Client Architecture**:
+
+1. **Host Session (`run`):**
+   - Automatically takes a clean save snapshot in `backup/vault` before starting.
+   - Remembers `--save-dir` in Windows Registry (`HKCU\Software\EldenDisk`) after first use (zero config files on disk!).
+   - Launches `eldenring.exe` offline, writes live game state (`output/disk-state.json`), and automatically restores the clean save when the game closes.
+2. **On-The-Fly Memory Writer Client (`sandbox`):**
+   - Does NOT launch the game or block.
+   - Attaches on-the-fly to the active game process, applies `--set` or `--refill` memory edits instantly while you play, prints confirmation if `-v` is set, and terminates immediately (`[end]`).
+   - Runs **100% silently** without output when `-v` is omitted.
+
+---
+
+## Subcommands
+
+### 1. `run` (Host Launcher & Save Guard)
+
+```commandline
+python -m eldendisk run [options]
 ```
-from the root folder of the project (containing the `eldendisk/` package directory).
 
-- **OS:** Windows 10/11 (64-bit)
-- **Runtime:** 64-bit Python 3.11+
-- **Help flag:** `-h` or `--help` works on the main module as well as on every subcommand.
-
----
-
-## Commands at a Glance
-
-| Command               | Primary Function                                                       | Game State Required                                       | Steam Client Required   |
-|-----------------------|------------------------------------------------------------------------|-----------------------------------------------------------|-------------------------|
-| [`run`](#run)         | Launches/attaches to game, polls memory, writes `disk-state.json`      | Not running (launch mode) or running offline (`--attach`) | Required in launch mode |
-| [`effects`](#effects) | Live SpEffect viewer: monitors active effects/buffs                    | Running offline (in-world for useful data)                | Not needed              |
-| [`animations`](#animations) | Live character animation state viewer: monitors animation IDs    | Running offline (in-world for useful data)                | Not needed              |
-| [`hash`](#hash)       | Calculates SHA-256 hash of `eldenring.exe` for profile key             | Any (reads file on disk)                                  | Not needed              |
-
----
-
-## Command Reference
-
-### `run`
-
-`python -m eldendisk run [options]`
-
-Launches Elden Ring offline (or attaches to an already-running process), polls character memory at the specified frequency (default: 60FPS), and writes snapshots to `output/disk-state.json` using Event-Driven Persistence.
+Launches Elden Ring offline with pre-session save protection, streams real-time game state to `disk-state.json`, and restores the clean save on exit.
 
 #### Flags & Options
 
-| Flag              | Value Type     | Default                  | Description                                                                                                                                                                                                                                                                                                 |
-|-------------------|----------------|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--attach`        | switch         | off (launch mode)        | Attach to an existing `eldenring.exe` process instead of launching a new instance. Waits (`WAITING_FOR_PROCESS`) if the process is not yet running. Performs identical EAC and read-only memory checks.                                                                                                     |
-| `--game-dir DIR`  | path           | auto-detect              | Path to folder containing `eldenring.exe`. Auto-detection reads Windows Registry `SteamPath` + `libraryfolders.vdf` → `steamapps\common\ELDEN RING\Game`. Required if auto-detect fails. (In `--attach` mode, a failed auto-detect is ignored and the path is retrieved directly from the running process). |
-| `--out DIR`       | path           | `<project>/output`       | Output directory where `disk-state.json` is saved (created automatically if missing). **Refused with an error if located inside the game folder.**                                                                                                                                                         |
-| `--offsets FILE`  | path           | `<project>/offsets.json` | Path to profiles JSON file, keyed by `eldenring.exe` SHA-256 hash.                                                                                                                                                                                                                                          |
-| `--effects FILE`  | path           | `<project>/chr_state_ids.json` | Path to unified state IDs lookup table (`chr_state_ids.json` or legacy `effects.json`). A missing file is treated as empty tables; a malformed file triggers an error. |
-| `--hz N`          | number (1–120) | `60`                     | Sampling rate in polls per second (decimals allowed, e.g. `60.0`). Values outside 1–120 trigger a usage error.                                                                                                                                                                                               |
-| `--timer-interval SEC` | number (≥0) | `0.5`              | Minimum seconds between disk writes that change **only** a buff countdown (`buff_duration`). Any other change is written immediately. `0` = write every change (old behaviour, ~60 writes/s while a timed buff is active). |
-| `--no-idle`       | switch         | off                      | Keep reading while the game window is unfocused instead of pausing in `IDLE` (for overlays on a second monitor / stream).                                                                                                                                                                                  |
-| `-v`, `--verbose` | switch         | off                      | Enable verbose logging to stderr: logs state changes, the reason for discarded samples (`last_error`) and which config files are used (`embedded` / `external` / `source`).                                                                                                                                                                                                   |
-| `-h`, `--help`    | switch         | —                        | Display help message for `run`.                                                                                                                                                                                                                                                                             |
+| Flag | Value Type | Default | Description |
+|:---|:---:|:---|:---|
+| `--save-dir DIR` | path | auto / Windows Registry | Path to live save folder (`%APPDATA%\EldenRing\<SteamID64>`). Remembered in Windows Registry after first use. |
+| `--game-dir DIR` | path | auto-detect | Path to folder containing `eldenring.exe`. Auto-detected via Steam if omitted. |
+| `--vault DIR` | path | `<project>/code/backup/vault/` | Directory where save snapshots and `PENDING_RESTORE.json` are stored. |
+| `--attach` | switch | off | Attach to an existing `eldenring.exe` process (read-only mode). |
+| `--out DIR` | path | `<project>/code/output/` | Output directory for `disk-state.json`. |
+| `--offsets FILE` | path | `offsets.json` | Path to offsets configuration file. |
+| `--effects FILE` | path | `chr_state_ids.json` | Path to state IDs configuration file. |
+| `--hz N` | float (1–120) | `60.0` | Polling rate in samples per second. |
+| `--timer-interval SEC` | float (≥0) | `0.5` | Minimum seconds between writes that change only a buff countdown. |
+| `--no-idle` | switch | off | Continue polling when game window loses focus. |
+| `-v`, `--verbose` | switch | off | Print detailed diagnostics to stderr (including `[vault]` backup/restore log lines). |
 
-#### Execution Flow & Safety Logic
+#### Expected Output Example (with `-v`)
 
-1. **Initialization:**
-   - *Launch Mode:* Launches `eldenring.exe -eac-nop-loaded` with `SteamAppId` / `SteamGameId` set in the child environment.
-   - *Attach Mode:* Searches for active `eldenring.exe` process.
-2. **Module Verification:** Waits up to 60 seconds for the main `eldenring.exe` module to load.
-3. **EAC Check:** Refuses to proceed and exits if EasyAntiCheat modules (`easyanticheat.dll`, `eac_sound_x64.dll`, etc.) are detected.
-4. **Profile Loading:** Hashes `eldenring.exe` and loads the matching profile from `offsets.json`. If no matching profile exists, sets state to `UNSUPPORTED_VERSION` and exits.
-5. **Polling Loop (60FPS Event-Driven):**
-   - Checks active window focus (`is_window_active`). If out of focus, transitions to `IDLE` state and pauses reading/writing.
-   - Polls memory at `--hz` frequency.
-   - Re-scans process modules for EAC every 2 seconds.
-   - Performs state differential check: atomically writes `output/disk-state.json` only when state/data changes or active timed buff durations update.
-6. **Termination:** Exits when the game closes, if EAC is loaded/detected, on unrecoverable error, or on Ctrl+C (leaving the game process running).
+```commandline
+python -m eldendisk run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569" -v
+```
+
+```commandline
+[config] offsets=D:\StudioProjects\Elden-Disk\code\offsets.json (external)
+[config] effects=D:\StudioProjects\Elden-Disk\code\chr_state_ids.json (external)
+state -> PREFLIGHT
+state -> SNAPSHOTTING
+[vault] backup save C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569 (steamID: 76561198296924569) to D:\StudioProjects\Elden-Disk\code\backup\vault\20261006-120000
+snapshot 20261006-120000: 2 file(s) verified
+state -> RUNNING
+[CONNECTED]
+...
+(when game exits)
+state -> RESTORING
+[vault] restored save from D:\StudioProjects\Elden-Disk\code\backup\vault\20261006-120000 to C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569
+verification passed: [vault] restore verified; save folder is byte-identical to snapshot
+state -> CLEANUP
+state -> IDLE
+```
 
 ---
 
-### `effects`
+### 2. `effects` (Live SpEffect Stream Viewer)
 
-`python -m eldendisk effects [options]`
+```commandline
+python -m eldendisk effects [options]
+```
 
-Attaches to a running `eldenring.exe` instance (never launches the game) and streams live active SpEffects (buffs, debuffs, status effects) to standard output.
+Attaches to active offline `eldenring.exe` process and streams character SpEffect IDs, total duration, and remaining timers in real-time. Designed for discovering SpEffect IDs for mapping in `chr_state_ids.json`.
+
+| Flag | Value Type | Default | Description |
+|:---|:---:|:---|:---|
+| `--offsets FILE` | path | `offsets.json` | Path to profiles JSON file. |
+| `-q`, `--quiet` | switch | off | Hide short-lived internal effects (< 1s duration); keeps permanent (-1) and timed buffs. |
+
+#### Expected Output Example
+
+```commandline
+python -m eldendisk effects -q
+```
+
+```commandline
+Ctrl+C to stop. Format: id | duration | timer   (+ = appeared, - = disappeared)
+--- 2 effects now active ---
+      311100 |     -1.00 |       0.00
+      100100 |     80.00 |      45.20
++     100200 |     30.00 |      30.00
+-     100200
+```
+
+---
+
+### 3. `animations` (Live Character Animation State Viewer)
+
+```commandline
+python -m eldendisk animations [options]
+```
+
+Attaches to active offline `eldenring.exe` process and streams character animation ID state transitions with timestamps in real-time. Designed for mapping character action/animation IDs in `chr_state_ids.json`.
+
+| Flag | Value Type | Default | Description |
+|:---|:---:|:---|:---|
+| `--offsets FILE` | path | `offsets.json` | Path to profiles JSON file. |
+
+#### Expected Output Example
+
+```commandline
+python -m eldendisk animations
+```
+
+```commandline
+Ctrl+C to stop. Format: id | name
+--- Animation active ---
+  2020210 | Sprint
+  0000000 | Idle
+```
+
+---
+
+### 4. `sandbox` (On-The-Fly Memory Writer Client)
+
+```commandline
+python -m eldendisk sandbox [options]
+```
+
+Attaches on-the-fly to the active game running under `run`, applies memory edits instantly, and terminates immediately (`[end]`).
+
+> [!NOTE]
+> **Silent Execution:** When `-v` / `--verbose` is omitted, `sandbox` runs completely silently without console output. Use `-v` to print detailed edit confirmations.
+
+> [!CAUTION]
+> **Offline Only:** The sandbox refuses to perform memory writes if Easy Anti-Cheat (EAC) is active.
+
+> [!WARNING]
+> **Unexpected Interruption Recovery (Power Loss / System Crash):**
+> If the system or game is forcibly interrupted (power cut, BSOD), run `python -m eldendisk sandbox restore` after closing the game to restore your clean pre-session save snapshot and clear the marker.
 
 #### Flags & Options
 
-| Flag             | Value Type | Default                        | Description                                                                                                           |
-|------------------|------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| `--offsets FILE` | path       | `<project>/offsets.json`       | Path to profiles JSON file. The active profile must contain a complete `sp_effect` block.                             |
-| `-q`, `--quiet`  | switch     | off                            | Hide short-lived internal effects (`0 <= duration < 1s`). Retains permanent buffs (`duration == -1`) and timed buffs. |
-| `-h`, `--help`   | switch     | —                              | Display help message for `effects`.                                                                                   |
+| Flag | Value Type | Default | Description |
+|:---|:---:|:---|:---|
+| `--set NAME=VALUE` | string | `None` | Set and hold an attribute value on-the-fly. Repeatable. |
+| `--refill LIST` | string | `None` | Comma-separated list (`hp`, `fp`, `stamina`) to refill current vitals to maximum. |
+| `--offsets FILE` | path | `offsets.json` | Path to offsets configuration file. |
+| `--effects FILE` | path | `chr_state_ids.json` | Path to state IDs configuration file. |
+| `-v`, `--verbose` | switch | off | Print diagnostic confirmation of applied edits (silent when omitted). |
+
+#### Editable Attributes & Ranges
+
+| Attribute Name | Acceptable Range | Description |
+|:---|:---:|:---|
+| `level` | `1` – `713` | Character level number |
+| `runes` | `0` – `999,999,999` | Current held Rune count |
+| `vigor`, `mind`, `endurance`, `strength`, `dexterity`, `intelligence`, `faith`, `arcane` | `1` – `99` | Character stats |
+| `hp` | `1` – `Max HP` | Current HP (cannot drop below 1) |
+| `fp`, `stamina` | `0` – `Max` | Current FP / Stamina |
+
+#### Expected Output Example (with `-v`)
+
+```commandline
+python -m eldendisk sandbox --set vigor=90 -v
+```
+
+```commandline
+[sandbox] vigor: set to 90
+[sandbox] Applied 1 edit(s) on-the-fly successfully.
+```
+
+*(Without `-v`: silent execution, zero console output)*
 
 ---
 
-### `animations`
+### 5. `hash` (Executable Hash Calculation)
 
-`python -m eldendisk animations [options]`
+```commandline
+python -m eldendisk hash [--game-dir DIR]
+```
 
-Attaches to a running `eldenring.exe` instance and streams character animation state ID transitions with timestamps to standard output in real-time.
+Calculates and prints the SHA-256 hash of `eldenring.exe`. Used as the profile lookup key in `offsets.json`.
 
-#### Flags & Options
+#### Expected Output Example
 
-| Flag             | Value Type | Default                        | Description                                                                                 |
-|------------------|------------|--------------------------------|---------------------------------------------------------------------------------------------|
-| `--offsets FILE` | path       | `<project>/offsets.json`       | Path to profiles JSON file. The active profile must contain a complete `anim` block.        |
-| `-h`, `--help`   | switch     | —                              | Display help message for `animations`.                                                      |
+```commandline
+python -m eldendisk hash
+```
 
----
-
-### `hash`
-
-`python -m eldendisk hash [options]`
-
-Calculates and prints the SHA-256 hash of the target `eldenring.exe`.
+```commandline
+1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891
+```
 
 ---
 
-## Exit Codes
+### 6. `build` (Standalone Executable Compiler)
 
-| Code  | Meaning               | Details                                                                                                                                                                                                                |
-|-------|-----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `0`   | Normal Exit           | Game closed cleanly (`DISCONNECTED`), `effects` stopped by user, or `hash` completed successfully.                                                                                                                     |
-| `1`   | Error                 | Unrecoverable error (e.g., game folder not found, main module timed out after 60s, game not running for `effects`, output directory inside game folder, malformed `effects.json`, unsupported OS/Python architecture). |
-| `2`   | Profile / Usage Error | `run`: `UNSUPPORTED_VERSION` (no profile matching exe hash in `offsets.json`). Also returned by Python `argparse` for invalid flags or out-of-range `--hz`.                                                            |
-| `3`   | EAC Detected          | `run`: `EAC_ACTIVE` or `EAC_DETECTED`. Tool refused to run due to EasyAntiCheat presence.                                                                                                                              |
-| `130` | Interrupted           | Interrupted by user (`Ctrl+C`).                                                                                                                                                                                        |
+```commandline
+python -m eldendisk build [options]
+```
 
----
-
-### `build`
-
-`python -m eldendisk build [options]`
-
-Compiles the EldenDisk project into a standalone single executable (`eldendisk.exe`) located in `./build/dist/<version>/`.
+Compiles the EldenDisk project into a standalone single executable (`eldendisk.exe`) located in `./build/dist/1.6.0/eldendisk-v1.6.0-x64/eldendisk/`.
 
 | Flag | Value Type | Default | Description |
 |:---|:---:|:---|:---|
 | `-e`, `--engine` | enum | `pyinstaller` | Select build engine: `pyinstaller` or `nuitka`. |
 | `-c`, `--clean` | switch | off | Clean `./build` and `./dist` cache directories prior to compilation. |
-| `-em`, `--embed-configs` | switch | off | Embed `offsets.json` and `chr_state_ids.json` directly into the `.exe`. Defaults to `True` in E2E pipeline. |
+| `-em`, `--embed-configs` | switch | off | Embed `offsets.json` and `chr_state_ids.json` directly into the `.exe`. |
 | `-i`, `--icon FILE` | path | `None` | Path to an `.ico` icon file. |
+
+#### Expected Output Example
+
+```commandline
+python -m eldendisk build -c -em
+```
+
+```commandline
+[INFO] Cleaning previous build artifacts...
+[INFO] Initializing PyInstaller engine...
+[INFO] Building eldendisk.exe (Onefile mode) for version 1.6.0...
+[SUCCESS] Build complete! Standalone executable located at: ./build/dist/1.6.0/eldendisk-v1.6.0-x64/eldendisk/eldendisk.exe
+```
 
 ---
 
-## Other Utility Scripts
+### 7. Vault & Recovery Subcommands (`sandbox <subcommand>`)
 
-### End-to-End Development Pipeline (`code/tools/dev_pipeline.py`)
-
-Automates pre-check unit testing, executable compilation, and telemetry verification.
-
-```cmd
-python code/tools/dev_pipeline.py [--dry-run] [--no-embed] [--skip-tests]
+#### `sandbox restore`
+Restores clean save snapshot after an interrupted session or restores a specific historical snapshot.
+```commandline
+python -m eldendisk sandbox restore [--snapshot NAME] [--archive-contaminated]
 ```
 
-### Soak Test Helper (`code/tools/soak_check.py`)
-
-Watches `disk-state.json` to validate continuous compliance with Specification V-06 (stability over long sessions).
-
-```cmd
-python code/tools/soak_check.py [path] [--interval S]
+#### `sandbox status`
+Displays active marker status, snapshot count, and vault size.
+```commandline
+python -m eldendisk sandbox status
 ```
 
-> **Deprecated (1.5.2):** `effects --effects FILE` and `animations -q` never had an effect. They are still accepted (hidden from `--help`) so old scripts keep working, and will be removed in a future version.
+##### Expected Output Example
+```commandline
+no unresolved session; live save trusted
+snapshots: 3  last: 20261006-120000  vault size: 14.2 MiB
+last snapshot: verified
+```
+
+#### `sandbox list` / `verify` / `prune`
+Lists snapshots, verifies SHA-256 integrity, or cleans up older snapshots.
+```commandline
+python -m eldendisk sandbox list [--fast]
+python -m eldendisk sandbox verify SNAPSHOT_NAME
+python -m eldendisk sandbox prune --keep N
+```
+
+##### Expected Output Examples
+```commandline
+python -m eldendisk sandbox list
+```
+```commandline
+20261006-120000    7.1 MiB  verified
+20261005-183012    7.1 MiB  verified
+```
+
+```commandline
+python -m eldendisk sandbox verify 20261006-120000
+```
+```commandline
+OK: snapshot matches its manifest
+```
+
+```commandline
+python -m eldendisk sandbox prune --keep 1
+```
+```commandline
+deleted 1 snapshot(s): 20261005-183012
+```
+
+---
+
+## Detailed Examples
+
+### Example 1: Launching Host & Setting Save Dir
+```commandline
+# Terminal 1: Launch game offline with save protection
+python -m eldendisk run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569" -v
+```
+
+### Example 2: Stream Live SpEffects or Animations
+```commandline
+# Stream active character buffs
+python -m eldendisk effects -q
+
+# Stream active character animation IDs
+python -m eldendisk animations
+```
+
+### Example 3: On-The-Fly Edit While Playing
+```commandline
+# Terminal 2: Apply Vigor=90 while game is open
+python -m eldendisk sandbox --set vigor=90 -v
+
+# Apply Level=150 and max Runes
+python -m eldendisk sandbox --set level=150 --set runes=999999999 -v
+
+# Refill HP and FP
+python -m eldendisk sandbox --refill hp,fp -v
+```
+
+### Example 4: Recovery After Crash
+```commandline
+# Restore clean save after unexpected system crash
+python -m eldendisk sandbox restore
+```

@@ -160,7 +160,7 @@ def test_pyinstaller_embed_adds_configs_not_schema(project, monkeypatch):
     assert rc == 0 and "PyInstaller" in cmd and "--onefile" in cmd
     adds = [c for c in cmd if c.startswith("--add-data=")]
     assert len(adds) == 2 and not any("schema" in a for a in adds)
-    assert not (project / "build" / "dist" / cli.__version__ / "offsets.json").exists()  # embedded: nothing copied
+    assert not (project / "build" / "dist" / cli.__version__ / f"eldendisk-v{cli.__version__}-x64" / "eldendisk" / "offsets.json").exists()  # embedded: nothing copied
 
 
 def test_nuitka_embed_includes_data_files(project, monkeypatch):
@@ -173,14 +173,14 @@ def test_nuitka_embed_includes_data_files(project, monkeypatch):
 @pytest.mark.parametrize("engine", ["pyinstaller", "nuitka"])
 def test_non_embedded_build_copies_editable_configs_for_both_engines(project, monkeypatch, engine):
     rc, calls = _run_build(monkeypatch, _args(engine=engine))
-    out = project / "build" / "dist" / cli.__version__
+    out = project / "build" / "dist" / cli.__version__ / f"eldendisk-v{cli.__version__}-x64" / "eldendisk"
     assert rc == 0 and (out / "offsets.json").exists() and (out / "chr_state_ids.json").exists()
     assert not any(c.startswith(("--add-data=", "--include-data-files=")) for c in calls[0])
 
 
 def test_failed_build_returns_1_and_copies_nothing(project, monkeypatch):
     rc, _ = _run_build(monkeypatch, _args(), rc=2)
-    assert rc == 1 and not (project / "build" / "dist" / cli.__version__ / "offsets.json").exists()
+    assert rc == 1 and not (project / "build" / "dist" / cli.__version__ / f"eldendisk-v{cli.__version__}-x64" / "eldendisk" / "offsets.json").exists()
 
 
 def test_clean_removes_old_artifacts(project, monkeypatch):
@@ -312,3 +312,14 @@ def test_locate_player_reports_reason():
     assert s.locate_player()[0] is not None
     m.u64(BASE + 0x1000, 0)
     assert s.locate_player() == (None, "world not loaded")
+
+
+def test_script_mode_runs_without_relative_import_errors(tmp_path):
+    """A frozen exe / `python eldendisk/__main__.py` runs __main__ as a top-level script: no relative imports allowed."""
+    import subprocess
+    script = Path(cli.__file__)
+    r = subprocess.run([sys.executable, str(script), "sandbox", "status", "--vault", str(tmp_path / "v")],
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "live save trusted" in r.stdout, r.stderr
+    r = subprocess.run([sys.executable, str(script), "sandbox", "list", "--vault", str(tmp_path / "v")], capture_output=True, text=True)
+    assert r.returncode == 0 and "no snapshots" in r.stdout, r.stderr

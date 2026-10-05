@@ -1,4 +1,5 @@
 import json
+import re
 import struct
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -99,7 +100,7 @@ def valid(doc):
 
 def doc_for(sampler, sample, state=None):
     return build_document(now=NOW, state=state or sample.state, pid=1, anti_cheat="DISABLED_OFFLINE",
-                          exe_sha256="x", profile_label="test", buffs_supported=True, sample=sample)
+                          exe_sha256="x", profile_label="test", sample=sample)
 
 
 @pytest.mark.parametrize("mode", ["remaining", "elapsed"])
@@ -146,9 +147,9 @@ def test_idle_state_retains_character_data():
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     d = build_document(now=NOW, state="IDLE", pid=1, anti_cheat="DISABLED_OFFLINE",
-                       exe_sha256="x", profile_label="test", buffs_supported=True, sample=r)
-    assert d["system_status"]["state"] == "IDLE"
-    assert d["system_status"]["game_connected"] is True
+                       exe_sha256="x", profile_label="test", sample=r)
+    assert d["systems"]["status"]["tool_state"] == "IDLE"
+    assert d["systems"]["status"]["game_connected"] is True
     assert d["character"] is not None
     assert d["character"]["level"] == 386
     valid(d)
@@ -160,9 +161,9 @@ def test_disconnected_state_retains_character_data():
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     d = build_document(now=NOW, state="DISCONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE",
-                       exe_sha256="x", profile_label="test", buffs_supported=True, sample=r)
-    assert d["system_status"]["state"] == "DISCONNECTED"
-    assert d["system_status"]["game_connected"] is False
+                       exe_sha256="x", profile_label="test", sample=r)
+    assert d["systems"]["status"]["tool_state"] == "DISCONNECTED"
+    assert d["systems"]["status"]["game_connected"] is False
     assert d["character"] is not None
     assert d["character"]["level"] == 386
     valid(d)
@@ -178,9 +179,9 @@ def test_character_retained_across_all_states():
 
     for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "DISCONNECTED", "IDLE"]:
         d = build_document(now=NOW, state=state, pid=1, anti_cheat="DISABLED_OFFLINE",
-                           exe_sha256="x", profile_label="test", buffs_supported=True,
+                           exe_sha256="x", profile_label="test",
                            sample=None, last_character=cached_char)
-        assert d["system_status"]["state"] == state
+        assert d["systems"]["status"]["tool_state"] == state
         assert d["character"] is not None
         assert d["character"]["level"] == 386
         valid(d)
@@ -189,9 +190,9 @@ def test_character_retained_across_all_states():
 def test_cold_boot_character_is_null():
     for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "DISCONNECTED"]:
         d = build_document(now=NOW, state=state, pid=None, anti_cheat="UNKNOWN",
-                           exe_sha256=None, profile_label=None, buffs_supported=False,
+                           exe_sha256=None, profile_label=None, effects_supported=False,
                            sample=None, last_character=None)
-        assert d["system_status"]["state"] == state
+        assert d["systems"]["status"]["tool_state"] == state
         assert d["character"] is None
         valid(d)
 
@@ -262,7 +263,7 @@ def test_null_world_is_silent_waiting():
     r = s.sample(NOW)
     assert r.state == "WAITING_FOR_WORLD" and r.error is None and r.character is None
     d = doc_for(s, r)
-    assert d["character"] is None and d["system_status"]["game_connected"] is False
+    assert d["character"] is None and d["systems"]["status"]["game_connected"] is False
     valid(d)
 
 
@@ -323,7 +324,7 @@ def test_buffs_disabled_when_sp_layout_missing():
 def test_non_connected_states_validate():
     for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "DISCONNECTED", "IDLE"]:
         d = build_document(now=NOW, state=state, pid=None, anti_cheat="UNKNOWN", exe_sha256=None,
-                           profile_label=None, buffs_supported=False, sample=None, note="x")
+                           profile_label=None, effects_supported=False, sample=None, note="x")
         valid(d)
 
 
@@ -388,14 +389,23 @@ def test_effects_loader(tmp_path):
 
 
 # ---- safety ----
-def test_read_only_access_mask_and_no_write_apis():
+def test_write_capability_is_confined_to_the_sandbox_path():
+    """memory_reader stays read-only; WriteProcessMemory exists in one module (memory_writer.py)."""
     assert memory_reader.ACCESS_MASK == 0x1010
-    forbidden = ["WriteProcessMemory", "VirtualAllocEx", "CreateRemoteThread", "VirtualProtectEx",
-                 "NtWriteVirtualMemory", "SetThreadContext"]
+    never = ["VirtualAllocEx", "CreateRemoteThread", "VirtualProtectEx", "NtWriteVirtualMemory", "SetThreadContext"]
     for f in PKG.glob("*.py"):
-        text = f.read_text()
-        for name in forbidden:
+        text = f.read_text(encoding="utf-8")
+        for name in never:
             assert name not in text, f"{name} found in {f.name}"
+        if f.name != "memory_writer.py":
+            assert "WriteProcessMemory" not in text, f"WriteProcessMemory found in {f.name}"
+        imports_writer = re.search(r"^\s*(from\s+\S*memory_writer\s+import|from\s+\.\s+import\s+memory_writer|import\s+\S*memory_writer)",
+                                   text, re.M)
+        if f.name not in ("memory_writer.py", "sandbox.py", "__main__.py"):
+            assert not imports_writer, f"{f.name} must not import the write module"
+    main_src = (PKG / "__main__.py").read_text(encoding="utf-8")
+    top_level = main_src.split("def _writer_api")[0]
+    assert not re.search(r"^(from|import)\s.*memory_writer", top_level, re.M), "write module must be imported lazily"
 
 
 def test_logger_refuses_game_dir_and_writes_atomically(tmp_path):
@@ -423,9 +433,9 @@ def test_monitor_should_write_state_differential(tmp_path):
     from eldendisk.__main__ import Monitor
     lg = JsonLogger(tmp_path / "out")
     mon = Monitor(None, lg)
-    doc1 = {"system_status": {"state": "CONNECTED"}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
-    doc2 = {"system_status": {"state": "CONNECTED"}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
-    doc3 = {"system_status": {"state": "IDLE"}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
+    doc1 = {"systems": {"status": {"tool_state": "CONNECTED"}}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
+    doc2 = {"systems": {"status": {"tool_state": "CONNECTED"}}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
+    doc3 = {"systems": {"status": {"tool_state": "IDLE"}}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
 
     assert mon._should_write(doc1) is True
     mon._last_written_doc = doc1

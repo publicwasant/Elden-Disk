@@ -1,189 +1,198 @@
-# EldenDisk Tool
+# EldenDisk
 
-> **Offline, Read-Only Memory Read Service & Standalone Executable for Elden Ring**  
-> **Version:** `1.5.2` | **Spec Version:** `1.5.2` | **Platform:** Windows 10/11 (x64) | **Runtime:** Python 3.11+ or Standalone Executable
+> **Offline Save Sandbox & Memory Tool for Elden Ring: Host/Client Architecture**  
+> **Version:** `1.6.0` | **Spec Version:** `1.6.0` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable or Python 3.11+
 
-Launches Elden Ring **offline** (`eldenring.exe -eac-nop-loaded`) and writes real-time character state snapshots to `output/disk-state.json`. EldenDisk is designed from the ground up for high reliability, zero anti-cheat risk, minimal CPU/disk footprint, and effortless distribution.
+EldenDisk is a specialized **Save Sandbox & Memory Tool** designed for Elden Ring (v1.17.1). It streams 60Hz real-time character state to `output/disk-state.json` and enables on-the-fly memory editing under a strict **Parallel Dimension Philosophy**:
 
----
-
-## 🔑 Core Guarantees & Safety Architecture
-
-1. **Strictly Read-Only Memory Access:** Requests only `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`. Performs zero memory writes (`WriteProcessMemory`), allocations, thread injections, or code modifications.
-2. **Zero Disk Changes in Game Folder:** Never creates, modifies, renames, or deletes any file inside the Elden Ring installation directory.
-3. **Anti-Cheat Guard (EAC Safe):** Continuously scans loaded modules. Refuses to attach and immediately exits if EasyAntiCheat modules (`easyanticheat.dll`, etc.) are present.
-4. **Event-Driven Persistence Architecture:** Polling runs in RAM at a locked 60FPS. Atomic disk writes (`disk-state.json`) occur only when state data changes; buff countdown ticks alone are written at most every `--timer-interval` (0.5 s), eliminating unnecessary SSD wear.
-5. **Window Focus Detection (`IDLE` State):** Uses Windows API focus detection (`GetForegroundWindow`). Pauses polling and disk writes when the game is unfocused, preserving CPU resources while retaining character data. Pass `--no-idle` to keep reading while unfocused.
-6. **Correct-or-Silent Validation:** Discards incomplete or malformed memory samples (null pointers, unreadable addresses, out-of-range stats) and safely retains the last known valid state snapshot.
-7. **Standalone Executable Distribution:** Compiles into a zero-dependency, single-file executable (`./build/dist/1.5.2/eldendisk.exe`) via PyInstaller.
+- **Host Session & Save Guard (`run`):** Takes an automatic SHA-256 verified save snapshot into `backup/vault`, launches `eldenring.exe` **offline**, streams live game state to JSON, and **restores the clean save byte-for-byte when the game closes**.
+- **On-The-Fly Memory Writer Client (`sandbox`):** Attaches dynamically to the active offline session, applies attribute edits (`--set`, `--refill`) instantly on-the-fly, and exits immediately (`[end]`).
+- **Zero Configuration Files:** Remembers `--save-dir` in Windows Registry (`HKCU\Software\EldenDisk`) leaving zero config files in tool or build directories.
 
 ---
 
-## ⚡ Quick Start
+> [!IMPORTANT]
+> **🌌 Parallel Dimension Guarantee (100% Clean Account Safety):**  
+> All memory edits made via `sandbox` exist **only during the active offline session (a temporary parallel dimension)**. When the game closes, `run` restores your live save folder byte-for-byte back to the exact pre-session snapshot taken before the game opened. Nothing from your sandbox modifications ever pollutes your real character save or account.
+
+---
+
+## 🏗️ Host / Client Architecture & Lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T1 as Terminal 1 (Host: run)
+    participant Game as Elden Ring (eldenring.exe)
+    participant Vault as Save Vault
+    participant T2 as Terminal 2 (Client: sandbox)
+
+    T1->>Vault: 1. Take Pre-Session Save Snapshot
+    Vault-->>T1: Snapshot verified & PENDING_RESTORE.json written
+    T1->>Game: 2. Launch Offline (-eac-nop-loaded)
+    T1->>T1: 3. Stream Game State (disk-state.json at 60Hz)
+    
+    note over Game,T2: Active Gameplay Session (Parallel Dimension)
+    T2->>Game: 4. Attach & Apply On-The-Fly Memory Edits (--set / --refill)
+    Game-->>T2: RAM updated instantly
+    T2-->>T2: 5. Terminate immediately [end]
+
+    Game->>T1: 6. User exits game
+    T1->>Vault: 7. Restore clean pre-session save byte-for-byte
+    Vault-->>T1: Save verified byte-identical ✓
+    T1->>Vault: 8. Clear marker & cleanup
+```
+
+---
+
+## 🔑 Core Principles & Safety Architecture
+
+1. **Host/Client Separation:** `run` acts as the Session Host & Save Guard. `sandbox` acts as a fast, non-blocking client that sends attribute edits to the running game without needing to close or restart the game.
+2. **Byte-Identical Save Restoration:** `run` takes a full SHA-256 verified save snapshot before the game starts. When the game closes, `run` restores the clean pre-session save byte-for-byte.
+3. **Zero Configuration Files:** Remembers `--save-dir` in Windows Registry (`HKCU\Software\EldenDisk`), leaving zero loose config files in tool or build directories.
+4. **Zero Disk Changes in Game Folder:** Never modifies, renames, or creates files inside the Elden Ring installation directory.
+5. **Anti-Cheat Guard (EAC Safe):** Refuses to attach or edit if EasyAntiCheat (`easyanticheat.dll`, etc.) is active.
+6. **Event-Driven Persistence:** Polling runs at locked 60FPS. Disk updates (`disk-state.json`) occur only when state data changes, preserving SSD health.
+7. **Window Focus Detection (`IDLE` State):** Pauses polling when the game is unfocused, saving CPU resources.
+8. **Crash Recovery Guarantee (`sandbox restore`):** If a system crash or power outage occurs during play, running `eldendisk.exe sandbox restore` immediately restores your clean pre-session save snapshot.
+
+---
+
+## ⚡ Quick Start (2-Terminal Workflow)
 
 ### Prerequisites
 1. Windows 10 or 11 (64-bit).
-2. Steam Client running (Offline mode in Steam is supported).
+2. Steam Client running (Offline mode supported).
 3. Supported Elden Ring executable (Version 1.17.1 included out-of-the-box).
 
-### 1. Running via Python
-```cmd
-# Get exe SHA-256 hash
-python -m eldendisk hash
+---
 
-# Launch game offline + write state (verbose mode)
-python -m eldendisk run -v
+### Terminal 1: Launch Host Session (`run`)
 
-# Or attach to an already running offline game instance
-python -m eldendisk run --attach -v
+```commandline
+# Launch game offline with save protection + state logger
+eldendisk.exe run -v
+
+# (Optional - If multiple Steam accounts exist, specify --save-dir once; remembered in Windows Registry)
+eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>" -v
 ```
 
-### 2. Building Standalone Executable (`.exe`)
-```cmd
-# Build single embedded executable into ./build/dist/1.5.2/eldendisk.exe
+#### Terminal 1 Verbose Output Example:
+
+```commandline
+[config] offsets=offsets.json (embedded)
+[config] effects=chr_state_ids.json (embedded)
+state -> PREFLIGHT
+state -> SNAPSHOTTING
+[vault] backup save C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569 (steamID: 76561198296924569) to D:\...\backup\vault\20261006-120000 ✓
+snapshot 20261006-120000: 2 file(s) verified ✓
+state -> RUNNING
+[CONNECTED]
+...
+(when game exits)
+state -> RESTORING
+[vault] restored save from D:\...\backup\vault\20261006-120000 to C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569 ✓
+[vault] verification passed: restore verified; save folder is byte-identical to snapshot ✓
+state -> CLEANUP
+state -> IDLE
+```
+
+---
+
+### Terminal 2: Apply On-The-Fly Edits While Playing (`sandbox`)
+
+While the game is open, open Terminal 2 and apply edits dynamically:
+
+```commandline
+# Set Vigor to 90 instantly on-the-fly (Silent by default; use -v for confirmation)
+eldendisk.exe sandbox --set vigor=90 -v
+
+# Set Level to 150 and max Runes
+eldendisk.exe sandbox --set level=150 --set runes=999999999 -v
+
+# Refill HP, FP, Stamina to maximum
+eldendisk.exe sandbox --refill hp,fp,stamina -v
+```
+
+#### Terminal 2 Output Example (with `-v`):
+
+```commandline
+[sandbox] vigor: set to 90
+[sandbox] Applied 1 edit(s) on-the-fly successfully. ✓
+```
+
+*(Without `-v`: silent execution with zero console output)*
+
+---
+
+## 🛠️ CLI Commands Overview
+
+Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [options]`.
+
+| Command | Role | Description |
+|:---|:---|:---|
+| [`run`](#terminal-1-launch-host-session-run) | **Host & Save Guard** | Takes save snapshot, launches game offline, streams `disk-state.json`, restores save on exit |
+| [`sandbox`](#terminal-2-apply-on-the-fly-edits-while-playing-sandbox) | **Memory Writer Client** | Attaches on-the-fly to active game, applies `--set` / `--refill` edits, exits immediately |
+| `sandbox restore` | **Recovery** | Restores clean save after a crashed or interrupted session |
+| `sandbox status` | **Status** | Checks vault marker status and snapshot count |
+| `sandbox list` / `verify` / `prune` | **Vault Tools** | Lists, verifies, or cleans up older save snapshots |
+| `build` | **Compiler** | Compiles project into standalone `./build/dist/1.6.0/.../eldendisk.exe` |
+
+---
+
+## 🧪 Editable Attributes & Clamping Ranges
+
+All edits supplied via `--set` are clamped to valid game boundaries before writing:
+
+| Attribute Name | Acceptable Range | Description |
+|:---|:---:|:---|
+| `level` | `1` – `713` | Character level number |
+| `runes` | `0` – `999,999,999` | Current held Rune count |
+| `vigor`, `mind`, `endurance`, `strength`, `dexterity`, `intelligence`, `faith`, `arcane` | `1` – `99` | Character stats |
+| `hp` | `1` – `Max HP` | Current HP (cannot drop below 1) |
+| `fp`, `stamina` | `0` – `Max` | Current FP / Stamina |
+| `--refill hp,fp,stamina` | — | Refills vitals to maximum |
+
+---
+
+## 📦 Building Standalone Executable & E2E Dev Pipeline
+
+```commandline
+# Build standalone executable with embedded configs
 python -m eldendisk build -c -em
+
+# Run E2E pipeline (pre-check tests + build + dry run)
+python code/tools/dev_pipeline.py --dry-run
 ```
 
-### 3. Running Standalone Executable
-```cmd
-# Launch game offline + write state via compiled binary
-.\build\dist\1.5.2\eldendisk.exe run -v
-```
-
-### 4. Running End-to-End Pipeline (Test + Build + Run)
-```cmd
-# Run pre-check unit tests, build .exe, and verify execution
-python code/tools/dev_pipeline.py
-```
+**Full Command References:**
+- **[docs/cli-commands-exe.md](docs/cli-commands-exe.md)** (Executable CLI Reference)
+- **[docs/cli-commands.md](docs/cli-commands.md)** (Python Source CLI Reference)
 
 ---
 
-## 🛠️ CLI Commands & Recipes
+## 📊 Connection State Machine (`disk-state.json`)
 
-Run via `python -m eldendisk <command> [options]` or `eldendisk.exe <command> [options]`. Every command supports `-h` / `--help`.
-
-### Commands at a Glance
-
-| Command | Usage | Description |
-|:---|:---|:---|
-| [`run`](#run) | `python -m eldendisk run [options]` | Launches (or attaches via `--attach`) and writes live state to `disk-state.json` |
-| [`effects`](#effects) | `python -m eldendisk effects [-q]` | Live SpEffect viewer: streams active buffs and status effects to stdout |
-| [`animations`](#animations) | `python -m eldendisk animations [-q]` | Live character animation state viewer: streams active animation IDs to stdout |
-| [`hash`](#hash) | `python -m eldendisk hash` | Calculates SHA-256 hash of `eldenring.exe` (used as profile key in `offsets.json`) |
-| [`build`](#build) | `python -m eldendisk build [options]` | Compiles project into standalone executable (`./build/dist/<version>/eldendisk.exe`) |
-
-### Common Recipes
-
-| Goal | Command |
-|:---|:---|
-| Get exe hash for a new game patch | `python -m eldendisk hash` |
-| Launch game offline + write state | `python -m eldendisk run -v` |
-| Attach to already running offline game | `python -m eldendisk run --attach -v` |
-| Custom sampling rate (e.g. 30FPS) | `python -m eldendisk run --hz 30` |
-| Stream active buffs / SpEffects | `python -m eldendisk effects -q` |
-| Stream animation state transitions | `python -m eldendisk animations -q` |
-| Build single embedded `.exe` file | `python -m eldendisk build -c -em` |
-| Build `.exe` + external JSON configs | `python -m eldendisk build -c` |
-| Run E2E pipeline (test + build + run) | `python code/tools/dev_pipeline.py --dry-run` |
-| Run soak stability test (V-06) | Terminal A: `run -v` · Terminal B: `python code/tools/soak_check.py` |
-
-**Full References:**  
-- For Python CLI reference, see **[docs/cli-commands.md](docs/cli-commands.md)**  
-- For Standalone Executable CLI reference, see **[docs/cli-commands-exe.md](docs/cli-commands-exe.md)**  
-
----
-
-## 📦 Standalone Executable Build & E2E Pipeline
-
-Version 1.5.1 introduced native compilation and end-to-end pipeline automation; 1.5.2 hardens it (Nuitka parity, config lookup rules, throttled writes).
-
-### Build Subcommand (`build`)
-```cmd
-python -m eldendisk build [OPTIONS]
+```json
+{
+  "systems": {
+    "profile": { "sha256": "...", "game": "eldenring.exe", "version": "1.17.1" },
+    "features": { "effects_supported": true, "animations_supported": true, "sandbox_supported": true },
+    "status": { "pid": 1234, "tool_state": "CONNECTED", "anti_cheat_state": "DISABLED_OFFLINE", "game_connected": true, "ignored": { "effects": 0, "animations": 0 } },
+    "session": { "mode": "telemetry", "read_only": true, "sandbox": false }
+  },
+  "character": { ... }
+}
 ```
-
-- **Single Embedded Binary (`-em` / `--embed-configs`):**
-  Embeds `offsets.json` and `chr_state_ids.json` directly inside `eldendisk.exe` (both engines). A same-named file placed next to the exe still overrides the embedded one. Generates a single file in `./build/dist/1.5.2/eldendisk.exe` with no external dependencies.
-  ```cmd
-  python -m eldendisk build -c -em
-  ```
-- **Modular Distribution (External Configs):**
-  Compiles `eldendisk.exe` and copies editable `offsets.json` and `chr_state_ids.json` into `./build/dist/1.5.2/` alongside the executable (both PyInstaller and Nuitka).
-  ```cmd
-  python -m eldendisk build -c
-  ```
-
-### End-to-End Development Pipeline (`code/tools/dev_pipeline.py`)
-Automates pre-check unit testing, compilation, and state verification in a single command:
-```cmd
-python code/tools/dev_pipeline.py
-```
-- **Options:**
-  - `--dry-run`: Runs tests, builds binary, and executes `--help` check on the compiled binary.
-  - `--no-embed`: Disables config embedding during build step.
-  - `--skip-tests`: Skips pre-check unit tests.
-
----
-
-## 📊 Connection State Machine
-
-| State | Description | Character Payload |
-|:---|:---|:---:|
-| `WAITING_FOR_PROCESS` | Game process not running or not found. | Retained last known |
-| `EAC_ACTIVE` / `EAC_DETECTED` | EasyAntiCheat present; attachment refused for safety. | Retained last known |
-| `UNSUPPORTED_VERSION` | Game SHA-256 hash not matched in `offsets.json`. | Retained last known |
-| `WAITING_FOR_WORLD` | Process attached, but game pointers/world not initialized. | Retained last known |
-| `CONNECTED` | Polling active; real-time character state live. | Live full object |
-| `DISCONNECTED` | Game process closed cleanly or crashed. | Retained last known |
-| `IDLE` | Game window out of focus; polling paused to save CPU (disabled by `--no-idle`). | Retained last known |
-
----
-
-## 🎮 Adding a Profile (New Game Patches)
-
-When FromSoftware updates Elden Ring, memory offsets change. Adding a profile allows EldenDisk to support the new game patch without updating source code.
-
-### Summary Table
-
-| Field | Description | Example (v1.17.1) |
-|:---|:---|:---|
-| `world_chr_man_rva` | Base Pointer scan RVA address (`eldenring.exe + RVA`) | `"0x3B16E30"` |
-| `world_chr_man_to_player` | Pointer Offset 0 (`PlayerIns`) | `"0x0"` |
-| `player_to_game_data` | Pointer Offset 1 (`PlayerGameData`) | `"0x580"` |
-| `game_data.level`, `.attributes` | Level and Attribute stat offsets | `"0x68"`, `"0x3C"` |
-| `game_data.runes` | Rune offset | `"0x6C"` |
-| `vitals` | HP (`0x138`), FP (`0x148`), Stamina (`0x154`) offsets | `"0x190"`, `"0x0"`, `"0x138"` |
-| `player_to_sp_effect` | SpEffect linked list head offset | `"0x178"` |
-| `at_grace` | `null` (off) or `{source, equals}`; `equals` is required, there is no default ID | `{"source":"anim","equals":["0x109AB"]}` |
-
-> A profile **must** include `vitals`; since 1.5.2 a profile without it is rejected (`UNSUPPORTED_VERSION: profile incomplete`) instead of silently reusing the 1.17.1 layout.
-
-**Full Step-by-Step Guide:** **[docs/adding-a-profile.md](docs/adding-a-profile.md)** — Includes Cheat Engine scanning checkpoints and step-by-step instructions.
 
 ---
 
 ## 🧪 Testing & Quality Assurance
 
-### Automated Unit Tests
-Includes a comprehensive test suite using mock memory structures, covering pointer chains, linked list safety, schema validation, and state machines:
-```cmd
+```commandline
+# Run unit test suite (145+ tests)
 python -m pytest
-```
 
-### Soak Stability Test (Spec V-06)
-Monitors long-term state output stability and schema compliance:
-```cmd
-# Terminal 1: Run logger
-python -m eldendisk run -v
-
-# Terminal 2: Run soak validator
+# Run soak stability check (V-06)
 python code/tools/soak_check.py
 ```
-
----
-
-## ❓ Troubleshooting
-
-- **Steam AppId Error on Direct Launch:** EldenDisk passes `SteamAppId=1245620` in the child environment. If Steam fails to launch the game, create a `steam_appid.txt` file containing `1245620` inside the game folder (EldenDisk never modifies the game folder directly).
-- **`OpenProcess failed` (Error 5):** The process is protected by EasyAntiCheat, or EldenDisk is running under a different Windows user account.
-- **Stuck in `WAITING_FOR_WORLD`:** Run with `-v` flag to view `last_error` diagnostic output detailing which pointer failed to resolve.

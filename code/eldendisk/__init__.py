@@ -1,2 +1,2 @@
-"""Read-only offline memory read tool for Elden Ring (see README.md)."""
-__version__ = "1.5.2"
+"""Offline save sandbox & memory tool for Elden Ring: live state streaming, plus save-protected sandbox edits (see README)."""
+__version__ = "1.6.0"

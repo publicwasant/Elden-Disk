@@ -24,15 +24,29 @@ ATTRS = ("vigor", "mind", "endurance", "strength", "dexterity", "intelligence", 
 def check(doc: dict) -> list[str]:
     """Problems found in one document (empty list = fine)."""
     try:
-        st, ch = doc["system_status"], doc["character"]
-        state = st["state"]
+        sys_obj, ch = doc["systems"], doc["character"]
+        st = sys_obj["status"]
+        session = sys_obj["session"]
+        prof = sys_obj["profile"]
+        state = st["tool_state"]
     except (KeyError, TypeError):
         return ["missing top-level keys"]
     out: list[str] = []
     if state not in STATES:
         out.append(f"unknown state {state!r}")
-    if st.get("read_only") is not True:
-        out.append("read_only is not true")
+    if not isinstance(session, dict):
+        out.append("systems.session is not an object")
+    else:
+        if not isinstance(session.get("read_only"), bool):
+            out.append("session.read_only is not a boolean")
+        if not isinstance(session.get("sandbox"), bool):
+            out.append("session.sandbox is not a boolean")
+    if not isinstance(prof, dict):
+        out.append("systems.profile is not an object")
+    if "errors" in sys_obj:
+        err = sys_obj["errors"]
+        if not isinstance(err, dict) or "message" not in err:
+            out.append("systems.errors is invalid")
     if ch is None:
         if state in ("CONNECTED", "IDLE"):
             return out + [f"{state} but character is null"]
@@ -124,8 +138,11 @@ def _loop(path, interval, end, stats, out, st_):
         for p in check(doc):
             stats["problems"] += 1
             out(f"{_now()} !! {p}")
-        st = doc.get("system_status", {})
-        state, err = st.get("state"), st.get("last_error")
+        sys_obj = doc.get("systems", {})
+        st = sys_obj.get("status", {}) if isinstance(sys_obj, dict) else {}
+        err_obj = sys_obj.get("errors") if isinstance(sys_obj, dict) else None
+        state = st.get("tool_state")
+        err = err_obj.get("message") if isinstance(err_obj, dict) else None
         stats["states"][state] += 1
         if (state, err) != (last_state, last_err):
             out(f"{_now()} {last_state or '-'} -> {state}" + (f"  ({err})" if err else ""))

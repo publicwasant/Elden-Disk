@@ -32,6 +32,7 @@ class Sample:
     state: str  # WAITING_FOR_WORLD | CONNECTED | IDLE
     character: dict | None = None
     ignored_effects: int = 0
+    ignored_animations: int = 0
     error: str | None = None  # diagnostic only; None for the normal title-screen case
     runes: int | None = None
 
@@ -75,7 +76,8 @@ class Sampler:
         entry_addr = time_act + anim.time_act_queue + (read_idx * anim.queue_entry_size)
         return read_u32(self.mem, entry_addr)
 
-    def _read_vitals(self, player: int) -> tuple[dict | None, str | None]:
+    def vitals_address(self, player: int) -> tuple[int | None, str | None]:
+        """Address of the 40-byte vitals block (CSChrDataModule + data_to_vitals), or (None, reason)."""
         vit = self.profile.vitals
         if vit is None:
             return None, "profile has no vitals layout"
@@ -85,37 +87,24 @@ class Sampler:
         data_mod = read_ptr(self.mem, modules + vit.modules_to_data)
         if data_mod is None or data_mod == 0 or not is_user_ptr(data_mod):
             return None, "read failed: CSChrDataModule pointer"
-        raw = self.mem.read(data_mod + vit.data_to_vitals, 40)
+        return data_mod + vit.data_to_vitals, None
+
+    def _read_vitals(self, player: int) -> tuple[dict | None, str | None]:
+        addr, err = self.vitals_address(player)
+        if addr is None:
+            return None, err
+        raw = self.mem.read(addr, 40)
         if raw is None:
             return None, "read failed: CSChrDataModule vitals block"
-
-        hp, max_hp, _, base_hp, fp, max_fp, base_fp, stamina, max_stamina, base_stamina = struct.unpack("<10i", raw)
-
-        if hp < 0 or max_hp <= 0 or base_hp <= 0:
-            return None, f"invalid HP vitals: hp={hp}, max_hp={max_hp}, base_hp={base_hp}"
-        if fp < 0 or max_fp <= 0 or base_fp <= 0:
-            return None, f"invalid FP vitals: fp={fp}, max_fp={max_fp}, base_fp={base_fp}"
-        if max_stamina <= 0 or base_stamina <= 0:
-            return None, f"invalid Stamina vitals: stamina={stamina}, max_stamina={max_stamina}, base_stamina={base_stamina}"
-
-        vitals_obj = {
-            "hit_point": {
-                "current": hp,
-                "maximum": max_hp,
-                "base": base_hp,
-            },
-            "focus_point": {
-                "current": fp,
-                "maximum": max_fp,
-                "base": base_fp,
-            },
-            "stamina": {
-                "current": stamina,
-                "maximum": max_stamina,
-                "base": base_stamina,
-            },
-        }
-        return vitals_obj, None
+        v, err = parse_vitals_block(raw)
+        if v is None:
+            return None, err
+        hp, max_hp, _, base_hp, fp, max_fp, base_fp, stamina, max_stamina, base_stamina = v
+        return {
+            "hit_point": {"current": hp, "maximum": max_hp, "base": base_hp},
+            "focus_point": {"current": fp, "maximum": max_fp, "base": base_fp},
+            "stamina": {"current": stamina, "maximum": max_stamina, "base": base_stamina},
+        }, None
 
     # -- helpers ---------------------------------------------------------
     @staticmethod
@@ -131,6 +120,21 @@ class Sampler:
         if not is_user_ptr(v):
             return None, self._wait(f"invalid pointer {name}=0x{v:X}")
         return v, None
+
+    def locate_game_data(self) -> tuple[int | None, str | None]:
+        """(PlayerGameData address, None), or (None, reason). Resolved fresh on every call (never cached)."""
+        player, reason = self.locate_player()
+        if player is None:
+            return None, reason
+        gd, w = self._follow(player + self.profile.player_to_game_data, "PlayerGameData")
+        return (gd, None) if w is None else (None, w.error or "world not loaded")
+
+    def locate_vitals(self) -> tuple[int | None, str | None]:
+        """(vitals block address, None), or (None, reason). Resolved fresh on every call."""
+        player, reason = self.locate_player()
+        if player is None:
+            return None, reason
+        return self.vitals_address(player)
 
     def locate_player(self) -> tuple[int | None, str | None]:
         """(PlayerIns address, None), or (None, reason) while the world/player is not available."""
@@ -199,6 +203,7 @@ class Sampler:
         anim_id = self.read_animation_id(player)
         is_at_grace = anim_id is not None and self.profile.at_grace is not None and anim_id in self.profile.at_grace.equals
 
+        ignored_anim = 0
         if anim_id is not None and anim_id > 0:
             cfg = self.effects.table.get(anim_id)
             if cfg is not None:
@@ -210,6 +215,7 @@ class Sampler:
                     anim_obj["abilities"] = cfg.abilities
                 self._last_animation = {str(anim_id): anim_obj}
             else:
+                ignored_anim = 1
                 self._last_animation = {
                     str(anim_id): {
                         "name": f"Animation {anim_id}",
@@ -245,7 +251,7 @@ class Sampler:
             "effects": effects,
             "animations": self._last_animation,
         }
-        return Sample("CONNECTED", character, ignored, None, runes)
+        return Sample("CONNECTED", character, ignored, ignored_anim, None, runes)
 
     def raw_effects(self) -> tuple[list[tuple[int, float, float]] | None, str | None]:
         """Unclassified (id, duration, timer) entries, for the `effects` discovery command."""
@@ -363,9 +369,15 @@ class Sampler:
 
 
 def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
-                   exe_sha256: str | None, profile_label: str | None, buffs_supported: bool,
+                   exe_sha256: str | None, profile_label: str | None,
+                   effects_supported: bool = True,
+                   animations_supported: bool = True,
+                   sandbox_supported: bool = True,
                    sample: Sample | None,
-                   note: str | None = None, last_character: dict | None = None) -> dict:
+                   note: str | None = None, last_character: dict | None = None,
+                   mode: str = "telemetry",
+                   read_only: bool = True,
+                   sandbox: bool = False) -> dict:
     has_character = sample is not None and sample.character is not None
     game_connected = state in ("CONNECTED", "IDLE")
 
@@ -376,21 +388,74 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
     else:
         character = None
 
-    return {
-        "system_status": {
-            "state": state,
-            "game_connected": game_connected,
-            "pid": pid,
-            "anti_cheat_status": anti_cheat,
-            "read_only": True,
-            "exe_sha256": exe_sha256,
-            "profile": profile_label,
-            "buffs_supported": buffs_supported,
-            "ignored_effects": sample.ignored_effects if sample else 0,
-            "last_error": note or (sample.error if sample else None),
+    version = profile_label
+    if profile_label and "Elden Ring " in profile_label:
+        version = profile_label.replace("Elden Ring ", "")
+
+    profile = {
+        "sha256": exe_sha256,
+        "game": "eldenring.exe",
+        "version": version,
+    }
+
+    features = {
+        "effects_supported": effects_supported,
+        "animations_supported": animations_supported,
+        "sandbox_supported": sandbox_supported,
+    }
+
+    status = {
+        "pid": pid,
+        "tool_state": state,
+        "anti_cheat_state": anti_cheat,
+        "game_connected": game_connected,
+        "ignored": {
+            "effects": sample.ignored_effects if sample else 0,
+            "animations": sample.ignored_animations if sample else 0,
         },
+    }
+
+    session = {
+        "mode": mode,
+        "read_only": read_only,
+        "sandbox": sandbox,
+    }
+
+    systems: dict = {
+        "profile": profile,
+        "features": features,
+        "status": status,
+        "session": session,
+    }
+
+    err_msg = note or (sample.error if sample else None)
+    if err_msg:
+        ts_dt = now or datetime.now(timezone.utc)
+        ts_str = ts_dt.isoformat().replace("+00:00", "Z")
+        systems["errors"] = {
+            "code": 1,
+            "message": err_msg,
+            "details": None,
+            "timestamp": ts_str,
+        }
+
+    return {
+        "systems": systems,
         "character": character,
     }
+
+
+def parse_vitals_block(raw: bytes) -> tuple[tuple[int, ...] | None, str | None]:
+    """Unpack + validate the 10-int vitals block: (hp, max_hp, uncapped_max, base_hp, fp, max_fp, base_fp, st, max_st, base_st)."""
+    v = struct.unpack("<10i", raw)
+    hp, max_hp, _, base_hp, fp, max_fp, base_fp, stamina, max_stamina, base_stamina = v
+    if hp < 0 or max_hp <= 0 or base_hp <= 0:
+        return None, f"invalid HP vitals: hp={hp}, max_hp={max_hp}, base_hp={base_hp}"
+    if fp < 0 or max_fp <= 0 or base_fp <= 0:
+        return None, f"invalid FP vitals: fp={fp}, max_fp={max_fp}, base_fp={base_fp}"
+    if max_stamina <= 0 or base_stamina <= 0:
+        return None, f"invalid Stamina vitals: stamina={stamina}, max_stamina={max_stamina}, base_stamina={base_stamina}"
+    return v, None
 
 
 def doc_signature(doc: dict) -> dict:

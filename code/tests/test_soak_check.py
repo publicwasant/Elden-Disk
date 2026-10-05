@@ -18,7 +18,12 @@ def doc(state="CONNECTED", **over):
     }
     ch = {"level": 386, "vitals": vitals, "runes": runes, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
           "effects": {}, "animations": {}}
-    d = {"system_status": {"state": state, "read_only": True},
+    d = {"systems": {
+            "profile": {"sha256": "abc", "game": "eldenring.exe", "version": "1.17.1"},
+            "features": {"effects_supported": True, "animations_supported": True, "sandbox_supported": True},
+            "status": {"pid": 1234, "tool_state": state, "anti_cheat_state": "DISABLED_OFFLINE", "game_connected": True, "ignored": {"effects": 0, "animations": 0}},
+            "session": {"mode": "telemetry", "read_only": True, "sandbox": False}
+         },
          "character": ch}
     d.update(over)
     return d
