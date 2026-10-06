@@ -1,17 +1,18 @@
-"""Gated memory writes for sandbox sessions (spec 1.6.0, MW-1..MW-6 and FR-14).
+"""Gated memory writes for the `sandbox` client (spec 1.6.1, MW-1..MW-6 and FR-14).
 
 This is the ONLY module that may call WriteProcessMemory.
 
 Rules enforced here:
-  * the write handle exists only for the duration of a session (WritableProcessMemory is created and closed by
-    the session; `run`, `effects` and `animations` keep the read-only handle)                          MW-1
+  * the write handle exists only for one `sandbox` edit (WritableProcessMemory is created and closed by that
+    command, and only after it found the restore marker of a running session; `run`, `effects` and
+    `animations` keep the read-only handle)                                                            MW-1
   * every write re-resolves the pointer chain through the Sampler; no address is ever cached         MW-2
   * a null/invalid pointer or unreadable field skips that write, it never raises                      MW-3
   * only stored current values are written (level, runes, attributes, current HP/FP/stamina);
     derived values (maximums) are left to the game                                                    MW-4
   * writes run at a bounded rate and every value is clamped to a sane range                           MW-5
   * offsets come from the profile that matched the exe hash (the Sampler's profile)                   MW-6
-  * nothing is written unless the WriteGate is open (RUNNING state, no anti-cheat)                    FR-14
+  * nothing is written unless the WriteGate is open (session marker found, no anti-cheat, known exe)  FR-14
 """
 from __future__ import annotations
 
@@ -144,6 +145,11 @@ class MemoryWriter:
         self._next = 0.0
         self._last_status: dict[str, str] = {}
         self.writes = 0
+        self.skipped: list[str] = []   # why a requested edit could not even be attempted (last tick)
+
+    def _skip(self, name: str, status: str, msg: str) -> None:
+        self.skipped.append(f"{name}: {msg}")
+        self._report(name, status, msg)
 
     def _report(self, name: str, status: str, msg: str) -> None:
         if self._last_status.get(name) != status:  # log transitions only, not every tick
@@ -175,12 +181,13 @@ class MemoryWriter:
             return []
         self._next = now + self._period
         out: list[WriteResult] = []
+        self.skipped = []
 
         stored = [(n, v) for n, v in self.policy.sets if not (n in VITAL_FIELDS)]
         if stored:
             gd, why = self.sampler.locate_game_data()
             if gd is None:
-                self._report("game_data", f"skip:{why}", f"skipped, {why}")
+                self._skip("game_data", f"skip:{why}", f"skipped, {why}")
             else:
                 p = self.sampler.profile
                 for name, value in stored:
@@ -195,7 +202,7 @@ class MemoryWriter:
                         addr = gd + p.attributes + 4 * ATTR_NAMES.index(name)
                     cur = self.mem.read(addr, 4)
                     if cur is None:
-                        self._report(name, "unreadable", "skipped, field unreadable")
+                        self._skip(name, "unreadable", "skipped, field unreadable")
                         continue
                     r = self._put(name, addr, struct.pack("<I", target), cur, target, "<I")
                     if r:
@@ -207,11 +214,11 @@ class MemoryWriter:
             base, why = self.sampler.locate_vitals()
             raw = self.mem.read(base, 40) if base is not None else None
             if raw is None:
-                self._report("vitals", f"skip:{why}", f"skipped, {why or 'vitals unreadable'}")
+                self._skip("vitals", f"skip:{why}", f"skipped, {why or 'vitals unreadable'}")
             else:
                 block, err = parse_vitals_block(raw)
                 if block is None:
-                    self._report("vitals", f"skip:{err}", f"skipped, {err}")
+                    self._skip("vitals", f"skip:{err}", f"skipped, {err}")
                 else:
                     for name, value in vital_targets.items():
                         off, max_idx = VITAL_FIELDS[name]

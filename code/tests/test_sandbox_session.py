@@ -32,7 +32,7 @@ def contaminate(live):
     (live / "stray.dat").write_bytes(b"x")
 
 
-def hooks(game, run=lambda gate: 0, running=False, ac=False, wait=lambda: True, extra=None, guard=True):
+def hooks(game, run=lambda: 0, running=False, ac=False, wait=lambda: True, extra=None, guard=True):
     return Hooks(game_running=lambda: running, anticheat_running=lambda: ac, run_game=run, wait_game_exit=wait,
                  extra_preflight=(lambda: extra) if extra else (lambda: []),
                  game_guard=GameFolderGuard(game) if guard else None, game_dir=game, exe_sha256="abc")
@@ -48,8 +48,7 @@ def test_full_flow_contaminates_then_restores_byte_for_byte(env):
     _, live, game, vault = env
     before, seen = tree(live), {}
 
-    def run(gate):
-        seen["gate"] = gate.allowed
+    def run():
         seen["marker"] = vault.read_marker()
         seen["snapshot_ok"] = vault.verify_snapshot(Path(seen["marker"]["snapshot_dir"])) == []
         contaminate(live)                      # "memory edits got autosaved"
@@ -57,9 +56,9 @@ def test_full_flow_contaminates_then_restores_byte_for_byte(env):
 
     s = SandboxSession(vault, live, hooks(game, run=run))
     assert s.run() == 0
-    assert seen["gate"] is True and seen["snapshot_ok"] and seen["marker"]["live_save_dir"] == str(live)
+    assert seen["snapshot_ok"] and seen["marker"]["live_save_dir"] == str(live)
     assert tree(live) == before                # G1
-    assert vault.read_marker() is None and s.gate.allowed is False
+    assert vault.read_marker() is None
     assert s.history == [State.IDLE, State.PREFLIGHT, State.SNAPSHOTTING, State.RUNNING, State.RESTORING,
                          State.VERIFYING, State.CLEANUP, State.IDLE]
     snap_dir = vault.root / vault.list_snapshots()[0]["name"]
@@ -67,12 +66,12 @@ def test_full_flow_contaminates_then_restores_byte_for_byte(env):
 
 
 def test_exit_code_of_the_game_phase_is_returned(env):
-    assert session(env, h={"run": lambda gate: 3}).run() == 3
+    assert session(env, h={"run": lambda: 3}).run() == 3
 
 
 def test_archive_contaminated_keeps_the_modified_save(env):
     _, live, game, vault = env
-    s = SandboxSession(vault, live, hooks(game, run=lambda g: contaminate(live) or 0), archive_contaminated=True)
+    s = SandboxSession(vault, live, hooks(game, run=lambda: contaminate(live) or 0), archive_contaminated=True)
     s.run()
     snap = vault.root / vault.list_snapshots()[0]["name"]
     assert (snap / "contaminated" / "ER0000.sl2").read_bytes().startswith(b"LEVEL 713")
@@ -83,7 +82,7 @@ def test_archive_contaminated_keeps_the_modified_save(env):
 def test_preflight_refusal_changes_nothing(env, kw):
     _, live, game, vault = env
     before, called = tree(live), []
-    s = SandboxSession(vault, live, hooks(game, run=lambda g: called.append(1) or 0, **kw))
+    s = SandboxSession(vault, live, hooks(game, run=lambda: called.append(1) or 0, **kw))
     assert s.run() == 1
     assert called == [] and tree(live) == before and vault.read_marker() is None
     assert not vault.root.exists() or not any(vault.root.iterdir())
@@ -98,7 +97,7 @@ def test_unresolved_marker_blocks_a_new_session_until_restore(env):
     vault.write_marker(snap, live, exe_sha256=None)       # as if the tool was killed mid-session
     contaminate(live)
     called = []
-    assert SandboxSession(vault, live, hooks(game, run=lambda g: called.append(1) or 0)).run() == 1 and not called
+    assert SandboxSession(vault, live, hooks(game, run=lambda: called.append(1) or 0)).run() == 1 and not called
     log = SessionLog()
     assert restore_pending(vault, game_running=lambda: False, log=log) == 0
     assert tree(live) == before and vault.read_marker() is None
@@ -110,12 +109,12 @@ def test_exception_and_interrupt_in_the_running_phase_still_restore(env):
     _, live, game, vault = env
     before = tree(live)
 
-    def boom(gate):
+    def boom():
         contaminate(live)
         raise RuntimeError("tool bug")
     assert session(env, h={"run": boom}).run() == 1 and tree(live) == before and vault.read_marker() is None
 
-    def ctrl_c(gate):
+    def ctrl_c():
         contaminate(live)
         raise KeyboardInterrupt
     assert session(env, h={"run": ctrl_c}).run() == 130 and tree(live) == before and vault.read_marker() is None
@@ -136,7 +135,7 @@ def test_game_still_running_or_second_interrupt_leaves_restore_pending(env):
     _, live, game, vault = env
     for wait in (lambda: False, lambda: (_ for _ in ()).throw(KeyboardInterrupt())):
         v = SaveVault(env[0] / f"vault-{id(wait)}", sleep=lambda s: None)
-        s = SandboxSession(v, live, hooks(game, run=lambda g: contaminate(live) or 0, wait=wait))
+        s = SandboxSession(v, live, hooks(game, run=lambda: contaminate(live) or 0, wait=wait))
         assert s.run() == EXIT_RESTORE_PENDING and s.state is State.RESTORE_PENDING
         assert v.read_marker() is not None and v.verify_snapshot(Path(v.read_marker()["snapshot_dir"])) == []
         assert restore_pending(v, game_running=lambda: True, log=SessionLog()) == 1   # game still open: refused
@@ -147,7 +146,7 @@ def test_game_still_running_or_second_interrupt_leaves_restore_pending(env):
 def test_restore_failure_keeps_marker_and_snapshot(env, monkeypatch):
     _, live, game, vault = env
     monkeypatch.setattr(vault, "restore", lambda *a, **k: (_ for _ in ()).throw(VaultError("locked")))
-    s = SandboxSession(vault, live, hooks(game, run=lambda g: contaminate(live) or 0))
+    s = SandboxSession(vault, live, hooks(game, run=lambda: contaminate(live) or 0))
     assert s.run() == EXIT_RESTORE_PENDING
     assert vault.read_marker() is not None and vault.verify_snapshot(Path(vault.read_marker()["snapshot_dir"])) == []
 
@@ -176,7 +175,7 @@ def test_files_created_in_the_game_folder_are_removed_and_recorded(env):
     _, live, game, vault = env
     before, seen = listing(game), {}
 
-    def run(gate):
+    def run():
         guard.create_file("steam_appid.txt", b"1245620")
         seen["marker_files"] = vault.read_marker()["game_folder_files_created"]
         return 0
@@ -229,7 +228,7 @@ def test_marker_is_written_after_snapshot_and_before_launch(env):
     real_snapshot, real_marker = vault.snapshot, vault.write_marker
     vault.snapshot = lambda *a, **k: order.append("snapshot") or real_snapshot(*a, **k)
     vault.write_marker = lambda *a, **k: order.append("marker") or real_marker(*a, **k)
-    SandboxSession(vault, live, hooks(game, run=lambda g: order.append("game") or 0)).run()
+    SandboxSession(vault, live, hooks(game, run=lambda: order.append("game") or 0)).run()
     assert order == ["snapshot", "marker", "game"]
 
 
@@ -278,9 +277,11 @@ def test_sandbox_flags_parse_and_are_validated(monkeypatch):
     monkeypatch.setattr(cli, "cmd_sandbox_edit", lambda a: seen.update(vars(a)) or 0)
     monkeypatch.setattr(cli, "cmd_sandbox", cli.cmd_sandbox)
     assert cli.main(["sandbox", "--set", "level=150", "--set", "vigor=40", "--refill", "hp,fp",
-                     "--write-hz", "10", "--archive-contaminated"]) == 0
-    assert seen["set"] == ["level=150", "vigor=40"] and seen["refill"] == "hp,fp" and seen["write_hz"] == 10.0
-    assert seen["archive_contaminated"] is True and seen["vault"] == cli.DEFAULT_VAULT
+                     "-v"]) == 0
+    assert seen["set"] == ["level=150", "vigor=40"] and seen["refill"] == "hp,fp" and seen["verbose"] is True
+    assert seen["vault"] == cli.DEFAULT_VAULT
+    with pytest.raises(SystemExit):
+        cli.main(["sandbox", "--write-hz", "10"])           # removed in 1.6.1: edits are applied once
 
 
 def test_bad_edit_policy_is_reported_and_nothing_starts(monkeypatch, tmp_path, capsys):
@@ -289,7 +290,7 @@ def test_bad_edit_policy_is_reported_and_nothing_starts(monkeypatch, tmp_path, c
     assert "bogus" in capsys.readouterr().err and not (tmp_path / "v").exists()
 
 
-def test_document_reports_read_only_false_during_a_sandbox_session():
+def test_document_reports_a_sandbox_session_but_stays_read_only():
     import argparse
     from eldendisk.disk import Sample
     from tests.test_disk import SCHEMA
@@ -300,23 +301,21 @@ def test_document_reports_read_only_false_during_a_sandbox_session():
     mon.logger = type("L", (), {"write": lambda s, d: docs.append(d) or True})()
     mon.emit("WAITING_FOR_WORLD", Sample("WAITING_FOR_WORLD"))
     mon.mode = "sandbox"
-    mon.read_only = False
     mon.sandbox = True
     mon.emit("IDLE", Sample("WAITING_FOR_WORLD"))
     assert [d["systems"]["session"] for d in docs] == [
         {"mode": "telemetry", "read_only": True, "sandbox": False},
-        {"mode": "sandbox", "read_only": False, "sandbox": True},
+        {"mode": "sandbox", "read_only": True, "sandbox": True},
     ]
     for d in docs:
         jsonschema.validate(d, SCHEMA)
 
 
-# ---- integration: cmd_run with a gate (fake Win32 layer) ----
+# ---- integration: cmd_run inside a sandbox session (fake Win32 layer) ----
 def _run_rig(tmp_path, monkeypatch, modules, alive_polls=2):
     import argparse
     import json
     import eldendisk.memory_reader as mr
-    import eldendisk.memory_writer as mw
     from eldendisk.memory_reader import Module
     from tests.test_disk import BASE, make_profile
     from tests.test_memory_writer import WMem
@@ -340,23 +339,20 @@ def _run_rig(tmp_path, monkeypatch, modules, alive_polls=2):
     monkeypatch.setattr(cli, "_wait_game_exit", lambda: True)
     monkeypatch.setattr("eldendisk.save_vault.load_registry_save_dir", lambda: None)
     monkeypatch.setattr("eldendisk.save_vault.save_registry_save_dir", lambda p: None)
-    monkeypatch.setattr(mw, "WritableProcessMemory", lambda pid: mem)
     monkeypatch.setattr(mr, "ProcessMemory", lambda pid: mem)
     args = argparse.Namespace(attach=False, game_dir=None, out=str(tmp_path / "out"), offsets="x", effects=str(tmp_path / "none.json"),
-                              hz=60.0, timer_interval=0.5, no_idle=True, verbose=False, write_hz=4.0)
+                              hz=60.0, timer_interval=0.5, no_idle=True, verbose=False)
     return args, mem, state, json
 
 
-def test_run_with_a_gate_applies_the_policy_and_reports_not_read_only(tmp_path, monkeypatch):
-    from eldendisk.memory_writer import WriteGate, parse_policy
-    from tests.test_disk import GD
+def test_run_in_a_sandbox_session_is_labelled_but_never_writes(tmp_path, monkeypatch):
     import struct
+    from tests.test_disk import GD
     args, mem, state, json = _run_rig(tmp_path, monkeypatch, ["eldenring.exe", "kernel32.dll"])
-    gate = WriteGate(); gate.open()
-    assert cli.cmd_run(args, gate=gate, policy=parse_policy(["level=150"], None)) == 0
-    assert struct.unpack("<I", mem.read(GD + 0x68, 4))[0] == 150 and state["closed"]
+    assert cli.cmd_run(args, sandbox=True) == 0
+    assert mem.log == [] and struct.unpack("<I", mem.read(GD + 0x68, 4))[0] == 386 and state["closed"]
     doc = json.loads((tmp_path / "out" / "disk-state.json").read_text())
-    assert doc["systems"]["session"] == {"mode": "sandbox", "read_only": False, "sandbox": True}
+    assert doc["systems"]["session"] == {"mode": "sandbox", "read_only": True, "sandbox": True}
 
 
 def test_run_without_a_gate_never_writes_and_stays_read_only(tmp_path, monkeypatch):
@@ -369,9 +365,6 @@ def test_run_without_a_gate_never_writes_and_stays_read_only(tmp_path, monkeypat
     assert json.loads((tmp_path / "out" / "disk-state.json").read_text())["systems"]["session"] == {"mode": "telemetry", "read_only": True, "sandbox": False}
 
 
-def test_eac_loaded_closes_the_gate_and_nothing_is_written(tmp_path, monkeypatch):
-    from eldendisk.memory_writer import WriteGate, parse_policy
+def test_eac_loaded_stops_the_host_and_nothing_is_written(tmp_path, monkeypatch):
     args, mem, state, json = _run_rig(tmp_path, monkeypatch, ["eldenring.exe", "EasyAntiCheat_EOS.dll"])
-    gate = WriteGate(); gate.open()
-    assert cli.cmd_run(args, gate=gate, policy=parse_policy(["level=150"], None)) == cli.EXIT_EAC
-    assert gate.allowed is False and mem.log == []
+    assert cli.cmd_run(args, sandbox=True) == cli.EXIT_EAC and mem.log == []

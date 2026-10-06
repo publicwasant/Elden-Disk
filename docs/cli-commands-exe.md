@@ -140,6 +140,8 @@ eldendisk.exe sandbox [options]
 
 Attaches on-the-fly to the active game running under `run`, applies memory edits instantly, and terminates immediately (`[end]`).
 
+Edits are applied **once** (not held); run the command again to re-apply (e.g. `--refill hp,fp,stamina` after a fight). It needs the session of a running `run` (same `--vault`) and exits with code `5` without writing when there is none, when the running `eldenring.exe` differs from the one snapshotted, or when the vault marker is unreadable. Exit `1` means an edit could not be applied (e.g. not in a world yet, or the write did not stick); exit `3` means EAC is loaded.
+
 > [!NOTE]
 > **Silent Execution:** When `-v` / `--verbose` is omitted, `sandbox` runs completely silently without console output. Use `-v` to print detailed edit confirmations.
 
@@ -154,8 +156,9 @@ Attaches on-the-fly to the active game running under `run`, applies memory edits
 
 | Flag | Value Type | Default | Description |
 |:---|:---:|:---|:---|
-| `--set NAME=VALUE` | string | `None` | Set and hold an attribute value on-the-fly. Repeatable. |
-| `--refill LIST` | string | `None` | Comma-separated list (`hp`, `fp`, `stamina`) to refill current vitals to maximum. |
+| `--vault DIR` | path | `<tool>/backup/vault` | Vault of the running session (must match the one `run` uses). Also valid before a subcommand: `sandbox --vault D:\v restore`. |
+| `--set NAME=VALUE` | string | `None` | Set an attribute value once, on-the-fly. Repeatable. |
+| `--refill LIST` | string | `None` | Comma-separated list (`hp`, `fp`, `stamina`) to refill current vitals to maximum once. |
 | `--offsets FILE` | path | `./offsets.json` | Path to offsets configuration file. |
 | `--effects FILE` | path | `./chr_state_ids.json` | Path to state IDs configuration file. |
 | `-v`, `--verbose` | switch | off | Print diagnostic confirmation of applied edits (silent when omitted). |

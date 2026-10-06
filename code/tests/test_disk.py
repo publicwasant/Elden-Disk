@@ -404,8 +404,8 @@ def test_write_capability_is_confined_to_the_sandbox_path():
         if f.name not in ("memory_writer.py", "sandbox.py", "__main__.py"):
             assert not imports_writer, f"{f.name} must not import the write module"
     main_src = (PKG / "__main__.py").read_text(encoding="utf-8")
-    top_level = main_src.split("def _writer_api")[0]
-    assert not re.search(r"^(from|import)\s.*memory_writer", top_level, re.M), "write module must be imported lazily"
+    assert not re.search(r"^(from|import)\s.*memory_writer", main_src, re.M), "write module must be imported lazily (indented, inside cmd_sandbox_edit)"
+    assert "WritableProcessMemory" not in main_src.split("def cmd_sandbox_edit")[0], "only the sandbox client may open a write handle"
 
 
 def test_logger_refuses_game_dir_and_writes_atomically(tmp_path):

@@ -1,19 +1,21 @@
 # EldenDisk
 
 > **Offline Save Sandbox & Memory Tool for Elden Ring: Host/Client Architecture**  
-> **Version:** `1.6.0` | **Spec Version:** `1.6.0` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable or Python 3.11+
+> **Version:** `1.6.1` | **Spec Version:** `1.6.1` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable or Python 3.11+
 
 EldenDisk is a specialized **Save Sandbox & Memory Tool** designed for Elden Ring (v1.17.1). It streams 60Hz real-time character state to `output/disk-state.json` and enables on-the-fly memory editing under a strict **Parallel Dimension Philosophy**:
 
 - **Host Session & Save Guard (`run`):** Takes an automatic SHA-256 verified save snapshot into `backup/vault`, launches `eldenring.exe` **offline**, streams live game state to JSON, and **restores the clean save byte-for-byte when the game closes**.
-- **On-The-Fly Memory Writer Client (`sandbox`):** Attaches dynamically to the active offline session, applies attribute edits (`--set`, `--refill`) instantly on-the-fly, and exits immediately (`[end]`).
+- **On-The-Fly Memory Writer Client (`sandbox`):** Attaches dynamically to the active offline session, applies attribute edits (`--set`, `--refill`) once, instantly, and exits immediately (`[end]`). It refuses to write unless the `run` session's restore marker exists in the same vault (exit code `5`), so every edit is always covered by a snapshot.
 - **Zero Configuration Files:** Remembers `--save-dir` in Windows Registry (`HKCU\Software\EldenDisk`) leaving zero config files in tool or build directories.
 
 ---
 
 > [!IMPORTANT]
-> **🌌 Parallel Dimension Guarantee (100% Clean Account Safety):**  
+> **🌌 Parallel Dimension Guarantee:**  
 > All memory edits made via `sandbox` exist **only during the active offline session (a temporary parallel dimension)**. When the game closes, `run` restores your live save folder byte-for-byte back to the exact pre-session snapshot taken before the game opened. Nothing from your sandbox modifications ever pollutes your real character save or account.
+>
+> **Steam Cloud:** not yet verified against the real game (spec test T10). Until it is, turn Steam Cloud **off** for Elden Ring while using `sandbox`, otherwise Steam may upload the modified save when the game closes, before `run` restores the clean one.
 
 ---
 
@@ -47,7 +49,7 @@ sequenceDiagram
 
 ## 🔑 Core Principles & Safety Architecture
 
-1. **Host/Client Separation:** `run` acts as the Session Host & Save Guard. `sandbox` acts as a fast, non-blocking client that sends attribute edits to the running game without needing to close or restart the game.
+1. **Host/Client Separation:** `run` acts as the Session Host & Save Guard and only ever **reads** game memory. `sandbox` acts as a fast, non-blocking client that sends attribute edits to the running game without needing to close or restart the game, and only while a `run` session is active (marker present, same `eldenring.exe`, no EAC).
 2. **Byte-Identical Save Restoration:** `run` takes a full SHA-256 verified save snapshot before the game starts. When the game closes, `run` restores the clean pre-session save byte-for-byte.
 3. **Zero Configuration Files:** Remembers `--save-dir` in Windows Registry (`HKCU\Software\EldenDisk`), leaving zero loose config files in tool or build directories.
 4. **Zero Disk Changes in Game Folder:** Never modifies, renames, or creates files inside the Elden Ring installation directory.
@@ -136,7 +138,7 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 | `sandbox restore` | **Recovery** | Restores clean save after a crashed or interrupted session |
 | `sandbox status` | **Status** | Checks vault marker status and snapshot count |
 | `sandbox list` / `verify` / `prune` | **Vault Tools** | Lists, verifies, or cleans up older save snapshots |
-| `build` | **Compiler** | Compiles project into standalone `./build/dist/1.6.0/.../eldendisk.exe` |
+| `build` | **Compiler** | Compiles project into standalone `./build/dist/1.6.1/.../eldendisk.exe` |
 
 ---
 
@@ -190,7 +192,7 @@ python code/tools/dev_pipeline.py --dry-run
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (145+ tests)
+# Run unit test suite (154 tests)
 python -m pytest
 
 # Run soak stability check (V-06)

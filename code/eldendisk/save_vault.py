@@ -67,9 +67,6 @@ def load_registry_save_dir() -> str | None:
             val, _ = winreg.QueryValueEx(key, "SaveDir")
             if val and Path(val).is_dir():
                 p = Path(val)
-                p_lower = str(p).lower()
-                if "pytest" in p_lower or "tmp" in p_lower or "temp" in p_lower:
-                    return None
                 if any(f.suffix.lower() == SAVE_FILE_HINT for f in p.iterdir() if f.is_file()):
                     return str(p)
     except Exception:
@@ -79,11 +76,6 @@ def load_registry_save_dir() -> str | None:
 
 def save_registry_save_dir(save_dir: str) -> None:
     if sys.platform != "win32" or not save_dir:
-        return
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return
-    p_lower = str(save_dir).lower()
-    if "pytest" in p_lower or "\\tmp\\" in p_lower or "\\temp\\" in p_lower:
         return
     try:
         import winreg

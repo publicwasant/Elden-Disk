@@ -27,7 +27,7 @@ else:
     from .profile_loader import load_effects, load_profile
 
 HERE = Path(__file__).resolve().parent.parent
-EXIT_UNSUPPORTED, EXIT_EAC = 2, 3
+EXIT_UNSUPPORTED, EXIT_EAC, EXIT_NO_SESSION = 2, 3, 5   # 4 = restore pending (sandbox.py)
 
 
 def runtime_dirs() -> tuple[Path | None, Path | None]:
@@ -113,7 +113,7 @@ class Monitor:
         self._busy_warned = False
         self._last_character: dict | None = None
         self.mode = "telemetry"
-        self.read_only = True  # False only while a sandbox session holds a write handle
+        self.read_only = True  # this process never writes; edits come from `sandbox` clients
         self.sandbox = False
 
     def _should_write(self, doc: dict, sig: dict | None = None, now_mono: float | None = None) -> bool:
@@ -160,17 +160,8 @@ class Monitor:
                 _log(f"[{state}]" + (f" {key[1]}" if key[1] else ""))
 
 
-def _writer_api():
-    """Imported lazily: plain `run`, `effects` and `animations` never load the write module."""
-    if __package__ is None or __package__ == "":
-        from eldendisk.memory_writer import MemoryWriter, WritableProcessMemory
-    else:
-        from .memory_writer import MemoryWriter, WritableProcessMemory
-    return MemoryWriter, WritableProcessMemory
-
-
-def _run_loop(args, gate=None, policy=None) -> int:
-    """State streaming loop. With a WriteGate (sandbox session only) it also applies the edit policy through a write handle."""
+def _run_loop(args, sandbox=False) -> int:
+    """State streaming loop. Always read-only; `sandbox=True` only labels a run that is inside a save-guarded session."""
     _require_windows_x64()
     if __package__ is None or __package__ == "":
         from eldendisk.memory_reader import ProcessMemory, find_pid, list_modules
@@ -220,8 +211,6 @@ def _run_loop(args, gate=None, policy=None) -> int:
         # 3. never attach with EAC loaded
         if gl.has_eac(m.name for m in mods):
             mon.anti_cheat = "ACTIVE_EAC"
-            if gate is not None:
-                gate.close("EAC loaded")
             mon.emit("EAC_ACTIVE", note="EasyAntiCheat modules loaded; not attaching")
             _log("EAC is loaded. Start the game with this tool (offline), not via Steam's normal Play.")
             return EXIT_EAC
@@ -240,21 +229,9 @@ def _run_loop(args, gate=None, policy=None) -> int:
         mon.sandbox_supported = True
         if profile.buffs_note:
             _log(f"note: {profile.buffs_note}")
-        writer = None
-        if gate is not None:  # sandbox session: open write capability
-            MemoryWriter, WritableProcessMemory = _writer_api()
-            mem = WritableProcessMemory(mon.pid)
-            mon.mode = "sandbox"
-            mon.read_only = False
-            mon.sandbox = True
-        else:
-            mem = ProcessMemory(mon.pid)
-            mon.mode = "telemetry"
-            mon.read_only = True
-            mon.sandbox = False
+        mem = ProcessMemory(mon.pid)  # the host never writes; edits are applied by `sandbox` clients
+        mon.mode, mon.sandbox = ("sandbox", True) if sandbox else ("telemetry", False)
         mon.sampler = Sampler(mem, profile, load_effects(Path(args.effects)), main_mod.base)
-        if gate is not None and policy is not None:
-            writer = MemoryWriter(mem, mon.sampler, policy, gate, hz=getattr(args, "write_hz", 4.0), log=_log)
 
         # 5. poll at 60FPS
         period = 1.0 / args.hz
@@ -269,15 +246,10 @@ def _run_loop(args, gate=None, policy=None) -> int:
             if time.monotonic() >= next_scan:
                 mods = list_modules(mon.pid)
                 if mods and gl.has_eac(m.name for m in mods):
-                    if gate is not None:
-                        gate.close("EAC detected")
                     mon.anti_cheat = "ACTIVE_EAC"
                     mon.emit("EAC_DETECTED", note="EasyAntiCheat module appeared; stopped reading")
                     return EXIT_EAC
                 next_scan = time.monotonic() + 2
-
-            if writer is not None:
-                writer.tick()  # gated + rate-limited; a no-op unless the session is RUNNING
 
             # Check window active focus -> IDLE state
             if not getattr(args, "no_idle", False) and not is_window_active(mon.pid):
@@ -298,11 +270,11 @@ def _run_loop(args, gate=None, policy=None) -> int:
     return 0
 
 
-def cmd_run(args, gate=None, policy=None) -> int:
+def cmd_run(args, sandbox=False) -> int:
     """Host launcher & save guard. Automatically handles pre-session save snapshot and post-session restore."""
     _require_windows_x64()
-    if getattr(args, "attach", False) or gate is not None:
-        return _run_loop(args, gate=gate, policy=policy)
+    if getattr(args, "attach", False) or sandbox:
+        return _run_loop(args, sandbox=sandbox)
 
     from eldendisk.game_launcher import GameFolderGuard
     from eldendisk.memory_reader import find_pid, list_process_names
@@ -311,7 +283,7 @@ def cmd_run(args, gate=None, policy=None) -> int:
 
     if find_pid(gl.GAME_EXE) is not None:
         _log("eldenring.exe is already running; attaching in read-only mode")
-        return _run_loop(args, gate=gate, policy=policy)
+        return _run_loop(args)
 
     game_dir = gl.find_game_dir(args.game_dir)
     sha = gl.sha256_file(game_dir / gl.GAME_EXE)
@@ -331,7 +303,7 @@ def cmd_run(args, gate=None, policy=None) -> int:
     hooks = Hooks(
         game_running=lambda: False,
         anticheat_running=lambda: bool(gl.anticheat_processes(list_process_names())),
-        run_game=lambda g: _run_loop(args, gate=g, policy=policy),
+        run_game=lambda: _run_loop(args, sandbox=True),
         wait_game_exit=_wait_game_exit, extra_preflight=extra,
         game_guard=GameFolderGuard(game_dir), game_dir=game_dir, exe_sha256=sha,
     )
@@ -669,24 +641,37 @@ def _sb_prune(args) -> int:
 
 
 def cmd_sandbox_edit(args) -> int:
+    """Client: apply --set / --refill once to the game of a running `run` session, then exit.
+
+    Refused unless `run` has written its restore marker (so a snapshot exists and the edits will be rolled back)."""
     _require_windows_x64()
     if __package__ is None or __package__ == "":
         from eldendisk.memory_reader import find_pid, list_modules
         from eldendisk.memory_writer import WritableProcessMemory, MemoryWriter, WriteGate, parse_policy
+        from eldendisk.save_vault import SaveVault, VaultError
     else:
         from .memory_reader import find_pid, list_modules
         from .memory_writer import WritableProcessMemory, MemoryWriter, WriteGate, parse_policy
+        from .save_vault import SaveVault, VaultError
 
     verbose = getattr(args, "verbose", False)
     log_func = _log if verbose else (lambda _m: None)
 
-    set_list = getattr(args, "set", None)
-    refill_str = getattr(args, "refill", None)
-    policy = parse_policy(set_list, refill_str)
+    policy = parse_policy(getattr(args, "set", None), getattr(args, "refill", None))
     if policy.empty:
         if verbose:
             _log("sandbox: no edits specified (use --set NAME=VALUE or --refill LIST)")
         return 0
+
+    try:
+        marker = SaveVault(Path(args.vault)).read_marker()
+    except VaultError as exc:
+        _log(f"error: {exc}")
+        return EXIT_NO_SESSION
+    if marker is None:
+        _log("error: no active sandbox session in this vault, so there is no snapshot to roll the edits back. "
+             "Start the game with `eldendisk run` first (same --vault).")
+        return EXIT_NO_SESSION
 
     pid = find_pid(gl.GAME_EXE)
     if pid is None:
@@ -704,6 +689,9 @@ def cmd_sandbox_edit(args) -> int:
         return EXIT_EAC
 
     sha = gl.sha256_file(Path(main_mod.path))
+    if marker.get("exe_sha256") and marker["exe_sha256"] != sha:
+        _log("error: the running eldenring.exe is not the one the session snapshot was taken for. Memory edits are refused.")
+        return EXIT_NO_SESSION
     profile, reason = load_profile(Path(args.offsets), sha)
     if profile is None:
         _log(f"error: no verified profile for eldenring.exe ({reason})")
@@ -713,17 +701,22 @@ def cmd_sandbox_edit(args) -> int:
     try:
         sampler = Sampler(mem, profile, load_effects(Path(args.effects)), main_mod.base)
         gate = WriteGate()
-        gate.open()
-        writer = MemoryWriter(mem, sampler, policy, gate, hz=1.0, log=log_func)
+        gate.open()  # opened only after the session, anti-cheat and profile checks above
+        writer = MemoryWriter(mem, sampler, policy, gate, log=log_func)
         results = writer.apply_once()
-        if verbose:
-            if results:
-                _log(f"[sandbox] Applied {len(results)} edit(s) on-the-fly successfully. ✓")
-            else:
-                _log("[sandbox] Memory values already match policy.")
     finally:
         mem.close()
 
+    failed = [r.name for r in results if not r.wrote]
+    if writer.skipped or failed:
+        for why in writer.skipped:
+            _log(f"[sandbox] not applied: {why}")
+        if failed:
+            _log(f"[sandbox] write failed or did not stick: {', '.join(failed)}")
+        return 1
+    if verbose:
+        _log(f"[sandbox] Applied {len(results)} edit(s) on-the-fly successfully. ✓" if results
+             else "[sandbox] Memory values already match policy.")
     return 0
 
 
@@ -789,33 +782,25 @@ def main(argv=None) -> int:
     b.add_argument("-i", "--icon", help="path to icon file (.ico)")
     b.set_defaults(fn=cmd_build)
 
-    sb = sub.add_parser("sandbox", help="on-the-fly memory edits and save-protected session management")
-    sb.add_argument("--vault", default=DEFAULT_VAULT, help="snapshot vault directory (default: %(default)s)")
-    sb.add_argument("--save-dir", help="live save folder (default: auto-detected / remembered in config.json)")
-    sb.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
+    sb = sub.add_parser("sandbox", help="edit values in the running `run` session, or manage the save vault")
+    sb.add_argument("--vault", default=DEFAULT_VAULT, help="snapshot vault directory of the session (default: %(default)s)")
     sb.add_argument("--set", action="append", metavar="NAME=VALUE",
-                    help="hold/set a value (level, runes, vigor, mind, endurance, strength, dexterity, intelligence, faith, arcane, hp, fp, stamina); repeatable")
-    sb.add_argument("--refill", metavar="LIST", help="hold current hp,fp,stamina at maximum, e.g. hp,fp,stamina")
-    sb.add_argument("--write-hz", type=float, default=4.0, help="edit applications per second, 1-30 (default: 4)")
-    sb.add_argument("--archive-contaminated", action="store_true", help="keep modified save in vault before restoring")
-    sb.add_argument("--out", default=out_default, help="directory for disk-state.json")
+                    help="set a value once (repeatable): level, runes, 8 attributes, hp, fp, stamina")
+    sb.add_argument("--refill", metavar="LIST", help="refill current hp,fp,stamina to maximum once, e.g. hp,fp,stamina")
     sb.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
     sb.add_argument("--effects", default=effects_default, help="chr_state_ids.json (default: %(default)s)")
-    sb.add_argument("--hz", type=float, default=60.0, help="polls per second, 1-120 (default: 60)")
-    sb.add_argument("--timer-interval", type=float, default=0.5, metavar="SEC", help="see `run --timer-interval`")
-    sb.add_argument("--no-idle", action="store_true", help="keep reading while the game window is unfocused")
-    sb.add_argument("-v", "--verbose", action="store_true", help="print state changes and diagnostics")
+    sb.add_argument("-v", "--verbose", action="store_true", help="print confirmations and diagnostics")
     sb.set_defaults(fn=cmd_sandbox)
 
     sbs = sb.add_subparsers(dest="sandbox_cmd", required=False)
 
-    def _vault_opt(sp):
-        sp.add_argument("--vault", default=DEFAULT_VAULT, help="snapshot vault directory (default: %(default)s)")
+    def _vault_opt(sp):  # SUPPRESS: a `--vault` given before the subcommand must survive
+        sp.add_argument("--vault", default=argparse.SUPPRESS, help="snapshot vault directory (default: as for `sandbox`)")
 
     s = sbs.add_parser("restore", help="restore the save after an interrupted session (safe to repeat)")
     _vault_opt(s)
     s.add_argument("--snapshot", help="restore this snapshot by name instead (the current save is kept as <ts>-pre-restore)")
-    s.add_argument("--save-dir", help="live save folder (default: auto-detect)")
+    s.add_argument("--save-dir", help="live save folder (default: auto-detect / remembered in the Windows Registry)")
     s.add_argument("--archive-contaminated", action="store_true", help="keep the modified save in the vault before restoring")
 
     s = sbs.add_parser("status", help="marker, last snapshot, vault size")
@@ -835,8 +820,6 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "run" and not 1 <= args.hz <= 120:
         ap.error("--hz must be between 1 and 120")
-        if not 1 <= args.write_hz <= 30:
-            ap.error("--write-hz must be between 1 and 30")
     try:
         return args.fn(args)
     except (OSError, ValueError, RuntimeError) as exc:

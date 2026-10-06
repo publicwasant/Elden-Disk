@@ -1,4 +1,4 @@
-"""Sandbox session: the lifecycle of spec 1.6.0 section 8. Orchestration only; it never touches files or memory itself.
+"""Sandbox session: the lifecycle of spec 1.6.1 section 8. Orchestration only; it never touches files or memory itself.
 
   IDLE -> PREFLIGHT -> SNAPSHOTTING -> RUNNING -> RESTORING -> VERIFYING -> CLEANUP -> IDLE
                                           \\____ any failure after the marker is written -> RESTORE_PENDING (marker stays)
@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Callable
 
 from .game_launcher import GameFolderGuard, cleanup_recorded
-from .memory_writer import WriteGate
 from .save_vault import SaveVault, SessionLog, VaultError
 
 EXIT_RESTORE_PENDING = 4
@@ -35,7 +34,7 @@ class State(str, Enum):
 class Hooks:
     game_running: Callable[[], bool]
     anticheat_running: Callable[[], bool]
-    run_game: Callable[[WriteGate], int]          # blocks through the RUNNING phase, returns an exit code
+    run_game: Callable[[], int]                   # blocks through the RUNNING phase, returns an exit code
     wait_game_exit: Callable[[], bool]            # blocks until no game process exists; True when gone
     extra_preflight: Callable[[], list[str]] = lambda: []
     game_guard: GameFolderGuard | None = None
@@ -49,7 +48,6 @@ class SandboxSession:
         self.vault, self.live, self.hooks = vault, Path(live_dir), hooks
         self.archive = archive_contaminated
         self.log = log or SessionLog()
-        self.gate = WriteGate()
         self.state = State.IDLE
         self.history: list[State] = [State.IDLE]
 
@@ -102,19 +100,16 @@ class SandboxSession:
         if guard is not None:
             guard._on_change = self.vault.set_game_files
 
-        self._to(State.RUNNING)
-        self.gate.open()
+        self._to(State.RUNNING)  # from here `sandbox` clients may edit; the marker is what authorises them
         code = 1
         try:
-            code = self.hooks.run_game(self.gate)
+            code = self.hooks.run_game()
         except KeyboardInterrupt:
             self.log.write("interrupted; waiting for the game to exit before restoring")
             code = 130
         except Exception as exc:  # restore must still run
             self.log.write(f"error while running: {exc!r} ✖️")
             code = 1
-        finally:
-            self.gate.close("session ended")
         return self._finish(snap, code)
 
     def _pending(self, why: str) -> int:
