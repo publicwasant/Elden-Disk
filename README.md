@@ -116,7 +116,7 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 
 Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `animations` (now `read --live-effects` / `--live-animations`), JSON output of `run` (now `read --export`), the verbs `read effects|animations|export`, `write set|refill` (now flags) and `--once` (a read without `--live` is already one shot). Values are addressed by name only; there are no memory addresses or scans.
 
-**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.6.2](docs/specs/elden-disk-spec-v1.6.2.md) · [changes 1.6.2](docs/wahy/changes-version-1.6.2.md)
+**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.6.2](docs/specs/elden-disk-spec-v1.6.2.md) · [changes 1.6.2](docs/wahy/changes-version-1.6.2.md) · [manual test plan](docs/manual-test-plan-1.6.2.md)
 
 ---
 
