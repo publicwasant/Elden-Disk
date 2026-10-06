@@ -1,5 +1,4 @@
 import json
-import re
 import struct
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -7,14 +6,15 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from eldendisk import memory_reader
-from eldendisk.disk import Sampler, build_document
-from eldendisk.json_logger import JsonLogger
-from eldendisk.profile_loader import (EffectConfig, EntryLayout, Effects, Profile,
-                                       SpEffectLayout, VitalsLayout, load_effects, load_profile)
+import eldendisk
+from eldendisk.game import memory as memory_reader
+from eldendisk.game.profile import (EffectConfig, EntryLayout, Effects, Profile,
+                                    SpEffectLayout, VitalsLayout, load_effects, load_profile)
+from eldendisk.reader.export import JsonLogger, build_document
+from eldendisk.reader.sampler import Sampler
 
-PKG = Path(memory_reader.__file__).parent
-SCHEMA = json.loads((PKG / "disk.schema.json").read_text())
+PKG = Path(eldendisk.__file__).parent
+SCHEMA = json.loads((PKG / "reader" / "disk.schema.json").read_text())
 
 BASE, WCM, PLAYER, GD, SP = 0x140000000, 0x200000000, 0x210000000, 0x220000000, 0x230000000
 MODULES, DATA_MOD = 0x250000000, 0x260000000
@@ -214,7 +214,7 @@ def test_rune_delta_and_baseline():
 
 
 def test_grace_reset_baseline():
-    from eldendisk.profile_loader import AnimLayout, AtGraceConfig
+    from eldendisk.game.profile import AnimLayout, AtGraceConfig
     m = full_world()
     ANIM_MOD, ANIM_SUB = 0x250000000, 0x270000000
     m.u64(PLAYER + 0x190, ANIM_MOD)
@@ -389,23 +389,21 @@ def test_effects_loader(tmp_path):
 
 
 # ---- safety ----
-def test_write_capability_is_confined_to_the_sandbox_path():
-    """memory_reader stays read-only; WriteProcessMemory exists in one module (memory_writer.py)."""
+def test_write_capability_is_confined_to_the_writer_package():
+    """game/memory.py stays read-only; WriteProcessMemory / PROCESS_VM_WRITE exist in one module (writer/writer.py)."""
     assert memory_reader.ACCESS_MASK == 0x1010
     never = ["VirtualAllocEx", "CreateRemoteThread", "VirtualProtectEx", "NtWriteVirtualMemory", "SetThreadContext"]
-    for f in PKG.glob("*.py"):
+    writer_py = PKG / "writer" / "writer.py"
+    for f in PKG.rglob("*.py"):
         text = f.read_text(encoding="utf-8")
+        rel = f.relative_to(PKG).as_posix()
         for name in never:
-            assert name not in text, f"{name} found in {f.name}"
-        if f.name != "memory_writer.py":
-            assert "WriteProcessMemory" not in text, f"WriteProcessMemory found in {f.name}"
-        imports_writer = re.search(r"^\s*(from\s+\S*memory_writer\s+import|from\s+\.\s+import\s+memory_writer|import\s+\S*memory_writer)",
-                                   text, re.M)
-        if f.name not in ("memory_writer.py", "sandbox.py", "__main__.py"):
-            assert not imports_writer, f"{f.name} must not import the write module"
-    main_src = (PKG / "__main__.py").read_text(encoding="utf-8")
-    assert not re.search(r"^(from|import)\s.*memory_writer", main_src, re.M), "write module must be imported lazily (indented, inside cmd_sandbox_edit)"
-    assert "WritableProcessMemory" not in main_src.split("def cmd_sandbox_edit")[0], "only the sandbox client may open a write handle"
+            assert name not in text, f"{name} found in {rel}"
+        if f != writer_py:
+            assert "WriteProcessMemory" not in text, f"WriteProcessMemory found in {rel}"
+            assert "PROCESS_VM_WRITE" not in text, f"PROCESS_VM_WRITE found in {rel}"
+        if rel not in ("writer/writer.py", "commands/write.py"):
+            assert "WritableProcessMemory" not in text, f"{rel} must not use the write handle"
 
 
 def test_logger_refuses_game_dir_and_writes_atomically(tmp_path):
@@ -427,25 +425,3 @@ def test_raw_effects_lists_everything_unclassified():
     assert entries is None
     entries, err = Sampler(m, make_profile(sp=False), effects(), BASE).raw_effects()
     assert entries is None and "sp_effect" in err
-
-
-def test_monitor_should_write_state_differential(tmp_path):
-    from eldendisk.__main__ import Monitor
-    lg = JsonLogger(tmp_path / "out")
-    mon = Monitor(None, lg)
-    doc1 = {"systems": {"status": {"tool_state": "CONNECTED"}}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
-    doc2 = {"systems": {"status": {"tool_state": "CONNECTED"}}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
-    doc3 = {"systems": {"status": {"tool_state": "IDLE"}}, "character": {"effects": {"100": {"kind": "TIMED"}}}}
-
-    assert mon._should_write(doc1) is True
-    mon._last_written_doc = doc1
-
-    # Identical document (even with TIMED effect) should NOT write
-    assert mon._should_write(doc2) is False
-
-    # State transition to IDLE should write once
-    assert mon._should_write(doc3) is True
-    mon._last_written_doc = doc3
-
-    # Consecutive IDLE ticks with identical document should NOT write
-    assert mon._should_write(doc3) is False

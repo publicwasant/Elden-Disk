@@ -1,18 +1,17 @@
-"""Gated memory writes for the `sandbox` client (spec 1.6.1, MW-1..MW-6 and FR-14).
+"""Gated memory writes for `eldendisk write` (spec 1.6.2, MW-1..MW-6 and FR-14).
 
 This is the ONLY module that may call WriteProcessMemory.
 
 Rules enforced here:
-  * the write handle exists only for one `sandbox` edit (WritableProcessMemory is created and closed by that
-    command, and only after it found the restore marker of a running session; `run`, `effects` and
-    `animations` keep the read-only handle)                                                            MW-1
-  * every write re-resolves the pointer chain through the Sampler; no address is ever cached         MW-2
-  * a null/invalid pointer or unreadable field skips that write, it never raises                      MW-3
+  * the write handle exists only for one `write` command (WritableProcessMemory is created and closed by that
+    command, and only after the session record authorised it; the host, `read` and `vault` never import this)     MW-1
+  * every write re-resolves the pointer chain through the Layout; no address is ever cached                       MW-2
+  * a null/invalid pointer or unreadable field skips that write, it never raises                                  MW-3
   * only stored current values are written (level, runes, attributes, current HP/FP/stamina);
-    derived values (maximums) are left to the game                                                    MW-4
-  * writes run at a bounded rate and every value is clamped to a sane range                           MW-5
-  * offsets come from the profile that matched the exe hash (the Sampler's profile)                   MW-6
-  * nothing is written unless the WriteGate is open (session marker found, no anti-cheat, known exe)  FR-14
+    derived values (maximums) are left to the game                                                               MW-4
+  * writes run at a bounded rate and every value is clamped to a sane range                                       MW-5
+  * offsets come from the profile that matched the exe hash (the Layout's profile)                                MW-6
+  * nothing is written unless the WriteGate is open (session authorised, no anti-cheat, known exe)               FR-14
 """
 from __future__ import annotations
 
@@ -22,30 +21,31 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
-from . import memory_reader as _mr
-from .disk import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Sampler, parse_vitals_block
-from .memory_reader import ProcessMemory, is_user_ptr, read_u32
+from ..game import _win
+from ..game.layout import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout, parse_vitals_block
+from ..game.memory import ACCESS_MASK, ProcessMemory, is_user_ptr
+from ..game.values import write_targets
 
 PROCESS_VM_WRITE = 0x0020
 PROCESS_VM_OPERATION = 0x0008
-WRITE_ACCESS_MASK = _mr.ACCESS_MASK | PROCESS_VM_WRITE | PROCESS_VM_OPERATION
+WRITE_ACCESS_MASK = ACCESS_MASK | PROCESS_VM_WRITE | PROCESS_VM_OPERATION
 
 # vitals block (see disk.parse_vitals_block): byte offset of the CURRENT value, index of its (capped) maximum
 VITAL_FIELDS = {"hp": (0, 1), "fp": (16, 5), "stamina": (28, 8)}
 EDIT_NAMES = ("level", "runes", *ATTR_NAMES, *VITAL_FIELDS)
 WRITE_HZ_RANGE = (1.0, 30.0)
 
-if _mr.IS_WINDOWS:
+if _win.IS_WINDOWS:
     from ctypes import wintypes
 
-    _mr._k32.WriteProcessMemory.argtypes = [
+    _win.k32.WriteProcessMemory.argtypes = [
         wintypes.HANDLE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t),
     ]
-    _mr._k32.WriteProcessMemory.restype = wintypes.BOOL
+    _win.k32.WriteProcessMemory.restype = wintypes.BOOL
 
 
 class WritableProcessMemory(ProcessMemory):
-    """Read + write handle. Create it when a session reaches RUNNING, close it when the session ends."""
+    """Read + write handle. Created by `write` after the session check, closed when the command ends."""
 
     def __init__(self, pid: int):
         super().__init__(pid, access=WRITE_ACCESS_MASK)
@@ -56,12 +56,12 @@ class WritableProcessMemory(ProcessMemory):
             return False
         buf = ctypes.create_string_buffer(bytes(data), len(data))
         n = ctypes.c_size_t(0)
-        ok = _mr._k32.WriteProcessMemory(self._h, ctypes.c_void_p(addr), buf, len(data), ctypes.byref(n))
+        ok = _win.k32.WriteProcessMemory(self._h, ctypes.c_void_p(addr), buf, len(data), ctypes.byref(n))
         return bool(ok) and n.value == len(data)
 
 
 class WriteGate:
-    """Writes are possible only while the gate is open. The session opens it in RUNNING and closes it on exit."""
+    """Writes are possible only while the gate is open. `write` opens it after the session check."""
 
     def __init__(self) -> None:
         self._open = False
@@ -89,26 +89,34 @@ class EditPolicy:
 
 
 def parse_policy(set_args: list[str] | None, refill: str | None) -> EditPolicy:
-    """`--set name=value` (repeatable) and `--refill hp,fp,stamina`; ValueError on anything unknown."""
+    """`--set NAME=VALUE...` and `--refill hp,fp,stamina`; ValueError on anything unknown.
+
+    NAME is a name of `game.values` (full or short: `hp` / `hit_point`, `attrs.faith`), or a pattern naming a group
+    (`attributes.*`).
+    """
     sets: dict[str, int] = {}
     for item in set_args or []:
         name, sep, raw = item.partition("=")
-        name = name.strip().lower()
-        if not sep or name not in EDIT_NAMES:
-            raise ValueError(f"--set {item!r}: expected NAME=VALUE with NAME one of {', '.join(EDIT_NAMES)}")
-        if name in sets:
-            raise ValueError(f"--set {name} given twice")
+        if not sep or not name.strip():
+            raise ValueError(f"--set {item!r}: expected NAME=VALUE")
         try:
             value = int(raw.strip().replace("_", ""))
         except ValueError:
             raise ValueError(f"--set {item!r}: value must be an integer") from None
         if value < 0:
             raise ValueError(f"--set {item!r}: value must not be negative")
-        sets[name] = value
-    names = tuple(n.strip().lower() for n in (refill or "").split(",") if n.strip())
+        for key in write_targets(name):
+            if key in sets:
+                raise ValueError(f"{key} is set twice")
+            sets[key] = value
+    names: list[str] = []
+    for n in (refill or "").split(","):
+        if n.strip():
+            keys = write_targets(n)
+            if any(k not in VITAL_FIELDS for k in keys):
+                raise ValueError(f"--refill {n.strip()!r}: choose from hp, fp, stamina")
+            names += keys
     for n in names:
-        if n not in VITAL_FIELDS:
-            raise ValueError(f"--refill {n!r}: choose from {', '.join(VITAL_FIELDS)}")
         if n in sets:
             raise ValueError(f"{n} is in both --set and --refill")
     return EditPolicy(tuple(sets.items()), tuple(dict.fromkeys(names)))
@@ -135,12 +143,12 @@ class WriteResult:
 
 
 class MemoryWriter:
-    def __init__(self, mem, sampler: Sampler, policy: EditPolicy, gate: WriteGate, *,
+    def __init__(self, mem, layout: Layout, policy: EditPolicy, gate: WriteGate, *,
                  hz: float = 4.0, clock: Callable[[], float] = time.monotonic,
                  log: Callable[[str], None] | None = None):
         if not WRITE_HZ_RANGE[0] <= hz <= WRITE_HZ_RANGE[1]:
             raise ValueError(f"write rate must be between {WRITE_HZ_RANGE[0]:g} and {WRITE_HZ_RANGE[1]:g} Hz")
-        self.mem, self.sampler, self.policy, self.gate = mem, sampler, policy, gate
+        self.mem, self.layout, self.policy, self.gate = mem, layout, policy, gate
         self._period, self._clock, self._log = 1.0 / hz, clock, log or (lambda _m: None)
         self._next = 0.0
         self._last_status: dict[str, str] = {}
@@ -154,7 +162,7 @@ class MemoryWriter:
     def _report(self, name: str, status: str, msg: str) -> None:
         if self._last_status.get(name) != status:  # log transitions only, not every tick
             self._last_status[name] = status
-            self._log(f"[sandbox] {name}: {msg}")
+            self._log(f"[write] {name}: {msg}")
 
     def _put(self, name: str, addr: int, raw: bytes, current: bytes, target: int, fmt: str) -> WriteResult | None:
         if raw == current:
@@ -185,11 +193,11 @@ class MemoryWriter:
 
         stored = [(n, v) for n, v in self.policy.sets if not (n in VITAL_FIELDS)]
         if stored:
-            gd, why = self.sampler.locate_game_data()
+            gd, why = self.layout.locate_game_data()
             if gd is None:
                 self._skip("game_data", f"skip:{why}", f"skipped, {why}")
             else:
-                p = self.sampler.profile
+                p = self.layout.profile
                 for name, value in stored:
                     target = _clamp(name, value)
                     if target != value:
@@ -211,7 +219,7 @@ class MemoryWriter:
         vital_targets = {n: v for n, v in self.policy.sets if n in VITAL_FIELDS}
         vital_targets.update({n: None for n in self.policy.refill})  # None = hold at maximum
         if vital_targets:
-            base, why = self.sampler.locate_vitals()
+            base, why = self.layout.locate_vitals()
             raw = self.mem.read(base, 40) if base is not None else None
             if raw is None:
                 self._skip("vitals", f"skip:{why}", f"skipped, {why or 'vitals unreadable'}")

@@ -3,8 +3,8 @@ import struct
 
 import pytest
 
-from eldendisk.disk import Sampler
-from eldendisk.memory_writer import (EDIT_NAMES, EditPolicy, MemoryWriter, WriteGate, WritableProcessMemory,
+from eldendisk.reader.sampler import Sampler
+from eldendisk.writer.writer import (EDIT_NAMES, EditPolicy, MemoryWriter, WriteGate, WritableProcessMemory,
                                      parse_policy)
 from tests.test_disk import BASE, DATA_MOD, GD, PLAYER, FakeMem, effects, full_world, make_profile
 
@@ -77,7 +77,7 @@ def test_empty_policy_never_writes():
 
 
 def test_writable_handle_is_a_distinct_type():
-    from eldendisk.memory_reader import ProcessMemory
+    from eldendisk.game.memory import ProcessMemory
     assert issubclass(WritableProcessMemory, ProcessMemory)
     assert not hasattr(ProcessMemory, "write")
 

@@ -1,4 +1,4 @@
-"""Loads offsets.json (per exe version) and effects.json (SpEffect ID tables)."""
+"""Loads offsets.json (per exe version) and chr_state_ids.json (SpEffect / animation ID tables)."""
 from __future__ import annotations
 
 import json

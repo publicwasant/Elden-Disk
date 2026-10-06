@@ -1,9 +1,9 @@
-"""SaveVault: snapshot / marker / restore / verify of the live save folder (spec 1.6.0, sections 6-11).
+"""SaveVault: snapshot / restore / verify of the live save folder (spec 1.6.2, sections 3-4).
 
 Pure filesystem. It knows nothing about the game process and is the only component that touches save files.
 The one guarantee: after a verified restore the live save folder is byte-identical to the snapshot taken before.
 
-Ordering (NFR-3): snapshot complete + hash-verified -> marker written -> ... -> verified restore -> marker removed.
+Ordering: snapshot complete + hash-verified -> session record written -> ... -> verified restore -> record removed.
 """
 from __future__ import annotations
 
@@ -13,26 +13,24 @@ import json
 import os
 import re
 import shutil
-import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-MARKER_NAME = "PENDING_RESTORE.json"
+from . import session as sess
+from .errors import VaultError
+from .saves import check_live_dir
+from .session import SessionRecord, SessionState, atomic_write_json
+
 MANIFEST_NAME = "manifest.json"
 SAVE_SUBDIR = "save"
 CONTAMINATED_SUBDIR = "contaminated"
 TMP_SUFFIX = ".eldendisk-tmp"
-SPACE_FACTOR = 3                      # FR-1: free space >= 3x the save folder
-RESTORE_TIMEOUT_S = 30.0              # FR-7: bounded retry on file locks
-SNAPSHOT_NAME = re.compile(r"^\d{8}-\d{6}(-\d+)?(-pre-restore)?$")
-SAVE_FILE_HINT = ".sl2"
-
-
-class VaultError(RuntimeError):
-    pass
+SPACE_FACTOR = 3                      # free space >= 3x the save folder
+RESTORE_TIMEOUT_S = 30.0              # bounded retry on file locks
+SNAPSHOT_NAME = re.compile(r"^\d{8}-\d{6}(-\d+)?(-pre-restore|-kept)?$")
 
 
 def sha256_of(path: Path) -> str:
@@ -55,107 +53,8 @@ def scan(root: Path) -> dict[str, dict]:
     return out
 
 
-REG_KEY_PATH = r"Software\EldenDisk"
-
-
-def load_registry_save_dir() -> str | None:
-    if sys.platform != "win32":
-        return None
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_KEY_PATH, 0, winreg.KEY_READ) as key:
-            val, _ = winreg.QueryValueEx(key, "SaveDir")
-            if val and Path(val).is_dir():
-                p = Path(val)
-                if any(f.suffix.lower() == SAVE_FILE_HINT for f in p.iterdir() if f.is_file()):
-                    return str(p)
-    except Exception:
-        return None
-    return None
-
-
-def save_registry_save_dir(save_dir: str) -> None:
-    if sys.platform != "win32" or not save_dir:
-        return
-    try:
-        import winreg
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_KEY_PATH) as key:
-            winreg.SetValueEx(key, "SaveDir", 0, winreg.REG_SZ, str(save_dir))
-    except Exception:
-        pass
-
-
 def dir_size(root: Path) -> int:
     return sum(Path(dp, f).stat().st_size for dp, _d, fs in os.walk(root) for f in fs)
-
-
-def find_save_dir(appdata: Path | None = None, base_dir: Path | None = None) -> Path:
-    """%APPDATA%\\EldenRing\\<SteamID64>. Exactly one candidate or it refuses to guess (A5, safety rule 5)."""
-    if appdata is None:
-        reg_dir = load_registry_save_dir()
-        if reg_dir:
-            p = Path(reg_dir)
-            if p.is_dir() and any(f.suffix.lower() == SAVE_FILE_HINT for f in p.iterdir() if f.is_file()):
-                return p
-
-    base = Path(appdata) if appdata else Path(os.environ.get("APPDATA", "")) / "EldenRing"
-    if not base.is_dir():
-        raise VaultError(f"save root not found: {base} (use --save-dir)")
-    cands = [d for d in base.iterdir() if d.is_dir() and d.name.isdigit()
-             and any(f.suffix.lower() == SAVE_FILE_HINT for f in d.iterdir() if f.is_file())]
-    if len(cands) != 1:
-        names = ", ".join(d.name for d in cands) or "none"
-        raise VaultError(f"expected exactly one save folder under {base}, found {len(cands)} ({names}); use --save-dir")
-
-    found = cands[0]
-    if appdata is None:
-        save_registry_save_dir(str(found))
-    return found
-
-
-def check_live_dir(live_dir: Path) -> None:
-    """Refuse folders that cannot be a save folder (restore deletes unknown files inside it)."""
-    p = Path(live_dir).resolve()
-    if not p.is_dir():
-        raise VaultError(f"save folder does not exist: {p}")
-    if p == Path(p.anchor) or p == Path.home().resolve() or len(p.parts) < 3:
-        raise VaultError(f"refusing to treat {p} as a save folder")
-    if not any(f.is_file() for f in p.rglob("*")):
-        raise VaultError(f"save folder has no files: {p}")
-
-
-def _atomic_write_json(path: Path, data: dict) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
-
-
-class SessionLog:
-    """NFR-4: timestamped log kept in the vault. Lines are buffered until the snapshot directory exists."""
-
-    def __init__(self, echo: Callable[[str], None] | None = None):
-        self.path: Path | None = None
-        self._buffer: list[str] = []
-        self._echo = echo
-
-    def attach(self, path: Path) -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._flush()
-
-    def write(self, msg: str) -> None:
-        line = f"{datetime.now().astimezone().isoformat(timespec='seconds')} {msg}"
-        self._buffer.append(line)
-        if self.path is not None:
-            self._flush()
-        if self._echo:
-            self._echo(msg)
-
-    def _flush(self) -> None:
-        if self.path is not None and self._buffer:
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write("\n".join(self._buffer) + "\n")
-            self._buffer = []
 
 
 @dataclass
@@ -174,54 +73,42 @@ class SaveVault:
         self.root = Path(root)
         self._timeout, self._sleep, self._clock = timeout, sleep, clock
 
-    @property
-    def marker_path(self) -> Path:
-        return self.root / MARKER_NAME
+    # ---------------- session record (see session.py) ----------------
+    def read_session(self) -> SessionRecord | None:
+        return sess.load(self.root)
 
-    # ---------------- marker ----------------
-    def read_marker(self) -> dict | None:
-        if not self.marker_path.exists():
-            return None
-        try:
-            m = json.loads(self.marker_path.read_text(encoding="utf-8"))
-            if m.get("version") != 1 or not all(k in m for k in ("snapshot_dir", "live_save_dir", "hashes")):
-                raise ValueError("missing keys")
-            return m
-        except (OSError, ValueError) as exc:
-            raise VaultError(f"{self.marker_path} exists but is unreadable ({exc}); the live save cannot be trusted. "
-                             f"Do not delete it; restore from the newest snapshot in {self.root}") from exc
+    def write_session(self, record: SessionRecord) -> None:
+        sess.store(self.root, record)
 
-    def write_marker(self, snap: Snapshot, live_dir: Path, *, exe_sha256: str | None,
-                     game_dir: Path | None = None, game_files: list[str] | None = None) -> None:
-        _atomic_write_json(self.marker_path, {
-            "version": 1,
-            "created": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "snapshot_dir": str(snap.dir),
-            "live_save_dir": str(live_dir),
-            "hashes": {rel: info["sha256"] for rel, info in snap.files.items()},
-            "game_dir": str(game_dir) if game_dir else None,
-            "game_folder_files_created": list(game_files or []),
-            "exe_sha256": exe_sha256,
-        })
+    def update_session(self, **changes) -> SessionRecord | None:
+        return sess.update(self.root, **changes)
 
-    def set_game_files(self, files: list[str]) -> None:
-        m = self.read_marker()
-        if m is not None:
-            m["game_folder_files_created"] = list(files)
-            _atomic_write_json(self.marker_path, m)
+    def clear_session(self) -> None:
+        sess.clear(self.root)
 
-    def clear_marker(self) -> None:
-        self.marker_path.unlink(missing_ok=True)
+    def new_record(self, snap: Snapshot, live_dir: Path, *, exe_sha256: str | None, game_dir: Path | None = None,
+                   host_pid: int | None = None, host_started: int | None = None) -> SessionRecord:
+        """The READY record of a snapshot that has just been verified."""
+        return SessionRecord(
+            state=SessionState.READY, snapshot_dir=str(snap.dir), live_save_dir=str(live_dir),
+            hashes={rel: info["sha256"] for rel, info in snap.files.items()},
+            created=datetime.now().astimezone().isoformat(timespec="seconds"),
+            snapshot_verified=True, exe_sha256=exe_sha256, game_dir=str(game_dir) if game_dir else None,
+            host_pid=host_pid, host_started=host_started)
 
     # ---------------- preflight (FR-1, vault part) ----------------
+    def restore_hint(self) -> str:
+        """The exact command that finishes an owed restore of THIS vault (the path matters when it is not the default)."""
+        return f'eldendisk vault restore --vault "{self.root}"'
+
     def preflight(self, live_dir: Path) -> list[str]:
         problems: list[str] = []
         try:
-            marker = self.read_marker()
+            record = self.read_session()
         except VaultError as exc:
             return [str(exc)]
-        if marker is not None:
-            problems.append(f"an unresolved session exists ({self.marker_path}); run `sandbox restore` first")
+        if record is not None:
+            problems.append(f"an unresolved session exists ({sess.SESSION_NAME} in {self.root}); run `{self.restore_hint()}` first")
         live, root = Path(live_dir).resolve(), self.root.resolve()
         if root == live or live in root.parents or root in live.parents:
             problems.append("the vault and the save folder must not contain each other")
@@ -262,11 +149,11 @@ class SaveVault:
             after = scan(live)
             if {k: v["sha256"] for k, v in after.items()} != {k: v["sha256"] for k, v in src.items()}:
                 raise VaultError("the live save changed while it was being copied")
-            _atomic_write_json(snap_dir / MANIFEST_NAME, {
+            atomic_write_json(snap_dir / MANIFEST_NAME, {
                 "version": 1, "created": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "live_save_dir": str(live), "files": src})
         except BaseException as exc:
-            shutil.rmtree(snap_dir, ignore_errors=True)  # nothing is kept, no marker exists yet
+            shutil.rmtree(snap_dir, ignore_errors=True)  # nothing is kept, no session record exists yet
             if isinstance(exc, (VaultError, KeyboardInterrupt)):
                 raise
             raise VaultError(f"snapshot failed: {exc}") from exc
@@ -314,7 +201,7 @@ class SaveVault:
     def prune(self, keep: int) -> list[str]:
         if keep < 1:
             raise VaultError("--keep must be at least 1")
-        if self.read_marker() is not None:
+        if self.read_session() is not None:
             raise VaultError("refusing to prune while an unresolved session exists (safety rule 3)")
         names = [s["name"] for s in self.list_snapshots(verify=False)]
         gone = names[:-keep] if len(names) > keep else []
@@ -325,12 +212,12 @@ class SaveVault:
     def status(self) -> dict:
         snaps = self.list_snapshots(verify=False)
         last = snaps[-1] if snaps else None
-        marker, marker_error = None, None
+        record, record_error = None, None
         try:
-            marker = self.read_marker()
+            record = self.read_session()
         except VaultError as exc:
-            marker_error = str(exc)
-        return {"marker": marker, "marker_error": marker_error, "snapshots": len(snaps),
+            record_error = str(exc)
+        return {"session": record, "session_error": record_error, "snapshots": len(snaps),
                 "last": last["name"] if last else None,
                 "last_problems": self.verify_snapshot(last["path"]) if last else [],
                 "vault_bytes": dir_size(self.root) if self.root.is_dir() else 0}

@@ -1,150 +1,128 @@
-# EldenDisk
+# Elden-Disk
 
-> **Offline Save Sandbox & Memory Tool for Elden Ring: Host/Client Architecture**  
-> **Version:** `1.6.1` | **Spec Version:** `1.6.1` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable or Python 3.11+
+> **Elden-Disk Memory I/O (Read / Write) Tools: offline save guard + live memory reader and writer for Elden Ring 1.17.1**  
+> **Version:** `1.6.2` | **Spec Version:** `1.6.2` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable (`eldendisk.exe`) or Python 3.11+
 
-EldenDisk is a specialized **Save Sandbox & Memory Tool** designed for Elden Ring (v1.17.1). It streams 60Hz real-time character state to `output/disk-state.json` and enables on-the-fly memory editing under a strict **Parallel Dimension Philosophy**:
+Four parts with one job each:
 
-- **Host Session & Save Guard (`run`):** Takes an automatic SHA-256 verified save snapshot into `backup/vault`, launches `eldenring.exe` **offline**, streams live game state to JSON, and **restores the clean save byte-for-byte when the game closes**.
-- **On-The-Fly Memory Writer Client (`sandbox`):** Attaches dynamically to the active offline session, applies attribute edits (`--set`, `--refill`) once, instantly, and exits immediately (`[end]`). It refuses to write unless the `run` session's restore marker exists in the same vault (exit code `5`), so every edit is always covered by a snapshot.
-- **Zero Configuration Files:** Remembers `--save-dir` in Windows Registry (`HKCU\Software\EldenDisk`) leaving zero config files in tool or build directories.
-
----
+- **Host (`run`):** takes a SHA-256 verified snapshot of your save, launches `eldenring.exe` **offline**, waits, and restores the save **byte for byte** when the game exits. It never opens the game's memory and writes no JSON.
+- **Vault (`vault`):** snapshots, the session record, restore and recovery. It is the part that must not fail: a restore that could not finish leaves a record, and the next `run` refuses until `vault restore` has been run.
+- **Reader (`read`):** prints every value once and exits; `--query NAME` one value or group; `--export` writes `disk-state.json` once; `--live` keeps going; `--live-effects` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. Values are addressed by **name** only. Read-only; works with or without `run`.
+- **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...). It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
+- **Zero configuration files:** `--save-dir` and `--vault` are remembered in the Windows Registry (`HKCU\Software\EldenDisk`). The vault lives in `%LOCALAPPDATA%\EldenDisk\vault` by default, never next to the exe, so a rebuild cannot delete it.
 
 > [!IMPORTANT]
-> **🌌 Parallel Dimension Guarantee:**  
-> All memory edits made via `sandbox` exist **only during the active offline session (a temporary parallel dimension)**. When the game closes, `run` restores your live save folder byte-for-byte back to the exact pre-session snapshot taken before the game opened. Nothing from your sandbox modifications ever pollutes your real character save or account.
+> **Parallel dimension:** edits made through `write` exist only during the session. When the game closes, `run` restores the save taken before launch and verifies it.
 >
-> **Steam Cloud:** not yet verified against the real game (spec test T10). Until it is, turn Steam Cloud **off** for Elden Ring while using `sandbox`, otherwise Steam may upload the modified save when the game closes, before `run` restores the clean one.
+> **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
+>
+> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (456 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
 
 ---
 
-## 🏗️ Host / Client Architecture & Lifecycle
+## Three terminals
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant T1 as Terminal 1 (Host: run)
-    participant Game as Elden Ring (eldenring.exe)
-    participant Vault as Save Vault
-    participant T2 as Terminal 2 (Client: sandbox)
+    participant T0 as Terminal 0 (run)
+    participant V as Vault
+    participant G as eldenring.exe
+    participant T1 as Terminal 1 (read)
+    participant T2 as Terminal 2 (write)
 
-    T1->>Vault: 1. Take Pre-Session Save Snapshot
-    Vault-->>T1: Snapshot verified & PENDING_RESTORE.json written
-    T1->>Game: 2. Launch Offline (-eac-nop-loaded)
-    T1->>T1: 3. Stream Game State (disk-state.json at 60Hz)
-    
-    note over Game,T2: Active Gameplay Session (Parallel Dimension)
-    T2->>Game: 4. Attach & Apply On-The-Fly Memory Edits (--set / --refill)
-    Game-->>T2: RAM updated instantly
-    T2-->>T2: 5. Terminate immediately [end]
-
-    Game->>T1: 6. User exits game
-    T1->>Vault: 7. Restore clean pre-session save byte-for-byte
-    Vault-->>T1: Save verified byte-identical ✓
-    T1->>Vault: 8. Clear marker & cleanup
+    T0->>V: snapshot + verify, session record READY
+    T0->>G: launch offline
+    T0->>V: record RUNNING (game pid + start time)
+    T1->>G: read --live / --live-effects / --export
+    T2->>V: authorised? (record RUNNING, same game, host alive)
+    T2->>G: --set / --refill once, then exit
+    G->>T0: game exits
+    T0->>V: restore, verify byte-identical, remove record
 ```
-
----
-
-## 🔑 Core Principles & Safety Architecture
-
-1. **Host/Client Separation:** `run` acts as the Session Host & Save Guard and only ever **reads** game memory. `sandbox` acts as a fast, non-blocking client that sends attribute edits to the running game without needing to close or restart the game, and only while a `run` session is active (marker present, same `eldenring.exe`, no EAC).
-2. **Byte-Identical Save Restoration:** `run` takes a full SHA-256 verified save snapshot before the game starts. When the game closes, `run` restores the clean pre-session save byte-for-byte.
-3. **Zero Configuration Files:** Remembers `--save-dir` in Windows Registry (`HKCU\Software\EldenDisk`), leaving zero loose config files in tool or build directories.
-4. **Zero Disk Changes in Game Folder:** Never modifies, renames, or creates files inside the Elden Ring installation directory.
-5. **Anti-Cheat Guard (EAC Safe):** Refuses to attach or edit if EasyAntiCheat (`easyanticheat.dll`, etc.) is active.
-6. **Event-Driven Persistence:** Polling runs at locked 60FPS. Disk updates (`disk-state.json`) occur only when state data changes, preserving SSD health.
-7. **Window Focus Detection (`IDLE` State):** Pauses polling when the game is unfocused, saving CPU resources.
-8. **Crash Recovery Guarantee (`sandbox restore`):** If a system crash or power outage occurs during play, running `eldendisk.exe sandbox restore` immediately restores your clean pre-session save snapshot.
-
----
-
-## ⚡ Quick Start (2-Terminal Workflow)
-
-### Prerequisites
-1. Windows 10 or 11 (64-bit).
-2. Steam Client running (Offline mode supported).
-3. Supported Elden Ring executable (Version 1.17.1 included out-of-the-box).
-
----
-
-### Terminal 1: Launch Host Session (`run`)
 
 ```commandline
-# Launch game offline with save protection + state logger
-eldendisk.exe run -v
-
-# (Optional - If multiple Steam accounts exist, specify --save-dir once; remembered in Windows Registry)
-eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>" -v
+eldendisk.exe run                                      (Terminal 0, leave open)
+eldendisk.exe read --live                              (Terminal 1: every value, redrawn in place)
+eldendisk.exe write --set vigor=99 level=150           (Terminal 2)
+eldendisk.exe write --refill hp,fp,stamina             (Terminal 2)
+eldendisk.exe read --query attrs.*                     (any terminal: print once, exit)
 ```
 
-#### Terminal 1 Verbose Output Example:
+To **keep** what `write` changed instead of rolling it back: let the game save (rest at a grace or quit to title), stop the host, close the game, then `eldendisk.exe vault keep --yes`.
 
-```commandline
-[config] offsets=offsets.json (embedded)
-[config] effects=chr_state_ids.json (embedded)
-state -> PREFLIGHT
-state -> SNAPSHOTTING
-[vault] backup save C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569 (steamID: 76561198296924569) to D:\...\backup\vault\20261006-120000 ✓
-snapshot 20261006-120000: 2 file(s) verified ✓
-state -> RUNNING
-[CONNECTED]
-...
-(when game exits)
-state -> RESTORING
-[vault] restored save from D:\...\backup\vault\20261006-120000 to C:\Users\<User>\AppData\Roaming\EldenRing\76561198296924569 ✓
-[vault] verification passed: restore verified; save folder is byte-identical to snapshot ✓
-state -> CLEANUP
-state -> IDLE
-```
+If the session is cut short (power loss, host killed, console closed, second Ctrl+C), close the game and run `eldendisk.exe vault restore`.
 
 ---
 
-### Terminal 2: Apply On-The-Fly Edits While Playing (`sandbox`)
+## Safety architecture
 
-While the game is open, open Terminal 2 and apply edits dynamically:
-
-```commandline
-# Set Vigor to 90 instantly on-the-fly (Silent by default; use -v for confirmation)
-eldendisk.exe sandbox --set vigor=90 -v
-
-# Set Level to 150 and max Runes
-eldendisk.exe sandbox --set level=150 --set runes=999999999 -v
-
-# Refill HP, FP, Stamina to maximum
-eldendisk.exe sandbox --refill hp,fp,stamina -v
-```
-
-#### Terminal 2 Output Example (with `-v`):
-
-```commandline
-[sandbox] vigor: set to 90
-[sandbox] Applied 1 edit(s) on-the-fly successfully. ✓
-```
-
-*(Without `-v`: silent execution with zero console output)*
+1. **Host and vault never touch game memory.** `run` only queries a process start time; boundaries are enforced by `test_architecture.py` (module imports are checked by AST).
+2. **Write capability lives in one file** (`writer/writer.py`) and is reached only from `write`, after `authorise()`.
+3. **Invariant:** at every instant either the live save equals the snapshot and there is no record, or a record exists whose snapshot is verified.
+4. **Restore never destroys unarchived data:** a modified save is copied into the vault before it is overwritten (`--no-archive-contaminated` to skip).
+5. **Interrupts:** first Ctrl+C is absorbed (the game keeps running); second, console close, logoff or shutdown leave `RESTORE_PENDING`.
+6. **No automatic recovery:** `run` with an owed restore exits `4` and prints the one command to run.
+7. **Zero changes in the game folder;** `read --export` refuses to write there.
+8. **EAC guard:** `read` and `write` stop when EasyAntiCheat is loaded; `run` refuses when anti-cheat processes are running.
+9. **Few disk writes:** the export is written only when its content changed, at most every `--export-interval` (0.5 s); buff countdowns at most every `--timer-interval` (2 s).
 
 ---
 
-## 🛠️ CLI Commands Overview
+## Quick start
+
+Prerequisites: Windows 10/11 x64, Steam (offline mode is fine), Elden Ring 1.17.1 (included profile).
+
+```commandline
+# Terminal 0: back up, launch offline, restore afterwards
+eldendisk.exe run
+# several Steam accounts: pass the save folder once (remembered)
+eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>"
+```
+
+```commandline
+ Elden-Disk 1.6.2 · run
+ ────────────────────────────────────────────────────────────────
+   vault  %LOCALAPPDATA%\EldenDisk\vault
+   save   C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>
+   game   C:\Program Files (x86)\Steam\steamapps\common\ELDEN RING\Game
+ ────────────────────────────────────────────────────────────────
+ 12:00:00  ✓  vault  snapshot 20261006-120000, 2 files verified
+ 12:00:01  ·  game   launching eldenring.exe offline
+ 12:00:09  ✓  game   running, pid 8812; `write` is now allowed
+ ...                                      (game exits)
+ 12:31:40  ·  game   exited
+ 12:31:42  ✓  vault  save restored, byte-identical to the snapshot
+```
+
+Every command prints concise lines like these without any flag. Every event is also logged, logcat style, to `<vault>/eldendisk.log`; add **`-v`** to a command to see that log live instead (`run -v`, `write --set level=150 -v`, `vault status -v` ...).
+
+---
+
+## CLI overview
 
 Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [options]`.
 
 | Command | Role | Description |
 |:---|:---|:---|
-| [`run`](#terminal-1-launch-host-session-run) | **Host & Save Guard** | Takes save snapshot, launches game offline, streams `disk-state.json`, restores save on exit |
-| [`sandbox`](#terminal-2-apply-on-the-fly-edits-while-playing-sandbox) | **Memory Writer Client** | Attaches on-the-fly to active game, applies `--set` / `--refill` edits, exits immediately |
-| `sandbox restore` | **Recovery** | Restores clean save after a crashed or interrupted session |
-| `sandbox status` | **Status** | Checks vault marker status and snapshot count |
-| `sandbox list` / `verify` / `prune` | **Vault Tools** | Lists, verifies, or cleans up older save snapshots |
-| `build` | **Compiler** | Compiles project into standalone `./build/dist/1.6.1/.../eldendisk.exe` |
+| `run` | **Host** | Snapshot, offline launch, wait, restore, verify |
+| `read [--query NAME] [--export] [--live] [--live-effects] [--live-animations]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-effects` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
+| `write --set NAME=VALUE...` / `write --refill LIST` | **Writer** | One-shot edits; exit `5` without a valid session |
+| `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
+| `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
+| `build` | Tool | Standalone `./build/dist/eldendisk/eldendisk.exe` |
+
+**Exit codes:** `0` ok · `1` error / not applied · `2` unsupported exe · `3` EAC · `4` restore pending · `5` no valid session · `130` interrupted.
+
+Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `animations` (now `read --live-effects` / `--live-animations`), JSON output of `run` (now `read --export`), the verbs `read effects|animations|export`, `write set|refill` (now flags) and `--once` (a read without `--live` is already one shot). Values are addressed by name only; there are no memory addresses or scans.
+
+**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.6.2](docs/specs/elden-disk-spec-v1.6.2.md) · [changes 1.6.2](docs/wahy/changes-version-1.6.2.md)
 
 ---
 
 ## 🧪 Editable Attributes & Clamping Ranges
 
-All edits supplied via `--set` are clamped to valid game boundaries before writing:
+All edits supplied via `write --set` are clamped to valid game boundaries before writing:
 
 | Attribute Name | Acceptable Range | Description |
 |:---|:---:|:---|
@@ -153,7 +131,9 @@ All edits supplied via `--set` are clamped to valid game boundaries before writi
 | `vigor`, `mind`, `endurance`, `strength`, `dexterity`, `intelligence`, `faith`, `arcane` | `1` – `99` | Character stats |
 | `hp` | `1` – `Max HP` | Current HP (cannot drop below 1) |
 | `fp`, `stamina` | `0` – `Max` | Current FP / Stamina |
-| `--refill hp,fp,stamina` | — | Refills vitals to maximum |
+| `write --refill hp,fp,stamina` | — | Refills vitals to maximum |
+
+Names: full path (`character.attributes.vigor`), short (`attrs.vigor`, `vigor`) or alias (`rune`, `hp`, `fp`). Groups with a wildcard (`attrs.*`, `vitals.*.current`) set several at once. Bare `*`, `character.*` and `ALL` are refused. Values the game or the tool computes (`hp.maximum`, `hp.base`, ...) are read-only, and the refusal says why. `read --query NAME` uses the same names.
 
 ---
 
@@ -167,13 +147,9 @@ python -m eldendisk build -c -em
 python code/tools/dev_pipeline.py --dry-run
 ```
 
-**Full Command References:**
-- **[docs/cli-commands-exe.md](docs/cli-commands-exe.md)** (Executable CLI Reference)
-- **[docs/cli-commands.md](docs/cli-commands.md)** (Python Source CLI Reference)
-
 ---
 
-## 📊 Connection State Machine (`disk-state.json`)
+## 📊 Export document (`read --export` → `disk-state.json`)
 
 ```json
 {
@@ -192,7 +168,7 @@ python code/tools/dev_pipeline.py --dry-run
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (154 tests)
+# Run unit test suite (456 tests)
 python -m pytest
 
 # Run soak stability check (V-06)

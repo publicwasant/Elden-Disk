@@ -1,4 +1,4 @@
-"""Sampling: pointer chain -> validated snapshot -> JSON document.
+"""Sampling: pointer chain -> validated snapshot (a character dict).
 
 Rule: one failed check discards the whole sample (correct-or-silent).
 """
@@ -9,15 +9,12 @@ import struct
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from .memory_reader import is_user_ptr, read_ptr, read_u32
-from .profile_loader import Effects, Profile
+from ..game.layout import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout, parse_vitals_block
+from ..game.memory import is_user_ptr, read_ptr, read_u32
+from ..game.profile import Effects, Profile
 
 MAX_EFFECTS = 512
-LEVEL_RANGE = (1, 713)
-RUNES_MAX = 999_999_999
 WORLD_LOST_RESET_S = 10.0  # title screen / long load this long -> forget baseline + animation
-ATTR_RANGE = (1, 99)
-ATTR_NAMES = ("vigor", "mind", "endurance", "strength", "dexterity", "intelligence", "faith", "arcane")
 
 
 def iso(dt: datetime) -> str:
@@ -37,12 +34,10 @@ class Sample:
     runes: int | None = None
 
 
-class Sampler:
+class Sampler(Layout):
     def __init__(self, mem, profile: Profile, effects: Effects, module_base: int):
-        self.mem = mem
-        self.profile = profile
+        super().__init__(mem, profile, module_base)
         self.effects = effects
-        self.base = module_base
         self.baseline_runes: int | None = None
         self._was_at_grace: bool = False
         self._last_animation: dict[str, dict] = {}
@@ -59,35 +54,6 @@ class Sampler:
     def reset_baseline(self, runes: int) -> None:
         """Lock in a new farming cycle baseline."""
         self.baseline_runes = runes
-
-    def read_animation_id(self, player: int) -> int | None:
-        anim = self.profile.anim
-        if anim is None:
-            return None
-        modules = read_ptr(self.mem, player + anim.player_to_modules)
-        if modules is None or modules == 0 or not is_user_ptr(modules):
-            return None
-        time_act = read_ptr(self.mem, modules + anim.modules_to_time_act)
-        if time_act is None or time_act == 0 or not is_user_ptr(time_act):
-            return None
-        read_idx = read_u32(self.mem, time_act + anim.time_act_read_idx)
-        if read_idx is None:
-            return None
-        entry_addr = time_act + anim.time_act_queue + (read_idx * anim.queue_entry_size)
-        return read_u32(self.mem, entry_addr)
-
-    def vitals_address(self, player: int) -> tuple[int | None, str | None]:
-        """Address of the 40-byte vitals block (CSChrDataModule + data_to_vitals), or (None, reason)."""
-        vit = self.profile.vitals
-        if vit is None:
-            return None, "profile has no vitals layout"
-        modules = read_ptr(self.mem, player + vit.player_to_modules)
-        if modules is None or modules == 0 or not is_user_ptr(modules):
-            return None, "read failed: ChrInsModuleContainer pointer"
-        data_mod = read_ptr(self.mem, modules + vit.modules_to_data)
-        if data_mod is None or data_mod == 0 or not is_user_ptr(data_mod):
-            return None, "read failed: CSChrDataModule pointer"
-        return data_mod + vit.data_to_vitals, None
 
     def _read_vitals(self, player: int) -> tuple[dict | None, str | None]:
         addr, err = self.vitals_address(player)
@@ -112,39 +78,8 @@ class Sampler:
         return Sample("WAITING_FOR_WORLD", error=error)
 
     def _follow(self, addr: int, name: str) -> tuple[int | None, Sample | None]:
-        v = read_ptr(self.mem, addr)
-        if v is None:
-            return None, self._wait(f"read failed: {name}")
-        if v == 0:
-            return None, self._wait()  # normal on title screen / loading
-        if not is_user_ptr(v):
-            return None, self._wait(f"invalid pointer {name}=0x{v:X}")
-        return v, None
-
-    def locate_game_data(self) -> tuple[int | None, str | None]:
-        """(PlayerGameData address, None), or (None, reason). Resolved fresh on every call (never cached)."""
-        player, reason = self.locate_player()
-        if player is None:
-            return None, reason
-        gd, w = self._follow(player + self.profile.player_to_game_data, "PlayerGameData")
-        return (gd, None) if w is None else (None, w.error or "world not loaded")
-
-    def locate_vitals(self) -> tuple[int | None, str | None]:
-        """(vitals block address, None), or (None, reason). Resolved fresh on every call."""
-        player, reason = self.locate_player()
-        if player is None:
-            return None, reason
-        return self.vitals_address(player)
-
-    def locate_player(self) -> tuple[int | None, str | None]:
-        """(PlayerIns address, None), or (None, reason) while the world/player is not available."""
-        p = self.profile
-        wcm, w = self._follow(self.base + p.world_chr_man_rva, "WorldChrMan")
-        if w is None:
-            player, w = self._follow(wcm + p.world_chr_man_to_player, "PlayerIns")
-            if w is None:
-                return player, None
-        return None, w.error or "world not loaded"
+        v, w = self.follow(addr, name)
+        return v, (None if w is None else self._wait(w.error))
 
     # -- main ------------------------------------------------------------
     def sample(self, now: datetime | None = None) -> Sample:
@@ -257,7 +192,6 @@ class Sampler:
         """Unclassified (id, duration, timer) entries, for the `effects` discovery command."""
         if self.profile.sp_effect is None:
             return None, "profile has no complete sp_effect layout"
-        p = self.profile
         player, reason = self.locate_player()
         if player is None:
             return None, reason
@@ -366,107 +300,3 @@ class Sampler:
                 del self._activations[stale_eid]
 
         return effects, ignored
-
-
-def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
-                   exe_sha256: str | None, profile_label: str | None,
-                   effects_supported: bool = True,
-                   animations_supported: bool = True,
-                   sandbox_supported: bool = True,
-                   sample: Sample | None,
-                   note: str | None = None, last_character: dict | None = None,
-                   mode: str = "telemetry",
-                   read_only: bool = True,
-                   sandbox: bool = False) -> dict:
-    has_character = sample is not None and sample.character is not None
-    game_connected = state in ("CONNECTED", "IDLE")
-
-    if has_character:
-        character = sample.character
-    elif last_character is not None:
-        character = last_character
-    else:
-        character = None
-
-    version = profile_label
-    if profile_label and "Elden Ring " in profile_label:
-        version = profile_label.replace("Elden Ring ", "")
-
-    profile = {
-        "sha256": exe_sha256,
-        "game": "eldenring.exe",
-        "version": version,
-    }
-
-    features = {
-        "effects_supported": effects_supported,
-        "animations_supported": animations_supported,
-        "sandbox_supported": sandbox_supported,
-    }
-
-    status = {
-        "pid": pid,
-        "tool_state": state,
-        "anti_cheat_state": anti_cheat,
-        "game_connected": game_connected,
-        "ignored": {
-            "effects": sample.ignored_effects if sample else 0,
-            "animations": sample.ignored_animations if sample else 0,
-        },
-    }
-
-    session = {
-        "mode": mode,
-        "read_only": read_only,
-        "sandbox": sandbox,
-    }
-
-    systems: dict = {
-        "profile": profile,
-        "features": features,
-        "status": status,
-        "session": session,
-    }
-
-    err_msg = note or (sample.error if sample else None)
-    if err_msg:
-        ts_dt = now or datetime.now(timezone.utc)
-        ts_str = ts_dt.isoformat().replace("+00:00", "Z")
-        systems["errors"] = {
-            "code": 1,
-            "message": err_msg,
-            "details": None,
-            "timestamp": ts_str,
-        }
-
-    return {
-        "systems": systems,
-        "character": character,
-    }
-
-
-def parse_vitals_block(raw: bytes) -> tuple[tuple[int, ...] | None, str | None]:
-    """Unpack + validate the 10-int vitals block: (hp, max_hp, uncapped_max, base_hp, fp, max_fp, base_fp, st, max_st, base_st)."""
-    v = struct.unpack("<10i", raw)
-    hp, max_hp, _, base_hp, fp, max_fp, base_fp, stamina, max_stamina, base_stamina = v
-    if hp < 0 or max_hp <= 0 or base_hp <= 0:
-        return None, f"invalid HP vitals: hp={hp}, max_hp={max_hp}, base_hp={base_hp}"
-    if fp < 0 or max_fp <= 0 or base_fp <= 0:
-        return None, f"invalid FP vitals: fp={fp}, max_fp={max_fp}, base_fp={base_fp}"
-    if max_stamina <= 0 or base_stamina <= 0:
-        return None, f"invalid Stamina vitals: stamina={stamina}, max_stamina={max_stamina}, base_stamina={base_stamina}"
-    return v, None
-
-
-def doc_signature(doc: dict) -> dict:
-    """The document minus the per-tick countdown (`buff_duration`): equal signatures mean only timers moved."""
-    ch = doc.get("character")
-    if not isinstance(ch, dict) or not ch.get("effects"):
-        return doc
-    effects = {}
-    for eid, eff in ch["effects"].items():
-        times = eff.get("times")
-        if times is not None:
-            eff = {**eff, "times": {k: v for k, v in times.items() if k != "buff_duration"}}
-        effects[eid] = eff
-    return {**doc, "character": {**ch, "effects": effects}}

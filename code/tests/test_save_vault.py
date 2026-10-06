@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk import save_vault as sv
-from eldendisk.save_vault import SaveVault, SessionLog, VaultError
+from eldendisk.vault import SaveVault, SessionLog, SessionState, VaultError, saves
+from eldendisk.vault import session as sess
+from eldendisk.vault import vault as sv
 
 
 @pytest.fixture
@@ -27,20 +28,20 @@ def tree(root):
 def test_find_save_dir_exactly_one(tmp_path):
     base = tmp_path / "EldenRing"
     with pytest.raises(VaultError):
-        sv.find_save_dir(base)                               # no root
+        saves.find_save_dir(base)                               # no root
     for sid in ("111", "222"):
         (base / sid).mkdir(parents=True)
         (base / sid / "ER0000.sl2").write_bytes(b"x")
     with pytest.raises(VaultError, match="exactly one"):
-        sv.find_save_dir(base)                               # two candidates: never guess
+        saves.find_save_dir(base)                               # two candidates: never guess
     shutil.rmtree(base / "222")
-    assert sv.find_save_dir(base) == base / "111"
+    assert saves.find_save_dir(base) == base / "111"
 
 
 def test_find_save_dir_ignores_folders_without_saves(tmp_path):
     (tmp_path / "EldenRing" / "999").mkdir(parents=True)
     with pytest.raises(VaultError):
-        sv.find_save_dir(tmp_path / "EldenRing")
+        saves.find_save_dir(tmp_path / "EldenRing")
 
 
 # ---- snapshot ----
@@ -77,7 +78,7 @@ def test_failed_snapshot_leaves_nothing_behind(env, monkeypatch):
     monkeypatch.setattr(shutil, "copy2", corrupting)
     with pytest.raises(VaultError):
         vault.snapshot(live)
-    assert not [p for p in vault.root.iterdir()] and vault.read_marker() is None
+    assert not [p for p in vault.root.iterdir()] and vault.read_session() is None
 
 
 def test_snapshot_detects_live_save_changing_during_copy(env, monkeypatch):
@@ -197,35 +198,61 @@ def test_verify_live_reports_every_kind_of_difference(env):
     assert "extra file: stray.tmp" in problems and "extra file: sub/deep.dat" in problems
 
 
-# ---- marker & preflight (FR-1, FR-4, FR-9) ----
-def test_marker_roundtrip_and_clear(env):
+# ---- session record & preflight ----
+def test_session_roundtrip_update_and_clear(env):
     _, live, vault = env
     snap = vault.snapshot(live)
-    assert vault.read_marker() is None
-    vault.write_marker(snap, live, exe_sha256="abc", game_dir=Path("G"), game_files=["a.txt"])
-    m = vault.read_marker()
-    assert m["snapshot_dir"] == str(snap.dir) and m["live_save_dir"] == str(live) and m["exe_sha256"] == "abc"
-    assert m["hashes"]["ER0000.sl2"] == snap.files["ER0000.sl2"]["sha256"] and m["game_folder_files_created"] == ["a.txt"]
-    vault.set_game_files(["a.txt", "b.txt"])
-    assert vault.read_marker()["game_folder_files_created"] == ["a.txt", "b.txt"]
-    vault.clear_marker(); vault.clear_marker()
-    assert vault.read_marker() is None
+    assert vault.read_session() is None
+    vault.write_session(vault.new_record(snap, live, exe_sha256="abc", game_dir=Path("G"), host_pid=7, host_started=99))
+    r = vault.read_session()
+    assert r.snapshot_dir == str(snap.dir) and r.live_save_dir == str(live) and r.exe_sha256 == "abc"
+    assert r.hashes["ER0000.sl2"] == snap.files["ER0000.sl2"]["sha256"]
+    assert r.state == SessionState.READY and r.snapshot_verified and (r.host_pid, r.host_started) == (7, 99)
+    vault.update_session(state=SessionState.RUNNING, game_pid=42, game_started=1234, game_folder_files_created=["a.txt"])
+    r = vault.read_session()
+    assert r.state == SessionState.RUNNING and (r.game_pid, r.game_started) == (42, 1234) and r.game_folder_files_created == ["a.txt"]
+    vault.clear_session(); vault.clear_session()
+    assert vault.read_session() is None and vault.update_session(state=SessionState.RUNNING) is None
+    assert not (vault.root / sess.SESSION_NAME).exists()
 
 
-def test_unreadable_marker_is_an_error_not_silence(env):
+def test_unreadable_session_is_an_error_not_silence(env):
     _, live, vault = env
     vault.root.mkdir(parents=True)
-    vault.marker_path.write_text("{ not json")
+    (vault.root / sess.SESSION_NAME).write_text("{ not json")
     with pytest.raises(VaultError, match="cannot be trusted"):
-        vault.read_marker()
+        vault.read_session()
     assert "cannot be trusted" in vault.preflight(live)[0]
 
 
-def test_preflight_ok_then_refuses_with_marker(env):
+def test_a_legacy_v1_marker_is_read_as_restore_pending(env):
+    import json
+    _, live, vault = env
+    snap = vault.snapshot(live)
+    (vault.root / sess.LEGACY_MARKER_NAME).write_text(json.dumps({
+        "version": 1, "created": "2026-10-04T21:30:00+07:00", "snapshot_dir": str(snap.dir), "live_save_dir": str(live),
+        "hashes": {}, "game_dir": None, "game_folder_files_created": [], "exe_sha256": "abc"}))
+    r = vault.read_session()
+    assert r.state == SessionState.RESTORE_PENDING and r.snapshot_dir == str(snap.dir) and r.version == 1
+    assert any("unresolved session" in p for p in vault.preflight(live))
+    vault.clear_session()
+    assert vault.read_session() is None and not (vault.root / sess.LEGACY_MARKER_NAME).exists()
+
+
+def test_unknown_record_version_is_an_error(env):
+    import json
+    _, live, vault = env
+    vault.root.mkdir(parents=True)
+    (vault.root / sess.SESSION_NAME).write_text(json.dumps({"version": 9}))
+    with pytest.raises(VaultError, match="cannot be trusted"):
+        vault.read_session()
+
+
+def test_preflight_ok_then_refuses_with_a_record(env):
     _, live, vault = env
     assert vault.preflight(live) == []
-    vault.write_marker(vault.snapshot(live), live, exe_sha256=None)
-    assert any("unresolved session" in p for p in vault.preflight(live))
+    vault.write_session(vault.new_record(vault.snapshot(live), live, exe_sha256=None))
+    assert any("unresolved session" in p and "vault restore" in p for p in vault.preflight(live))
 
 
 def test_preflight_checks_free_space(env, monkeypatch):
@@ -245,7 +272,7 @@ def test_vault_may_not_overlap_the_save_folder(env):
 def test_check_live_dir_refuses_dangerous_folders(tmp_path):
     for bad in (Path(tmp_path.anchor), Path.home(), tmp_path / "nope"):
         with pytest.raises(VaultError):
-            sv.check_live_dir(bad)
+            saves.check_live_dir(bad)
 
 
 # ---- housekeeping (FR-12, section 12) ----
@@ -261,14 +288,14 @@ def test_list_verify_and_prune(env):
     assert gone == [rows[0]["name"]] and len(vault.list_snapshots(verify=False)) == 2
 
 
-def test_prune_is_refused_while_a_marker_exists_and_needs_keep(env):
+def test_prune_is_refused_while_a_session_record_exists_and_needs_keep(env):
     _, live, vault = env
     snap = vault.snapshot(live)
-    vault.write_marker(snap, live, exe_sha256=None)
+    vault.write_session(vault.new_record(snap, live, exe_sha256=None))
     with pytest.raises(VaultError, match="unresolved"):
         vault.prune(1)
     assert snap.dir.exists()
-    vault.clear_marker()
+    vault.clear_session()
     with pytest.raises(VaultError):
         vault.prune(0)
 
@@ -290,14 +317,16 @@ def test_status_and_archive(env):
     assert (arch / "ER0000.sl2").read_bytes().startswith(b"LEVEL 713")
     vault.restore(snap.dir, live)
     st = vault.status()
-    assert st["snapshots"] == 1 and st["last"] == snap.dir.name and st["last_problems"] == [] and st["marker"] is None
+    assert st["snapshots"] == 1 and st["last"] == snap.dir.name and st["last_problems"] == [] and st["session"] is None
 
 
 def test_session_log_buffers_then_flushes(tmp_path):
-    echoed = []
-    log = SessionLog(echo=echoed.append)
-    log.write("first")
+    emitted = []
+    log = SessionLog(emit=lambda level, tag, msg, ok=False: emitted.append((level, tag, msg, ok)))
+    log.i("host", "first")
     log.attach(tmp_path / "snap" / "session.log")
-    log.write("second")
+    log.ok("vault", "second")
+    log.e("vault", "line one\nline two")
     lines = (tmp_path / "snap" / "session.log").read_text().splitlines()
-    assert [l.split(" ", 1)[1] for l in lines] == ["first", "second"] and echoed == ["first", "second"]
+    assert [l.split(" ", 1)[1] for l in lines] == ["I host  : first", "I vault : second", "E vault : line one", "E vault : line two"]
+    assert emitted == [("I", "host", "first", False), ("I", "vault", "second", True), ("E", "vault", "line one\nline two", False)]

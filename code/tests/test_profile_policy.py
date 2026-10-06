@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.profile_loader import load_profile
+from eldendisk.game.profile import load_profile
 
 OFFSETS = Path(__file__).resolve().parent.parent / "offsets.json"
 SHA, RAW = next(iter(json.loads(OFFSETS.read_text())["profiles"].items()))
