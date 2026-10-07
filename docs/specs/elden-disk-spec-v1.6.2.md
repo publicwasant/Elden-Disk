@@ -143,7 +143,7 @@ One attach and one loop serve every mode. One-shot modes wait for the game and f
 
 **Whole document.** `read` without a name and `--live` show the export document exactly as `disk-state.json` holds it, `character.effects` and `character.animations` included (decided 2026-10-07; an earlier 1.6.2 build left the lists out and showed values only). `character.*` includes them. A name inside the lists that matches nothing right now is empty, not unknown (`--live` shows `none active`, a one-shot query exits 0 with `nothing matches`); a misspelt list name is still refused.
 
-**Live display.** On a terminal (`isatty`, VT sequences available, `TERM` not `dumb`) `--live` redraws the value tree where it stands (cursor up, rewrite every line, one write per frame, at most 30 frames a second; the cursor is hidden meanwhile); a value that changed is highlighted for 1 s; lines are cut to the window width and, if the tree is taller than the window, the rest is summarised in one line. Elsewhere (IDE run window, pipe) the tree is printed once, then one line per changed value. Buff countdowns and the counters of ignored effects / animations are not changes. Ctrl+C stops. Bars and `q` / `p` keys are not planned.
+**Live display.** On a terminal (`isatty`, VT sequences available, `TERM` not `dumb`) `--live` redraws the value tree where it stands (cursor up, rewrite every line, one write per frame, at most 30 frames a second; the cursor is hidden meanwhile); a value that changed is highlighted for 1 s; lines are cut to the window width and, if the tree is taller than the window, the rest is summarised in one line. Elsewhere (IDE run window, pipe) the tree is printed once, then one line per changed value. Buff countdowns and the counters of ignored effects / animations are not changes; the countdowns (`*.buff_duration`) are painted in their own colour (magenta) on a terminal, a change highlight wins over it. While the world is not loaded (warp, death, title screen) the last tree stays and one dim status line is drawn under it; the next frame replaces both in place, nothing is detached or printed again; the reason (`sample.error`) goes to the log at debug level. Without a terminal the two events are printed. Ctrl+C stops. Bars and `q` / `p` keys are not planned.
 
 ### 5.1 Names (`game/values.py`)
 
@@ -182,7 +182,7 @@ Flow: authorise (section 3) → attach (EAC refused, profile for this exe) → o
 6. `read` (multi-feature, export policy) and `write` (renames), `vault` command group.
 7. README, CLI docs, plan, changes; version 1.6.2.
 
-Done in this order; 490 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
+Done in this order; 494 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
 
 ## 9. Real-game evidence and open items
 

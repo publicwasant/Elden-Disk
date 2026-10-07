@@ -11,7 +11,8 @@ from typing import Iterator, NamedTuple
 
 from ..game.values import UnknownName, is_pattern, normalize, suggest
 
-VOLATILE = (".buff_duration", "systems.status.ignored.effects", "systems.status.ignored.animations")
+TICKING = (".buff_duration",)     # countdowns: the live views paint them in their own colour, they are never "changes"
+VOLATILE = (*TICKING, "systems.status.ignored.effects", "systems.status.ignored.animations")
 # buff countdowns and the counters of ignored effects / animations change every few frames; the change stream
 # (the fallback for consoles that cannot redraw in place) leaves them out
 LISTS = ("character.effects", "character.animations")   # these come and go: no match now is not a wrong name

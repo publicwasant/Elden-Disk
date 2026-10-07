@@ -518,3 +518,60 @@ def test_flat_live_on_a_terminal_redraws_the_flat_rows(rig, monkeypatch, capsys)
     assert rcmd.cmd_read(args(query=["runes.*"], flat=True, live=True)) == 0
     out = capsys.readouterr().out
     assert "character.runes.total" in out and "\n runes\n" not in out and "\n character\n" not in out
+
+
+# ---- a loading screen in --live ----
+
+def _loading_screen(rig, monkeypatch, gone_at=2, back_at=4, ticks=40):
+    tmp, mem, target, box, args = rig
+    mem.ticks = ticks
+    world, n = mem.m, {"i": 0}
+
+    def sleep(s):
+        n["i"] += 1
+        if n["i"] == gone_at:
+            mem.m = type(world)()          # warp / death: the pointer chain ends in nothing
+        elif n["i"] == back_at:
+            mem.m = world
+
+    monkeypatch.setattr(rcmd.time, "sleep", sleep)
+    return args
+
+
+def test_live_on_a_terminal_keeps_the_tree_in_place_over_a_loading_screen(rig, monkeypatch, capsys):
+    import os
+    monkeypatch.setattr(rcmd.ui, "can_redraw", lambda stream=None: True)
+    monkeypatch.setattr(rcmd.ui.shutil, "get_terminal_size", lambda fallback=None: os.terminal_size((100, 60)))
+    monkeypatch.setenv("NO_COLOR", "1")
+    args = _loading_screen(rig, monkeypatch)
+    clock = {"t": 100.0}
+    monkeypatch.setattr(rcmd.time, "monotonic", lambda: clock["t"])
+    real_sleep = rcmd.time.sleep
+    monkeypatch.setattr(rcmd.time, "sleep", lambda s: (clock.__setitem__("t", clock["t"] + 0.05), real_sleep(s)))
+    assert rcmd.cmd_read(args(query=["runes"], live=True)) == 0
+    cap = capsys.readouterr()
+    assert "waiting for a loaded world …" in cap.out and "total" in cap.out.split("waiting for a loaded world")[0]
+    assert "total" in cap.out.rsplit("waiting for a loaded world", 1)[1]          # drawn again over it afterwards
+    assert cap.out.count("\x1b[?25l") == 1                                        # one drawing session, never detached
+    assert "waiting for a loaded world" not in cap.err and "world loaded" not in cap.err   # not printed as events
+
+
+def test_live_without_a_terminal_still_reports_the_loading_screen_as_events(rig, monkeypatch, capsys):
+    args = _loading_screen(rig, monkeypatch)
+    assert rcmd.cmd_read(args(query=["level"], live=True)) == 0
+    err = capsys.readouterr().err
+    assert err.count("waiting for a loaded world") == 1 and err.count("world loaded") == 1
+
+
+def test_live_on_a_terminal_paints_buff_countdowns_in_their_own_colour(rig, monkeypatch, capsys):
+    import os
+    monkeypatch.setattr(rcmd.ui, "can_redraw", lambda stream=None: True)
+    monkeypatch.setattr(rcmd.ui.shutil, "get_terminal_size", lambda fallback=None: os.terminal_size((100, 200)))
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    tmp, mem, target, box, args = rig
+    mem.ticks = 5
+    assert rcmd.cmd_read(args(query=["character.effects.*"], live=True)) == 0
+    out = capsys.readouterr().out
+    assert re.search(r"buff_duration\s*\x1b\[0m\s+\x1b\[35m45\.00\x1b\[0m", out)          # the countdown
+    assert re.search(r"max_duration\s*\x1b\[0m\s+80\.00\n", out)                          # a constant beside it stays plain

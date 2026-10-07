@@ -147,3 +147,17 @@ def test_can_redraw_needs_a_terminal(monkeypatch):
     assert ui.can_redraw(Term())
     monkeypatch.setenv("TERM", "dumb")
     assert not ui.can_redraw(Term())
+
+
+def test_countdowns_have_their_own_colour_and_a_change_still_wins():
+    from eldendisk.ui import format_rows
+    from eldendisk.reader.view import Row
+    rows = [Row(0, "buff_duration", "44.90", "a.buff_duration"), Row(0, "max_duration", "80.00", "a.max_duration"),
+            Row(0, "level", "150", "character.level")]
+    out = format_rows(rows, color=True, ticking=frozenset({"a.buff_duration"}), hot=frozenset({"character.level"}))
+    assert "\x1b[35m44.90\x1b[0m" in out[0]                  # the countdown
+    assert "\x1b[" not in out[1].split("  ", 1)[1]            # a constant next to it is plain
+    assert "\x1b[1;33m150\x1b[0m" in out[2]
+    both = format_rows(rows[:1], color=True, ticking=frozenset({"a.buff_duration"}), hot=frozenset({"a.buff_duration"}))
+    assert "\x1b[1;33m44.90" in both[0] and "\x1b[35m" not in both[0]
+    assert "\x1b[" not in format_rows(rows, color=False, ticking=frozenset({"a.buff_duration"}))[0]

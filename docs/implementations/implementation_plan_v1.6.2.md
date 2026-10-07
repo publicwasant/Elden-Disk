@@ -20,7 +20,7 @@ See [changes-version-1.6.2.md](../wahy/changes-version-1.6.2.md) and [elden-disk
 - **Docs:** README, `cli-commands*.md`, spec/plan/changes 1.6.2.
 
 ## Verification Plan
-1. `python -m pytest` (490 passed, 1 skipped).
+1. `python -m pytest` (494 passed, 1 skipped).
 2. `python -m eldendisk -h` and each subcommand's `-h`; removed flags and `sandbox` are rejected.
 3. On Windows, on a **copy** of the save: T0 `eldendisk run -v`, T1 `eldendisk read --live -v` (then `read`, `read --query attrs.*`, `read --export`, `read --live --export`, `read --live-effects`, `read --live-animations --unmapped`), T2 `eldendisk write --set level=150 -v` (also `--set vigor=40 faith=40`, `--set attrs.*=20`, `--refill hp,fp`, and a refusal such as `--set hp.maximum=1`); close the game and confirm the byte-identical restore and the `[vault] verification passed` line.
 4. Kill the host (Task Manager) with the game open: `write` must exit 5; after closing the game `vault status` shows the record and `vault restore` restores and clears it.

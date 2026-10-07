@@ -18,7 +18,7 @@ from .console import printable
 from .logbook import Event, format_line, parse_line
 
 _SYMBOLS = {"ok": ("\u2713", "+"), "info": ("\u00b7", "-"), "warn": ("!", "!"), "error": ("\u2716", "x")}
-_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "unknown": "36"}
+_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36"}
 RULE = "\u2500"
 
 
@@ -142,10 +142,12 @@ def result(kind: str, text: str) -> None:
     _emit(f" {sym}  {text}", stream)
 
 
-def format_rows(items, *, indent: int = 1, color: bool = False, hot=frozenset(), columns: int | None = None) -> list[str]:
+def format_rows(items, *, indent: int = 1, color: bool = False, hot=frozenset(), ticking=frozenset(),
+                columns: int | None = None) -> list[str]:
     """Rows of `Row(level, key, value|None, path)` as tree lines: `value` None makes the key a heading, the others align.
 
-    Values whose path is in `hot` are highlighted; with `columns` every line is cut to fit (so it never wraps).
+    Values whose path is in `hot` are highlighted (a change just happened); those in `ticking` (countdowns that change
+    all the time) have their own colour, `hot` wins; with `columns` every line is cut to fit (so it never wraps).
     """
     items = list(items)
     width = min(44, max((2 * r.indent + len(r.key) for r in items if r.value is not None), default=0))
@@ -162,7 +164,8 @@ def format_rows(items, *, indent: int = 1, color: bool = False, hot=frozenset(),
             room = columns - 1 - len(pad) - len(key) - 2
             if len(value) > room:
                 value = value[:max(0, room - 1)] + "\u2026" if room > 1 else ""
-        lines.append(pad + paint(key, "dim", color) + "  " + paint(value, "hot", color and r.path in hot))
+        kind = "hot" if r.path in hot else "tick" if r.path in ticking else ""
+        lines.append(pad + paint(key, "dim", color) + "  " + paint(value, kind, color))
     return lines
 
 

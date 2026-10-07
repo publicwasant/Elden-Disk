@@ -236,6 +236,7 @@ class _LiveValues:
         self.name, self.export, self.sampler, self.as_paths = name, export, sampler, as_paths
         self.flat: dict[str, object] | None = None
         self.waiting = False
+        self._lines: list[str] = []      # the last tree drawn, kept on screen while the world is loading
         self.painter = _Redraw() if ui.can_redraw() else None
         self.hot: dict[str, float] = {}
 
@@ -252,17 +253,28 @@ class _LiveValues:
         if self.painter is not None:
             self.painter.close()
 
+    def _wait(self, sample) -> None:
+        """A loading screen (warp, death, quit to title). On a terminal the last tree stays where it is with one status
+        line below it and the next frame redraws over both; elsewhere the two messages are printed as events."""
+        why = f": {sample.error}" if sample.error else ""
+        if self.painter is None:
+            if not self.waiting:
+                book.i("read", f"waiting for a loaded world{why}")
+        else:
+            if not self.waiting:
+                book.d("read", f"waiting for a loaded world{why}")
+            screen = self.painter.screen
+            status = ui.paint(" waiting for a loaded world \u2026", "dim", ui.use_color(screen.stream))
+            self.painter.show([*self._lines, "", status])
+        self.waiting = True
+
     def tick(self) -> None:
         sample = self.sampler.sample()
         if sample.state != "CONNECTED":
-            if not self.waiting:
-                if self.painter is not None:
-                    self.painter.detach()   # the message below must not be overwritten
-                book.i("read", f"waiting for a loaded world{': ' + sample.error if sample.error else ''}")
-                self.waiting = True
+            self._wait(sample)
             return
         if self.waiting:
-            book.i("read", "world loaded")
+            (book.d if self.painter is not None else book.i)("read", "world loaded")
             self.waiting = False
         selection = view.select(self.export.build("CONNECTED", sample), self.name)
         shown = selection or [(view.label(self.name), NONE_NOW)]    # a list name with nothing active: say so, keep running
@@ -277,8 +289,11 @@ class _LiveValues:
         if self.painter is not None:
             self.hot = {p: t for p, t in self.hot.items() if now - t < self.HOLD_S}
             screen = self.painter.screen
-            self.painter.show(ui.format_rows(view.rows(shown, flat=self.as_paths), color=ui.use_color(screen.stream),
-                                             hot=frozenset(self.hot), columns=screen.size()[0]))
+            rows = view.rows(shown, flat=self.as_paths)
+            self._lines = ui.format_rows(rows, color=ui.use_color(screen.stream), hot=frozenset(self.hot),
+                                         ticking=frozenset(r.path for r in rows if r.path.endswith(view.TICKING)),
+                                         columns=screen.size()[0])
+            self.painter.show(self._lines)
         elif first:
             ui.rows(view.rows(shown, flat=self.as_paths))
         else:

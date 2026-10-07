@@ -108,11 +108,12 @@ Already seen on the real game (spec section 9): `run` restore, hard-kill recover
 | L4 | `read --live --query nonsense` | exit `1` before any drawing | [ ] |
 | L5 | Ctrl+C | the last frame stays, the cursor is visible again, exit `130`, the game keeps running | [ ] |
 | L6 | Quit the game while `--live` runs | it ends on its own, exit `0`, the cursor is back | [ ] |
-| L7 | Quit to the title screen, then load again | "waiting for a loaded world", then "world loaded", drawing resumes below | [ ] |
+| L7 | In a real terminal: warp, die, or quit to the title screen and load again | the tree stays in place with a dim `waiting for a loaded world …` line under it; when the world is back the tree is redrawn over it, **no second copy** is printed below; the reason shows only with `-v` / in the log. Without a terminal (`\| more`): two events once each | [ ] |
 | L8 | Start `read --live` first, then the game | waits for the game (one message), then continues | [ ] |
 | L9 | Window about 30 rows tall | the tree is cut with "… N more lines (make the window taller, or use --query)" | [ ] |
 | L10 | Make the window narrow while it runs (about 50 columns) | lines are cut with `…`, no wrapping garbage | [ ] |
 | L11 | Run it in a console that cannot redraw (Android Studio run window, or `read --live \| more`) | the tree once, then one line per changed value `HH:MM:SS  path  old → new`; the effects/animations counters do not flood it | [ ] |
+| L16 | `read --query character.effects.* --live` with a timed buff active (e.g. Golden Vow) | `buff_duration` counts down in magenta, other values (`max_duration`, names) stay plain; a change elsewhere is still yellow | [ ] |
 | L12 | `NO_COLOR=1`; `FORCE_COLOR=1` | no colours / colours; same layout | [ ] |
 | L13 | `--hz 1`, `--hz 120` | accepted; slower / smoother; CPU stays low | [ ] |
 | L14 | `read --live -v` | the log lines on stderr; the tree still on stdout | [ ] |
@@ -206,7 +207,7 @@ Use a throwaway or backed-up save.
 ## Automated tests (Linux or Windows, no game)
 
 ```commandline
-python -m pytest          # 490 passed, 1 skipped
+python -m pytest          # 494 passed, 1 skipped
 python -m pyflakes eldendisk tests tools
 ```
 

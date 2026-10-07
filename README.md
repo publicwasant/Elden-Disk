@@ -16,7 +16,7 @@ Four parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (490 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
+> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (494 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
 
 ---
 
@@ -173,7 +173,7 @@ python code/tools/dev_pipeline.py --vault-off
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (490 tests)
+# Run unit test suite (494 tests)
 python -m pytest
 
 # Run soak stability check (V-06)
