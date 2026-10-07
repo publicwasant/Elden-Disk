@@ -144,10 +144,13 @@ def _merge(dst: dict, src: dict) -> None:
             dst[key] = v
 
 
-def rows(selection: list[tuple[str, object]]) -> list[Row]:
+def rows(selection: list[tuple[str, object]], flat: bool = False) -> list[Row]:
     """Console rows for a selection: the selected values placed in their tree (`character` > `runes` > `total`),
     exactly as the whole document is printed, so a wildcard or several names read like `read` itself. One single
-    value is one `path  value` row."""
+    value is one `path  value` row. `flat`: every value is one `full.path  value` row, no headings."""
+    if flat:
+        return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value), path)
+                for top, sub in selection for path, value in flatten(sub, top).items()]
     if len(selection) == 1 and selection[0][0] and not isinstance(selection[0][1], dict):
         path, value = selection[0]
         return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value), path)]

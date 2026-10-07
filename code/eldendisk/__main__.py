@@ -65,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     rd.add_argument("--query", metavar="NAME", nargs="+",
                     help="one or several values or groups, e.g. runes, hp, attrs.*, character.runes.* character.effects.*  "
                          "(no flag: every value)")
+    rd.add_argument("--flat", action="store_true",
+                    help="print values as one 'full.path  value' row each instead of the tree (works with --query and --live)")
     rd.add_argument("--export", action="store_true", help="write disk-state.json once and exit")
     rd.add_argument("--live", action="store_true",
                     help="do not stop: keep showing (with --export: keep writing; with --query: those values)")
@@ -165,6 +167,8 @@ def main(argv=None) -> int:
             ap.error("--mapped and --unmapped cannot be combined")
         if (args.mapped or args.unmapped) and not monitor:
             ap.error("--mapped / --unmapped go with --live-effects / --live-animations")
+        if args.flat and (args.export or monitor or args.json):
+            ap.error("--flat is for the printed values (read, --query, --live), not --export, --json or the monitors")
         if args.json and (args.live or args.export or monitor):
             ap.error("--json is for the one-shot print and --query only")
     if args.cmd == "write" and not args.set and not args.refill:

@@ -177,3 +177,14 @@ def test_a_wildcard_and_several_names_print_as_one_tree():
 
 def test_one_value_stays_one_row():
     assert view.rows(view.select(DOC, ["level"])) == [view.Row(0, "character.level", "150", "character.level")]
+
+
+def test_flat_rows_are_full_paths_without_headings_and_empty_groups_vanish():
+    doc = {**DOC, "character": {**DOC["character"], "animations": {}}}
+    rows = view.rows(view.select(doc, ["runes", "character.animations", "attrs.vigor"]), flat=True)
+    assert [(r.indent, r.key, r.value) for r in rows] == [
+        (0, "character.runes.total", "40,402,709"), (0, "character.runes.baseline", "40,401,505"),
+        (0, "character.runes.delta", "+1,204"), (0, "character.attributes.vigor", "80")]
+    assert [r.path for r in rows] == [r.key for r in rows]
+    whole = view.rows(view.select(DOC, None), flat=True)
+    assert any(r.key == "systems.status.pid" and r.value == "8812" for r in whole) and all(r.value is not None for r in whole)

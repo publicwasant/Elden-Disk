@@ -56,7 +56,7 @@ def rig(tmp_path, monkeypatch):
     def args(**kw):
         d = dict(query=None, export=False, live=False, live_effects=False, live_animations=False, json=False,
                  timeout=1.0, offsets="x", effects="y", vault=str(tmp_path / "vault"), hz=60.0, quiet=False,
-                 mapped=False, unmapped=False, no_idle=True, out=str(tmp_path / "out"), export_interval=0.0, timer_interval=0.0, verbose=False)
+                 mapped=False, unmapped=False, flat=False, no_idle=True, out=str(tmp_path / "out"), export_interval=0.0, timer_interval=0.0, verbose=False)
         return argparse.Namespace(**{**d, **kw})
 
     return tmp_path, mem, target, box, args
@@ -476,3 +476,45 @@ def test_one_shot_query_of_an_empty_list_says_so_and_succeeds(rig, monkeypatch, 
     monkeypatch.setattr(rcmd.ExportWriter, "build", build)
     assert rcmd.cmd_read(args(query="character.effects.*")) == 0
     assert "nothing matches" in capsys.readouterr().err
+
+
+# ---- --flat ----
+
+def test_flat_prints_one_full_path_row_per_value(rig, capsys):
+    tmp, mem, target, box, args = rig
+    assert rcmd.cmd_read(args(query=["character.runes.*", "attrs.vigor"], flat=True)) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [l.split()[0] for l in lines] == ["character.runes.total", "character.runes.baseline", "character.runes.delta",
+                                              "character.attributes.vigor"]
+    assert all(re.match(r"^ character\.\S+\s{2,}\S", l) for l in lines)       # no headings, values aligned
+    assert rcmd.cmd_read(args(flat=True)) == 0           # no name: every value of the document, flat
+    out = capsys.readouterr().out
+    assert " character.level " in out and not any(l.strip() in ("character", "systems") for l in out.splitlines())
+
+
+def test_flat_live_without_a_terminal_prints_the_flat_rows_then_changes(rig, monkeypatch, capsys):
+    tmp, mem, target, box, args = rig
+    mem.ticks = 4
+    n = {"i": 0}
+
+    def sleep(s):
+        n["i"] += 1
+        if n["i"] == 2:
+            mem.m.u32(GD + 0x68, 387)
+
+    monkeypatch.setattr(rcmd.time, "sleep", sleep)
+    assert rcmd.cmd_read(args(query=["level"], flat=True, live=True)) == 0
+    out = capsys.readouterr().out
+    assert "character.level" in out and "386 \u2192 387" in out
+
+
+def test_flat_live_on_a_terminal_redraws_the_flat_rows(rig, monkeypatch, capsys):
+    import os
+    monkeypatch.setattr(rcmd.ui, "can_redraw", lambda stream=None: True)
+    monkeypatch.setattr(rcmd.ui.shutil, "get_terminal_size", lambda fallback=None: os.terminal_size((100, 60)))
+    monkeypatch.setenv("NO_COLOR", "1")
+    tmp, mem, target, box, args = rig
+    mem.ticks = 3
+    assert rcmd.cmd_read(args(query=["runes.*"], flat=True, live=True)) == 0
+    out = capsys.readouterr().out
+    assert "character.runes.total" in out and "\n runes\n" not in out and "\n character\n" not in out

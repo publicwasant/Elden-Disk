@@ -93,7 +93,7 @@ With `-v` the banner and these lines are replaced by the log itself (see "Log an
 ## 2. `read` (reader)
 
 ```commandline
-python -m eldendisk read [--query NAME [NAME ...]] [--export] [--live] [--live-effects] [--live-animations] [options]
+python -m eldendisk read [--query NAME [NAME ...]] [--flat] [--export] [--live] [--live-effects] [--live-animations] [options]
 ```
 
 Read-only: it never opens a write handle. Works with or without `run` (a game started from Steam's Play button has EasyAntiCheat, which hides the game from `read`: exit `3`, start it with `run`). Stops with exit `3` if EasyAntiCheat is or becomes loaded.
@@ -114,6 +114,16 @@ Read-only: it never opens a write handle. Works with or without `run` (a game st
 **Names.** A name is a path into `disk-state.json`: `character.level`, `character.runes.total`, `character.attributes.vigor`, `character.vitals.hit_point.current`, `character.effects`, `systems.status.pid`. Short forms work: `character.` can be left out, `attrs` = `attributes`, `hp` = `hit_point`, `fp` = `focus_point`, `max` = `maximum`. A group name shows the whole group; `*` selects several values. A wrong name is an error with suggestions.
 
 **Several names, and the tree.** `--query` takes any number of names (`--query runes hp attrs.vigor`); the result is one selection, in the order asked, each value once. Whatever is selected (a group, a wildcard, several names) is printed **in its place in the tree**, the same layout as `read` itself (`character` > `runes` > `total`), so `--live` redraws and highlights it the same way. Exactly one single value is the exception: it stays one `path  value` line (handy in scripts). `--json` prints a flat object `{"path": value, ...}` for the selection.
+
+**`--flat`** switches every printed view (`read`, `--query`, with or without `--live`) from the tree to one `full.path  value` row per value, no headings: easy to read across groups and to filter (`read --flat | findstr vigor`). It combines with `--query` and `--live` (redrawn and highlighted the same way); it is refused with `--export`, `--json` and the two monitors, which have their own layouts.
+
+```commandline
+python -m eldendisk read --query character.runes.* attrs.vigor --flat --live
+ character.runes.total       40,402,709
+ character.runes.baseline    40,401,505
+ character.runes.delta       +1,204
+ character.attributes.vigor  80
+```
 
 ```commandline
 python -m eldendisk read --query runes
@@ -154,6 +164,7 @@ A terminal that cannot move the cursor (IDE run window, pipe, `TERM=dumb`) gets 
 | Flag | Default | Applies to | Description |
 |:---|:---|:---|:---|
 | `--query NAME [NAME ...]` | all values | print, `--live` | One or more values or groups to show. |
+| `--flat` | off (tree) | print, `--live` | One `full.path  value` row per value instead of the tree. |
 | `--export` / `--live` / `--live-effects` / `--live-animations` | off | | Modes above. `--export` and `--query` cannot be combined; the two monitors stand alone (together is fine). |
 | `--json` | off | one-shot | Print as JSON. |
 | `--timeout SEC` | `15` | one-shot | Seconds to wait for the game and a loaded world. |

@@ -76,6 +76,7 @@ Already seen on the real game (spec section 9): `run` restore, hard-kill recover
 | Q9 | game started from Steam (EAC): `read` | exit `3` with the hint to use `eldendisk run` (not "module not found") | [ ] |
 | Q10 | `read --hz 500`, `--timeout 0`, `--json --live`, `--export --query hp`, `--live-effects --live` | each a usage error, exit `2` | [ ] |
 | Q11 | `read --query character.runes.* character.effects.*`, then the same with `--live` | one tree: `character` once, `runes` with its values, `effects` with each id; `--live` redraws and highlights in place; a typo in any name stops with exit `1` | [ ] |
+| Q12 | `read --flat`, `read --query character.runes.* attrs.vigor --flat`, then the same with `--live` | one `full.path  value` row per value, aligned, no headings; `--live` redraws in place and highlights changes; `--flat --export` / `--json` / `--live-effects` are usage errors (exit `2`) | [ ] |
 
 ---
 
@@ -205,7 +206,7 @@ Use a throwaway or backed-up save.
 ## Automated tests (Linux or Windows, no game)
 
 ```commandline
-python -m pytest          # 483 passed, 1 skipped
+python -m pytest          # 490 passed, 1 skipped
 python -m pyflakes eldendisk tests tools
 ```
 

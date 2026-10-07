@@ -3,6 +3,7 @@
     read                          every value once, then exit
     read --query NAME [NAME ...]  one or several values or groups once (`character.runes`, `hp`, `attrs.*`), then exit
     read --export                 write disk-state.json once, then exit
+    read ... --flat               print the values as `full.path  value` rows instead of the tree
     read --live                   the same, continuously (with --query / --export: that one, continuously)
     read --live-effects           effects monitor        read --live-animations   animation monitor
                                   (--mapped / --unmapped: only ids that are / are not in chr_state_ids.json)
@@ -178,7 +179,7 @@ def _query_once(args, mem, sampler: Sampler, export: ExportWriter) -> int:
     if args.json:
         ui.out(view.as_json(selection))
     else:
-        ui.rows(view.rows(selection))
+        ui.rows(view.rows(selection, flat=args.flat))
     return 0
 
 
@@ -231,8 +232,8 @@ class _LiveValues:
     """
     HOLD_S = 1.0       # how long a changed value stays highlighted
 
-    def __init__(self, name: str | None, export: ExportWriter, sampler: Sampler):
-        self.name, self.export, self.sampler = name, export, sampler
+    def __init__(self, name: str | None, export: ExportWriter, sampler: Sampler, as_paths: bool = False):
+        self.name, self.export, self.sampler, self.as_paths = name, export, sampler, as_paths
         self.flat: dict[str, object] | None = None
         self.waiting = False
         self.painter = _Redraw() if ui.can_redraw() else None
@@ -276,10 +277,10 @@ class _LiveValues:
         if self.painter is not None:
             self.hot = {p: t for p, t in self.hot.items() if now - t < self.HOLD_S}
             screen = self.painter.screen
-            self.painter.show(ui.format_rows(view.rows(shown), color=ui.use_color(screen.stream),
+            self.painter.show(ui.format_rows(view.rows(shown, flat=self.as_paths), color=ui.use_color(screen.stream),
                                              hot=frozenset(self.hot), columns=screen.size()[0]))
         elif first:
-            ui.rows(view.rows(shown))
+            ui.rows(view.rows(shown, flat=self.as_paths))
         else:
             stamp = datetime.now().strftime("%H:%M:%S")
             for path, old, new in view.changes(previous, flat):
@@ -352,7 +353,7 @@ def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vau
         sample = _first_sample(args, mem, sampler)
         if sample is None:
             return EXIT_ERROR
-        stream = _LiveValues(args.query, export, sampler)
+        stream = _LiveValues(args.query, export, sampler, args.flat)
         if not stream.check(sample):
             return EXIT_ERROR
     book.ok("read", "attached, reading (Ctrl+C to stop)")

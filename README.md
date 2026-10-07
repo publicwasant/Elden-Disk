@@ -7,7 +7,7 @@ Four parts with one job each:
 
 - **Host (`run`):** takes a SHA-256 verified snapshot of your save, launches `eldenring.exe` **offline**, waits, and restores the save **byte for byte** when the game exits. It never opens the game's memory and writes no JSON.
 - **Vault (`vault`):** snapshots, the session record, restore and recovery. It is the part that must not fail: a restore that could not finish leaves a record, and the next `run` refuses until `vault restore` has been run.
-- **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree; `--export` writes `disk-state.json` once; `--live` keeps going; `--live-effects` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. Values are addressed by **name** only. Read-only; works with or without `run`.
+- **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree (`--flat`: one `full.path  value` row each); `--export` writes `disk-state.json` once; `--live` keeps going; `--live-effects` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. Values are addressed by **name** only. Read-only; works with or without `run`.
 - **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...). It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
 - **Zero configuration files:** `--save-dir` and `--vault` are remembered in the Windows Registry (`HKCU\Software\EldenDisk`). The vault lives in `%LOCALAPPDATA%\EldenDisk\vault` by default, never next to the exe, so a rebuild cannot delete it.
 
@@ -16,7 +16,7 @@ Four parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (483 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
+> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (490 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
 
 ---
 
@@ -173,7 +173,7 @@ python code/tools/dev_pipeline.py --vault-off
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (483 tests)
+# Run unit test suite (490 tests)
 python -m pytest
 
 # Run soak stability check (V-06)

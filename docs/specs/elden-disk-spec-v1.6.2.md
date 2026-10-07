@@ -135,6 +135,7 @@ Values are addressed by **name** only: the paths of `disk-state.json` (`characte
 | `read --export` | writes `disk-state.json` once (schema unchanged, `systems.session` as in section 3), exits |
 | `read --live` | the same as `read`, continuously: the full list once, kept current (below) |
 | `read --live --query NAME [NAME ...]` | follows those values or groups |
+| `read ... --flat` | the printed views (print, `--query`, `--live`) as one `full.path  value` row per value, no headings, instead of the tree; refused with `--export`, `--json`, the monitors |
 | `read --live --export` | the 1.6.2 loop: sample at `--hz` (default 60, the game's frame rate; 1-120), write on change |
 | `read --live-effects`, `--live-animations` | the monitors (5.2); stand alone, combinable with each other; `--mapped` / `--unmapped` filter them |
 
@@ -181,7 +182,7 @@ Flow: authorise (section 3) → attach (EAC refused, profile for this exe) → o
 6. `read` (multi-feature, export policy) and `write` (renames), `vault` command group.
 7. README, CLI docs, plan, changes; version 1.6.2.
 
-Done in this order; 483 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
+Done in this order; 490 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
 
 ## 9. Real-game evidence and open items
 

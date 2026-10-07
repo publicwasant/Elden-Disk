@@ -183,7 +183,9 @@ def test_read_flags_parse_and_several_features_are_accepted(monkeypatch):
     assert cli.main(["read", "--query", "runes", "--json"]) == 0
     assert seen["query"] == ["runes"] and seen["json"] and not seen["live"] and not seen["export"]
     seen.clear()
-    assert cli.main(["read", "--query", "character.runes.*", "character.effects.*", "--live"]) == 0
+    assert cli.main(["read", "--query", "attrs.*", "--flat", "--live"]) == 0 and seen["flat"] and seen["live"]
+    seen.clear()
+    assert cli.main(["read", "--query", "character.runes.*", "character.effects.*", "--live"]) == 0 and not seen["flat"]
     assert seen["query"] == ["character.runes.*", "character.effects.*"] and seen["live"]
     seen.clear()
     cli.main(["read"])   # no flag: every value once
@@ -195,6 +197,7 @@ def test_read_flags_parse_and_several_features_are_accepted(monkeypatch):
     ["read", "--timeout", "0"], ["read", "--export", "--query", "hp"], ["read", "--live-effects", "--live"],
     ["read", "--live-animations", "--export"], ["read", "--live-effects", "--query", "hp"],
     ["read", "--json", "--live"], ["read", "--json", "--export"], ["read", "effects"], ["read", "export"], ["read", "--once"],
+    ["read", "--flat", "--export"], ["read", "--flat", "--json"], ["read", "--flat", "--live-effects"],
     ["read", "--mapped"], ["read", "--live", "--unmapped"], ["read", "--live-effects", "--mapped", "--unmapped"],
 ])
 def test_read_usage_errors(argv):
