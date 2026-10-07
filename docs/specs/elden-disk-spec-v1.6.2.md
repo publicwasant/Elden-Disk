@@ -70,7 +70,7 @@ Enforced by `test_architecture.py` (AST over the imports of every module, mutati
 ### 2.1 Vault location and build layout
 
 - **Vault.** Every command resolves it the same way: `--vault` > path remembered in the Registry (`HKCU\Software\EldenDisk\VaultDir`, written by `run --vault X` only) > `%LOCALAPPDATA%\EldenDisk\vault`. It is never placed next to the exe: the exe lives in `build/dist`, which `build -c` deletes, and the vault holds the only clean copy of the save. A remembered path whose folder is unavailable is an error (never a silent fresh vault, which would hide an owed restore).
-- **Build output.** `./build/dist/eldendisk/eldendisk.exe` (no version in the path, so IDE run configurations and the vault survive a version bump); work files in `./build/work`. `build -c` refuses (exit 4) while a vault under `build/` holds a session record.
+- **Build output.** `./build/dist/eldendisk/eldendisk.exe` (no version in the path, so IDE run configurations and the vault survive a version bump); work files in `./build/work`. `build` also writes `README.md` there: `docs/README-exe.md` (intro, `{version}` filled in) + `docs/cli-commands-exe.md` without its title; a missing `docs/` is a warning, not a failure. `build -c` refuses (exit 4) while a vault under `build/` holds a session record.
 
 ### 2.2 Log and console output
 
@@ -181,7 +181,7 @@ Flow: authorise (section 3) → attach (EAC refused, profile for this exe) → o
 6. `read` (multi-feature, export policy) and `write` (renames), `vault` command group.
 7. README, CLI docs, plan, changes; version 1.6.2.
 
-Done in this order; 479 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
+Done in this order; 483 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
 
 ## 9. Real-game evidence and open items
 

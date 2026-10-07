@@ -272,7 +272,7 @@ Prints the SHA-256 of `eldenring.exe`, the profile key in `offsets.json` (alone 
 eldendisk.exe build [-e pyinstaller|nuitka] [-c] [-em] [-i ICON]
 ```
 
-Builds `./build/dist/eldendisk/eldendisk.exe` (no version in the path); progress and the result are log events. `-c` cleans `./build` first (refused with exit `4` while a vault under `./build` still owes a restore; the vault is never kept there by default), `-em` embeds `offsets.json` and `chr_state_ids.json`.
+Builds `./build/dist/eldendisk/eldendisk.exe` (no version in the path); progress and the result are log events. `-c` cleans `./build` first (refused with exit `4` while a vault under `./build` still owes a restore; the vault is never kept there by default), `-em` embeds `offsets.json` and `chr_state_ids.json`. It also writes `./build/dist/eldendisk/README.md` next to the exe: the intro `docs/README-exe.md` followed by this reference (`docs/cli-commands-exe.md` is the only source of the commands); without a `docs/` folder the build only warns.
 
 ---
 

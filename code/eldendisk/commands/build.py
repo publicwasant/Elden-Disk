@@ -81,6 +81,20 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
     return cmd
 
 
+def exe_readme(layout: dict) -> str | None:
+    """README.md for the folder of the exe: the intro `docs/README-exe.md` followed by `docs/cli-commands-exe.md`
+    (the one source of the command reference). None when those files are not there (a source tree without docs/)."""
+    docs = layout["project_root"] / "docs"
+    try:
+        intro = (docs / "README-exe.md").read_text(encoding="utf-8")
+        reference = (docs / "cli-commands-exe.md").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if reference.startswith("# "):      # its title becomes the "Command reference" heading of the intro
+        reference = reference.split("\n", 1)[1].lstrip("\n") if "\n" in reference else ""
+    return intro.replace("{version}", __version__).rstrip("\n") + "\n\n" + reference.rstrip("\n") + "\n"
+
+
 def cmd_build(args) -> int:
     import shutil
     import subprocess
@@ -122,6 +136,16 @@ def cmd_build(args) -> int:
     if not args.embed_configs:  # editable configs travel next to the exe, for both engines
         for c in configs:
             shutil.copy2(c, dist_dir / c.name)
+
+    readme = exe_readme(layout)
+    if readme is None:
+        book.w("build", "docs/README-exe.md or docs/cli-commands-exe.md not found: no README.md next to the exe")
+    else:
+        try:
+            (dist_dir / "README.md").write_text(readme, encoding="utf-8")
+            book.d("build", f"wrote {dist_dir / 'README.md'}")
+        except OSError as exc:
+            book.w("build", f"could not write README.md next to the exe: {exc}")
 
     rel_exe = "./build/dist/eldendisk/eldendisk.exe"
     book.ok("build", f"done: {rel_exe}")

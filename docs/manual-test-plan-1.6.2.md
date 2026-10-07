@@ -197,6 +197,7 @@ Use a throwaway or backed-up save.
 | B4 | `python code\tools\dev_pipeline.py --dry-run` | tests, build, dry run pass (no session record!) | [ ] |
 | B6 | `python code\tools\dev_pipeline.py --vault-off` (no session record!) | tests, build, then `run -v --vault-off`: banner `mode vault OFF`; a typo such as `--vault-of` stops at once with a usage error before the tests | [ ] |
 | L15 | T1 `read --query character.effects.* --live` with an effect active (e.g. Gold Scarab), then take it off | the rows turn into `none active` (no error, no exit); equip again: the rows come back; Ctrl+C exits `130` | [ ] |
+| B7 | After `build -c -em`: open `build\dist\eldendisk\README.md` | starts with `# Elden-Disk 1.6.2 (eldendisk.exe)`, the quick start, then `# Command reference` with every command; no `{version}` left; renders in a Markdown viewer / Notepad is readable | [ ] |
 | B5 | `python code\tools\soak_check.py` while `read --live --export` runs for 10+ minutes | no anomalies reported | [ ] |
 
 ---
@@ -204,7 +205,7 @@ Use a throwaway or backed-up save.
 ## Automated tests (Linux or Windows, no game)
 
 ```commandline
-python -m pytest          # 479 passed, 1 skipped
+python -m pytest          # 483 passed, 1 skipped
 python -m pyflakes eldendisk tests tools
 ```
 

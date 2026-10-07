@@ -16,7 +16,7 @@ Four parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (479 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
+> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (483 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
 
 ---
 
@@ -112,7 +112,7 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 | `write --set NAME=VALUE...` / `write --refill LIST` | **Writer** | One-shot edits; exit `5` without a valid session |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
-| `build` | Tool | Standalone `./build/dist/eldendisk/eldendisk.exe` |
+| `build` | Tool | Standalone `./build/dist/eldendisk/eldendisk.exe` plus a `README.md` next to it (quick start + the exe command reference) |
 
 **Exit codes:** `0` ok · `1` error / not applied · `2` unsupported exe · `3` EAC · `4` restore pending · `5` no valid session · `130` interrupted.
 
@@ -173,7 +173,7 @@ python code/tools/dev_pipeline.py --vault-off
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (479 tests)
+# Run unit test suite (483 tests)
 python -m pytest
 
 # Run soak stability check (V-06)

@@ -380,3 +380,40 @@ def test_vault_on_and_off_are_per_run_flags(monkeypatch):
     with pytest.raises(SystemExit) as e:
         cli.main(["run", "--vault-on", "--vault-off"])
     assert e.value.code == 2
+
+
+# ---------- README next to the exe ----------
+def _docs(project, intro="# Elden-Disk {version}\n\nQuick start\n\n# Command reference\n",
+          reference="# Reference title\n\nComplete reference.\n\n## 1. `run`\n"):
+    (project / "docs").mkdir()
+    (project / "docs" / "README-exe.md").write_text(intro, encoding="utf-8")
+    (project / "docs" / "cli-commands-exe.md").write_text(reference, encoding="utf-8")
+
+
+def test_build_writes_a_readme_next_to_the_exe(project, monkeypatch):
+    _docs(project)
+    rc, _ = _run_build(monkeypatch, _args(embed_configs=True))
+    text = (project / "build" / "dist" / "eldendisk" / "README.md").read_text(encoding="utf-8")
+    assert rc == 0
+    assert text.startswith(f"# Elden-Disk {cli.__version__}\n") and "{version}" not in text
+    assert "# Command reference\n\nComplete reference." in text       # the reference follows, without its own title
+    assert "Reference title" not in text and "## 1. `run`" in text and text.endswith("\n")
+
+
+def test_build_without_docs_still_succeeds_and_warns(project, monkeypatch, capsys):
+    rc, _ = _run_build(monkeypatch, _args(embed_configs=True))
+    assert rc == 0 and not (project / "build" / "dist" / "eldendisk" / "README.md").exists()
+    assert "no README.md" in capsys.readouterr().err
+
+
+def test_a_failed_build_writes_no_readme(project, monkeypatch):
+    _docs(project)
+    rc, _ = _run_build(monkeypatch, _args(), rc=2)
+    assert rc == 1 and not (project / "build" / "dist" / "eldendisk" / "README.md").exists()
+
+
+def test_the_real_docs_make_a_readme(monkeypatch):
+    root = Path(__file__).resolve().parents[2]
+    text = build_cmd.exe_readme({"project_root": root})
+    assert text and "# Command reference" in text and "## 1. `run` (host)" in text and "{version}" not in text
+    assert "Standalone Executable CLI Commands Reference" not in text    # the reference's own title is replaced
