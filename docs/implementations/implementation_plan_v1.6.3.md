@@ -1,6 +1,6 @@
 # Implementation Plan v1.6.3 (IMPLEMENTED, unit tests only)
 
-Feature: **params**, starting with `SpEffectParam`. Read and edit the game's own parameter table in memory, for example make the Black Flame burn permanent. Status: implemented on 2026-10-08, 624 tests pass; not yet run on the real game. Data and pointer chains were found and validated on the real game (1.17.1) with Cheat Engine. Where the build differs from this plan, section 7 says so.
+Feature: **params**, starting with `SpEffectParam`. Read and edit the game's own parameter table in memory, for example make the Black Flame burn permanent. Status: implemented on 2026-10-08, 624 tests pass; `effectEndurance = -1` on all four rows confirmed on the real game by the author (2026-10-08), the rest not yet run. Data and pointer chains were found and validated on the real game (1.17.1) with Cheat Engine. Where the build differs from this plan, section 7 says so.
 
 ## 1. What we found (evidence)
 
@@ -13,7 +13,7 @@ Feature: **params**, starting with `SpEffectParam`. Read and edit the game's own
 | Three pointer chains reach the file head; stable across two game restarts | Cheat Engine, all three chains |
 | Row address = file head + row data offset (from the row descriptor table) | Verified for 1621000 (head + 0x799188) |
 
-Not yet tried in the game: the other three rows (1623000, 1625000, 1626001) and any field except `effectEndurance`. Offsets come from the file layout and Paramdex; the code finds rows by ID and refuses to write when a check fails.
+Update 2026-10-08: the author reports that `effectEndurance = -1` works for all four rows. Not yet tried in the game: any field except `effectEndurance`, `--reset`, the title screen. Offsets come from the file layout and Paramdex; the code finds rows by ID and refuses to write when a check fails.
 
 Rows (all `effectEndurance` = 2 by default):
 

@@ -160,9 +160,10 @@ Unchanged: `0` ok · `1` error / not applied · `2` unsupported exe **or a read-
 - The three pointer chains reach the same head and survived two restarts of the game. Level 3 / offset 4095 found no path; level 4 / offset 16383 found 32.
 - Three copies of the table exist in memory; the live one is at the highest address. What the other copy (lower address) does was not recorded.
 
-**Still open** (code from this release was **not run on real Windows**)
-- Rows 1623000, 1625000, 1626001: positions derived from the file layout (same arithmetic as the measured row); the author expects them to work. Test PA6.
-- Fields other than `effectEndurance`: offsets from Paramdex, not measured. Tests PA8, PA10.
+- **Reported by the author, 2026-10-08:** with `effectEndurance = -1` all four rows (1621000, 1623000, 1625000, 1626001) burn without end: enemies burn to death and the effect bar stays lit. So the positions of the three rows that were only derived from the file layout are right in practice. No log of this run is kept in the repository.
+
+**Still open** (the rest of this release was **not run on real Windows**)
+- Fields other than `effectEndurance`: offsets from Paramdex, not measured. Tests PA8, PA10. `--reset` (PA9) is not reported yet.
 - The title screen (no character loaded): reading and writing there. Test PA20.
 - The buffs rename and the new `chr_state_ids.json` are covered by unit tests only; real-game checks are M14-M16 in the manual plan (the monitors themselves were seen working in 1.6.2).
 - Earlier open items of 1.6.2 (T10 Steam Cloud, console close, Registry vault path …) are unchanged.

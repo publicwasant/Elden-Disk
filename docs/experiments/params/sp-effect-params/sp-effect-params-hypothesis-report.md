@@ -4,7 +4,7 @@ Project: Elden-Disk (offline, Python)
 Game build: Elden Ring 1.17.1 (`eldenring.exe` SHA-256 `1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891`)
 Tools used: Smithbox (view/export only, nothing saved or imported into the game), Cheat Engine, Elden Ring started with `eldendisk run` (offline, no EAC), Paramdex definitions
 Period: 2026-10-07 to 2026-10-08
-Status: **H1 to H6 confirmed on the real game. H7 and H8 not tested yet** (section 6).
+Status: **H1 to H7 confirmed on the real game (H7 reported by the author on 2026-10-08, no log kept). H8 not tested yet** (section 6).
 
 ## 1. Goal
 
@@ -24,7 +24,7 @@ The game keeps `SpEffectParam` as one contiguous file in memory (11,354 rows of 
 | H4 | The table has the file structure we assumed | Read in Cheat Engine: row count (u16 at head+0xA) = 11,354; data start (u64 at head+0x30) = 272,560 | Confirmed: both equal the CSV; 272,560 = 0x40 + 11,354 × 24 |
 | H5 | A static pointer chain from `eldenring.exe` reaches the file head | Pointer scan on the head | Confirmed: three chains X, Y, Z (section 5) |
 | H6 | The chains still work after restarting the game, and writing through one is enough | Closed and restarted the game twice; wrote `-1` through X | Confirmed: all three still pointed to the same cell after both restarts; changing X changed Y and Z (they are one memory cell); the frog test repeated with `-1` written through X gave the same permanent burn |
-| H7 | The same works for Scouring Black Flame (1623000), Black Flame Ritual (1625000) and Black Flame Blade (1626001) | not run | **Open**: addresses are calculated (section 5); the project owner expects it to work |
+| H7 | The same works for Scouring Black Flame (1623000), Black Flame Ritual (1625000) and Black Flame Blade (1626001) | run by the author with the tool, 2026-10-08 | **Confirmed (reported)**: all four rows burn without end, enemies burn to death, the effect bar stays lit. The addresses were calculated (section 5), not measured |
 | H8 | The other fields (`motionInterval`, `changeHpRate`, `changeHpPoint`, `atkOccurrenceSpEffectId`, `vfxId`) can be read and written the same way | not run | **Open**: offsets taken from Paramdex only |
 
 A note on scope: when `-1` was written for Black Flame (1621000), Black Flame Ritual was unchanged. Each row has to be edited on its own.
@@ -110,7 +110,6 @@ For debugging only: the head of a copy is `hit address − 0x31738` for the row-
 
 ## 6. Not yet tested
 
-- H7: the three other rows. The tool will look up rows by ID in the descriptor table and check the file head (`data start == 0x40 + row count × 24`) before writing, so a wrong offset should refuse to write instead of corrupting something, but the in-game effect of each spell is untested.
 - H8: any field other than `effectEndurance`.
 - Behaviour at the title screen (before a character is loaded): not checked.
 - A burn that is already on an enemy keeps its old duration; this was not tested but follows from the effect being copied onto the target when it is applied. Treat as unverified.

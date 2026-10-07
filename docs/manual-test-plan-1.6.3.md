@@ -7,7 +7,7 @@ For the checks the unit tests cannot make: the real game, a real terminal, Steam
 
 Legend: `T0` = terminal running `eldendisk.exe run` (leave it open), `T1` = a second terminal, `T2` = a third. "Loaded" = a character is in the world, not the title screen.
 
-Already seen on the real game (spec 1.6.2 section 9): `run` restore, hard-kill recovery, `write` by name, `read --live`, the two monitors. They are listed again so a release run is complete; tick them quickly. New in 1.6.3 (section 7A): game params. On the real game only the Black Flame row (1621000) has been written so far; the other three rows are what section 7A tests first.
+Already seen on the real game (spec 1.6.2 section 9): `run` restore, hard-kill recovery, `write` by name, `read --live`, the two monitors. They are listed again so a release run is complete; tick them quickly. New in 1.6.3 (section 7A): game params. On the real game, `effectEndurance = -1` has been written into all four Black Flame rows (author's report, 2026-10-08: every configured spell burns without end, enemies burn to death, the effect bar stays lit). Not yet tried: the other fields, `--reset`, the title screen, the buffs rename.
 
 ---
 
@@ -174,7 +174,7 @@ Set-up: T0 `eldendisk.exe run`. Target: an enemy that does not die at once (the 
 | PA3 | `read --export` | the file has `systems`, `character`, `params` (in that order); valid against `reader/disk.schema.json`; `character` and `systems` as before | [ ] |
 | PA4 | T1 `write --set params.effects.1621000.effectEndurance=-1`, then cast Black Flame on the enemy | `✓ write params.effects.1621000.effectEndurance = -1.0`; the burn never ends and the black fire stays on the enemy until it dies (seen on the real game with this value) | [ ] |
 | PA5 | `read --query params.effects.1621000` | `effectEndurance -1.0`, the other five fields unchanged; the other rows still `2.0` | [ ] |
-| PA6 | Reset (PA9), then PA4 for each of `1623000`, `1625000`, `1626001`, one at a time, with its own spell (Blade: apply the buff, then hit) | each burns without end with its own spell and **only** with it. **Not yet tried on the real game.** Write down which fail: ______ | [ ] |
+| PA6 | Reset (PA9), then PA4 for each of `1623000`, `1625000`, `1626001`, one at a time, with its own spell (Blade: apply the buff, then hit) | each burns without end with its own spell and **only** with it. **Reported working for all four rows by the author (2026-10-08)**; tick it when you have seen each one with this build. Write down which fail: ______ | [ ] |
 | PA7 | `write --set "params.effects.*.effectEndurance=-1"` | a line `… matches 4 values: 1621000.effectEndurance, …`, then four `✓` lines; `read --query "params.effects.*.effectEndurance" --flat` shows `-1.0` four times | [ ] |
 | PA8 | `write --set params.effects.1621000.motionInterval=1 params.effects.1621000.changeHpRate=0.5 params.effects.1621000.changeHpPoint=3` | the three values read back (`1.0`, `0.5`, `3`); in game the burn ticks slower / harder as set (note what you see) | [ ] |
 | PA9 | `write --reset params.effects.1621000.effectEndurance`; then `--reset params.effects.1621000` (a whole row); then `--reset all` | the game's own values (`2.0`, `0.1`, `0.1`, `1`) return field, row, everything; a new cast burns about 2 seconds again. With nothing to reset: `values already match`, exit `0` | [ ] |

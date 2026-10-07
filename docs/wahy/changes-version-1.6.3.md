@@ -50,6 +50,6 @@ _(baseline: **[changes-version-1.6.2.md](changes-version-1.6.2.md)**; design: **
 
 ## Not done / open
 
-- Nothing in 1.6.3 was run against the real game. Only row 1621000 `effectEndurance` was ever measured; the rows 1623000, 1625000, 1626001 (test PA6) and the other fields (PA8, PA10) are derived from the file layout, not tested. The title screen (PA20) is unknown.
+- Real game, reported by the author (2026-10-08): `effectEndurance = -1` makes **all four** Black Flame rows burn without end (PA4 and PA6 as far as `effectEndurance` goes). Not reported yet: the other fields (PA8, PA10), `--reset` (PA9), the title screen (PA20), the buffs rename and the new `chr_state_ids.json` (M14-M16).
 - `character.inventory.*`: postponed (no data yet).
 - The earlier open items of 1.6.2 (T10 Steam Cloud and the others in spec 1.6.2 section 9) are unchanged.
