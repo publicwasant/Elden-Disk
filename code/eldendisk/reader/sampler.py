@@ -11,9 +11,12 @@ from datetime import datetime, timedelta, timezone
 
 from ..game.layout import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout, parse_vitals_block
 from ..game.memory import is_user_ptr, read_ptr, read_u32
-from ..game.profile import Effects, Profile
+from ..game.params import ParamError, ParamStore
+from ..game.profile import Profile, StateIds
 
-MAX_EFFECTS = 512
+MAX_BUFFS = 512
+PARAMS_EVERY_S = 1.0   # the param tables change only when something edits them: look about once a second, not every frame
+PARAMS_RETRY_S = 0.25  # ... but while they cannot be read (not loaded yet) look again soon
 WORLD_LOST_RESET_S = 10.0  # title screen / long load this long -> forget baseline + animation
 
 
@@ -28,21 +31,27 @@ def iso(dt: datetime) -> str:
 class Sample:
     state: str  # WAITING_FOR_WORLD | CONNECTED | IDLE
     character: dict | None = None
-    ignored_effects: int = 0
+    ignored_buffs: int = 0
     ignored_animations: int = 0
     error: str | None = None  # diagnostic only; None for the normal title-screen case
     runes: int | None = None
+    params: dict | None = None        # the `params` block of the document (None: unsupported or not readable now)
+    params_error: str | None = None   # why `params` is None when the profile does support it
 
 
 class Sampler(Layout):
-    def __init__(self, mem, profile: Profile, effects: Effects, module_base: int):
+    def __init__(self, mem, profile: Profile, state_ids: StateIds, module_base: int):
         super().__init__(mem, profile, module_base)
-        self.effects = effects
+        self.state_ids = state_ids
         self.baseline_runes: int | None = None
         self._was_at_grace: bool = False
         self._last_animation: dict[str, dict] = {}
         self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
         self._world_lost_at: datetime | None = None
+        self.param_store = ParamStore(mem, profile, module_base) if profile.params is not None else None
+        self._params: dict | None = None
+        self._params_error: str | None = None
+        self._params_at: datetime | None = None
 
     def _reset_session(self) -> None:
         """Forget per-character state (the player left the world, possibly to load another character)."""
@@ -82,9 +91,23 @@ class Sampler(Layout):
         return v, (None if w is None else self._wait(w.error))
 
     # -- main ------------------------------------------------------------
+    def read_params(self, now: datetime) -> tuple[dict | None, str | None]:
+        """The param tables (disk-state `params`) as (values, None) or (None, why not); read at most every PARAMS_EVERY_S."""
+        if self.param_store is None:
+            return None, None
+        gap = PARAMS_EVERY_S if self._params is not None else PARAMS_RETRY_S
+        if self._params_at is None or (now - self._params_at).total_seconds() >= gap:
+            self._params_at = now
+            try:
+                self._params, self._params_error = self.param_store.read_all(), None
+            except ParamError as exc:
+                self._params, self._params_error = None, str(exc)
+        return self._params, self._params_error
+
     def sample(self, now: datetime | None = None) -> Sample:
         now = now or datetime.now(timezone.utc)
         s = self._sample(now)
+        s.params, s.params_error = self.read_params(now)
         if s.state == "CONNECTED":
             self._world_lost_at = None
         elif s.error is None:  # normal title-screen / loading wait (not a read failure)
@@ -126,13 +149,13 @@ class Sampler(Layout):
         if err is not None:
             return self._wait(err)
 
-        effects: dict[str, dict] = {}
+        buffs: dict[str, dict] = {}
         ignored = 0
         if p.sp_effect is not None:
-            entries, err = self._read_effect_list(player)
+            entries, err = self._read_buff_list(player)
             if err is not None:
                 return self._wait(err)
-            effects, ignored = self._classify(entries, now)
+            buffs, ignored = self._classify(entries, now)
 
         # Read Site of Grace interaction/resting state directly from CSChrTimeActModule in game memory
         anim_id = self.read_animation_id(player)
@@ -140,7 +163,7 @@ class Sampler(Layout):
 
         ignored_anim = 0
         if anim_id is not None and anim_id > 0:
-            cfg = self.effects.table.get(anim_id)
+            cfg = self.state_ids.animations.get(anim_id)
             if cfg is not None:
                 anim_obj = {
                     "name": cfg.name,
@@ -183,22 +206,22 @@ class Sampler(Layout):
             "vitals": vitals,
             "runes": runes_obj,
             "attributes": dict(zip(ATTR_NAMES, attrs)),
-            "effects": effects,
+            "buffs": buffs,
             "animations": self._last_animation,
         }
         return Sample("CONNECTED", character, ignored, ignored_anim, None, runes)
 
-    def raw_effects(self) -> tuple[list[tuple[int, float, float]] | None, str | None]:
-        """Unclassified (id, duration, timer) entries, for the `effects` discovery command."""
+    def raw_buffs(self) -> tuple[list[tuple[int, float, float]] | None, str | None]:
+        """Unclassified (id, duration, timer) entries, for the `--live-buffs` monitor."""
         if self.profile.sp_effect is None:
             return None, "profile has no complete sp_effect layout"
         player, reason = self.locate_player()
         if player is None:
             return None, reason
-        return self._read_effect_list(player)
+        return self._read_buff_list(player)
 
     # -- SpEffect linked list -------------------------------------------
-    def _read_effect_list(self, player: int):
+    def _read_buff_list(self, player: int):
         lay = self.profile.sp_effect
         e = lay.entry
         sp = read_ptr(self.mem, player + lay.player_to_sp_effect)
@@ -216,8 +239,8 @@ class Sampler(Layout):
         seen: set[int] = set()
         out: list[tuple[int, float, float]] = []
         while cur != 0:
-            if len(out) >= MAX_EFFECTS:
-                return None, f"SpEffect list longer than {MAX_EFFECTS} entries"
+            if len(out) >= MAX_BUFFS:
+                return None, f"SpEffect list longer than {MAX_BUFFS} entries"
             if cur in seen:
                 return None, "cycle in SpEffect list"
             if not is_user_ptr(cur):
@@ -236,13 +259,13 @@ class Sampler(Layout):
 
     def _classify(self, entries, now: datetime) -> tuple[dict[str, dict], int]:
         mode = self.profile.sp_effect.entry.timer_mode
-        effects: dict[str, dict] = {}
+        buffs: dict[str, dict] = {}
         ignored = 0
         active_eids: set[int] = set()
 
         for eid, dur, timer in entries:
-            cfg = self.effects.table.get(eid)
-            if cfg is None or cfg.sources == "ANIMATIONS" or not (math.isfinite(dur) and math.isfinite(timer)):
+            cfg = self.state_ids.buffs.get(eid)
+            if cfg is None or not (math.isfinite(dur) and math.isfinite(timer)):
                 ignored += 1
                 continue
 
@@ -274,29 +297,29 @@ class Sampler(Layout):
                 }
 
             key = str(eid)
-            eff = {
+            buff = {
                 "name": cfg.name,
                 "categories": cfg.categories or "CONSUMABLES",
             }
             if cfg.abilities:
-                eff["abilities"] = cfg.abilities
+                buff["abilities"] = cfg.abilities
             if kind == "TIMED":
-                eff["times"] = times
+                buff["times"] = times
 
-            if key in effects:
-                existing = effects[key]
+            if key in buffs:
+                existing = buffs[key]
                 has_times = "times" in existing
                 if not has_times and kind == "TIMED":
-                    effects[key] = eff
+                    buffs[key] = buff
                 elif has_times and kind == "TIMED":
                     if times["buff_duration"] > existing["times"]["buff_duration"]:
-                        effects[key] = eff
+                        buffs[key] = buff
             else:
-                effects[key] = eff
+                buffs[key] = buff
 
         # Prune expired or inactive buffs from activation tracking
         for stale_eid in list(self._activations.keys()):
             if stale_eid not in active_eids:
                 del self._activations[stale_eid]
 
-        return effects, ignored
+        return buffs, ignored

@@ -16,6 +16,7 @@ from typing import Callable
 
 from .sampler import Sample
 
+NO_PARAMS_STATES = ("DISCONNECTED", "EAC_DETECTED", "EAC_ACTIVE", "WAITING_FOR_PROCESS", "UNSUPPORTED_VERSION")
 RETRIES = 5
 RETRY_DELAY_S = 0.01
 
@@ -48,7 +49,7 @@ class JsonLogger:
 
 def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
                    exe_sha256: str | None, profile_label: str | None,
-                   effects_supported: bool = True,
+                   buffs_supported: bool = True,
                    animations_supported: bool = True,
                    sandbox_supported: bool = True,
                    sample: Sample | None,
@@ -77,7 +78,7 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
     }
 
     features = {
-        "effects_supported": effects_supported,
+        "buffs_supported": buffs_supported,
         "animations_supported": animations_supported,
         "sandbox_supported": sandbox_supported,
     }
@@ -88,7 +89,7 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
         "anti_cheat_state": anti_cheat,
         "game_connected": game_connected,
         "ignored": {
-            "effects": sample.ignored_effects if sample else 0,
+            "buffs": sample.ignored_buffs if sample else 0,
             "animations": sample.ignored_animations if sample else 0,
         },
     }
@@ -117,24 +118,29 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
             "timestamp": ts_str,
         }
 
+    # the param tables belong to the running game: with no game (DISCONNECTED, EAC) there is nothing to show, and the
+    # values would be wrong anyway, since an edit is gone with the game
+    params = sample.params if sample is not None and state not in NO_PARAMS_STATES else None
+
     return {
         "systems": systems,
         "character": character,
+        "params": params,
     }
 
 
 def doc_signature(doc: dict) -> dict:
     """The document minus the per-tick countdown (`buff_duration`): equal signatures mean only timers moved."""
     ch = doc.get("character")
-    if not isinstance(ch, dict) or not ch.get("effects"):
+    if not isinstance(ch, dict) or not ch.get("buffs"):
         return doc
-    effects = {}
-    for eid, eff in ch["effects"].items():
-        times = eff.get("times")
+    buffs = {}
+    for eid, buff in ch["buffs"].items():
+        times = buff.get("times")
         if times is not None:
-            eff = {**eff, "times": {k: v for k, v in times.items() if k != "buff_duration"}}
-        effects[eid] = eff
-    return {**doc, "character": {**ch, "effects": effects}}
+            buff = {**buff, "times": {k: v for k, v in times.items() if k != "buff_duration"}}
+        buffs[eid] = buff
+    return {**doc, "character": {**ch, "buffs": buffs}}
 
 
 class ExportWriter:
@@ -150,7 +156,7 @@ class ExportWriter:
         self.anti_cheat = "UNKNOWN"
         self.sha: str | None = None
         self.label: str | None = None
-        self.effects_supported = False
+        self.buffs_supported = False
         self.animations_supported = False
         self.sandbox = False                      # a valid RUNNING session record exists (set by the reader loop)
         self.writes = 0
@@ -189,7 +195,7 @@ class ExportWriter:
             self._last_character = sample.character
         return build_document(
             state=state, pid=self.pid, anti_cheat=self.anti_cheat, exe_sha256=self.sha, profile_label=self.label,
-            effects_supported=self.effects_supported, animations_supported=self.animations_supported,
+            buffs_supported=self.buffs_supported, animations_supported=self.animations_supported,
             sample=sample, last_character=self._last_character, note=note,
             mode="sandbox" if self.sandbox else "telemetry", read_only=True, sandbox=self.sandbox,
         )

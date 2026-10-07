@@ -5,7 +5,7 @@
     read --export                 write disk-state.json once, then exit
     read ... --flat               print the values as `full.path  value` rows instead of the tree
     read --live                   the same, continuously (with --query / --export: that one, continuously)
-    read --live-effects           effects monitor        read --live-animations   animation monitor
+    read --live-buffs             buffs monitor        read --live-animations   animation monitor
                                   (--mapped / --unmapped: only ids that are / are not in chr_state_ids.json)
 
 `--live` means "do not stop". One attach and one loop serve every mode (spec 1.6.2 section 5).
@@ -21,13 +21,13 @@ from .. import ui
 from ..console import require_windows_x64
 from ..game.attach import EXIT_ERROR, EXIT_EAC, AttachError, Target, eac_loaded, locate, open_read
 from ..game.processes import is_window_active, process_started
-from ..game.profile import load_effects
-from ..game.values import UnknownName
+from ..game.profile import load_state_ids
+from ..game.values import UnknownName, is_param_name
 from ..logbook import book
 from ..paths import describe_resource
 from ..reader import view
 from ..reader.animations import AnimationsMonitor
-from ..reader.effects import EffectsMonitor
+from ..reader.buffs import BuffsMonitor
 from ..reader.export import ExportWriter, JsonLogger
 from ..reader.sampler import Sampler
 from ..vault import VaultError, authorise, resolve_vault
@@ -72,13 +72,21 @@ def _export_log(message: str) -> None:
         book.i("export", "state " + re.sub(r"^\[(\w+)\]\s*", r"\1 ", message).strip())
 
 
+def _why_unknown(exc: UnknownName, doc: dict, sample, names) -> str:
+    """The message for a name that matched nothing; a `params` name with no params to look in says why there are none."""
+    wanted = [names] if isinstance(names, str) else names or []
+    if doc.get("params") is None and any(is_param_name(n) for n in wanted):
+        return f"params cannot be read: {sample.params_error or 'this exe version has no params block in offsets.json'}"
+    return str(exc)
+
+
 def _continuous(args) -> bool:
-    return bool(args.live or args.live_effects or args.live_animations)
+    return bool(args.live or args.live_buffs or args.live_animations)
 
 
 def _mode_text(args) -> str:
-    if args.live_effects or args.live_animations:
-        return ", ".join(n for n, on in (("effects", args.live_effects), ("animations", args.live_animations)) if on) + " (live)"
+    if args.live_buffs or args.live_animations:
+        return ", ".join(n for n, on in (("buffs", args.live_buffs), ("animations", args.live_animations)) if on) + " (live)"
     if args.export:
         return f"export to {args.out} (live)"
     return f"{view.label(args.query)} (live)"
@@ -89,6 +97,11 @@ def cmd_read(args) -> int:
     continuous = _continuous(args)
     timeout = None if continuous else args.timeout
     try:
+        state_ids = load_state_ids(Path(args.state_ids))     # before waiting for the game: a bad file is told at once
+    except ValueError as exc:
+        book.e("read", str(exc))
+        return EXIT_ERROR
+    try:
         target = _wait_for_game(Path(args.offsets), timeout)
     except AttachError as exc:
         book.e("read", str(exc))
@@ -97,7 +110,7 @@ def cmd_read(args) -> int:
         return 130
 
     book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
-    book.d("config", f"effects: {args.effects} ({describe_resource(args.effects)})")
+    book.d("config", f"state ids: {args.state_ids} ({describe_resource(args.state_ids)})")
     vault = Path()
     try:
         vault = resolve_vault(args.vault)
@@ -115,9 +128,9 @@ def cmd_read(args) -> int:
         book.w("read", profile.buffs_note)
 
     mem = open_read(target)
-    sampler = Sampler(mem, profile, load_effects(Path(args.effects)), target.base)
+    sampler = Sampler(mem, profile, state_ids, target.base)
     try:
-        if args.live_effects or args.live_animations:
+        if args.live_buffs or args.live_animations:
             return _monitors(args, target, mem, sampler, vault)
         export = _exporter(args, target, vault)
         if args.export and not args.live:
@@ -140,7 +153,7 @@ def _exporter(args, target: Target, vault: Path | None) -> ExportWriter:
                           timer_interval=0.0 if not args.live else args.timer_interval, verbose=args.live, log=_export_log)
     export.pid, export.sha, export.label = target.pid, target.sha256, profile.label
     export.anti_cheat = "DISABLED_OFFLINE"
-    export.effects_supported = profile.sp_effect is not None
+    export.buffs_supported = profile.sp_effect is not None
     export.animations_supported = profile.anim is not None
     export.sandbox = bool(vault) and _in_session(vault, target)
     return export
@@ -171,11 +184,11 @@ def _query_once(args, mem, sampler: Sampler, export: ExportWriter) -> int:
     try:
         selection = view.select(doc, args.query)
     except UnknownName as exc:
-        book.e("read", str(exc))
+        book.e("read", _why_unknown(exc, doc, sample, args.query))
         return EXIT_ERROR
     book.d("read", f"query {view.label(args.query)}: {len(selection)} result(s)")
     if not selection:
-        book.i("read", f"nothing matches {view.label(args.query)!r} right now (no such effect or animation is active)")
+        book.i("read", f"nothing matches {view.label(args.query)!r} right now (no such buff or animation is active)")
     if args.json:
         ui.out(view.as_json(selection))
     else:
@@ -228,7 +241,7 @@ class _LiveValues:
 
     On a terminal the tree is redrawn where it stands and a value that just changed is highlighted for `HOLD_S`.
     Elsewhere (an IDE run window, a pipe) the tree is printed once and then one line per changed value follows.
-    Buff countdowns and the counters of ignored effects / animations do not count as changes.
+    Buff countdowns and the counters of ignored buffs / animations do not count as changes.
     """
     HOLD_S = 1.0       # how long a changed value stays highlighted
 
@@ -242,11 +255,12 @@ class _LiveValues:
 
     def check(self, sample) -> bool:
         """False (after saying why) when the name matches nothing."""
+        doc = self.export.build("CONNECTED", sample)
         try:
-            view.select(self.export.build("CONNECTED", sample), self.name)
+            view.select(doc, self.name)
             return True
         except UnknownName as exc:
-            book.e("read", str(exc))
+            book.e("read", _why_unknown(exc, doc, sample, self.name))
             return False
 
     def close(self) -> None:
@@ -300,11 +314,11 @@ class _LiveValues:
             stamp = datetime.now().strftime("%H:%M:%S")
             for path, old, new in view.changes(previous, flat):
                 key = path.rsplit(".", 1)[-1]
-                ui.out(f" {stamp}  {path}  {view.fmt(key, old)} \u2192 {view.fmt(key, new)}")
+                ui.out(f" {stamp}  {path}  {view.fmt(key, old, path)} \u2192 {view.fmt(key, new, path)}")
 
 
 class _Board:
-    """`--live-effects` / `--live-animations` on a terminal: one table per monitor, redrawn where it stands."""
+    """`--live-buffs` / `--live-animations` on a terminal: one table per monitor, redrawn where it stands."""
 
     def __init__(self, monitors):
         self.monitors = monitors
@@ -354,12 +368,12 @@ class _TableReload:
         if stamp is None:
             return
         try:
-            table = load_effects(self.path)
+            table = load_state_ids(self.path)
         except ValueError as exc:
             book.w("read", f"{self.path.name} changed but cannot be read, keeping the old names: {exc}")
             return
-        self.sampler.effects = table
-        book.i("read", f"{self.path.name} reloaded ({len(table.table)} ids)")
+        self.sampler.state_ids = table
+        book.i("read", f"{self.path.name} reloaded ({len(table.buffs)} buffs, {len(table.animations)} animations)")
 
 
 def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vault: Path | None) -> int:
@@ -382,7 +396,7 @@ def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vau
 
 
 def _monitors(args, target: Target, mem, sampler: Sampler, vault: Path | None) -> int:
-    both = args.live_effects and args.live_animations
+    both = args.live_buffs and args.live_animations
     show = "mapped" if args.mapped else "unmapped" if args.unmapped else "all"
     redraw = ui.can_redraw()
 
@@ -393,8 +407,8 @@ def _monitors(args, target: Target, mem, sampler: Sampler, vault: Path | None) -
         return lambda line: print(prefix + line, flush=True)
 
     monitors = []
-    if args.live_effects:
-        monitors.append(EffectsMonitor(sampler, out_for("effects"), quiet=args.quiet, show=show))
+    if args.live_buffs:
+        monitors.append(BuffsMonitor(sampler, out_for("buffs"), quiet=args.quiet, show=show))
     if args.live_animations:
         monitors.append(AnimationsMonitor(sampler, out_for("animations"), show=show))
     for m in monitors:
@@ -408,7 +422,7 @@ def _monitors(args, target: Target, mem, sampler: Sampler, vault: Path | None) -
     book.ok("read", "attached, reading (Ctrl+C to stop)")
     try:
         return _loop(args, target, mem, sampler, monitors, None, vault, board,
-                     _TableReload(Path(args.effects), sampler))
+                     _TableReload(Path(args.state_ids), sampler))
     finally:
         if board is not None:
             board.close()

@@ -14,7 +14,7 @@ from eldendisk.game import attach, memory as memory_reader, processes
 from eldendisk.host import launcher
 from eldendisk.reader.export import JsonLogger, doc_signature
 from eldendisk.reader.sampler import Sampler, WORLD_LOST_RESET_S, iso
-from tests.test_disk import BASE, FakeMem, GD, NOW, effects, full_world, make_profile
+from tests.test_disk import BASE, FakeMem, GD, NOW, state_ids, full_world, make_profile
 
 
 # ---------- iso / doc_signature ----------
@@ -27,7 +27,7 @@ def test_iso_always_carries_utc_offset():
 
 def _doc(level=1, remaining=50.0):
     return {"system_status": {"state": "CONNECTED"},
-            "character": {"level": level, "effects": {
+            "character": {"level": level, "buffs": {
                 "1": {"name": "a", "times": {"buff_duration": remaining, "max_duration": 60.0, "last_activated_at": "t"}},
                 "2": {"name": "perm"}}}}
 
@@ -36,7 +36,7 @@ def test_doc_signature_ignores_only_the_countdown():
     assert doc_signature(_doc(remaining=50.0)) == doc_signature(_doc(remaining=49.0))
     assert doc_signature(_doc(level=1)) != doc_signature(_doc(level=2))
     assert doc_signature({"character": None}) == {"character": None}
-    assert _doc(remaining=50.0)["character"]["effects"]["1"]["times"]["buff_duration"] == 50.0  # input not mutated
+    assert _doc(remaining=50.0)["character"]["buffs"]["1"]["times"]["buff_duration"] == 50.0  # input not mutated
 
 
 # ---------- get_resource_path / describe_resource ----------
@@ -167,14 +167,14 @@ def test_run_flags_parse(monkeypatch):
 def test_read_flags_parse_and_several_features_are_accepted(monkeypatch):
     seen = {}
     monkeypatch.setattr(cli, "cmd_read", lambda a: seen.update(vars(a)) or 0)
-    assert cli.main(["read", "--live-effects", "--live-animations", "-q", "--hz", "30"]) == 0
-    assert seen["live_effects"] and seen["live_animations"] and seen["quiet"] and not seen["live"] and not seen["export"]
+    assert cli.main(["read", "--live-buffs", "--live-animations", "-q", "--hz", "30"]) == 0
+    assert seen["live_buffs"] and seen["live_animations"] and seen["quiet"] and not seen["live"] and not seen["export"]
     assert seen["hz"] == 30.0
     seen.clear()
     assert cli.main(["read", "--live-animations", "--unmapped"]) == 0
     assert seen["unmapped"] and not seen["mapped"]
     seen.clear()
-    assert cli.main(["read", "--live-effects", "--mapped"]) == 0 and seen["mapped"]
+    assert cli.main(["read", "--live-buffs", "--mapped"]) == 0 and seen["mapped"]
     seen.clear()
     assert cli.main(["read", "--export", "--live", "--no-idle", "--export-interval", "1", "--timer-interval", "0"]) == 0
     assert seen["export"] and seen["live"] and seen["no_idle"] and seen["query"] is None
@@ -185,8 +185,8 @@ def test_read_flags_parse_and_several_features_are_accepted(monkeypatch):
     seen.clear()
     assert cli.main(["read", "--query", "attrs.*", "--flat", "--live"]) == 0 and seen["flat"] and seen["live"]
     seen.clear()
-    assert cli.main(["read", "--query", "character.runes.*", "character.effects.*", "--live"]) == 0 and not seen["flat"]
-    assert seen["query"] == ["character.runes.*", "character.effects.*"] and seen["live"]
+    assert cli.main(["read", "--query", "character.runes.*", "character.buffs.*", "--live"]) == 0 and not seen["flat"]
+    assert seen["query"] == ["character.runes.*", "character.buffs.*"] and seen["live"]
     seen.clear()
     cli.main(["read"])   # no flag: every value once
     assert (seen["query"], seen["export"], seen["live"], seen["hz"], seen["timeout"]) == (None, False, False, 60.0, 15.0)
@@ -194,11 +194,11 @@ def test_read_flags_parse_and_several_features_are_accepted(monkeypatch):
 
 @pytest.mark.parametrize("argv", [
     ["read", "--hz", "500"], ["read", "--hz", "0"], ["read", "--export", "--export-interval", "-1"],
-    ["read", "--timeout", "0"], ["read", "--export", "--query", "hp"], ["read", "--live-effects", "--live"],
-    ["read", "--live-animations", "--export"], ["read", "--live-effects", "--query", "hp"],
+    ["read", "--timeout", "0"], ["read", "--export", "--query", "hp"], ["read", "--live-buffs", "--live"],
+    ["read", "--live-animations", "--export"], ["read", "--live-buffs", "--query", "hp"],
     ["read", "--json", "--live"], ["read", "--json", "--export"], ["read", "effects"], ["read", "export"], ["read", "--once"],
-    ["read", "--flat", "--export"], ["read", "--flat", "--json"], ["read", "--flat", "--live-effects"],
-    ["read", "--mapped"], ["read", "--live", "--unmapped"], ["read", "--live-effects", "--mapped", "--unmapped"],
+    ["read", "--flat", "--export"], ["read", "--flat", "--json"], ["read", "--flat", "--live-buffs"],
+    ["read", "--mapped"], ["read", "--live", "--unmapped"], ["read", "--live-buffs", "--mapped", "--unmapped"],
 ])
 def test_read_usage_errors(argv):
     with pytest.raises(SystemExit) as e:
@@ -207,7 +207,7 @@ def test_read_usage_errors(argv):
 
 
 def test_old_command_names_are_gone():
-    for argv in (["sandbox", "status"], ["effects"], ["animations"], ["run", "--attach"], ["run", "--hz", "30"]):
+    for argv in (["sandbox", "status"], ["buffs"], ["animations"], ["run", "--attach"], ["run", "--hz", "30"]):
         with pytest.raises(SystemExit):
             cli.main(argv)
 
@@ -298,7 +298,7 @@ def test_memory_reader_helpers():
 # ---------- Sampler: leaving the world resets per-character state ----------
 def test_baseline_and_animation_reset_after_world_lost():
     m = full_world()
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     assert s.sample(NOW).character["runes"]["baseline"] == 10_008_626
     s._last_animation = {"2000000": {"name": "Standing", "categories": "MANNER"}}
 
@@ -316,7 +316,7 @@ def test_baseline_and_animation_reset_after_world_lost():
 
 def test_read_failures_do_not_start_the_world_lost_clock():
     m = full_world()
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     s.sample(NOW)
     m.u32(GD + 0x68, 9999)  # level out of range -> diagnostic error, not a title screen
     for i in range(1, 30):
@@ -326,7 +326,7 @@ def test_read_failures_do_not_start_the_world_lost_clock():
 
 def test_locate_player_reports_reason():
     m = full_world()
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     assert s.locate_player()[0] is not None
     m.u64(BASE + 0x1000, 0)
     assert s.locate_player() == (None, "world not loaded")

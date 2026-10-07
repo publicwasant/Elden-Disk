@@ -15,12 +15,16 @@ class AnimationsMonitor(LedgerMonitor):
                  now: Callable[[], datetime] = lambda: datetime.now().astimezone()):
         super().__init__(sampler, out, show=show, now=now)
 
+    @property
+    def table(self):
+        return self.sampler.state_ids.animations
+
     @staticmethod
     def unsupported(profile) -> str | None:
         return None if profile.anim is not None else "anim layout incomplete in profile"
 
     def is_mapped(self, eid: int) -> bool:
-        return eid in self.sampler.effects.table
+        return eid in self.table
 
     def read(self):
         player, reason = self.sampler.locate_player()

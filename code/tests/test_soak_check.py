@@ -17,11 +17,11 @@ def doc(state="CONNECTED", **over):
         "stamina": {"current": 178, "maximum": 178, "base": 158},
     }
     ch = {"level": 386, "vitals": vitals, "runes": runes, "attributes": dict(zip(soak_check.ATTRS, [80, 60, 60, 90, 90, 15, 60, 10])),
-          "effects": {}, "animations": {}}
+          "buffs": {}, "animations": {}}
     d = {"systems": {
             "profile": {"sha256": "abc", "game": "eldenring.exe", "version": "1.17.1"},
-            "features": {"effects_supported": True, "animations_supported": True, "sandbox_supported": True},
-            "status": {"pid": 1234, "tool_state": state, "anti_cheat_state": "DISABLED_OFFLINE", "game_connected": True, "ignored": {"effects": 0, "animations": 0}},
+            "features": {"buffs_supported": True, "animations_supported": True, "sandbox_supported": True},
+            "status": {"pid": 1234, "tool_state": state, "anti_cheat_state": "DISABLED_OFFLINE", "game_connected": True, "ignored": {"buffs": 0, "animations": 0}},
             "session": {"mode": "telemetry", "read_only": True, "sandbox": False}
          },
          "character": ch}
@@ -48,7 +48,7 @@ def test_detects_problems():
     bad = doc("WAITING_FOR_WORLD"); bad["character"]["level"] = 0
     assert any("level" in p for p in soak_check.check(bad))
     bad = doc()
-    bad["character"]["effects"] = {
+    bad["character"]["buffs"] = {
         "1": {"name": "Test", "kind": "TIMED", "times": {"buff_duration": 90.0, "max_duration": 30.0}}
     }
     assert any("impossible timer" in p for p in soak_check.check(bad))

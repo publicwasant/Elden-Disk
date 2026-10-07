@@ -19,9 +19,9 @@
         },
         "features": {
           "type": "object",
-          "required": ["effects_supported", "animations_supported", "sandbox_supported"],
+          "required": ["buffs_supported", "animations_supported", "sandbox_supported"],
           "properties": {
-            "effects_supported": { "type": "boolean" },
+            "buffs_supported": { "type": "boolean" },
             "animations_supported": { "type": "boolean" },
             "sandbox_supported": { "type": "boolean" }
           }
@@ -36,9 +36,9 @@
             "game_connected": { "type": "boolean" },
             "ignored": {
               "type": "object",
-              "required": ["effects", "animations"],
+              "required": ["buffs", "animations"],
               "properties": {
-                "effects": { "type": "integer", "minimum": 0 },
+                "buffs": { "type": "integer", "minimum": 0 },
                 "animations": { "type": "integer", "minimum": 0 }
               }
             }
@@ -67,7 +67,7 @@
     },
     "character": {
       "type": ["object", "null"],
-      "required": ["level", "vitals", "runes", "attributes", "effects", "animations"],
+      "required": ["level", "vitals", "runes", "attributes", "buffs", "animations"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
         "vitals": {
@@ -117,7 +117,7 @@
           "required": ["vigor", "mind", "endurance", "strength", "dexterity", "intelligence", "faith", "arcane"],
           "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 99 }
         },
-        "effects": {
+        "buffs": {
           "type": "object",
           "additionalProperties": {
             "type": "object",
@@ -147,6 +147,31 @@
               "name": { "type": "string" },
               "categories": { "type": "string" },
               "abilities": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "params": {
+      "type": ["object", "null"],
+      "description": "Tables of the game itself (params.<table>.<row id>.<field>); null with no game attached.",
+      "properties": {
+        "effects": {
+          "type": "object",
+          "description": "SpEffectParam rows listed in offsets.json, by row id",
+          "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["name", "effectEndurance", "motionInterval", "changeHpRate", "changeHpPoint",
+                         "atkOccurrenceSpEffectId", "vfxId"],
+            "properties": {
+              "name": { "type": "string" },
+              "effectEndurance": { "type": "number" },
+              "motionInterval": { "type": "number" },
+              "changeHpRate": { "type": "number" },
+              "changeHpPoint": { "type": "integer" },
+              "atkOccurrenceSpEffectId": { "type": "integer" },
+              "vfxId": { "type": "integer" }
             }
           }
         }

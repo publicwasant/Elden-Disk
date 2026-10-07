@@ -16,7 +16,7 @@ class Clock:
 
 
 def character(buff=10.0, level=100):
-    return {"level": level, "effects": {"1": {"name": "B", "categories": "CONSUMABLES",
+    return {"level": level, "buffs": {"1": {"name": "B", "categories": "CONSUMABLES",
                                               "times": {"buff_duration": buff, "max_duration": 60.0,
                                                         "last_activated_at": "2026-10-06 21:00:00.000000+07:00"}}}}
 

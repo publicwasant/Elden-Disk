@@ -86,7 +86,7 @@ def check(doc: dict) -> list[str]:
     for name in ATTRS:
         if not 1 <= attrs.get(name, 0) <= 99:
             out.append(f"attribute {name}={attrs.get(name)} out of range")
-    for eid, eff in ch.get("effects", {}).items():
+    for eid, eff in ch.get("buffs", {}).items():
         if "times" in eff:
             t = eff.get("times", {}) or {}
             rem, mx = t.get("buff_duration"), t.get("max_duration")

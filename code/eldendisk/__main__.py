@@ -1,8 +1,8 @@
 """CLI: eldendisk run | read | write | vault | build | hash
 
   run    host: back up the save, launch the game offline, restore the save when it exits (leave this open)
-  read   look at the game's values: print, --query, --export, --live, --live-effects, --live-animations (read-only)
-  write  edit values in the running game (--set, --refill); only inside a session started by `run`
+  read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
+  write  edit values in the running game (--set, --refill, --reset); only inside a session started by `run`
   vault  save vault tools (status, list, verify, restore, keep, prune)
 
 Every command prints concise lines; with -v it prints the log itself, live (the same lines that go to
@@ -35,9 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     offsets_default = str(get_resource_path("offsets.json", default_dir=HERE))
-    effects_default = str(get_resource_path("chr_state_ids.json", default_dir=HERE))
-    if not Path(effects_default).exists() and (HERE / "effects.json").exists():
-        effects_default = str(get_resource_path("effects.json", default_dir=HERE))
+    state_ids_default = str(get_resource_path("chr_state_ids.json", default_dir=HERE))
 
     # ---- run (host) ----
     r = sub.add_parser("run", help="host: back up the save, launch the game offline, restore the save when it exits")
@@ -63,28 +61,28 @@ def build_parser() -> argparse.ArgumentParser:
     # ---- read ----
     rd = sub.add_parser("read", help="look at the game's values: print, query, export, live (read-only)")
     rd.add_argument("--query", metavar="NAME", nargs="+",
-                    help="one or several values or groups, e.g. runes, hp, attrs.*, character.runes.* character.effects.*  "
+                    help="one or several values or groups, e.g. runes, hp, attrs.*, character.runes.* character.buffs.*  "
                          "(no flag: every value)")
     rd.add_argument("--flat", action="store_true",
                     help="print values as one 'full.path  value' row each instead of the tree (works with --query and --live)")
     rd.add_argument("--export", action="store_true", help="write disk-state.json once and exit")
     rd.add_argument("--live", action="store_true",
                     help="do not stop: keep showing (with --export: keep writing; with --query: those values)")
-    rd.add_argument("--live-effects", action="store_true", help="effects monitor: one row per effect id, kept current")
+    rd.add_argument("--live-buffs", action="store_true", help="buffs monitor: one row per buff id, kept current")
     rd.add_argument("--live-animations", action="store_true", help="animation monitor: one row per animation id (for chr_state_ids.json)")
     rd.add_argument("--mapped", action="store_true",
-                    help="--live-effects / --live-animations: only ids that are in chr_state_ids.json")
+                    help="--live-buffs / --live-animations: only ids that are in chr_state_ids.json")
     rd.add_argument("--unmapped", action="store_true",
-                    help="--live-effects / --live-animations: only ids that are NOT in chr_state_ids.json yet")
+                    help="--live-buffs / --live-animations: only ids that are NOT in chr_state_ids.json yet")
     rd.add_argument("--json", action="store_true", help="print the result as JSON (one-shot only)")
     rd.add_argument("--timeout", type=float, default=15.0, metavar="SEC",
                     help="one-shot: seconds to wait for the game and a loaded world (default: 15)")
     rd.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
-    rd.add_argument("--effects", default=effects_default, help="chr_state_ids.json, names of effects and animations (default: %(default)s)")
+    rd.add_argument("--state-ids", default=state_ids_default, help="chr_state_ids.json, names of buffs and animations (default: %(default)s)")
     add_vault_option(rd)
     rd.add_argument("--hz", type=float, default=60.0, help="reads per second, 1-120 (default: 60)")
     rd.add_argument("-q", "--quiet", action="store_true",
-                    help="--live-effects: hide short-lived internal effects (0 <= duration < 1 s); keeps permanent (-1) and timed buffs")
+                    help="--live-buffs: hide short-lived internal buffs (0 <= duration < 1 s); keeps permanent (-1) and timed buffs")
     rd.add_argument("--no-idle", action="store_true",
                     help="--export --live: keep reading while the game window is unfocused (default: pause and report IDLE)")
     rd.add_argument("--out", default=default_out_dir(), help="--export: directory for disk-state.json (default: %(default)s)")
@@ -99,7 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
     w = sub.add_parser("write", help="edit values in the running game (needs a session started by `run`)")
     w.add_argument("--set", nargs="+", action="extend", default=[], metavar="NAME=VALUE",
                    help="set values once, e.g. --set vigor=99 level=150 (names: level, runes, attributes, hp, fp, stamina; "
-                        "full or short; a group pattern such as attrs.* works)")
+                        "full or short; a group pattern such as attrs.* works). Game params: --set "
+                        "params.effects.1621000.effectEndurance=-1 (Black Flame; a pattern such as "
+                        "\"params.effects.*.effectEndurance\" sets every row; typed in full)")
+    w.add_argument("--reset", nargs="+", action="extend", default=[], metavar="NAME",
+                   help="put the game's own values back: params.effects.1621000.effectEndurance (one field), "
+                        "params.effects.1621000 (one row), or all")
     w.add_argument("--refill", metavar="LIST", help="refill current hp, fp, stamina to their maximum once, e.g. hp,fp,stamina")
     add_vault_option(w)
     w.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
@@ -158,15 +161,15 @@ def main(argv=None) -> int:
             ap.error("--export-interval and --timer-interval must not be negative")
         if args.timeout <= 0:
             ap.error("--timeout must be positive")
-        monitor = args.live_effects or args.live_animations
+        monitor = args.live_buffs or args.live_animations
         if args.export and args.query is not None:
             ap.error("--export and --query cannot be combined")
         if monitor and (args.export or args.query is not None or args.live):
-            ap.error("--live-effects / --live-animations stand alone (they can be used together)")
+            ap.error("--live-buffs / --live-animations stand alone (they can be used together)")
         if args.mapped and args.unmapped:
             ap.error("--mapped and --unmapped cannot be combined")
         if (args.mapped or args.unmapped) and not monitor:
-            ap.error("--mapped / --unmapped go with --live-effects / --live-animations")
+            ap.error("--mapped / --unmapped go with --live-buffs / --live-animations")
         if args.flat and (args.export or monitor or args.json):
             ap.error("--flat is for the printed values (read, --query, --live), not --export, --json or the monitors")
         if args.json and (args.live or args.export or monitor):

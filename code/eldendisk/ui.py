@@ -192,7 +192,7 @@ def format_ledger(title: str, summary: str, lines, *, color: bool = False, colum
                   waiting: str | None = None) -> list[str]:
     """A monitor's table: a title line, a column header, then one row per id (`lines`: reader.ledger.Line).
 
-        effects   7 active · 23 seen · 5 unmapped
+        buffs     7 active · 23 seen · 5 unmapped
           id  name                  timer           time
         +  311100  Gold Scarab        permanent       04:06:12.750
         -  2000000  Unknown                           04:06:07.512
