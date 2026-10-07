@@ -54,10 +54,17 @@ class _Postpone(Exception):
     """Second Ctrl+C while waiting for the game: stop waiting, leave the restore owed."""
 
 
+class _Stop(Exception):
+    """Ctrl+C in a session without a vault: nothing is owed, so stop waiting at once."""
+
+
 class Session:
     def __init__(self, vault: SaveVault, live_dir: Path, hooks: Hooks, *, archive_contaminated: bool = True,
-                 log: SessionLog | None = None, pid: int | None = None):
+                 log: SessionLog | None = None, pid: int | None = None, protect: bool = True):
+        """`protect` False = vault OFF: the game is launched offline and watched, the save is neither backed up nor
+        restored, there is no session record (so `write` is never allowed). An owed restore still blocks it."""
         self.vault, self.live, self.hooks = vault, Path(live_dir), hooks
+        self.protect = protect
         self.archive = archive_contaminated
         self.log = log or SessionLog()
         self.pid = os.getpid() if pid is None else pid
@@ -72,18 +79,19 @@ class Session:
 
     # ---- H1 ----
     def preflight(self) -> list[str]:
-        problems = self.vault.preflight(self.live)
+        problems = self.vault.preflight(self.live) if self.protect else []
         if self.hooks.find_game_pid() is not None:
             problems.append("eldenring.exe is already running; close it first")
         if self.hooks.anticheat_running():
             problems.append("anti-cheat processes are running; the host is offline-only")
-        if self.hooks.process_started(self.pid) is None:
+        if self.protect and self.hooks.process_started(self.pid) is None:
             problems.append("cannot read this process's start time, so `write` could never be authorised")
         problems += self.hooks.extra_preflight()
         return problems
 
     def run(self) -> int:
         self._to(State.PREFLIGHT)
+        self.log.d("vault", f"status {'ON' if self.protect else 'OFF'}")
         try:
             owed = self.vault.read_session()
         except VaultError as exc:
@@ -102,12 +110,31 @@ class Session:
             self._to(State.IDLE)
             return 1
 
+        if not self.protect:
+            return self._unprotected()
         remove_handler = self.hooks.install_close_handler(self._on_console_close)
         try:
             snap, code = self._prepare()
             return code if snap is None else self._session()
         finally:
             remove_handler()
+
+    def _unprotected(self) -> int:
+        """Vault OFF: launch, wait for the game, leave the save alone. Nothing is owed afterwards."""
+        self.log.w("vault", "vault OFF: the save is not backed up and will not be restored; `write` is not allowed")
+        code = 0
+        try:
+            code = self._launch_and_wait()
+        except _Stop:
+            self.log.w("host", "Ctrl+C: stopped waiting; the game keeps running (vault off: nothing to restore)")
+            self._to(State.IDLE)
+            return 130
+        except Exception as exc:
+            self.log.e("host", f"error while running: {exc!r}")
+            code = 1
+        self.log.i("vault", "vault OFF: the save was left as the game wrote it")
+        self._to(State.IDLE)
+        return code
 
     # ---- H2, H3 ----
     def _prepare(self):
@@ -181,8 +208,12 @@ class Session:
                         break
                 elif cur != pid:
                     pid = cur
-                    self.vault.update_session(state=SessionState.RUNNING, game_pid=cur, game_started=h.process_started(cur))
-                    self.log.ok("game", f"running, pid {cur}; `write` is now allowed")
+                    if self.protect:
+                        self.vault.update_session(state=SessionState.RUNNING, game_pid=cur,
+                                                  game_started=h.process_started(cur))
+                        self.log.ok("game", f"running, pid {cur}; `write` is now allowed")
+                    else:
+                        self.log.ok("game", f"running, pid {cur}; `write` is not allowed")
                     self._to(State.RUNNING)   # from here `write` may edit; the record is what authorises it
                 h.sleep(h.poll)
             except KeyboardInterrupt:
@@ -195,6 +226,8 @@ class Session:
                 self._absorb_interrupt()
 
     def _absorb_interrupt(self) -> None:
+        if not self.protect:
+            raise _Stop()
         self._interrupts += 1
         if self._interrupts >= 2:
             raise _Postpone()

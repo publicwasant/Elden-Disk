@@ -14,7 +14,7 @@ from ..game.values import UnknownName, is_pattern, normalize, suggest
 VOLATILE = (".buff_duration", "systems.status.ignored.effects", "systems.status.ignored.animations")
 # buff countdowns and the counters of ignored effects / animations change every few frames; the change stream
 # (the fallback for consoles that cannot redraw in place) leaves them out
-MONITORED = ("character.effects", "character.animations")   # the lists the monitors own
+LISTS = ("character.effects", "character.animations")   # these come and go: no match now is not a wrong name
 
 
 class Row(NamedTuple):
@@ -44,31 +44,43 @@ def _walk(path: str, value) -> object:
     return cur
 
 
-def visible(doc: dict) -> dict:
-    """The document as `read` shows it without a name: the values only. The effect and animation lists are long and
-    belong to their monitors (`--live-effects`, `--live-animations`); ask for them by name (`--query effects`).
-    `disk-state.json` carries them either way."""
-    ch = doc.get("character")
-    if not isinstance(ch, dict):
-        return doc
-    return {**doc, "character": {k: v for k, v in ch.items() if f"character.{k}" not in MONITORED}}
-
-
 def _names_a_list(path: str) -> bool:
-    """True when `path` (a name or a pattern) asks for the effect or animation list itself."""
-    return any(path == m or path.startswith(m + ".") for m in MONITORED)
+    """True when `path` (a name or a pattern) points into the effect or animation list."""
+    return any(path == m or path.startswith(m + ".") for m in LISTS)
 
 
-def select(doc: dict, name: str | None) -> list[tuple[str, object]]:
-    """[(canonical path, value or subtree)] for `name`; the values of the whole document for None (see `visible`).
+def _wanted(names) -> list[str]:
+    if names is None:
+        return []
+    return [n for n in ([names] if isinstance(names, str) else names) if n and n.strip()]
 
-    A name that points into the effect or animation lists reads them; a wildcard such as `character.*` does not
-    drag them in. UnknownName if nothing matches.
+
+def label(names) -> str:
+    """The names as typed, for messages and the banner."""
+    return " ".join(_wanted(names)) or "all values"
+
+
+def select(doc: dict, names: str | list[str] | None) -> list[tuple[str, object]]:
+    """[(canonical path, value or subtree)] for one name or several; the whole document (what `disk-state.json`
+    holds) for none. A path selected twice (`runes` and `runes.total`) is listed once, in the order first asked.
+
+    UnknownName if a name matches nothing, except for names inside the effect and animation lists: they are empty
+    when nothing is active, so no match there gives nothing.
     """
-    if not name or not name.strip():
-        return [("", visible(doc))]
+    wanted = _wanted(names)
+    if not wanted:
+        return [("", doc)]
+    out: list[tuple[str, object]] = []
+    for name in wanted:
+        for path, value in _select_one(doc, name):
+            if all(path != p for p, _ in out):
+                out.append((path, value))
+    return out
+
+
+def _select_one(doc: dict, name: str) -> list[tuple[str, object]]:
     path = normalize(name)
-    leaves = flatten(doc if _names_a_list(path) else visible(doc))
+    leaves = flatten(doc)
     if is_pattern(path):
         hits = [(p, v) for p, v in leaves.items() if fnmatchcase(p, path)]
         if hits:
@@ -78,6 +90,8 @@ def select(doc: dict, name: str | None) -> list[tuple[str, object]]:
             return [(path, _walk(path, doc))]
         except KeyError:
             pass
+    if _names_a_list(path):
+        return []       # the lists come and go (an effect ends, an animation stops): no match now is not a wrong name
     known = (set(leaves) | {p.rsplit(".", 1)[0] for p in leaves if "." in p}) - {"character", "systems"}
     raise UnknownName(name, suggest(name, sorted(known)))
 
@@ -109,17 +123,38 @@ def _rows(value: dict, indent: int, prefix: str) -> Iterator[Row]:
             yield Row(indent, str(key), fmt(str(key), v), path)
 
 
-def rows(selection: list[tuple[str, object]]) -> list[Row]:
-    """Console rows for a selection: a group becomes a heading with its values below, a leaf one `path  value` row."""
-    out: list[Row] = []
-    for path, value in selection:
+def _graft(tree: dict, parts: list[str], value) -> None:
+    """Put `value` into the nested `tree` at `parts` (a group is merged into what is already there)."""
+    for part in parts[:-1]:
+        tree = tree.setdefault(part, {})
+    if not parts:
         if isinstance(value, dict):
-            if path:
-                out.append(Row(0, path, None, path))
-            out.extend(_rows(value, 1 if path else 0, path))
+            _merge(tree, value)
+    elif isinstance(value, dict):
+        _merge(tree.setdefault(parts[-1], {}), value)
+    else:
+        tree[parts[-1]] = value
+
+
+def _merge(dst: dict, src: dict) -> None:
+    for key, v in src.items():
+        if isinstance(v, dict):
+            _merge(dst.setdefault(key, {}), v)
         else:
-            out.append(Row(0, path, fmt(path.rsplit(".", 1)[-1], value), path))
-    return out
+            dst[key] = v
+
+
+def rows(selection: list[tuple[str, object]]) -> list[Row]:
+    """Console rows for a selection: the selected values placed in their tree (`character` > `runes` > `total`),
+    exactly as the whole document is printed, so a wildcard or several names read like `read` itself. One single
+    value is one `path  value` row."""
+    if len(selection) == 1 and selection[0][0] and not isinstance(selection[0][1], dict):
+        path, value = selection[0]
+        return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value), path)]
+    tree: dict = {}
+    for path, value in selection:
+        _graft(tree, path.split(".") if path else [], value)
+    return list(_rows(tree, 0, ""))
 
 
 def as_json(selection: list[tuple[str, object]]) -> str:

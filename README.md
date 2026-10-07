@@ -7,7 +7,7 @@ Four parts with one job each:
 
 - **Host (`run`):** takes a SHA-256 verified snapshot of your save, launches `eldenring.exe` **offline**, waits, and restores the save **byte for byte** when the game exits. It never opens the game's memory and writes no JSON.
 - **Vault (`vault`):** snapshots, the session record, restore and recovery. It is the part that must not fail: a restore that could not finish leaves a record, and the next `run` refuses until `vault restore` has been run.
-- **Reader (`read`):** prints every value once and exits; `--query NAME` one value or group; `--export` writes `disk-state.json` once; `--live` keeps going; `--live-effects` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. Values are addressed by **name** only. Read-only; works with or without `run`.
+- **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree; `--export` writes `disk-state.json` once; `--live` keeps going; `--live-effects` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. Values are addressed by **name** only. Read-only; works with or without `run`.
 - **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...). It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
 - **Zero configuration files:** `--save-dir` and `--vault` are remembered in the Windows Registry (`HKCU\Software\EldenDisk`). The vault lives in `%LOCALAPPDATA%\EldenDisk\vault` by default, never next to the exe, so a rebuild cannot delete it.
 
@@ -16,7 +16,7 @@ Four parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (456 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
+> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (479 tests); the Steam Cloud sync on exit (T10) is still untested. Keep a manual copy of your save folder.
 
 ---
 
@@ -95,7 +95,9 @@ eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID
  12:31:42  ✓  vault  save restored, byte-identical to the snapshot
 ```
 
-Every command prints concise lines like these without any flag. Every event is also logged, logcat style, to `<vault>/eldendisk.log`; add **`-v`** to a command to see that log live instead (`run -v`, `write --set level=150 -v`, `vault status -v` ...).
+Every command prints concise lines like these without any flag. Every event is also logged, logcat style, to `<vault>/eldendisk.log` (every terminal's command line and exit code included); add **`-v`** to a command to see that log live instead (`run -v`, `write --set level=150 -v`, `vault status -v` ...). `run -v` also shows the lines other terminals log.
+
+**Farming (keep the progress):** `eldendisk.exe run --vault-off`, then `eldendisk.exe read --live --query runes` in another terminal. Nothing is backed up or restored, and `write` is refused.
 
 ---
 
@@ -105,8 +107,8 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 
 | Command | Role | Description |
 |:---|:---|:---|
-| `run` | **Host** | Snapshot, offline launch, wait, restore, verify |
-| `read [--query NAME] [--export] [--live] [--live-effects] [--live-animations]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-effects` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
+| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. `--vault-off`: no backup, no restore (farming with `read`; `write` is refused) |
+| `read [--query NAME [NAME ...]] [--export] [--live] [--live-effects] [--live-animations]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-effects` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
 | `write --set NAME=VALUE...` / `write --refill LIST` | **Writer** | One-shot edits; exit `5` without a valid session |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
@@ -145,6 +147,9 @@ python -m eldendisk build -c -em
 
 # Run E2E pipeline (pre-check tests + build + dry run)
 python code/tools/dev_pipeline.py --dry-run
+
+# Options the pipeline does not know go to `run`: ends in `eldendisk.exe run -v --vault-off`
+python code/tools/dev_pipeline.py --vault-off
 ```
 
 ---
@@ -168,7 +173,7 @@ python code/tools/dev_pipeline.py --dry-run
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (456 tests)
+# Run unit test suite (479 tests)
 python -m pytest
 
 # Run soak stability check (V-06)

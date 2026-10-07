@@ -80,3 +80,67 @@ def test_unknown_levels_become_info():
     b.emit("?", "t", "m")
     assert seen[0].level == "I"
     assert "I t" in format_line(seen[0])
+
+
+# ---- several terminals, one file ----
+def line_of(pid, level, tag, msg):
+    from datetime import datetime
+    from eldendisk.logbook import Event
+    return format_line(Event(datetime(2026, 10, 7, 13, 53, 7, 306000), pid, level, tag, msg))
+
+
+def test_parse_line():
+    assert lb.parse_line(line_of(14004, "D", "cli", "x")) == (14004, "D")
+    assert lb.parse_line("not a log line") is None
+
+
+def test_tail_shows_other_processes_from_the_end_of_the_file_and_not_its_own(tmp_path):
+    path, got = tmp_path / "x.log", []
+    path.write_text(line_of(1, "D", "cli", "history") + "\n", encoding="utf-8")
+    t = lb.Tail(path, got.append, own_pid=100, poll=0.01)
+    t.start()
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(line_of(200, "D", "cli", "eldendisk 1.6.2 read --live") + "\n")
+        fh.write(line_of(100, "I", "host", "mine") + "\n")
+        fh.write(line_of(300, "I", "write", "level = 150") + "\n")
+    t.stop()
+    assert [l.split(" : ")[-1] for l in got] == ["eldendisk 1.6.2 read --live", "level = 150"]
+
+
+def test_tail_waits_for_the_end_of_a_line_and_survives_a_rotation(tmp_path):
+    path, got = tmp_path / "x.log", []
+    path.write_text("", encoding="utf-8")
+    t = lb.Tail(path, got.append, own_pid=1, poll=10)   # polled by hand
+    t.start()
+    whole = line_of(2, "I", "read", "attached")
+    with open(path, "ab") as fh:
+        fh.write(whole[:20].encode())
+    t.poll_once()
+    assert got == []                                  # half a line is not shown
+    with open(path, "ab") as fh:
+        fh.write((whole[20:] + "\n").encode())
+    t.poll_once()
+    assert got == [whole]
+    fresh = tmp_path / "new.log"                      # rotation: a different, even bigger, file takes the name
+    fresh.write_text(line_of(3, "E", "read", "after rotation, longer than before") + "\n" + whole + "\n", encoding="utf-8")
+    lb.os.replace(fresh, path)
+    t.poll_once()
+    assert got[-2].endswith("after rotation, longer than before")
+    path.write_text(line_of(4, "W", "read", "emptied") + "\n", encoding="utf-8")   # the same file, smaller
+    t.poll_once()
+    assert got[-1].endswith("emptied")
+    t.stop()
+
+
+def test_a_log_another_process_holds_is_not_rotated_but_keeps_working(tmp_path, monkeypatch):
+    monkeypatch.setattr(lb, "MAX_BYTES", 300)
+    real = lb.os.replace
+    monkeypatch.setattr(lb.os, "replace", lambda a, b: (_ for _ in ()).throw(PermissionError("in use")))
+    b = Logbook()
+    b.configure(file=tmp_path / "x.log")
+    for n in range(30):
+        b.i("t", f"event {n:03d}")
+    b.close()
+    monkeypatch.setattr(lb.os, "replace", real)
+    text = (tmp_path / "x.log").read_text()
+    assert "event 000" in text and "event 029" in text

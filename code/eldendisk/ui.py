@@ -15,7 +15,7 @@ from typing import Callable
 
 from . import __version__
 from .console import printable
-from .logbook import Event, format_line
+from .logbook import Event, format_line, parse_line
 
 _SYMBOLS = {"ok": ("\u2713", "+"), "info": ("\u00b7", "-"), "warn": ("!", "!"), "error": ("\u2716", "x")}
 _COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "unknown": "36"}
@@ -99,6 +99,14 @@ def raw_sink(stream=None) -> Callable[[Event], None]:
         line = format_line(e)
         _emit(paint(line, kind, color) if kind else line, out)
     return sink
+
+
+def raw_line(line: str, stream=None) -> None:
+    """A log line written by another command, shown as it is in the file (coloured by its level letter)."""
+    out = stream or sys.stderr
+    got = parse_line(line)
+    kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(got[1]) if got else None
+    _emit(paint(line, kind, use_color(out)) if kind else line, out)
 
 
 def header(title: str, rows: list[tuple[str, str]] | None = None, stream=None) -> None:

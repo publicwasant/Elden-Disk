@@ -1,7 +1,7 @@
 """`read`: look at the game's values. Read-only; it never opens a write handle.
 
     read                          every value once, then exit
-    read --query NAME             one value or group once (`character.runes`, `hp`, `attrs.*`), then exit
+    read --query NAME [NAME ...]  one or several values or groups once (`character.runes`, `hp`, `attrs.*`), then exit
     read --export                 write disk-state.json once, then exit
     read --live                   the same, continuously (with --query / --export: that one, continuously)
     read --live-effects           effects monitor        read --live-animations   animation monitor
@@ -80,7 +80,7 @@ def _mode_text(args) -> str:
         return ", ".join(n for n, on in (("effects", args.live_effects), ("animations", args.live_animations)) if on) + " (live)"
     if args.export:
         return f"export to {args.out} (live)"
-    return f"{args.query or 'all values'} (live)"
+    return f"{view.label(args.query)} (live)"
 
 
 def cmd_read(args) -> int:
@@ -172,7 +172,9 @@ def _query_once(args, mem, sampler: Sampler, export: ExportWriter) -> int:
     except UnknownName as exc:
         book.e("read", str(exc))
         return EXIT_ERROR
-    book.d("read", f"query {args.query or '(all)'}: {len(selection)} result(s)")
+    book.d("read", f"query {view.label(args.query)}: {len(selection)} result(s)")
+    if not selection:
+        book.i("read", f"nothing matches {view.label(args.query)!r} right now (no such effect or animation is active)")
     if args.json:
         ui.out(view.as_json(selection))
     else:
@@ -217,6 +219,9 @@ class _Redraw:
         self.screen.close()
 
 
+NONE_NOW = "none active"
+
+
 class _LiveValues:
     """`--live`: the values, kept current.
 
@@ -259,6 +264,7 @@ class _LiveValues:
             book.i("read", "world loaded")
             self.waiting = False
         selection = view.select(self.export.build("CONNECTED", sample), self.name)
+        shown = selection or [(view.label(self.name), NONE_NOW)]    # a list name with nothing active: say so, keep running
         flat = {}
         for path, value in selection:
             flat.update(view.flatten(value, path))
@@ -270,10 +276,10 @@ class _LiveValues:
         if self.painter is not None:
             self.hot = {p: t for p, t in self.hot.items() if now - t < self.HOLD_S}
             screen = self.painter.screen
-            self.painter.show(ui.format_rows(view.rows(selection), color=ui.use_color(screen.stream),
+            self.painter.show(ui.format_rows(view.rows(shown), color=ui.use_color(screen.stream),
                                              hot=frozenset(self.hot), columns=screen.size()[0]))
         elif first:
-            ui.rows(view.rows(selection))
+            ui.rows(view.rows(shown))
         else:
             stamp = datetime.now().strftime("%H:%M:%S")
             for path, old, new in view.changes(previous, flat):

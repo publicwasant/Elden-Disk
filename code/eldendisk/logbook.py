@@ -9,6 +9,7 @@ Logging must never break the tool: a failing sink is dropped silently.
 from __future__ import annotations
 
 import os
+import re
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -50,14 +51,19 @@ class _FileSink:
         self._size += len(data.encode("utf-8"))
 
     def _rotate(self) -> None:
+        """Move the log aside. Several commands append to this file at once (one per terminal), and Windows will not
+        rename a file another process holds open: then the file simply keeps growing."""
         self._fh.close()
-        for i in range(KEEP_FILES - 1, 0, -1):
-            src = self.path if i == 1 else self.path.with_name(f"{self.path.name}.{i - 1}")
-            dst = self.path.with_name(f"{self.path.name}.{i}")
-            if src.exists():
-                os.replace(src, dst)
+        try:
+            for i in range(KEEP_FILES - 1, 0, -1):
+                src = self.path if i == 1 else self.path.with_name(f"{self.path.name}.{i - 1}")
+                dst = self.path.with_name(f"{self.path.name}.{i}")
+                if src.exists():
+                    os.replace(src, dst)
+        except OSError:
+            pass
         self._fh = open(self.path, "a", encoding="utf-8", buffering=1)
-        self._size = 0
+        self._size = self.path.stat().st_size if self.path.exists() else 0
 
     def close(self) -> None:
         try:
@@ -107,6 +113,11 @@ class Logbook:
                     except Exception:
                         self._console = None
 
+    def locked(self, fn: Callable, *args) -> None:
+        """Run `fn` while no event is being written, so console lines from two threads never interleave."""
+        with self._lock:
+            fn(*args)
+
     def v(self, tag, msg): self.emit("V", tag, msg)
     def d(self, tag, msg): self.emit("D", tag, msg)
     def i(self, tag, msg): self.emit("I", tag, msg)
@@ -116,3 +127,68 @@ class Logbook:
 
 
 book = Logbook()
+
+_LINE = re.compile(r"^\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +(\d+) ([VDIWE]) ")
+
+
+def parse_line(line: str) -> tuple[int, str] | None:
+    """(pid, level) of a log line as `format_line` writes it, None for anything else."""
+    m = _LINE.match(line)
+    return (int(m.group(1)), m.group(2)) if m else None
+
+
+class Tail:
+    """Shows what other commands append to the log file while this one runs (`run -v`): every terminal's lines,
+    in the file's own format. Starts at the end of the file; lines of this process (`own_pid`) are not repeated."""
+
+    def __init__(self, path: Path, show: Callable[[str], None], own_pid: int, poll: float = 0.2):
+        self.path, self.show, self.own_pid, self.poll = Path(path), show, own_pid, poll
+        self._offset = 0
+        self._ident = None
+        self._partial = b""
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        try:
+            st = self.path.stat()
+            self._offset, self._ident = st.st_size, (st.st_dev, st.st_ino)
+        except OSError:
+            self._offset = 0
+        self._thread = threading.Thread(target=self._run, name="log-tail", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2)
+        self.poll_once()   # whatever arrived since the last look
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.poll):
+            self.poll_once()
+
+    def poll_once(self) -> None:
+        try:
+            st = self.path.stat()
+            size, ident = st.st_size, (st.st_dev, st.st_ino)
+            if size < self._offset or (self._ident is not None and ident != self._ident):
+                self._offset, self._partial = 0, b""   # rotated (a new file) or emptied: start over
+            self._ident = ident
+            if size == self._offset:
+                return
+            with open(self.path, "rb") as fh:
+                fh.seek(self._offset)
+                data = self._partial + fh.read(size - self._offset)
+            self._offset = size
+        except OSError:
+            return
+        *whole, self._partial = data.split(b"\n")   # a line that is still being written waits for its newline
+        for raw in whole:
+            line = raw.decode("utf-8", errors="replace").rstrip("\r")
+            got = parse_line(line)
+            if got and got[0] != self.own_pid:
+                try:
+                    self.show(line)
+                except Exception:
+                    return

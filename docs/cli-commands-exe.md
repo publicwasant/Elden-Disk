@@ -47,9 +47,24 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
 | `--no-archive-contaminated` | off | Do not keep a copy of the modified save in the vault before restoring. |
 | `--launch-timeout SEC` | `120` | Seconds to wait for `eldenring.exe` to appear. |
 | `--keep N` | `5` | After a finished session keep only the newest N snapshots (never while a restore is owed); `0` = never prune. |
-| `-v`, `--verbose` | off | Show the full log live instead of the concise view. |
+| `--vault-on` / `--vault-off` | `--vault-on` | Per run, never toggled while the host runs. **ON**: snapshot before, restore after. **OFF**: no snapshot, no session record, no restore; see below. |
+| `-v`, `--verbose` | off | Show the full log live instead of the concise view; also shows the command lines other terminals log (`read`, `write`, ...). |
 
 **Steam.** If `steam.exe` is running, `run` prints one note: Steam Cloud can sync the save when the game exits (not verified), so use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session.
+
+**Vault OFF** (`run --vault-off`) is for read-only farming: you read runes, buff durations ... with `read` and the progress you make in the game is **kept**, because nothing is backed up and nothing is restored. The banner shows `mode  vault OFF (no backup, no restore)` and the log has `D vault : status OFF` (`status ON` otherwise). Consequences, all deliberate:
+
+- `write` is **refused** (exit `5`): with no session record no edit would be covered by a snapshot.
+- An owed restore from an earlier session still blocks `run` (exit `4`), also with `--vault-off`; run `vault restore` or `vault keep` first.
+- Game-running and anti-cheat checks stay; nothing is written to the save or the game folder; no automatic pruning of snapshots.
+- Ctrl+C only stops the host (exit `130`); the game keeps running.
+- `--vault DIR` (where the vault lives) and `--vault-off` (no protection) are unrelated.
+
+```commandline
+eldendisk.exe run --vault-off -v
+eldendisk.exe read --live --query runes        (other terminal)
+eldendisk.exe read --live-effects               (other terminal)
+```
 
 **Vault location.** Resolved the same way by every command: `--vault` → the path remembered by an earlier `run --vault X` → `%LOCALAPPDATA%\EldenDisk\vault`. It is deliberately not next to the exe (a rebuild deletes `build/`). If the remembered folder is unavailable (drive missing) the command stops with an error instead of creating a fresh, empty vault.
 
@@ -61,6 +76,7 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
    vault  %LOCALAPPDATA%\EldenDisk\vault
    save   C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>
    game   C:\Program Files (x86)\Steam\steamapps\common\ELDEN RING\Game
+   mode   vault ON (backup before, restore after)
  ────────────────────────────────────────────────────────────────
  12:00:00  ✓  vault  snapshot 20261006-120000, 2 files verified
  12:00:01  ·  game   launching eldenring.exe offline
@@ -77,7 +93,7 @@ With `-v` the banner and these lines are replaced by the log itself (see "Log an
 ## 2. `read` (reader)
 
 ```commandline
-eldendisk.exe read [--query NAME] [--export] [--live] [--live-effects] [--live-animations] [options]
+eldendisk.exe read [--query NAME [NAME ...]] [--export] [--live] [--live-effects] [--live-animations] [options]
 ```
 
 Read-only: it never opens a write handle. Works with or without `run` (a game started from Steam's Play button has EasyAntiCheat, which hides the game from `read`: exit `3`, start it with `run`). Stops with exit `3` if EasyAntiCheat is or becomes loaded.
@@ -85,10 +101,10 @@ Read-only: it never opens a write handle. Works with or without `run` (a game st
 | Command | Does |
 |:---|:---|
 | `read` | print **every** value once, then exit |
-| `read --query NAME` | print that value or group once, then exit |
+| `read --query NAME [NAME ...]` | print those values or groups once, then exit |
 | `read --export` | write `disk-state.json` once, then exit |
 | `read --live` | the same as `read`, but keep going: on a terminal the tree is redrawn where it stands and a value that just changed is highlighted for a second; in an IDE run window or a pipe the tree is printed once, then one line per changed value |
-| `read --query NAME --live` | keep following that value or group |
+| `read --query NAME [NAME ...] --live` | keep following those values or groups |
 | `read --export --live` | keep writing `disk-state.json` for other programs (sampled at `--hz`, written only when the content changed, at most every `--export-interval`) |
 | `read --live-effects` | effects monitor: one row per effect id, kept current (see below) |
 | `read --live-animations` | animation monitor: one row per animation id; with both, two tables |
@@ -97,18 +113,32 @@ Read-only: it never opens a write handle. Works with or without `run` (a game st
 
 **Names.** A name is a path into `disk-state.json`: `character.level`, `character.runes.total`, `character.attributes.vigor`, `character.vitals.hit_point.current`, `character.effects`, `systems.status.pid`. Short forms work: `character.` can be left out, `attrs` = `attributes`, `hp` = `hit_point`, `fp` = `focus_point`, `max` = `maximum`. A group name shows the whole group; `*` selects several values. A wrong name is an error with suggestions.
 
+**Several names, and the tree.** `--query` takes any number of names (`--query runes hp attrs.vigor`); the result is one selection, in the order asked, each value once. Whatever is selected (a group, a wildcard, several names) is printed **in its place in the tree**, the same layout as `read` itself (`character` > `runes` > `total`), so `--live` redraws and highlights it the same way. Exactly one single value is the exception: it stays one `path  value` line (handy in scripts). `--json` prints a flat object `{"path": value, ...}` for the selection.
+
 ```commandline
 eldendisk.exe read --query runes
- character.runes
-   total     40,402,709
-   baseline  40,401,505
-   delta     +1,204
+ character
+   runes
+     total     40,402,709
+     baseline  40,401,505
+     delta     +1,204
 eldendisk.exe read --query hp.max
  character.vitals.hit_point.maximum  1,460
 eldendisk.exe read --query attrs.*
- character.attributes.vigor         80
- character.attributes.mind          60
- ...
+ character
+   attributes
+     vigor  80
+     mind   60
+     ...
+eldendisk.exe read --query character.runes.* character.effects.* --live
+ character
+   runes
+     total     40,402,709
+     ...
+   effects
+     311100
+       name        Gold Scarab
+       categories  TALISMANS
 eldendisk.exe read --query vigr
  ✖  read   unknown name 'vigr'; did you mean character.attributes.vigor, ...
 ```
@@ -117,13 +147,13 @@ Results go to **stdout**, events to stderr; `--json` prints the result as JSON i
 
 A terminal that cannot move the cursor (IDE run window, pipe, `TERM=dumb`) gets the change lines. If the tree is taller than the window the rest is summarised in one line (make the window taller, or use `--query`). Ctrl+C stops; the last frame stays on screen.
 
-The values views (`read` with no name, `--live`) show the **values** of `disk-state.json` (`systems`, level, runes, attributes, vitals) and leave out the long effect and animation lists, so they do not flood the screen. Ask for them by name: `read --query effects`, `--query character.effects.*`, `--query animations`, also with `--live`. A wildcard such as `character.*` does not pull them in. `--live-effects` / `--live-animations` are the monitors (what appeared / disappeared). `disk-state.json` carries the lists either way, schema unchanged.
+`read` with no name and `--live` show the whole document of `disk-state.json`: `systems` and `character` (level, vitals, runes, attributes) **including `character.effects` and `character.animations`**, the same content as the file. With many effects the tree is long: a live view taller than the window is cut with a `… N more lines` line (make the window taller, or ask for a part with `--query`). `--query effects`, `--query character.effects.*`, `--query animations` show just the lists, also with `--live`; `character.*` includes them. The lists come and go, so a name inside them that matches nothing **right now** is not an error: `--live` shows `none active` (and keeps running, rows reappear when something starts), a one-shot query says `nothing matches` and exits `0`. A misspelt list name (`character.effectz.*`) is still an unknown name. `--live-effects` / `--live-animations` are the monitors (one row per id: what appeared / disappeared, with times). Buff countdowns (`buff_duration`) tick in the live tree but do not count as changes (no highlight). The file schema is unchanged.
 
 **`--export`** writes `disk-state.json` (to `--out`, never inside the game folder) and says where: `✓ export  disk-state.json (4.1 KB) written to <dir>`. The document and its schema are unchanged. `systems.session` is `{"mode": "sandbox", "sandbox": true}` while a valid `RUNNING` session covers the game, otherwise `{"mode": "telemetry", "sandbox": false}`; `read_only` is always `true`. With `--live` the writing loop is the 1.6.2 one: `IDLE` while the game window is unfocused (`--no-idle` to keep reading), a countdown-only change is written at most every `--timer-interval`, one more write on exit.
 
 | Flag | Default | Applies to | Description |
 |:---|:---|:---|:---|
-| `--query NAME` | all values | print, `--live` | Value or group to show. |
+| `--query NAME [NAME ...]` | all values | print, `--live` | One or more values or groups to show. |
 | `--export` / `--live` / `--live-effects` / `--live-animations` | off | | Modes above. `--export` and `--query` cannot be combined; the two monitors stand alone (together is fine). |
 | `--json` | off | one-shot | Print as JSON. |
 | `--timeout SEC` | `15` | one-shot | Seconds to wait for the game and a loaded world. |
@@ -262,6 +292,13 @@ Format `MM-DD HH:MM:SS.mmm  PID L tag : message`; levels `V` verbose, `D` debug,
 **Console, no flag needed.** `run`, `read`, `write`, `vault`, `build` print concise lines: a symbol (`✓` done, `·` info, `!` warning, `✖` error), the source tag and a short message; `run` and `read` add a banner and the time. Events go to **stderr**, the result of a query (`vault status`, `vault list`, `hash`) to **stdout**, so `hash` and `read --query ... --json` stay pipeable. Warnings and errors are coloured on a terminal (`NO_COLOR=1` turns colour off, `FORCE_COLOR=1` forces it, e.g. in an IDE run window). Consoles whose code page cannot show `✓` / `✖` get `+` / `x`.
 
 **`-v`, `--verbose`** (every command, also after the subcommand: `write --set level=150 -v`) forgets the concise view and shows the log itself, live: the very lines of `eldendisk.log`, debug included, nothing else.
+
+**Every terminal is in the log.** Each command, in any terminal, writes `D cli : eldendisk 1.6.2 <arguments>` when it starts and `D cli : exit N` when it ends. `run -v` also follows the file and prints the lines of **other** terminals as they are written (from the moment `run -v` starts, own lines are not repeated, rotation is followed), so one window shows `read`, `write` and `vault` commands next to the host's events. The format is the same as above; several processes may write the file at once, and if a rotation cannot rename the file (another process holds it, Windows) logging simply carries on.
+
+```text
+10-07 13:53:07.306 14004 D cli   : eldendisk 1.6.2 write --set level=150
+10-07 13:53:07.501 14004 D cli   : exit 0
+```
 
 ---
 

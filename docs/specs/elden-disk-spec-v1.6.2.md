@@ -10,7 +10,7 @@
 | Command | Role | Game memory | Needs a session |
 |:---|:---|:---|:---|
 | `run` | **Host.** preflight → snapshot → session record → offline launch → wait → restore → verify | never opens the game with memory access | creates it |
-| `read [--query NAME] [--export] [--live] [--live-effects] [--live-animations]` | **Reader.** every value once; one value or group; `disk-state.json`; continuous modes (section 5) | read-only | no (labels the export when one exists) |
+| `read [--query NAME [NAME ...]] [--export] [--live] [--live-effects] [--live-animations]` | **Reader.** every value once; one value or group; `disk-state.json`; continuous modes (section 5) | read-only | no (labels the export when one exists) |
 | `write --set NAME=VALUE... --refill LIST` | **Writer.** by value name (section 6) | read + write | **yes** |
 | `vault status\|list\|verify\|restore\|keep\|prune` | vault tools | none | `restore` and `keep` refused while the game runs |
 | `build`, `hash` | tooling | none | no |
@@ -47,7 +47,7 @@ eldendisk/
                    attach.py     Target: pid, start time, base, exe hash, EAC check, profile
   reader/          sampler.py effects.py animations.py export.py disk.schema.json
   writer/          writer.py     WritableProcessMemory, WriteGate, EditPolicy, MemoryWriter
-tools/             dev_pipeline.py, soak_check.py (outside the package)
+tools/             dev_pipeline.py (options it does not know are passed to `run`), soak_check.py (outside the package)
 ```
 
 | Package | May import | Must not import |
@@ -76,6 +76,8 @@ Enforced by `test_architecture.py` (AST over the imports of every module, mutati
 
 - **One event model.** `Event(when, pid, level, tag, msg, ok)`; levels `V D I W E` (logcat), `ok` marks an info event that reports something done. Tags name the source (`cli host vault game read write export build config steam`).
 - **Log file.** Every command writes every event, all levels, to `<vault>/eldendisk.log` (vault resolved as in 2.1, but never remembered by the log itself), line format `MM-DD HH:MM:SS.mmm PID L tag   : message`, one line per event, rotation at 2 MiB keeping 3 files. The command line and the exit code are logged (`D cli`). A log that cannot be opened or written is dropped silently; logging never fails a command. If the remembered vault is unavailable there is no file (the command reports the vault error itself).
+- **Shared bus (client log).** The log file is shared by every terminal: each command logs `D cli : eldendisk <version> <argv>` first and `D cli : exit N` last (format unchanged). `run -v` starts a `Tail` (`logbook.Tail`: polls every 0.2 s, starts at the end of the file, hands over whole lines only, skips lines of its own PID, follows rotation by `(st_dev, st_ino)` / shrinking size) and prints other processes' lines in the log format through `ui.raw_line`. Without `-v` nothing is tailed.
+- **Concurrent writers.** Several processes append to one file; a rotation that cannot rename the file (another process holds it, Windows) is skipped and the sink reopens, so logging never fails a command.
 - **Session log.** `session.log` in the snapshot directory keeps the same events of one session (ISO time, level, tag, message).
 - **Console, no flag.** All commands render events concisely on stderr: ` [time]  symbol  tag  message`, symbols `✓ · ! ✖` (`+ - ! x` when the code page cannot show them), time only for `run` and `read`, debug and verbose events hidden, warnings and errors coloured. `run` and `read` print a banner (title, rule, key/value rows). Results of queries (`vault status`, `vault list`, `vault keep` without `--yes`, `hash`) go to stdout. Colour: `NO_COLOR` off, `FORCE_COLOR` on, else only on a terminal.
 - **`-v` on every command** (also after the subcommand) replaces that view, banner included, with the log lines themselves, live, debug included.
@@ -115,8 +117,10 @@ One file in the vault, `session.json` (version 2), written atomically, present *
 | Game crash / quits | normal `H6 → H9` | none |
 | Game process never appears (default `--launch-timeout` 120 s) | treated as exit: restore, verify, remove record | none |
 | Restore blocked (locked file) | bounded retry 30 s, then `RESTORE_PENDING`, exit 4, snapshot and record kept | `vault restore` |
-| `run` while a record exists | refused (exit 4) with the one command to run; **no auto-recovery** | `vault restore` |
+| `run` while a record exists | refused (exit 4) with the one command to run; **no auto-recovery**, also with `--vault-off` | `vault restore` |
 | Damaged snapshot | restore refuses to touch the live folder | `vault verify` / archived copy |
+
+**Vault ON / OFF (per run).** `run --vault-on` (default) / `run --vault-off`, mutually exclusive, fixed for the life of the host (no toggling while it runs); logged as `D vault : status ON|OFF` and shown as the banner row `mode`. OFF is for read-only farming (e.g. runes delta, buff durations while keeping the progress made in the game): no snapshot, no session record, no restore, no game-folder guard, no pruning (the `RESTORING` state is never entered). Unchanged: the owed-record refusal (exit 4), the game-running and anti-cheat checks. Because no record exists, `authorise()` refuses `write` (exit 5; the message names `--vault-off`), which keeps invariant "every edit is covered by a snapshot". Ctrl+C only stops waiting (exit 130); the game keeps running. `--vault DIR` (location) is unrelated to `--vault-off`. Restoring the save under a running game and a snapshot taken mid-run were rejected as unsafe.
 
 **Fault-injection test.** For every boundary `H1..H9`, inject a kill or exception, then assert I1 and that `vault restore` returns the live folder byte-identical. One table-driven test replaces case-by-case tests for the lifecycle.
 
@@ -127,16 +131,16 @@ Values are addressed by **name** only: the paths of `disk-state.json` (`characte
 | Command | Does |
 |:---|:---|
 | `read` | prints every value once, exits |
-| `read --query NAME [--json]` | prints that value or group once, exits |
+| `read --query NAME [NAME ...] [--json]` | prints those values or groups once, exits; the selection is shown in its place in the tree (one single value: one `path  value` row); `--json`: flat `{path: value}` |
 | `read --export` | writes `disk-state.json` once (schema unchanged, `systems.session` as in section 3), exits |
 | `read --live` | the same as `read`, continuously: the full list once, kept current (below) |
-| `read --live --query NAME` | follows that value or group |
+| `read --live --query NAME [NAME ...]` | follows those values or groups |
 | `read --live --export` | the 1.6.2 loop: sample at `--hz` (default 60, the game's frame rate; 1-120), write on change |
 | `read --live-effects`, `--live-animations` | the monitors (5.2); stand alone, combinable with each other; `--mapped` / `--unmapped` filter them |
 
 One attach and one loop serve every mode. One-shot modes wait for the game and for a loaded world for `--timeout` seconds (default 15) and then fail with exit 1; live modes wait for ever. `--export` and `--live` combine; `--export` and `--query` do not; `--json` is one-shot only. Stops with exit 3 when EAC is loaded or appears later. Works with or without a session. It never opens a write handle. Options: `--hz`, `--timeout`, `-q` (effects), `--no-idle`, `--out`, `--export-interval`, `--timer-interval`, `--offsets`, `--effects`, `--vault`, `-v`. A vault that cannot be resolved is an error for `--export` (the export is labelled by the session record) and a warning otherwise.
 
-**Values only.** `read` without a name and `--live` show the values of the export document without `character.effects` and `character.animations` (long lists, and the purpose of the monitors). They are read by name (`--query effects`, `character.effects.*`, also `--live`); a wildcard such as `character.*` does not include them. `disk-state.json` is unchanged, lists included.
+**Whole document.** `read` without a name and `--live` show the export document exactly as `disk-state.json` holds it, `character.effects` and `character.animations` included (decided 2026-10-07; an earlier 1.6.2 build left the lists out and showed values only). `character.*` includes them. A name inside the lists that matches nothing right now is empty, not unknown (`--live` shows `none active`, a one-shot query exits 0 with `nothing matches`); a misspelt list name is still refused.
 
 **Live display.** On a terminal (`isatty`, VT sequences available, `TERM` not `dumb`) `--live` redraws the value tree where it stands (cursor up, rewrite every line, one write per frame, at most 30 frames a second; the cursor is hidden meanwhile); a value that changed is highlighted for 1 s; lines are cut to the window width and, if the tree is taller than the window, the rest is summarised in one line. Elsewhere (IDE run window, pipe) the tree is printed once, then one line per changed value. Buff countdowns and the counters of ignored effects / animations are not changes. Ctrl+C stops. Bars and `q` / `p` keys are not planned.
 
@@ -177,7 +181,7 @@ Flow: authorise (section 3) → attach (EAC refused, profile for this exe) → o
 6. `read` (multi-feature, export policy) and `write` (renames), `vault` command group.
 7. README, CLI docs, plan, changes; version 1.6.2.
 
-Done in this order; 456 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
+Done in this order; 479 tests passing, 1 skipped (Linux, fake Windows and memory layers), including the read/write redesign (5, 6).
 
 ## 9. Real-game evidence and open items
 
@@ -186,6 +190,7 @@ Done in this order; 456 tests passing, 1 skipped (Linux, fake Windows and memory
 - `write` of vigor / faith / runes takes effect in the running game; the game's own autosave (site of grace warp) writes the values into `ER0000.sl2`, and they survive a restart.
 - **Hard kill (reported 2026-10-07).** Ctrl+C / the IDE's red button kills the host: the record stays, the next `run` is refused (exit 4), and `vault restore` archives the contaminated save and restores the snapshot byte-identically.
 - **Read/write redesign (reported 2026-10-07).** `read --live` (tree redrawn in place, highlight), `--live-effects` / `--live-animations` (tables), and `write --set` with the new names passed on the real game. `--export`, `--query`, wildcards and `--refill` were not reported one by one.
+- **Vault OFF and client log (reported 2026-10-07).** `run -v --vault-off` through `dev_pipeline.py`: banner row `mode`, `status OFF`, exit 0, save left as the game wrote it; `run -v` printed the `read` command lines of other terminals live.
 - **Normal Steam play.** A session played from Steam outside the host persists; the next `run` snapshots it (the "parallel dimension" behaviour is as designed).
 - **Steam Cloud upload** was seen online after the corrected save; T10 (sync on exit during a session) is still untested.
 - A host killed from the IDE (stop button) leaves the session record and the snapshot; the live save keeps whatever the game last wrote. In the first 1.6.2 build the game died with the host (shared console, process-tree kill).

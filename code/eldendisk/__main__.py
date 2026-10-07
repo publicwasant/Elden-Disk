@@ -45,6 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_vault_option(r)
     r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     r.add_argument("--offsets", default=offsets_default, help="offsets.json, checked before launching (default: %(default)s)")
+    g = r.add_mutually_exclusive_group()
+    g.add_argument("--vault-on", dest="protect", action="store_true",
+                   help="back the save up before the game and restore it after (the default)")
+    g.add_argument("--vault-off", dest="protect", action="store_false",
+                   help="no backup, no restore: the game's changes stay; `write` is not allowed (for reading while farming)")
+    r.set_defaults(protect=True)
     r.add_argument("--no-archive-contaminated", action="store_true",
                    help="do not keep a copy of a modified save in the vault before restoring it")
     r.add_argument("--keep", type=int, default=5, metavar="N",
@@ -56,11 +62,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ---- read ----
     rd = sub.add_parser("read", help="look at the game's values: print, query, export, live (read-only)")
-    rd.add_argument("--query", metavar="NAME",
-                    help="one value or group, e.g. character.runes, runes, hp, attrs.*  (no flag: every value)")
+    rd.add_argument("--query", metavar="NAME", nargs="+",
+                    help="one or several values or groups, e.g. runes, hp, attrs.*, character.runes.* character.effects.*  "
+                         "(no flag: every value)")
     rd.add_argument("--export", action="store_true", help="write disk-state.json once and exit")
     rd.add_argument("--live", action="store_true",
-                    help="do not stop: keep showing (with --export: keep writing; with --query: that value)")
+                    help="do not stop: keep showing (with --export: keep writing; with --query: those values)")
     rd.add_argument("--live-effects", action="store_true", help="effects monitor: one row per effect id, kept current")
     rd.add_argument("--live-animations", action="store_true", help="animation monitor: one row per animation id (for chr_state_ids.json)")
     rd.add_argument("--mapped", action="store_true",

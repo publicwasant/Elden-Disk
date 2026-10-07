@@ -416,3 +416,59 @@ def test_killing_the_tool_anywhere_leaves_a_recoverable_save(env, point):
     fresh = SaveVault(vault.root, sleep=lambda s: None)
     assert recover(fresh, game_running=lambda: False, log=SessionLog()) == 0
     assert tree(live) == before and fresh.read_session() is None
+
+
+# ---- vault OFF: the game runs, the save is left alone ----
+def test_vault_off_launches_and_waits_but_never_backs_up_or_restores(env):
+    _, live, game, vault = env
+    seen = {}
+
+    def on_tick(w, n):
+        if n == 1:
+            seen["record"] = vault.read_session()
+            seen["snapshots"] = vault.list_snapshots(verify=False)
+            contaminate(live)            # progress made while farming
+
+    logs = []
+    s, world = make(env, World(on_tick=on_tick), protect=False, log=SessionLog(emit=lambda *a, **k: logs.append(a)))
+    assert s.run() == 0
+    assert seen["record"] is None and seen["snapshots"] == []         # no record (so `write` is refused), no snapshot
+    assert (live / "stray.dat").exists() and (live / "ER0000.sl2").read_bytes().startswith(b"LEVEL 713")   # kept
+    assert vault.read_session() is None and world.launched == 1
+    assert s.history == [State.IDLE, State.PREFLIGHT, State.RUNNING, State.IDLE]
+    text = " | ".join(" ".join(str(x) for x in a) for a in logs)
+    assert "status OFF" in text and "not allowed" in text and "left as the game wrote it" in text
+
+
+def test_vault_on_logs_its_status_too(env):
+    logs = []
+    s, _ = make(env, log=SessionLog(emit=lambda *a, **k: logs.append(a)))
+    assert s.run() == 0
+    assert any("status ON" in " ".join(str(x) for x in a) for a in logs)
+
+
+def test_vault_off_still_refuses_while_a_restore_is_owed(env):
+    _, live, game, vault = env
+    vault.write_session(vault.new_record(vault.snapshot(live), live, exe_sha256="abc"))
+    s, world = make(env, protect=False)
+    assert s.run() == EXIT_RESTORE_PENDING and world.launched == 0
+
+
+@pytest.mark.parametrize("kw,why", [(dict(running=True), "already running"), (dict(ac=True), "anti-cheat")])
+def test_vault_off_keeps_the_game_checks(env, kw, why):
+    logs = []
+    s, world = make(env, protect=False, log=SessionLog(emit=lambda *a, **k: logs.append(a)), **kw)
+    assert s.run() == 1 and world.launched == 0
+    assert any(why in " ".join(str(x) for x in a) for a in logs)
+
+
+def test_ctrl_c_in_a_vault_off_session_just_stops_waiting(env):
+    _, live, game, vault = env
+
+    def on_tick(w, n):
+        if n == 1:
+            raise KeyboardInterrupt
+
+    s, world = make(env, World(lifetime=50, on_tick=on_tick), protect=False)
+    assert s.run() == 130
+    assert vault.read_session() is None and s.history[-1] == State.IDLE

@@ -80,15 +80,19 @@ def test_query_a_group_a_value_and_a_pattern(rig, capsys):
     tmp, mem, target, box, args = rig
     assert rcmd.cmd_read(args(query="runes")) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[0].strip() == "character.runes" and "total" in out and "10,008,626" in out
+    assert [l.strip() for l in out.splitlines()[:2]] == ["character", "runes"] and "10,008,626" in out
     assert rcmd.cmd_read(args(query="hp")) == 0
     out = capsys.readouterr().out
-    assert "character.vitals.hit_point" in out and "1,914" in out and "2,015" in out   # current, maximum, base
+    assert "hit_point" in out and "1,914" in out and "2,015" in out   # current, maximum, base
     assert rcmd.cmd_read(args(query="character.attributes.strength")) == 0
     assert capsys.readouterr().out.split() == ["character.attributes.strength", "90"]
     assert rcmd.cmd_read(args(query="attrs.*")) == 0
     out = capsys.readouterr().out
-    assert out.count("character.attributes.") == 8 and re.search(r"character\.attributes\.arcane\s+10\n", out)
+    assert [l.strip() for l in out.splitlines()[:2]] == ["character", "attributes"]      # the same tree as `read`
+    assert re.search(r"\barcane\s+10\n", out) and "character." not in out
+    assert rcmd.cmd_read(args(query=["runes", "attrs.vigor", "level"])) == 0
+    out = capsys.readouterr().out
+    assert out.count("character\n") == 1 and "runes" in out and "vigor" in out and "level" in out and "hit_point" not in out
 
 
 def test_query_json_is_the_value_alone(rig, capsys):
@@ -245,7 +249,7 @@ def test_live_without_a_name_follows_every_value(rig, capsys):
     assert "character" in out and "hit_point" in out and "10,008,626" in out
 
 
-def test_values_views_carry_no_effect_or_animation_lists_but_the_export_still_does(rig, capsys):
+def test_the_whole_views_show_effects_and_animations_like_the_export(rig, capsys):
     tmp, mem, target, box, args = rig
     assert rcmd.cmd_read(args(export=True)) == 0
     lists = doc(tmp)["character"]
@@ -255,8 +259,8 @@ def test_values_views_carry_no_effect_or_animation_lists_but_the_export_still_do
         capsys.readouterr()
         assert rcmd.cmd_read(args(**kw)) == 0
         out = capsys.readouterr().out
-        assert "hit_point" in out and "times" not in out and not any(i in out.split() for i in ids)
-        assert "buff_duration" not in out
+        assert "hit_point" in out and "effects" in out and "animations" in out
+        assert all(i in out.split() for i in ids)
 
 
 def test_live_on_a_terminal_redraws_in_place_and_highlights_what_changed(rig, monkeypatch, capsys):
@@ -418,3 +422,57 @@ def test_read_never_opens_a_writable_handle():
     import inspect
     src = inspect.getsource(rcmd)
     assert "Writable" not in src and "write_process" not in src.lower()
+
+
+# ---- a list that is empty right now is not a wrong name ----
+
+def test_a_list_name_with_nothing_active_is_empty_not_unknown():
+    from eldendisk.reader import view
+    from eldendisk.game.values import UnknownName
+    d = {"systems": {}, "character": {"level": 1, "effects": {}, "animations": {}}}
+    assert view.select(d, "character.effects.*") == []
+    assert view.select(d, "animations.*") == []
+    assert view.select(d, "character.effects.311100.name") == []
+    with pytest.raises(UnknownName):
+        view.select(d, "character.effectz.*")
+
+
+def test_live_query_of_a_list_survives_the_last_effect_ending(rig, monkeypatch, capsys):
+    tmp, mem, target, box, args = rig
+    mem.ticks = 6
+    gone = {"on": False}
+    real = rcmd.ExportWriter.build
+
+    def build(self, state, sample):
+        d = real(self, state, sample)
+        if gone["on"]:
+            d["character"]["effects"] = {}
+        return d
+
+    monkeypatch.setattr(rcmd.ExportWriter, "build", build)
+    n = {"i": 0}
+
+    def sleep(s):
+        n["i"] += 1
+        if n["i"] == 2:
+            gone["on"] = True
+
+    monkeypatch.setattr(rcmd.time, "sleep", sleep)
+    assert rcmd.cmd_read(args(query="character.effects.*", live=True)) == 0
+    cap = capsys.readouterr()
+    assert "unknown name" not in cap.err
+    assert "→ -" in cap.out        # what was active is shown as gone, the loop kept running
+
+
+def test_one_shot_query_of_an_empty_list_says_so_and_succeeds(rig, monkeypatch, capsys):
+    tmp, mem, target, box, args = rig
+    real = rcmd.ExportWriter.build
+
+    def build(self, state, sample):
+        d = real(self, state, sample)
+        d["character"]["effects"] = {}
+        return d
+
+    monkeypatch.setattr(rcmd.ExportWriter, "build", build)
+    assert rcmd.cmd_read(args(query="character.effects.*")) == 0
+    assert "nothing matches" in capsys.readouterr().err

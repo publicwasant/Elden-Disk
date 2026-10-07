@@ -99,7 +99,7 @@ Same version: no bump. The interface now says what it does by name, and a read i
 | 5 | **Names only.** `game/values.py`: the paths of `disk-state.json` with short forms and aliases (`attrs`, `rune`, `hp`, `fp`, `max`); unknown names fail with suggestions. No addresses, offsets, chains, scans or raw writes (decided: over-engineering for a one-person tool; new writable values go into `offsets.json`). | `game/values.py` |
 | 6 | `write --set NAME=VALUE ...` (repeatable) and `--refill LIST` replace `write set` / `write refill`. Group wildcards (`attrs.*`, `vitals.*.current`); bare `*`, `character.*`, `ALL` refused. Everything `read` shows can be named; derived values (`hp.maximum`, `hp.base`, ...) are refused with the reason. | `writer/writer.py`, `commands/write.py` |
 | 7 | `ExportWriter` builds the document without a file (`build`), so `read` and `--export` share one source. | `reader/export.py` |
-| 8 | **Values only.** `read` without a name and `--live` show the values of `disk-state.json` without the long effect and animation lists; ask for them by name (`--query effects`, `--query character.effects.*`, also `--live`). The file itself is unchanged. | `reader/view.py` |
+| 8 | ~~Values only~~ **Reversed (2026-10-07, after the real game):** `read` without a name and `--live` show the whole document of `disk-state.json`, `character.effects` and `character.animations` included; `character.*` includes them too. The monitors stay the place for the per-id view. | `reader/view.py` |
 
 Decisions to confirm: a bare `hp` / `runes` reads as the whole group but writes as `...current` / `...total`; the 13 stored values are the only settable ones; a vault that cannot be resolved is fatal only for `--export`; `--live` redraws in place on a terminal and falls back to a change stream elsewhere; a tree taller than the window is cut with a summary line; the monitors use the same screen (one table per monitor); no bars and no `q` / `p` keys.
 
@@ -108,3 +108,20 @@ Tests: 456 passed, 1 skipped (rewritten `test_read_command`; new `test_values`; 
 Also recorded in the spec (section 9): the real-game hard-kill recovery (`vault restore`, byte-identical), normal Steam play followed by a host run, and the Steam Cloud upload seen online (T10 still open).
 
 Real-game check (author, 2026-10-07): `read --live`, `--live-effects` / `--live-animations` and `write --set` with the new names work. Still unreported: `--export`, `--mapped` / `--unmapped`, the names reload, `write --refill` and the refusal messages; T10 (Steam Cloud sync on exit) is untested.
+
+## Client log in `run -v` and `run --vault-off` (round 2)
+
+| # | Change | Where |
+|:-:|:--|:--|
+| 1 | **Client log.** Every command already logged its command line and exit code to `<vault>/eldendisk.log`; the format is **unchanged**. `run -v` now also follows that file and prints the lines of the other terminals (not its own, not what was written before it started; rotation followed). | `logbook.Tail`, `ui.raw_line`, `commands/run.py` |
+| 2 | **Rotation tolerance.** Several processes share the file; when the rename fails (Windows, file held by another process) the rotation is skipped and logging continues. | `logbook.py` |
+| 3 | **`run --vault-on` / `--vault-off`** (default ON, mutually exclusive, per run, not togglable while the host runs). OFF: no snapshot, no record, no restore; the log says `status ON|OFF`, the banner has a `mode` row. For farming with `read` while keeping progress. | `__main__.py`, `commands/run.py`, `host/host.py` |
+| 4 | OFF consequences: `write` refused (exit 5, message names `--vault-off`); an owed restore still blocks `run` (exit 4); Ctrl+C stops the host only (exit 130); no auto-prune. | `host/host.py`, `vault/session.py` |
+
+| 5 | **`dev_pipeline.py` forwards options to `run`.** Anything the script does not know itself (`--vault-off`, `--save-dir`, `--keep 1` ...) is appended to `run -v` in step 3/3; the options are checked against the real `run` parser first (exit 2 before tests and build on a typo). `--dry-run` / `--skip-tests` / `--no-embed` stay the script's own. | `tools/dev_pipeline.py`, `tests/test_dev_pipeline.py` |
+| 6 | **Reverses row 8 of round 1:** the whole views show effects and animations again (see there). **Fix (found on the real game):** `read --query character.effects.* --live` stopped with `unknown name` and exit 1 when the last effect ended (Gold Scarab taken off). Names inside the effect / animation lists now match nothing without being an error: `--live` shows `none active` and keeps running, a one-shot query prints `nothing matches` and exits 0; a misspelt list name is still refused. | `reader/view.py`, `commands/read.py` |
+| 7 | **`--query` takes several names** (`read --query character.runes.* character.effects.* --live`): one selection, in the order asked, each path once. **Query output is a tree:** a group, a wildcard or several names are printed in their place in the tree like `read` (before: wildcards were a flat list of full paths, a group a heading with its values). One single value stays one `path  value` row. `--json` stays flat. | `reader/view.py`, `commands/read.py`, `__main__.py` |
+
+Decisions: no vault toggle command (the proposal `vault --on/--off` was replaced by per-run flags, no state to change under a running game); no restore on OFF (it would overwrite a save under a running game); the log format stays as it was.
+
+Tests: 479 passed, 1 skipped (+23: `Tail`, rotation tolerance, `run -v` tail, vault OFF in `test_host`, flags in `test_main`, new `test_dev_pipeline`). **Real game (author, 2026-10-07):** `dev_pipeline.py --vault-off` ran `run -v --vault-off` (banner `mode`, `status OFF`, warning, `write is not allowed`, exit 0, save left as the game wrote it), and `run -v` showed the `read` command lines of other terminals live. Not yet run: rotation with several writers, `write` refusal in OFF, owed record with OFF.

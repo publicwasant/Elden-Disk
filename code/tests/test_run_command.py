@@ -49,3 +49,41 @@ def test_a_prune_failure_is_only_a_warning(vault, monkeypatch, capsys):
     monkeypatch.setattr(SaveVault, "prune", lambda self, keep: (_ for _ in ()).throw(OSError("locked")))
     run_cmd.auto_prune(v, 1)
     assert "could not prune" in capsys.readouterr().err
+
+
+def test_run_v_shows_the_lines_other_terminals_log(tmp_path, monkeypatch, capsys):
+    """`run -v` tails the shared log: lines of other commands appear, its own are not repeated."""
+    import argparse
+    from eldendisk.logbook import Event, book, format_line
+    from datetime import datetime
+
+    log = tmp_path / "vault" / "eldendisk.log"
+    book.configure(file=log)
+    seen = {}
+
+    class FakeSession:
+        history = []
+
+        def __init__(self, *a, **k): pass
+
+        def run(self):
+            line = format_line(Event(datetime.now(), 99999, "D", "cli", "eldendisk 1.6.2 write --set level=150"))
+            with open(log, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+            book.i("host", "own line")
+            seen["ran"] = True
+            return 0
+
+    monkeypatch.setattr(run_cmd, "Session", FakeSession)
+    monkeypatch.setattr(run_cmd, "require_windows_x64", lambda: None)
+    monkeypatch.setattr(run_cmd.launcher, "find_game_dir", lambda d: tmp_path / "game")
+    monkeypatch.setattr(run_cmd, "sha256_file", lambda p: "ab" * 32)
+    monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
+    monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
+    monkeypatch.setattr(run_cmd, "session_log", lambda: None)
+    args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x",
+                              no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=True)
+    assert run_cmd.cmd_run(args) == 0 and seen["ran"]
+    err = capsys.readouterr().err
+    assert "write --set level=150" in err and err.count("write --set level=150") == 1
+    book.close()

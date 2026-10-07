@@ -3,7 +3,11 @@
 Execution Flow:
 1. Pre-check: Executes unit tests to validate source code.
 2. Build: Executes `python -m eldendisk build -c -em` (embedded configs; `--no-embed` to disable) to compile the executable.
-3. Launch: Executes `./build/dist/eldendisk/eldendisk.exe run -v` (the live log; also kept in <vault>/eldendisk.log).
+3. Launch: Executes `./build/dist/eldendisk/eldendisk.exe run -v [options]` (the live log; also kept in <vault>/eldendisk.log).
+
+Every option this script does not know is handed to `run`, so `python dev_pipeline.py --vault-off` ends in
+`eldendisk.exe run -v --vault-off`. The options are checked against the real `run` parser first, before the tests
+and the build take their time.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ else:
 
 sys.path.insert(0, str(CODE_DIR))
 from eldendisk import __version__
+from eldendisk.__main__ import build_parser
 
 
 def log(msg: str) -> None:
@@ -57,7 +62,16 @@ def run_build(clean: bool = True, embed: bool = True) -> bool:
     return True
 
 
-def run_launch(dry_run: bool = False) -> int:
+def check_run_options(run_options: list[str]) -> bool:
+    """True when `run` accepts these options (argparse prints its own usage error otherwise)."""
+    try:
+        build_parser().parse_args(["run", *run_options])
+    except SystemExit as exc:
+        return exc.code in (0, None)
+    return True
+
+
+def run_launch(dry_run: bool = False, run_options: list[str] | None = None) -> int:
     exe_path = ROOT_DIR / "build" / "dist" / "eldendisk" / "eldendisk.exe"
     if not exe_path.exists():
         log(f"ERROR: Executable not found at {exe_path}")
@@ -68,9 +82,9 @@ def run_launch(dry_run: bool = False) -> int:
         log(f"Step 3/3: [Dry Run] Executing {rel_path} --help ...")
         cmd = [str(exe_path), "--help"]
     else:
-        log(f"Step 3/3: Executing {rel_path} run -v ...")
+        cmd = [str(exe_path), "run", "-v", *(run_options or [])]
+        log(f"Step 3/3: Executing {rel_path} {' '.join(cmd[1:])} ...")
         log(f"If this run is killed (IDE stop button), restore the save with: {exe_path} vault restore")
-        cmd = [str(exe_path), "run", "-v"]
 
     return _run_exe(cmd)
 
@@ -99,12 +113,15 @@ def _run_exe(cmd: list[str], attempts: int = 10, delay: float = 1.5) -> int:
     return 1
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="EldenDisk E2E Development Run Pipeline")
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="EldenDisk E2E Development Run Pipeline. "
+                                     "Any other option is passed to `run` (e.g. --vault-off, --save-dir DIR, --keep 1).")
     parser.add_argument("--dry-run", action="store_true", help="run dry-run help check instead of full game launch")
     parser.add_argument("--skip-tests", action="store_true", help="skip pre-check unit tests")
     parser.add_argument("--no-embed", action="store_true", help="do not embed configuration files during build")
-    args = parser.parse_args()
+    args, run_options = parser.parse_known_args(argv)
+    if not check_run_options(run_options):
+        return 2
 
     if not args.skip_tests:
         if not run_precheck():
@@ -113,7 +130,7 @@ def main() -> int:
     if not run_build(clean=True, embed=not args.no_embed):
         return 1
 
-    return run_launch(dry_run=args.dry_run)
+    return run_launch(dry_run=args.dry_run, run_options=run_options)
 
 
 if __name__ == "__main__":

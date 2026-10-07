@@ -38,6 +38,12 @@ Already seen on the real game (spec section 9): `run` restore, hard-kill recover
 | R9 | `run` while Steam is running | a Steam Cloud reminder is printed | [ ] |
 | R10 | `run --keep 1` twice (two finished sessions) | only the newest snapshot remains (`vault list`) | [ ] |
 | R11 | `run -v` | the logcat lines instead of the concise view; same lines in `<vault>/eldendisk.log` | [ ] |
+| R12 | `run --vault-off`; the banner | `mode  vault OFF (no backup, no restore)`; no snapshot is created (`vault list` unchanged); log has `D vault : status OFF`; the game launches offline as usual (`run` without the flag logs `status ON`) | [ ] |
+| R13 | Farming with OFF: T0 `run --vault-off`, T1 `read --live --query runes`; kill some enemies, quit the game | the rune count rises in T1; after the game exits **nothing is restored** (`ER0000.sl2` keeps the progress after a grace save); `vault status` shows no record; exit `0` | [ ] |
+| R14 | OFF: T2 `write --set level=150` | refused, exit `5`, message mentions `--vault-off` / no valid session; nothing written | [ ] |
+| R15 | A record is owed (R4/R7), then `run --vault-off` | still refused, exit `4`, names `vault restore` | [ ] |
+| R16 | OFF: Ctrl+C in T0 while the game runs | the host stops waiting, exit `130`; the game keeps running; no record is left; `read` still works | [ ] |
+| R17 | `run --vault-on --vault-off` | usage error (exit `2`): mutually exclusive | [ ] |
 
 ---
 
@@ -59,16 +65,17 @@ Already seen on the real game (spec section 9): `run` restore, hard-kill recover
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
-| Q1 | `read` | a tree: `systems` (profile, features, status, session) and `character` (level, vitals, runes, attributes); numbers with thousands separators; **no** effects or animations lists; exit `0`, returns at once | [ ] |
+| Q1 | `read` | a tree: `systems` (profile, features, status, session) and `character` (level, vitals, runes, attributes); numbers with thousands separators; with `character.effects` and `character.animations` as in `disk-state.json`; exit `0`, returns at once | [ ] |
 | Q2 | `read --query level` / `runes` / `hp` / `hp.max` / `hit_point.maximum` / `fp` / `stamina` / `vigor` / `attrs.*` | the value or group; `runes` and `hp` show the whole group | [ ] |
-| Q3 | `read --query vitals.*.current` / `character.*` | the matching values, no effects or animations | [ ] |
+| Q3 | `read --query vitals.*.current` / `character.*` | the matching values (`character.*` includes the effects and animations) | [ ] |
 | Q4 | `read --query vigr` | exit `1`, "unknown name 'vigr'; did you mean … vigor" | [ ] |
 | Q5 | `read --query runes --json \| ConvertFrom-Json` | valid JSON, only that value | [ ] |
-| Q6 | `read --query effects`, `read --query character.effects.*`, `read --query animations` | the lists (they are read by name); `character.*` does **not** include them | [ ] |
+| Q6 | `read --query effects`, `read --query character.effects.*`, `read --query animations` | just the lists (also with `--live`) | [ ] |
 | Q7 | game not running: `read --timeout 3` | "waiting for eldenring.exe …" then exit `1` after about 3 s | [ ] |
 | Q8 | game at the title screen: `read --timeout 3` | "no loaded world after 3 s …; load a character first", exit `1` | [ ] |
 | Q9 | game started from Steam (EAC): `read` | exit `3` with the hint to use `eldendisk run` (not "module not found") | [ ] |
 | Q10 | `read --hz 500`, `--timeout 0`, `--json --live`, `--export --query hp`, `--live-effects --live` | each a usage error, exit `2` | [ ] |
+| Q11 | `read --query character.runes.* character.effects.*`, then the same with `--live` | one tree: `character` once, `runes` with its values, `effects` with each id; `--live` redraws and highlights in place; a typo in any name stops with exit `1` | [ ] |
 
 ---
 
@@ -161,6 +168,10 @@ Already seen on the real game (spec section 9): `run` restore, hard-kill recover
 | G4 | Android Studio run window with `FORCE_COLOR=1` | colours shown; live views use the line fallback | [ ] |
 | G5 | `-v` after the subcommand on every command | the log replaces the concise view | [ ] |
 | G6 | Make the vault unavailable and run `hash` / `build` | the command works; the log is simply not written | [ ] |
+| G7 | T0 `run -v`; in T1 run `read --query runes`, in T2 `write --set level=150`, `vault status` | T0 shows the other terminals' lines in the log format (`D cli : eldendisk 1.6.2 read --query runes`, `... exit 0`, the writer's events) as they happen; T0's own lines appear once, not twice | [ ] |
+| G8 | T0 `run -v`: lines written **before** it started | not replayed (the tail starts at the end of the file) | [ ] |
+| G9 | Several terminals logging at once for a few minutes (e.g. `read --live` + `write` loops), optionally with a small rotation size | no command fails; no garbled lines in `eldendisk.log`; after a rotation `run -v` keeps showing new lines | [ ] |
+| G10 | `run` **without** `-v` while other terminals run commands | the concise view shows only its own events (no foreign lines) | [ ] |
 
 ---
 
@@ -184,6 +195,8 @@ Use a throwaway or backed-up save.
 | B2 | The exe: P1–P5, Q1, L1, M1, W1, V1 | same behaviour as Python | [ ] |
 | B3 | `build -c` while a record exists in a vault **under `build\`** | refused, exit `4`; with the default vault a rebuild never touches it | [ ] |
 | B4 | `python code\tools\dev_pipeline.py --dry-run` | tests, build, dry run pass (no session record!) | [ ] |
+| B6 | `python code\tools\dev_pipeline.py --vault-off` (no session record!) | tests, build, then `run -v --vault-off`: banner `mode vault OFF`; a typo such as `--vault-of` stops at once with a usage error before the tests | [ ] |
+| L15 | T1 `read --query character.effects.* --live` with an effect active (e.g. Gold Scarab), then take it off | the rows turn into `none active` (no error, no exit); equip again: the rows come back; Ctrl+C exits `130` | [ ] |
 | B5 | `python code\tools\soak_check.py` while `read --live --export` runs for 10+ minutes | no anomalies reported | [ ] |
 
 ---
@@ -191,7 +204,7 @@ Use a throwaway or backed-up save.
 ## Automated tests (Linux or Windows, no game)
 
 ```commandline
-python -m pytest          # 456 passed, 1 skipped
+python -m pytest          # 479 passed, 1 skipped
 python -m pyflakes eldendisk tests tools
 ```
 

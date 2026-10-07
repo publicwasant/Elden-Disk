@@ -4,7 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..console import require_windows_x64
-from ..logbook import book
+from .. import ui
+from ..logbook import Tail, book
 from ..game.processes import GAME_EXE, anticheat_processes, find_pid, list_process_names, process_started, sha256_file
 from ..game.profile import load_profile
 from ..host import launcher
@@ -47,7 +48,10 @@ def cmd_run(args) -> int:
     vault, live = SaveVault(vault_path), live_dir(args.save_dir)
 
     book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
-    begin(args, "run", [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir))])
+    protect = getattr(args, "protect", True)
+    begin(args, "run", [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
+                        ("mode", "vault ON (backup before, restore after)" if protect
+                         else "vault OFF (no backup, no restore)")])
 
     def extra() -> list[str]:
         out = []
@@ -70,8 +74,16 @@ def cmd_run(args) -> int:
     if any(n.lower() == STEAM_EXE for n in list_process_names()):
         book.w("steam", STEAM_CLOUD_NOTE)
     session = Session(vault, live, hooks, archive_contaminated=not args.no_archive_contaminated,
-                      log=session_log())
-    rc = session.run()
+                      log=session_log(), protect=protect)
+    tail = None
+    if getattr(args, "verbose", False) and book.path is not None:   # -v shows what the other terminals do, too
+        tail = Tail(book.path, lambda line: book.locked(ui.raw_line, line), book.pid)
+        tail.start()
+    try:
+        rc = session.run()
+    finally:
+        if tail is not None:
+            tail.stop()
     if State.RESTORING in session.history:   # a session really ran; never prune a vault that still owes a restore
         auto_prune(vault, args.keep)
     return rc

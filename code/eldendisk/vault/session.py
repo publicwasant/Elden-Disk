@@ -117,7 +117,7 @@ def authorise(record: SessionRecord | None, *, game_pid: int | None, game_starte
               exe_sha256: str | None, started_of: Callable[[int], int | None]) -> list[str]:
     """Reasons the writer must refuse; an empty list means writing is allowed (spec 1.6.2, section 3)."""
     if record is None:
-        return ["no active session: start the game with `eldendisk run` (same --vault)"]
+        return ["no active session: start the game with `eldendisk run` (same --vault; a run with --vault-off has none)"]
     problems = []
     if record.state != SessionState.RUNNING:
         problems.append(f"the session is {record.state.value}, not RUNNING")

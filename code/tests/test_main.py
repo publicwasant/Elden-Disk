@@ -157,7 +157,7 @@ def test_run_flags_parse(monkeypatch):
     seen.clear()
     cli.main(["run"])
     assert seen["launch_timeout"] == 120.0 and seen["no_archive_contaminated"] is False and seen["vault"] is None
-    assert seen["keep"] == 5
+    assert seen["keep"] == 5 and seen["protect"] is True        # the vault is ON unless told otherwise
     with pytest.raises(SystemExit):
         cli.main(["run", "--launch-timeout", "0"])
     with pytest.raises(SystemExit):
@@ -181,7 +181,10 @@ def test_read_flags_parse_and_several_features_are_accepted(monkeypatch):
     assert (seen["export_interval"], seen["timer_interval"]) == (1.0, 0.0)
     seen.clear()
     assert cli.main(["read", "--query", "runes", "--json"]) == 0
-    assert seen["query"] == "runes" and seen["json"] and not seen["live"] and not seen["export"]
+    assert seen["query"] == ["runes"] and seen["json"] and not seen["live"] and not seen["export"]
+    seen.clear()
+    assert cli.main(["read", "--query", "character.runes.*", "character.effects.*", "--live"]) == 0
+    assert seen["query"] == ["character.runes.*", "character.effects.*"] and seen["live"]
     seen.clear()
     cli.main(["read"])   # no flag: every value once
     assert (seen["query"], seen["export"], seen["live"], seen["hz"], seen["timeout"]) == (None, False, False, 60.0, 15.0)
@@ -364,3 +367,16 @@ def test_every_help_page_renders(capsys):
             cli.main([*page, "-h"])
         assert exc.value.code == 0, page
     assert "LOCALAPPDATA" in capsys.readouterr().out
+
+
+def test_vault_on_and_off_are_per_run_flags(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(cli, "cmd_run", lambda a: seen.update(vars(a)) or 0)
+    assert cli.main(["run", "--vault-off", "-v"]) == 0 and seen["protect"] is False and seen["vault"] is None
+    cli.main(["run", "--vault-on"])
+    assert seen["protect"] is True
+    cli.main(["run", "--vault", "D:\\v", "--vault-off"])
+    assert seen["protect"] is False and seen["vault"] == "D:\\v"      # --vault DIR is still the folder
+    with pytest.raises(SystemExit) as e:
+        cli.main(["run", "--vault-on", "--vault-off"])
+    assert e.value.code == 2

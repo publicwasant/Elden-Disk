@@ -95,7 +95,7 @@ def test_select_by_alias_group_leaf_and_pattern():
     assert view.select(DOC, "runes")[0][0] == "character.runes"
     assert view.select(DOC, "hp.max") == [("character.vitals.hit_point.maximum", 1460)]
     assert view.select(DOC, "attrs.*") == [("character.attributes.vigor", 80), ("character.attributes.faith", 60)]
-    assert view.select(DOC, None) == [("", view.visible(DOC))]
+    assert view.select(DOC, None) == [("", DOC)]
 
 
 def test_select_unknown_name_suggests():
@@ -108,10 +108,10 @@ def test_select_unknown_name_suggests():
 
 def test_rows_group_and_leaf_formatting():
     rows = view.rows(view.select(DOC, "runes"))
-    assert rows[0] == view.Row(0, "character.runes", None, "character.runes")
-    assert rows[1:] == [view.Row(1, "total", "40,402,709", "character.runes.total"),
-                        view.Row(1, "baseline", "40,401,505", "character.runes.baseline"),
-                        view.Row(1, "delta", "+1,204", "character.runes.delta")]
+    assert rows[:2] == [view.Row(0, "character", None, "character"), view.Row(1, "runes", None, "character.runes")]
+    assert rows[2:] == [view.Row(2, "total", "40,402,709", "character.runes.total"),
+                        view.Row(2, "baseline", "40,401,505", "character.runes.baseline"),
+                        view.Row(2, "delta", "+1,204", "character.runes.delta")]
     assert view.rows(view.select(DOC, "level")) == [view.Row(0, "character.level", "150", "character.level")]
     assert view.rows(view.select(DOC, "systems.status.pid")) == [
         view.Row(0, "systems.status.pid", "8812", "systems.status.pid")]
@@ -131,26 +131,49 @@ def test_changes_ignore_buff_countdowns_and_report_appearing_values():
 def test_as_json_for_one_selection_and_for_the_whole_document():
     import json
     assert json.loads(view.as_json(view.select(DOC, "hp"))) == {"character.vitals.hit_point": DOC["character"]["vitals"]["hit_point"]}
-    assert json.loads(view.as_json(view.select(DOC, None))) == view.visible(DOC)
+    assert json.loads(view.as_json(view.select(DOC, None))) == DOC
 
 
-# ---- effects and animations belong to their monitors ----
-def test_the_values_view_leaves_out_effects_and_animations():
+# ---- effects and animations are part of the document, like in disk-state.json ----
+def test_the_whole_view_includes_effects_and_animations():
     doc = {**DOC, "character": {**DOC["character"], "animations": {"7": {"name": "roll"}}}}
-    shown = view.visible(doc)
-    assert "effects" not in shown["character"] and "animations" not in shown["character"]
-    assert "effects" in doc["character"]   # the document itself (disk-state.json) is untouched
-    paths = {r.key for r in view.rows(view.select(doc, None))}
-    assert "311100" not in paths and "roll" not in paths
+    paths = {r.path for r in view.rows(view.select(doc, None))}
+    assert "character.effects.311100.name" in paths and "character.animations.7.name" in paths
 
 
-def test_effects_and_animations_are_read_by_name_but_not_dragged_in_by_a_wildcard():
+def test_effects_and_animations_are_selected_like_any_other_name():
     doc = {**DOC, "character": {**DOC["character"], "animations": {"7": {"name": "roll"}}}}
     assert view.select(doc, "effects") == [("character.effects", doc["character"]["effects"])]
     assert view.select(doc, "character.animations.7.name") == [("character.animations.7.name", "roll")]
     hits = dict(view.select(doc, "character.effects.*"))
     assert hits["character.effects.311100.name"] == "x" and "character.level" not in hits
-    assert "character.effects.311100.name" not in dict(view.select(doc, "character.*"))
-    assert dict(view.select(doc, "character.*"))["character.level"] == 150
+    assert dict(view.select(doc, "character.*"))["character.effects.311100.name"] == "x"
+    assert view.select(doc, "effects.999") == []         # not active now; the lists come and go
     with pytest.raises(UnknownName):
-        view.select(doc, "effects.999")
+        view.select(doc, "character.effectz.999")
+
+
+# ---- several names, and the tree ----
+def test_several_names_are_one_selection_in_the_order_asked_without_repeats():
+    got = view.select(DOC, ["attrs.*", "level", "character.attributes.vigor"])
+    assert [p for p, _ in got] == ["character.attributes.vigor", "character.attributes.faith", "character.level"]
+    with pytest.raises(UnknownName):
+        view.select(DOC, ["level", "vigr"])
+    assert view.select(DOC, []) == [("", DOC)] and view.select(DOC, ["", " "]) == [("", DOC)]
+    assert view.label(["runes", "hp"]) == "runes hp" and view.label(None) == "all values"
+
+
+def test_a_wildcard_and_several_names_print_as_one_tree():
+    doc = {**DOC, "character": {**DOC["character"], "animations": {"7": {"name": "roll"}}}}
+    rows = view.rows(view.select(doc, ["character.runes.*", "character.effects.*", "animations.*"]))
+    shape = [(r.indent, r.key, r.value) for r in rows]
+    assert shape[:6] == [(0, "character", None), (1, "runes", None), (2, "total", "40,402,709"),
+                         (2, "baseline", "40,401,505"), (2, "delta", "+1,204"), (1, "effects", None)]
+    assert (2, "311100", None) in shape and (3, "name", "x") in shape
+    assert (1, "animations", None) in shape and (3, "name", "roll") in shape
+    assert shape.count((0, "character", None)) == 1            # one `character` heading, not one per name
+    assert [r.path for r in rows][-1] == "character.animations.7.name"
+
+
+def test_one_value_stays_one_row():
+    assert view.rows(view.select(DOC, ["level"])) == [view.Row(0, "character.level", "150", "character.level")]
