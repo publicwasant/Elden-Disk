@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="52">
+  <Files>
+    <File Name="sp2.PTR" Encoding="Ascii85">WtLrR6jc/+7fKZQ5c}:nOeDcXG?+94qyl^},u4yW-H+x6ZWmtM%,B2IPC8%Q]RMjRNqj)q)P.FEAkhFX?[-5=.Dg2ojmCti?L+C%C}dce7c;DwQe)U][nxywALiwE=wmOv_8wqa,mK3KUVS*}N@N8hu=+r,)]ogS4oRhM_M3@IJi-i4U_3c@ds3.-ZvD,5do494S4whWFw;ta6jG[tgg:UWB(+8(jopi{WgWBB*l7q)Pw3[*pcO?]RCjUuVnWw5Dpd_DRXDtH5k4B}G-zr+.e30-._PsGBP_Y{]3gMORJj5!7L%iE/D.FH$:Ul0?U=orG,M1H9KSRh/G3KUAL)9W%5:D*jhQesm/c(uhcrG.15SrA6QAg9+BAIYM!YYVhuDr]O]E1OnVA_A*wu1(d:ulEZ8Wr(-^@oTeGdG%76Csm--1Y+I-T}!C,Q-j):yD#%tQ#S3;P6p-L-o}eI298:Ek!MMtK@KtD_zEfH,C=i8vBBqq}$ehT?7rpw)gURxZfd8n+PkB{gD(ECRf:2nqWE)d;rinc)MF56-h+6@k5xdL5jra/!)gU@$nUfa=:2yG6nOAf]_,/gyCjkCTiaXLyoOhgkiZ:f#/D;z#S1-,[Edsa4Yr5z@7$z+^ac=B;]w0bR),/K;b4oX(N?OQP(#Jd)kA2Mwm/g,Wg$-([Jee!CaVu[U#{Vn2*)iSKKzcw!Ud:W}!Z;p)E:5ufwfn-Hl_DJ$whmE*O2:uZk=wY:oop6d]N5U,W2VCQ.LsA-#l8G,lkv7Am_Yc$X{-qD2,lP;C)$y]DorH6VdD%7!KBPcr4*;?:)d7OWV@P.Hn.iP1za2?28)Sm}f*h?@/@4Z2Rn,,d6yS*Ha4opG@dWPl{h-X{]sQGe//9jy%7uC92mc{?CyBIyuL*6uw8N^lRmkJ]D]@o8N.;pu(.zop8,B7AOK]5aRK.K==H_zv$Vv9bXn1]]qtu*+zzuymB%1Xn^n-+Z5*h$ER;O:gTTvpZG+v?*9hC9]@;3Jv-/yoj5o1/![rdB!s0Bc%Q$0a4bYk;2.KgWD=Tpy]YD@;GF8Eu7gFgGi0jWoAzxC.6$s#(!p:nqMd4;MX*Mek4If-;5:r=VwG#OpUX3o)I#@Y3R-cWgsAzQ}]R2kbf2LmZsPt=jp*L0hbX3qVVSEc3#tGl#QVQc.^zcg5bP4i%Tu1)0S?m8!3CxMc{*$qnYx842h1mp$Oa::7$!4.PpdSw=6Z9nOzj!vz*)o/qb:xN]$5LZes@!q45g2kuQ),,?cwaO!Ks5vlj#m@e_)3*%AbK#Y?Dq1(a1=-nu:ifO/3JKXT4NMd?X8oc$;R[N)yKF3;hbYbPqEP7wR35%i5H7(UY)S]eP9-]uFc26VS5ITGFA}u$}6WFYS1F6-#*:o6ln#hE/sNVX@P$kcuqVYSNf7gYeYDFa^arg!9UnlZCUBg-(IR)XYBF]hj[wkG1qvc@F=/Uzk#j{m.X/CFfcD;R7U.SHAvC*c4=W1eG[Uoa61;Lc^j2(XXD}7FEVA=.tLSU,-;1]o[p/)z$^M#d!#;FD+!X62jc.kp4xZIw+fqjbO7L$upU]+MV/hSz;EY+C=z!kkP1AJnNsmXGLR%[Sr[rhxGT5yQt:W*^*i#ZZy!M%.c=)1#MiLc;ANq2G6X_@xUZn{b[:asdH!!:hxyS6[]rditqqKjDe(ET_Gd%Nf*j*${2f9XsYbk3;oL#7j$X__TjmsMHiA-+vSZ}S+:-ueXp9kQWex_xRfNjQBNwA/0RVGsAU^^:]lJ6.jH]Rk-fPsf!fz8g{Vc(:sY*BI-TXU?+_q)p/z2EE,-b6N1{XhqKE*M^258?T@Z]Ph%C_MB#J/,BN2!:6;E*@6*#2mS;</File>
+  </Files>
+  <CheatEntries>
+    <CheatEntry>
+      <ID>10</ID>
+      <Description>"(1) Total Rows In Table"</Description>
+      <ShowAsSigned>0</ShowAsSigned>
+      <VariableType>2 Bytes</VariableType>
+      <Address>7FF45D9EDAAA</Address>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>11</ID>
+      <Description>"(2) Addr start from head"</Description>
+      <ShowAsSigned>0</ShowAsSigned>
+      <VariableType>8 Bytes</VariableType>
+      <Address>7FF45D9EDAD0</Address>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>12</ID>
+      <Description>"SpEffect file head (Set B)"</Description>
+      <ShowAsSigned>0</ShowAsSigned>
+      <VariableType>8 Bytes</VariableType>
+      <Address>7FF45D9EDAA0</Address>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>13</ID>
+      <Description>"Path X"</Description>
+      <ShowAsSigned>0</ShowAsSigned>
+      <VariableType>Float</VariableType>
+      <Address>"eldenring.exe"+04861FB0</Address>
+      <Offsets>
+        <Offset>799188</Offset>
+        <Offset>130</Offset>
+        <Offset>E8</Offset>
+        <Offset>98</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>14</ID>
+      <Description>"Path Y"</Description>
+      <ShowAsSigned>0</ShowAsSigned>
+      <VariableType>Float</VariableType>
+      <Address>"eldenring.exe"+03D7D568</Address>
+      <Offsets>
+        <Offset>799188</Offset>
+        <Offset>130</Offset>
+        <Offset>E8</Offset>
+        <Offset>148</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>15</ID>
+      <Description>"Path Z"</Description>
+      <ShowAsSigned>0</ShowAsSigned>
+      <VariableType>Float</VariableType>
+      <Address>"eldenring.exe"+03D85F58</Address>
+      <Offsets>
+        <Offset>799188</Offset>
+        <Offset>80</Offset>
+        <Offset>80</Offset>
+        <Offset>4C0</Offset>
+      </Offsets>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+</CheatTable>
