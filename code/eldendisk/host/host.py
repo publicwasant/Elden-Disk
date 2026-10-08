@@ -245,9 +245,9 @@ class Session:
                     if self.protect:
                         self.vault.update_session(state=SessionState.RUNNING, game_pid=cur,
                                                   game_started=h.process_started(cur))
-                        self.log.ok("game", f"running, pid {cur}; `write` is now allowed")
+                        self.log.ok("game", f"running, pid {cur}; `read` allowed, `write` allowed")
                     else:
-                        self.log.ok("game", f"running, pid {cur}; `write` is not allowed")
+                        self.log.ok("game", f"running, pid {cur}; `read` allowed, `write` not allowed")
                     self._to(State.RUNNING)   # from here `write` may edit; the record is what authorises it
                 h.sleep(h.poll)
             except KeyboardInterrupt:

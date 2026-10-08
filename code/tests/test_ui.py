@@ -90,6 +90,21 @@ def test_raw_view_colours_the_command_line_only_on_the_console(err, monkeypatch)
     assert "\x1b[" not in err.getvalue()
 
 
+def test_backticked_words_are_cyan_on_a_colour_console_and_stay_plain_otherwise(err, monkeypatch):
+    e = ev(tag="game", msg="running, pid 7; `read` allowed, `write` allowed")
+    ui.pretty_sink(stream=err)(e)
+    assert "`read`" in err.getvalue() and "\x1b[" not in err.getvalue()
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    err.truncate(0); err.seek(0)
+    ui.pretty_sink(stream=err)(e)
+    out = err.getvalue()
+    assert "\x1b[36mread\x1b[0m allowed, \x1b[36mwrite\x1b[0m allowed" in out and "`" not in out
+    err.truncate(0); err.seek(0)
+    ui.raw_sink(err)(e)
+    assert "\x1b[36mwrite\x1b[0m" in err.getvalue()
+    assert "`write`" in format_line(e)                       # the log file keeps the backticks
+
+
 def test_header_shows_title_rule_and_aligned_rows(err):
     ui.header("run", [("vault", "C:\\v"), ("game", "D:\\g")], stream=err)
     out = err.getvalue().splitlines()

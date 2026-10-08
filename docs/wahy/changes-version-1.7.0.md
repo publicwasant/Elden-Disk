@@ -27,6 +27,7 @@ _(baseline: **[changes-version-1.6.4.md](changes-version-1.6.4.md)**; design: **
 | 11 | **Dev pipeline** stays at 3 steps (tests, build with `-em`, `run -v`); the extension is built inside `run`. `--extension-dir` / `--spec` go to `run`. | `tools/dev_pipeline.py`, `tests/test_dev_pipeline.py` |
 | 11b | **Console polish.** The vault backup debug line is short (`save <steamID> -> snapshot <name>`); existing Windows paths in console output are clickable hyperlinks (OSC 8) in Windows Terminal, VS Code and similar; `ELDENDISK_LINKS=1/0` forces on/off; the log file is never changed. | `host/host.py`, `ui.py` |
 | 11c | **The `cli` log line is the command as typed.** `D cli : version 1.7.0`, then `D cli : .\eldendisk.exe run -v` (from `sys.orig_argv`; `python -m eldendisk …` from source). On the `-v` console the command is cyan; the log file stays plain. | `logsetup.py`, `ui.py` |
+| 11d | **Status line names `read` too, words in backticks are cyan.** `game : running, pid N; \`read\` allowed, \`write\` allowed` (or `\`write\` not allowed`). On a colour console the `backticked` words are cyan (backticks hidden); the log file keeps them. | `host/host.py`, `ui.py` |
 | 12 | **Docs.** Spec 1.7.0, this file, manual test plan 1.7.0, README, CLI references. | `docs/` |
 
 ## Principle

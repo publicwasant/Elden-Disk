@@ -92,7 +92,7 @@ eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID
  ────────────────────────────────────────────────────────────────
  12:00:00  ✓  vault  snapshot 20261006-120000, 2 files verified
  12:00:01  ·  game   launching eldenring.exe offline
- 12:00:09  ✓  game   running, pid 8812; `write` is now allowed
+ 12:00:09  ✓  game   running, pid 8812; `read` allowed, `write` allowed
  ...                                      (game exits)
  12:31:40  ·  game   exited
  12:31:42  ✓  vault  save restored, byte-identical to the snapshot

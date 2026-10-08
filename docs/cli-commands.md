@@ -83,7 +83,7 @@ python -m eldendisk read --live-buffs               (other terminal)
  ────────────────────────────────────────────────────────────────
  12:00:00  ✓  vault  snapshot 20261006-120000, 2 files verified
  12:00:01  ·  game   launching eldenring.exe offline
- 12:00:09  ✓  game   running, pid 8812; `write` is now allowed
+ 12:00:09  ✓  game   running, pid 8812; `read` allowed, `write` allowed
  ...                                      (game exits)
  12:31:40  ·  game   exited
  12:31:42  ✓  vault  save restored, byte-identical to the snapshot
@@ -360,7 +360,7 @@ Every command logs **every event** to `<vault>/eldendisk.log` (the folder of `va
 10-07 12:00:00.123  4242 D cli   : version 1.7.0
 10-07 12:00:00.123  4242 D cli   : python -m eldendisk run -v
 10-07 12:00:00.981  4242 I vault : snapshot 20261006-120000, 2 files verified
-10-07 12:00:09.411  4242 I game  : running, pid 8812; `write` is now allowed
+10-07 12:00:09.411  4242 I game  : running, pid 8812; `read` allowed, `write` allowed
 10-07 12:31:42.007  4242 W host  : Ctrl+C: the game keeps running; the save is restored when it exits (press again to postpone the restore)
 ```
 

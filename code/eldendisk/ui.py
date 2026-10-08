@@ -58,6 +58,14 @@ def paint(text: str, kind: str, color: bool) -> str:
     return f"\x1b[{_COLORS[kind]}m{text}\x1b[0m" if color and kind in _COLORS else text
 
 
+_TICKS = re.compile(r"`([^`\r\n]+)`")
+
+
+def emphasize(text: str, color: bool) -> str:
+    """`name` -> name in cyan on a colour console (the backticks are what the colour replaces). Without colour the text is unchanged."""
+    return _TICKS.sub(lambda m: paint(m.group(1), "cyan", True), text) if color else text
+
+
 def symbol(kind: str, encoding: str | None) -> str:
     uni, plain = _SYMBOLS[kind]
     try:
@@ -132,7 +140,7 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
         sym = paint(symbol(kind, getattr(out, "encoding", None)), kind, color)
         stamp = paint(f"{e.when:%H:%M:%S}", "dim", color) + "  " if show_time else ""
         tag = paint(f"{e.tag:<6}", "dim", color)
-        msg = paint(e.msg, kind, color) if kind in ("warn", "error") else e.msg
+        msg = paint(e.msg, kind, color) if kind in ("warn", "error") else emphasize(e.msg, color)
         _emit(f" {stamp}{sym}  {tag} {msg}", out)
     return sink
 
@@ -156,7 +164,7 @@ def raw_sink(stream=None) -> Callable[[Event], None]:
         color = use_color(out)
         kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(e.level)
         line = format_line(e)
-        _emit(_dim_line(line, color) if e.level == "D" else paint(line, kind, color) if kind else line, out)
+        _emit(_dim_line(line, color) if e.level == "D" else paint(line, kind, color) if kind else emphasize(line, color), out)
     return sink
 
 
@@ -166,7 +174,7 @@ def raw_line(line: str, stream=None) -> None:
     got = parse_line(line)
     kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(got[1]) if got else None
     color = use_color(out)
-    _emit(_dim_line(line, color) if got and got[1] == "D" else paint(line, kind, color) if kind else line, out)
+    _emit(_dim_line(line, color) if got and got[1] == "D" else paint(line, kind, color) if kind else emphasize(line, color), out)
 
 
 def header(title: str, rows: list[tuple[str, str]] | None = None, stream=None) -> None:
