@@ -72,10 +72,10 @@ def test_raw_view_prints_the_log_lines_including_debug(err):
 
 def test_raw_view_colours_the_command_line_only_on_the_console(err, monkeypatch):
     monkeypatch.setenv("FORCE_COLOR", "1")
-    cmd = ev(level="D", tag="client", msg="eldendisk.exe run -v")
+    cmd = ev(level="D", tag="client", msg="run: eldendisk.exe run -v")
     ui.raw_sink(err)(cmd)
     out = err.getvalue()
-    assert "\x1b[36meldendisk.exe run -v\x1b[0m" in out and out.startswith("\x1b[2m10-07 23:41:02.123")   # prefix dim, command cyan
+    assert "run: \x1b[0m\x1b[36meldendisk.exe run -v\x1b[0m" in out and out.startswith("\x1b[2m10-07 23:41:02.123")   # prefix dim, command cyan
     assert "\x1b[" not in format_line(cmd)                                      # the log file line is plain
     err.truncate(0); err.seek(0)
     ui.raw_sink(err)(ev(level="D", tag="client", msg="exit 0"))

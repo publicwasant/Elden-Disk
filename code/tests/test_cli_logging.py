@@ -33,7 +33,7 @@ def test_every_command_writes_the_logcat_file_next_to_the_vault(env, capsys):
     lines = text.splitlines()
     assert all(LOGCAT.match(l) for l in lines), lines
     assert "D client" in lines[0] and "version " in lines[0]
-    assert "D client" in lines[1] and "vault verify" in lines[1]          # the command line itself, no version in it
+    assert "D client: run: " in lines[1] and "vault verify" in lines[1]          # the command line itself, no version in it
     assert any(" I vault" in l and "matches its manifest" in l for l in lines)
     assert lines[-1].endswith("exit 0")
 

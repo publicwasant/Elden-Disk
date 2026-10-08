@@ -38,7 +38,7 @@ def start(args, argv: list[str], real: bool = False) -> None:
         log_file = None   # the remembered vault is unavailable: the command reports that itself
     book.configure(file=log_file, console=console)
     book.d("client", f"version {__version__}")
-    book.d("client", command_line(argv, getattr(sys, "orig_argv", None) if real else None))
+    book.d("client", "run: " + command_line(argv, getattr(sys, "orig_argv", None) if real else None))
     if verbose:
         on, why = ui.links_status(sys.stderr)
         book.d("client", f"clickable paths {'on' if on else 'off'}: {why}")

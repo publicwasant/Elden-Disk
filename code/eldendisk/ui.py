@@ -161,11 +161,11 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
     return sink
 
 
-_CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D client *: )(?!(?:exit -?\d+|version \S+|clickable paths .*)$)(.+)$")
+_CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D client *: (?:run: )?)(?!(?:exit -?\d+|version \S+|clickable paths .*)$)(.+)$")
 
 
 def _dim_line(line: str, color: bool) -> str:
-    """A debug line of the log in dim; the command that started a process (`D client : eldendisk.exe run -v`) in cyan.
+    """A debug line of the log in dim; the command that started a process (`D client : run: eldendisk.exe run -v`) in cyan.
     Only the console gets the colour: the file keeps the plain line."""
     m = _CLI_LINE.match(line) if color else None
     if m:
