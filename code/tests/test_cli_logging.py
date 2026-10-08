@@ -120,7 +120,7 @@ def test_a_host_session_reports_concise_events_in_order(tmp_path):
     shown = [(e.level, e.tag, e.msg, e.ok) for e in events if e.level not in "VD"]
     assert [m for _l, _t, m, _o in shown] == [
         shown[0][2], "launching eldenring.exe offline", f"running, pid {4242}; `read` allowed, `write` allowed", "exited",
-        "save restored, byte-identical to the snapshot"]
+        "`ER0000.sl2` restored, byte-identical to the snapshot"]
     assert shown[0][2].startswith("snapshot ") and shown[0][3] is True and shown[-1][3] is True
     assert not any(ch in e.msg for e in events for ch in "\u2713\u2716")      # glyphs belong to the view, not the message
     assert any(e.level == "D" and e.msg == "state RUNNING" for e in events)

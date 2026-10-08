@@ -13,7 +13,7 @@ from typing import Callable
 from .errors import VaultError
 from .gamefolder import cleanup_recorded
 from .session import SessionLog, SessionRecord, SessionState
-from .vault import SaveVault
+from .vault import SaveVault, names_of
 
 EXIT_RESTORE_PENDING = 4
 
@@ -34,7 +34,7 @@ def restore_from_record(vault: SaveVault, record: SessionRecord, *, archive: boo
     try:
         files = vault.load_manifest(snap_dir)["files"]
         if archive and vault.verify_live(live, files):   # only a save that differs holds anything worth keeping
-            log.ok("vault", f"modified save archived to {vault.archive_contaminated(live, snap_dir)}")
+            log.ok("vault", f"modified {names_of(files)} archived to {vault.archive_contaminated(live, snap_dir)}")
         vault.restore(snap_dir, live)
         log.d("vault", f"restored {snap_dir} -> {live}")
         problems = vault.verify_live(live, files)
@@ -42,7 +42,7 @@ def restore_from_record(vault: SaveVault, record: SessionRecord, *, archive: boo
         return pending(f"restore failed: {exc}")
     if problems:
         return pending("verification failed: " + "; ".join(problems[:3]))
-    log.ok("vault", "save restored, byte-identical to the snapshot")
+    log.ok("vault", f"{names_of(files)} restored, byte-identical to the snapshot")
     try:
         _restore_regulation(vault, record, log)
     except (VaultError, OSError) as exc:
@@ -81,7 +81,7 @@ def keep_from_record(vault: SaveVault, record: SessionRecord, *, log: SessionLog
         log.e("vault", f"could not back up the current save, nothing changed: {exc}")
         return 1
     log.attach(kept.dir / "session.log")
-    log.ok("vault", f"current save kept as the new baseline: {kept.dir.name} ({len(kept.files)} file{"" if len(kept.files) == 1 else "s"} verified)")
+    log.ok("vault", f"current {names_of(kept.files)} kept as the new baseline: {kept.dir.name} (verified)")
     log.i("vault", f"the pre-session snapshot {Path(record.snapshot_dir).name} stays in the vault")
     if record.game_dir and record.game_folder_files_created:
         removed = cleanup_recorded(Path(record.game_dir), record.game_folder_files_created)

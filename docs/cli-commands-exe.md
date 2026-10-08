@@ -86,7 +86,7 @@ eldendisk.exe read --live-buffs               (other terminal)
  12:00:09  ✓  game   running, pid 8812; `read` allowed, `write` allowed
  ...                                      (game exits)
  12:31:40  ·  game   exited
- 12:31:42  ✓  vault  save restored, byte-identical to the snapshot
+ 12:31:42  ✓  vault  ER0000.sl2 restored, byte-identical to the snapshot
 ```
 
 With `-v` the banner and these lines are replaced by the log itself (see "Log and output" below).

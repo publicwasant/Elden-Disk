@@ -22,7 +22,7 @@ from typing import Callable
 
 from . import interrupts
 from ..vault import (EXIT_RESTORE_PENDING, GameFolderGuard, SaveVault, SessionLog, SessionState, VaultError,
-                     restore_from_record)
+                     restore_from_record, save_names)
 
 
 class State(str, Enum):
@@ -105,7 +105,7 @@ class Session:
             self._to(State.IDLE)
             return EXIT_RESTORE_PENDING
         if owed is not None:
-            self.log.e("host", "an unresolved session exists, so the live save is NOT trusted")
+            self.log.e("host", f"an unresolved session exists, so the live {save_names(self.live)} is NOT trusted")
             self.log.i("host", f"close the game, then run `{self.vault.restore_hint()}`")
             self._to(State.IDLE)
             return EXIT_RESTORE_PENDING
@@ -127,7 +127,7 @@ class Session:
 
     def _unprotected(self) -> int:
         """Vault OFF: launch, wait for the game, leave the save alone. Nothing is owed afterwards."""
-        self.log.w("vault", "vault OFF: the save is not backed up and will not be restored; `write` is not allowed")
+        self.log.w("vault", f"vault OFF: {save_names(self.live)} not backed up and will not be restored; `write` is not allowed")
         code = 0
         try:
             code = self._launch_and_wait()
@@ -138,7 +138,7 @@ class Session:
         except Exception as exc:
             self.log.e("host", f"error while running: {exc!r}")
             code = 1
-        self.log.i("vault", "vault OFF: the save was left as the game wrote it")
+        self.log.i("vault", f"vault OFF: {save_names(self.live)} left as the game wrote it")
         self._to(State.IDLE)
         return code
 
@@ -265,11 +265,11 @@ class Session:
         self._interrupts += 1
         if self._interrupts >= 2:
             raise _Postpone()
-        self.log.w("host", "Ctrl+C: the game keeps running; the save is restored when it exits "
+        self.log.w("host", f"Ctrl+C: the game keeps running; {save_names(self.live)} will be restored when it exits "
                            "(press again to postpone the restore)")
 
     def _pending(self, why: str) -> int:
-        self.log.e("host", f"{why}. The live save is NOT trusted")
+        self.log.e("host", f"{why}. The live {save_names(self.live)} is NOT trusted")
         self.log.i("host", f"close the game, then run `{self.vault.restore_hint()}`")
         self.vault.update_session(state=SessionState.RESTORE_PENDING)
         self._to(State.RESTORE_PENDING)

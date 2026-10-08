@@ -95,7 +95,7 @@ eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID
  12:00:09  ✓  game   running, pid 8812; `read` allowed, `write` allowed
  ...                                      (game exits)
  12:31:40  ·  game   exited
- 12:31:42  ✓  vault  save restored, byte-identical to the snapshot
+ 12:31:42  ✓  vault  ER0000.sl2 restored, byte-identical to the snapshot
 ```
 
 Every command prints concise lines like these without any flag. Every event is also logged, logcat style, to `<vault>/eldendisk.log` (every terminal's command line and exit code included); add **`-v`** to a command to see that log live instead (`run -v`, `write --set level=150 -v`, `vault status -v` ...). `run -v` also shows the lines other terminals log.

@@ -410,6 +410,21 @@ def scan_names(root: Path) -> list[str]:
     return [Path(dp, f).relative_to(root).as_posix() for dp, _d, fs in os.walk(root) for f in fs]
 
 
+def names_of(files) -> str:
+    """File names for a log message: `ER0000.sl2`, `ER0000.sl2.bak` (the backticks make them cyan on a colour console).
+    No files known: just "save"."""
+    names = sorted(files)
+    return ", ".join(f"`{n}`" for n in names) if names else "save"
+
+
+def save_names(live_dir: Path) -> str:
+    """names_of() the files that are in the live save folder now ("save" when it cannot be listed)."""
+    try:
+        return names_of(scan_names(Path(live_dir)))
+    except OSError:
+        return "save"
+
+
 def _compare(actual: dict[str, dict], expected: dict[str, dict]) -> list[str]:
     problems = []
     for rel, info in expected.items():

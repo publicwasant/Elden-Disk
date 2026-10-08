@@ -330,3 +330,16 @@ def test_session_log_buffers_then_flushes(tmp_path):
     lines = (tmp_path / "snap" / "session.log").read_text().splitlines()
     assert [l.split(" ", 1)[1] for l in lines] == ["I host  : first", "I vault : second", "E vault : line one", "E vault : line two"]
     assert emitted == [("I", "host", "first", False), ("I", "vault", "second", True), ("E", "vault", "line one\nline two", False)]
+
+
+def test_log_messages_name_the_save_files(tmp_path):
+    from eldendisk.vault import names_of, save_names
+    assert names_of(["ER0000.sl2.bak", "ER0000.sl2"]) == "`ER0000.sl2`, `ER0000.sl2.bak`"      # sorted, comma-separated
+    assert names_of([]) == "save"
+    live = tmp_path / "live"
+    live.mkdir()
+    assert save_names(live) == "save"
+    (live / "ER0000.sl2").write_bytes(b"x")
+    (live / "ER0000.sl2.bak").write_bytes(b"y")
+    assert save_names(live) == "`ER0000.sl2`, `ER0000.sl2.bak`"
+    assert save_names(tmp_path / "missing") == "save"

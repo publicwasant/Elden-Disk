@@ -10,7 +10,7 @@ from .. import ui
 from ..console import require_windows_x64
 from ..game.processes import GAME_EXE, find_pid, process_started
 from ..logbook import book
-from ..vault import SaveVault, SessionState, VaultError, recover, resolve_vault
+from ..vault import SaveVault, SessionState, VaultError, names_of, recover, resolve_vault
 from ..vault.recover import keep_from_record
 from ..vault.session import host_alive
 from .common import live_dir, session_log
@@ -35,7 +35,7 @@ def cmd_restore(args) -> int:
         return 1
     live, snap_dir = live_dir(args.save_dir), vault.snapshot_path(args.snapshot)
     safety = vault.snapshot(live, suffix="-pre-restore")  # what is there now stays recoverable
-    slog.i("vault", f"current save kept as {safety.dir.name}")
+    slog.i("vault", f"current {names_of(safety.files)} kept as {safety.dir.name}")
     vault.restore(snap_dir, live)
     problems = vault.verify_live(live, vault.load_manifest(snap_dir)["files"])
     if problems:
