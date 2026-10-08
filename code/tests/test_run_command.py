@@ -81,7 +81,7 @@ def test_run_v_shows_the_lines_other_terminals_log(tmp_path, monkeypatch, capsys
     monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
     monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
-    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: None)       # not what this test is about (it would build)
+    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (None, "none"))       # not what this test is about (it would build)
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x",
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=True)
     assert run_cmd.cmd_run(args) == 0 and seen["ran"]
@@ -136,3 +136,33 @@ def test_run_ignores_the_1_6_4_folder_and_says_so(tmp_path, monkeypatch, capsys)
     (tmp_path / "vault" / "regulation" / "regulation.bin").write_bytes(b"old")
     out = _run_with_world(tmp_path, monkeypatch, capsys, protect=True)
     assert "is no longer read" in " ".join(out.split())
+
+
+# ---- the hint to secure a new build ----
+@pytest.mark.parametrize("mode,history,hint", [("built", ["RESTORING"], True), ("secured", ["RESTORING"], False),
+                                               ("built", [], False), ("file", ["RESTORING"], False)])
+def test_run_hints_at_secure_only_after_a_session_that_ran_a_new_build(tmp_path, monkeypatch, capsys, mode, history, hint):
+    import argparse
+    from eldendisk.host.host import State
+    from eldendisk.logbook import book
+
+    class FakeSession:
+        def __init__(self, *a, **k):
+            self.history = [State.RESTORING] if history else []
+
+        def run(self): return 0
+
+    monkeypatch.setattr(run_cmd, "Session", FakeSession)
+    monkeypatch.setattr(run_cmd, "require_windows_x64", lambda: None)
+    monkeypatch.setattr(run_cmd.launcher, "find_game_dir", lambda d: tmp_path / "game")
+    monkeypatch.setattr(run_cmd, "sha256_file", lambda p: "ab" * 32)
+    monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
+    monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
+    monkeypatch.setattr(run_cmd, "session_log", lambda: None)
+    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (tmp_path / "r.bin", mode))
+    args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", no_archive_contaminated=False,
+                              keep=0, launch_timeout=1.0, verbose=False, protect=True, regulation=None, extension_dir=None, spec=None)
+    assert run_cmd.cmd_run(args) == 0
+    out = capsys.readouterr()
+    book.close()
+    assert ("extension customize-items --secure" in out.out + out.err) is hint

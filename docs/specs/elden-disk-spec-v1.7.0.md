@@ -1,57 +1,68 @@
 > [!NOTE]
 > **Version:** `1.7.0`  
-> **Status:** IMPLEMENTED (unit and golden tests; the swap of a tool-built file is not yet run in the real game, see section 10)  
+> **Status:** IMPLEMENTED (unit and golden tests; a tool-built file ran in the real game; the secured path (`--secure`) and poise are not yet tried, see section 10)  
 > **Last Updated:** _2026-10-09_
 
-# Elden-Disk spec 1.7.0: extensions and `customize-items`
+# Elden-Disk spec 1.7.0: extensions and `customize-items` (draft → secured)
 
 Reads on top of [spec 1.6.4](elden-disk-spec-v1.6.4.md) (the `regulation.bin` swap). Only what changes is written here. The research behind the build (why a frame is rewritten block by block, what the game rejected) is the [item-customization handbook](../experiments/item-customization/item-customization-handbook.md), Part VI.
 
 ## 1. Idea
 
-1.6.4 swapped a `regulation.bin` that somebody else made. 1.7.0 makes it inside the tool, offline, from a small JSON file, **every time `run` starts**:
+**Principle: the other world never touches the real one.** Everything done in a `run` session (the rules, the items, the values written, the changes to the save) exists for that session only. When the game exits, the vault puts back the save and the game's own `regulation.bin`, byte for byte, checked by hash. Nothing carries over: not the items, not the progress. The real playthrough stays exactly as it was, and it can be finished with no mod at all. The sandbox is for playing around on the days you want to; it is never required, and nothing in the real world can collapse because of it.
+
+1.6.4 swapped a `regulation.bin` that somebody else made. 1.7.0 makes it inside the tool, offline, from a small JSON file. A file goes through three states: **draft** (the JSON you edit) → **built** (a `regulation.bin` the gate passed; not yet tried in the game) → **secured** (a copy you confirmed in the game, kept next to a record of the draft it came from).
 
 ```
-sources/items.json (embedded in the exe)  --build, on the game's own regulation.bin-->  regulation.bin  --vault swaps it in-->  the game, for one session  --vault puts the game's file back
+items.draft.json (embedded in the exe) --run: build on the game's own regulation.bin + gate--> regulation.bin --vault swaps--> the game (one session; the vault puts the game's file back)
+                                       --extension customize-items --secure (game closed)--> regulation.secured.bin + items.secured.json
+next run, draft unchanged: regulation.secured.bin is swapped; nothing is built, nothing is re-checked (about 20 s saved)
 ```
 
 `extension` is a main feature like `read`, `write` and `vault`: a place for features that **build things for the game outside the game**. `customize-items` is the first. Because an extension touches game files, it **depends on the vault's permission**, like `write` needs the vault ON: with the vault ON (the default) `run` also runs the extension build; with the vault OFF it does not. There is no `--extension-on` flag. The vault is unchanged in purpose: it backs up, swaps the file it is given, and puts the original back.
 
-The build runs **every time**, with no "already built" shortcut: it is simple, and it exercises the customize code on every run. The base is **always the game's own file**; a modified file is never modified again.
+The base is **always the game's own file**, checked against the known original on **every** path (also when the secured file is used); a modified file is never modified again.
 
 Customize levels (the author's words): **L1** `write --set` (memory, live); **L2** a `regulation.bin` with copied/adapted rows under the game's own rules (this version, "2a": one item per file); **L3** truly new things (name, text, icon, colour): needs files inside the game's archives and a loader, not started.
 
 ## 2. Layout
 
 ```
-code/eldendisk/extension/customize_items/sources/items.json   the spec: the item(s) you want in the game (you edit it)
-%LOCALAPPDATA%\EldenDisk\extension\customize-items\regulation.bin   the output of the last build   (--extension-dir overrides the folder)
+code/eldendisk/extension/customize_items/items.draft.json    the draft: the item(s) you want in the game (you edit it)
+code/eldendisk/extension/customize_items/items.schema.json   JSON schema of the draft (for editors; dev tests check it agrees with the validator)
+%LOCALAPPDATA%\EldenDisk\extension\customize-items\          (--extension-dir overrides the folder)
+    regulation.bin           the latest build (gate passed, not yet confirmed)
+    regulation.secured.bin   a copy of the build you confirmed with --secure
+    items.secured.json       the record: the draft snapshot, hashes of the secured file and of the base, recipe version
 ```
 
-Nothing else is kept: no base copy, no manifest, no verified copy. `build -c -em` embeds `sources/items.json` in the exe like `offsets.json`; the spec is found as `--spec FILE`, else `items.json` next to the exe, else the embedded copy, else `sources/` in the source tree (`paths.get_resource_path`). Without `-em`, the file is copied next to the exe, where you can edit it without rebuilding the exe.
+No base copy and no manifest are kept. `build -c -em` embeds `items.draft.json` in the exe like `offsets.json`; the draft is found as `--spec FILE`, else `items.draft.json` next to the exe, else the embedded copy, else the package in the source tree (`paths.get_resource_path`). Without `-em`, the file is copied next to the exe, where you can edit it without rebuilding the exe.
 
-Code: `code/eldendisk/extension/` (registry) and `extension/customize_items/` (aes, zstd, fse, reblock, container, defs, paramdefs, bases, spec, recipes, preflight, build, service; `sources/items.json`, `schema/items.schema.json`). Standard library only. The package imports nothing else of the tool (`test_architecture.py`).
+Code: `code/eldendisk/extension/` (registry) and `extension/customize_items/` (aes, zstd, fse, reblock, container, defs, paramdefs, bases, spec, recipes, preflight, **gate**, build, service). Standard library only. The package imports nothing else of the tool (`test_architecture.py`).
 
 ## 3. Commands
 
 | Command | Does |
 |:--|:--|
-| `run` (vault ON) | **builds** the spec on the game's `regulation.bin` (about 15 s), writes the output, and passes it to the host to swap in |
+| `run` (vault ON) | **swaps `regulation.secured.bin` without building** when the secured state is valid (section 6); otherwise prints why and what changed, builds (about 20 s), and swaps the new `regulation.bin` after the gate passed |
 | `run --vault-off` | no build, no swap (an info line says so) |
-| `run --regulation FILE` | swaps that file instead of building (an experiment; vault ON only) |
-| `run --spec FILE`, `--extension-dir DIR` | the spec to build; the folder of the output |
-| `extension --list` | the spec (path, where it comes from, number of items) and the last output |
-| `extension customize-items` | where the spec and output are |
-| `extension customize-items --add all` (or `--add <id>`) | the same build as `run` does, without starting the game |
-| &nbsp;&nbsp;`--dry-run` | build and check in memory; write nothing |
-| &nbsp;&nbsp;`--source FILE`, `--game-dir DIR` | the game's original `regulation.bin` to build on (default: the one in the auto-detected game folder) |
+| `run --regulation FILE` | swaps that file instead (an experiment; vault ON only) |
+| `run --spec FILE`, `--extension-dir DIR` | the draft; the folder of the files |
+| `extension --list` | the draft (path, where it comes from, number of items), the secured state, the draft-vs-secured diff, the last build |
+| `extension customize-items` | where the files are |
+| `extension customize-items --add all` (or `--add <id>`) | builds like `run` does (always; never uses the secured file), without starting the game |
+| &nbsp;&nbsp;`--dry-run` | build and run the gate in memory; write nothing |
+| `extension customize-items --secure` | **game closed.** Runs the gate on `regulation.bin` against the current draft and the game's file; copies it to `regulation.secured.bin`, then writes `items.secured.json` (last). Stands alone (not with `--add` / `--dry-run`) |
+| &nbsp;&nbsp;`--source FILE`, `--game-dir DIR` | the game's original `regulation.bin` (default: the one in the auto-detected game folder) |
 | &nbsp;&nbsp;`--spec FILE`, `--extension-dir DIR` | as above |
 
-An empty `items` list is a valid spec: the build says there is nothing to build and exits `0`; `run` swaps nothing. In `run`, a spec or build error (invalid spec, the game's file is not the known original, a failed check) stops `run` with exit `1` **before** any snapshot or launch. If the vault still owes a restore from an earlier session, `run` does not build; the host refuses to start and says what to do.
+There is no `--force`: delete `items.secured.json` to make the next `run` build. There is no automatic securing: the host never reads game memory, so it cannot know the item worked; you confirm it with `--secure`. After a session that **built**, `run` prints a hint to run `--secure`.
 
-Exit codes: `0` ok; `1` error (invalid spec, unknown base, failed check); `2` usage.
+An empty `items` list is a valid draft: nothing to build, exit `0`, `run` swaps nothing. In `run`, a draft or build error (invalid draft, the game's file is not the known original) or a **failed gate** stops `run` with exit `1` **before** any snapshot or launch: nothing is swapped and the game is not started. If the vault still owes a restore from an earlier session, `run` does not build; the host refuses to start and says what to do.
 
-## 4. The spec (`items.json`, format 1)
+Exit codes: `0` ok; `1` error (invalid draft, unknown base, gate failed); `2` usage.
+
+## 4. The draft (`items.draft.json`, format 1)
 
 One object, `items`: a list (empty = no items yet). Unknown fields are errors; every problem is listed with its path (`$.items[0].requires.faith: must be a whole number from 0 to 99`). `name` and `description` are **stored only**; `colour`, `icon_file`, `text` and similar are refused ("Level 3").
 
@@ -75,55 +86,72 @@ Ids of the new rows (Goods/Magic `2230000`, SpEffect `21950111`, shop line `1005
 3. decrypt (AES-256-CBC), read the DCX/zstd frame, BND4 and the four PARAM tables (EquipParamGoods, Magic, SpEffectParam, ShopLineupParam); check that writing them back unchanged reproduces the original;
 4. apply the recipe: the never-used dummy row at the end of each table becomes the new row (its id changes, it stays sorted; no table grows), cloned from real rows and then overwritten (section 4); the shop line is a free line of the merchant's range;
 5. re-encode only the 64 KiB blocks whose bytes changed, as ordinary compressed blocks, steering the repeat-offset registers so the following original blocks stay decodable; shape the file tail like the original (handbook Chapters 9-11);
-6. **preflight** (section 7); 7. encrypt with an IV derived from the content (same input, same bytes; the game accepts any IV); 8. write `regulation.bin` (through a temporary file and `os.replace`).
+6. encrypt with an IV derived from the content (same input, same bytes; the game accepts any IV); 7. write a temporary file and fsync it; 8. read it back and run the **gate** (section 7) on those bytes; 9. only if the gate passes, `os.replace` it to `regulation.bin`. A failed gate deletes the temporary file; `regulation.bin` and the secured files stay as they were.
 
-Reference result: the shipped `sources/items.json` (Z4) gives a container whose decrypted SHA-256 is `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b` (2,071,472 bytes), the Z4 file that passed in the real game.
+Reference result: the shipped `items.draft.json` (Z4) gives a container whose decrypted SHA-256 is `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b` (2,071,472 bytes), the Z4 file that passed in the real game.
 
-## 6. Every time
+## 6. When `run` builds and when it does not
 
-There is no skip logic. Every `run` (vault ON) and every `--add` reads the spec and the game's file again and builds; the output is replaced atomically. A build takes about 15 s, so each `run --vault-on` starts that much later.
+`run` (vault ON) swaps `regulation.secured.bin` without building and without the gate **only if all of these hold**:
 
-## 7. Preflight (necessary, not sufficient)
+1. the draft equals the secured spec (`spec.build_view`: field by field; `name`, `description`, whitespace and key order do not count);
+2. SHA-256 of `regulation.secured.bin` equals the record;
+3. the SHA-256 of the game's `regulation.bin` equals the base recorded and is the known 1.17.1 original (this check also runs on the build path);
+4. `RECIPE_VERSION` equals the record.
 
-Run on the finished bytes before anything is written; any failure writes nothing. The only real test of a file is the game.
+Otherwise it builds and prints **the reasons** (no secured build yet; the draft changed; the secured file is missing or its hash differs; the recipes changed; the base is another file; the record cannot be read) and, for a changed draft, the **diff** field by field, for example `reverse-curse-technique.shop.price  34590 -> 40000`, before the long step.
+
+## 7. The gate (necessary, not sufficient)
+
+The gate (`gate.py`) judges the **bytes of the file read back from disk**, not what the builder believes it wrote. It replaces the old in-build preflight and decrypt round-trip (same time). **Any problem, and any warning, is a stop** (including more than 11 re-encoded blocks). The only real test of a file is the game.
 
 | Rule | Checks |
 |:--|:--|
-| R1 | the frame decodes to exactly the intended body |
-| R2 | no stored/RLE block that the original did not have in the same place; same block count and flags; edited blocks are compressed and < 128 KiB; warning above 11 re-encoded blocks (the most tested in the game) |
+| G0 | the file decrypts |
+| R1 | the frame decodes to exactly the intended body, recomputed independently from the draft and the game's file (G5) |
+| R2 | no stored/RLE block that the original did not have in the same place; same block count and flags; edited blocks are compressed and < 128 KiB; **more than 11 re-encoded blocks is a stop** (11 is the most tested in the game) |
 | R3 | blocks whose decoded bytes did not change are byte-identical (only the literal-size header form of raw-literal blocks, or the conversion of a Huffman-treeless follower to raw literals, may differ) |
 | R4 | DCX header: only the two size fields differ and they are right; exactly 2 zero bytes after the frame; length 16 + a multiple of 16 |
 | R5 | BND4: same entries; only the four tables differ |
 | R6 | PARAM: same row size, row count, header and strings; sorted; the set of rows removed / added / changed equals the recipe's declared footprint |
+| G5 | Magic and SpEffect fields (costs, requirements, cast motion, effect values, poise) equal the draft |
+| G11 | the id chain: Goods, Magic, SpEffect and the shop line exist; Magic points to the SpEffect |
+| G12 | the shop line is inside the merchant's range 100500-100524; the stock flag belongs to that line only |
+| G13 | heal sign: `changeHpPoint` / `changeMpPoint` are negative for a heal (a positive value drains the player) |
+| G16 | a second decoder (`compression.zstd`, Python 3.14), when this Python has one, decodes the frame to the same bytes. It is imported by name inside `try`; if it is missing the gate only notes it. Agreed on the author's Python 3.14.5 |
 
 ## 8. `run` and the vault
 
-- `run` builds (vault ON), then passes the output path to the host (`Hooks.regulation_world`); the vault methods take that path (`backup_regulation(snap, game_dir, world)`, `regulation_problems(game_dir, world)`, `world_info(world)`). Backup, record, swap, restore and RG1-RG7 of spec 1.6.4 are unchanged. The build only **reads** the game's file; the vault does the swap.
-- Log order: `extension ...` lines (spec, building, built and checked), then the host lines (PREFLIGHT, SNAPSHOTTING, READY).
-- `--regulation FILE` wins over the build.
+- `run` decides (section 6), builds if needed, then passes the path to the host (`Hooks.regulation_world`); the vault methods take that path (`backup_regulation(snap, game_dir, world)`, `regulation_problems(game_dir, world)`, `world_info(world)`). Backup, record, swap, restore and RG1-RG7 of spec 1.6.4 are unchanged. The extension only **reads** the game's file; the vault does the swap.
+- The banner row `regulation` says whether the file is the secured copy or a new build.
+- Log order: `extension ...` lines (draft, reasons, diff, building, gate passed or failed), then the host lines (PREFLIGHT, SNAPSHOTTING, READY).
+- `--regulation FILE` wins over everything.
 - **Legacy:** `<vault>\regulation\regulation.bin` (1.6.4) is no longer read; `run` and `vault status` say so.
-- `vault status` no longer shows a "file to swap"; `extension --list` shows the last output.
 - Vault OFF never swaps and never builds.
 
 ## 9. Failures
 
 | Situation | Result |
 |:--|:--|
-| invalid `items.json` | exit `1`, fields named; nothing written (`run` does not start) |
-| the game's file is not the known original | exit `1`; nothing written; hint: `vault restore`, or Steam *verify integrity*; `run --vault-off` starts the game without the extension |
+| invalid `items.draft.json` | exit `1`, fields named; nothing written (`run` does not start) |
+| the game's file is not the known original | exit `1`; nothing written; hint: close the game if it runs, `vault restore`, or Steam *verify integrity*; `run --vault-off` starts the game without the extension |
 | a recipe row is missing | exit `1`: "not the 1.17.1 regulation.bin" |
-| a preflight rule fails | exit `1`, rules listed; **no file written** |
+| the gate fails (build) | `GATE FAILED: this regulation.bin is NOT safe for the game; nothing was swapped`, rules listed, exit `1`, the game is not started; the temporary file is deleted, `regulation.bin` and the secured files are untouched |
+| the gate fails (`--secure`) | same message; nothing secured |
+| `--secure` with no build, or a build made from another draft | exit `1` ("build it first" / rule R1) |
+| killed during `--secure` | the bin may be written without the record = "not secured" = the next `run` builds |
 | killed during a build | a temporary file only; the previous output is intact; the game's file was only read |
 
 ## 10. Open
 
-- **Not yet run in the real game through this path:** a tool-built Z4 swapped by `run --vault-on` (manual plan 1.7.0 SW1-SW3). The bytes equal the tested file (golden test), but the swap itself (1.6.4) has been tested by unit tests only.
-- One verifier: our decoder. Dev tests cross-check with `zstandard` and `cryptography`; the runtime has no second opinion.
-- `SpEffect 102006` ("Unused" in community lists) is overwritten; the poise effect is not proven in the game (`read --live-buffs` can show a 2.0 s entry).
+- **Confirmed in the real game (2026-10-09, Windows, Python 3.14.5):** a tool-built Z4 swapped by `run --vault-on` (SW1-SW3): built in 16 s with the gate passed (11 blocks re-encoded), the item was sold and cast, healed, and beat a boss with infinite Black Flame via `write`; the save and `regulation.bin` were restored byte-identical. **Not yet tried in the game:** poise (SW10) and the secured path (SC1-SC10).
+- The gate is a necessary condition. The rule the game uses to accept or reject a frame is unknown (stored blocks were rejected in several tests and accepted in others), so all stored blocks are forbidden.
+- `compression.zstd` (G16) ran on a real Python 3.14.5 and agreed with our decoder. On Python 3.13 or older the gate only notes that it is not available.
+- `SpEffect 102006` ("Unused" in community lists) is overwritten; the poise effect is not proven in the game.
 - Level 2b (several items, table growth), Level 3 (text, icon, colour: archives and a loader).
 - `Paramdex` field layouts are embedded (`paramdefs.py`, generated by `tools/gen_paramdefs.py`); its licence has not been checked.
-- Build time (about 15 s) is pure Python.
+- Build time (about 20 s) is pure Python.
 
 ## 11. Tests
 
-`code/tests/test_ext_spec.py` (validation, schema agreement), `test_ext_primitives.py` (AES vectors, sequence coding, frame rewriting against `zstandard`, containers, field definitions), `test_ext_service.py` (build every time, base handling, empty spec), `test_extension_command.py` (CLI, what `run` builds and takes), `test_ext_golden.py` (needs `ELDENDISK_REGULATION_ORIG`: the Z4 hash, determinism, preflight negatives); `test_regulation.py`, `test_run_command.py` and `test_host.py` adapted to a caller-named file. Linux: 765 passed, 14 skipped without the original (all 13 golden tests pass with it).
+`code/tests/test_ext_spec.py` (validation, schema agreement), `test_ext_primitives.py` (AES vectors, sequence coding, frame rewriting against `zstandard`, containers, field definitions), `test_ext_service.py` (the decision matrix: first run, unchanged, changed price with its diff, only a name changed, secured file missing or edited, recipe version, other base, damaged record, failed gate, `--secure`, half-done secure; deciding never builds), `test_ext_gate.py` (the optional second decoder), `test_extension_command.py` (CLI, `--secure`, `--list`, what `run` builds, swaps and says), `test_ext_golden.py` (needs `ELDENDISK_REGULATION_ORIG`: the Z4 hash, determinism, preflight and gate negatives, the whole flow with the real build); `test_regulation.py`, `test_run_command.py` and `test_host.py` adapted to a caller-named file.

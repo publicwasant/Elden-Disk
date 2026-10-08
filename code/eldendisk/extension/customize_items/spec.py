@@ -1,4 +1,4 @@
-"""The items.json spec: a strict stdlib validator.
+"""The items.draft.json spec: a strict stdlib validator.
 
 Level 2a rules (handbook Part VI): one incantation per build; text (name, description) is stored but not written into the
 game; anything that needs files inside the game's archives (colour, icon) is Level 3 and refused."""

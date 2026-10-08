@@ -17,7 +17,7 @@ from eldendisk.extension.customize_items.service import CustomizeItems
 ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 pytestmark = pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
 Z4_DECRYPTED_SHA256 = "1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b"
-Z4 = spec.normalise(json.loads((Path(spec.__file__).parent / "sources" / "items.json").read_text(encoding="utf-8")))
+Z4 = spec.normalise(json.loads((Path(spec.__file__).parent / "items.draft.json").read_text(encoding="utf-8")))
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +38,7 @@ def built(base, src):
 
 
 def test_z4_comes_out_byte_identical_to_the_file_tested_in_the_game(built):
-    assert built.decrypted_sha256 == Z4_DECRYPTED_SHA256 and built.warnings == []
+    assert built.decrypted_sha256 == Z4_DECRYPTED_SHA256 and built.changed_blocks <= 11
     dcx = container.decrypt(built.data)
     assert len(dcx) == 2071472 and (len(built.data) - 16) % 16 == 0
 
@@ -156,7 +156,105 @@ def test_the_recipe_refuses_a_base_where_a_row_it_needs_is_missing(src):
 def test_service_builds_on_the_game_file(tmp_path, base):
     game = tmp_path / "game.bin"
     game.write_bytes(base)
-    ci = CustomizeItems(tmp_path / "ext")                      # the spec shipped in sources/
-    rep = ci.build(ci.items("all"), game)
-    assert rep.built and rep.decrypted_sha256 == Z4_DECRYPTED_SHA256 and not rep.warnings
+    ci = CustomizeItems(tmp_path / "ext")                      # the draft shipped in the package
+    data, _ = ci.read_base(game)
+    rep = ci.build(ci.items("all"), data)
+    assert rep.built and rep.decrypted_sha256 == Z4_DECRYPTED_SHA256 and rep.changed_blocks <= 11
     assert game.read_bytes() == base and ci.output_path.is_file()
+
+
+# ---- the gate: the Z4 file passes, and every kind of damage is noticed ----
+from eldendisk.extension.customize_items import gate, service as _service     # noqa: E402
+from eldendisk.extension.customize_items.defs import TABLE_FILES, Def         # noqa: E402
+
+
+def test_the_gate_passes_the_z4_file(built, src):
+    v = gate.verify(built.data, src, Z4["items"])
+    assert v.ok, v.problems
+    assert v.decrypted_sha256 == Z4_DECRYPTED_SHA256 and v.stats["changed_blocks"] <= 11
+
+
+def test_the_gate_notices_a_draft_that_is_not_what_the_file_was_built_from(built, src):
+    other = copy.deepcopy(Z4["items"])
+    other[0]["shop"]["price"] += 1
+    v = gate.verify(built.data, src, other)
+    assert not v.ok and any(p.startswith("R1") for p in v.problems)
+
+
+def test_the_gate_notices_a_flipped_byte_in_the_file(built, src):
+    bad = bytearray(built.data)
+    bad[len(bad) // 2] ^= 1
+    v = gate.verify(bytes(bad), src, Z4["items"])
+    assert not v.ok
+
+
+def test_the_gate_notices_that_the_file_is_the_original(base, src):
+    assert not gate.verify(base, src, Z4["items"]).ok
+
+
+def _rows(src, items):
+    newbody, _ = build.plan(src, items)
+    bnd = container.Bnd4(newbody)
+    D = {k: Def(k) for k in TABLE_FILES}
+    P = {k: container.Param(bnd.get(f).data) for k, f in TABLE_FILES.items()}
+    return P, D
+
+
+def test_check_incantation_is_quiet_on_the_real_z4(src):
+    P, D = _rows(src, Z4["items"])
+    assert recipes.check_incantation(P, D, Z4["items"][0]) == []
+
+
+def test_check_incantation_notices_a_heal_with_the_wrong_sign(src):
+    P, D = _rows(src, Z4["items"])
+    sp = P["sp"].find(recipes.SP_ID)[2]
+    D["sp"].set(sp, "changeHpPoint", 60)
+    bad = recipes.check_incantation(P, D, Z4["items"][0])
+    assert any(p.startswith("G13") and "drains the player" in p for p in bad)
+
+
+def test_check_incantation_notices_a_reused_stock_flag(src):
+    P, D = _rows(src, Z4["items"])
+    other = next(r for r in P["shop"].rows if r[0] != recipes.SHOP_LINE)
+    D["shop"].set(other[2], "eventFlag_forStock", recipes.SHOP_FLAG)
+    assert any(p.startswith("G12") and "used by shop lines" in p for p in recipes.check_incantation(P, D, Z4["items"][0]))
+
+
+def test_check_incantation_notices_a_shop_line_outside_the_merchants_range(src, monkeypatch):
+    P, D = _rows(src, Z4["items"])
+    monkeypatch.setattr(recipes, "SHOP_RANGE", (100509, 100524))
+    assert any("outside the merchant's range" in p for p in recipes.check_incantation(P, D, Z4["items"][0]))
+
+
+def test_check_incantation_notices_a_broken_id_chain(src):
+    P, D = _rows(src, Z4["items"])
+    P["goods"].rows = [r for r in P["goods"].rows if r[0] != recipes.ITEM_ID]
+    bad = recipes.check_incantation(P, D, Z4["items"][0])
+    assert any(p.startswith("G11") and "goods" in p for p in bad)
+    P, D = _rows(src, Z4["items"])
+    D["magic"].set(P["magic"].find(recipes.ITEM_ID)[2], "refId1", recipes.SP_ID + 1)
+    assert any("refId1" in p for p in recipes.check_incantation(P, D, Z4["items"][0]))
+
+
+def test_the_gate_stops_on_a_second_decoder_that_disagrees(built, src, monkeypatch):
+    monkeypatch.setattr(gate, "second_decode", lambda frame: ("ok", b"different"))
+    assert any(p.startswith("G16") for p in gate.verify(built.data, src, Z4["items"]).problems)
+    monkeypatch.setattr(gate, "second_decode", lambda frame: ("error", "bad frame"))
+    assert any(p.startswith("G16") and "bad frame" in p for p in gate.verify(built.data, src, Z4["items"]).problems)
+    monkeypatch.setattr(gate, "second_decode", lambda frame: ("unavailable", None))
+    v = gate.verify(built.data, src, Z4["items"])
+    assert v.ok and any("not available" in n for n in v.notes)
+
+
+def test_the_whole_service_flow_with_the_real_build_and_gate(tmp_path, base):
+    game = tmp_path / "game.bin"
+    game.write_bytes(base)
+    ci = CustomizeItems(tmp_path / "ext")
+    items = ci.items("all")
+    data, sha = ci.read_base(game)
+    assert not ci.decide(items, sha).use_secured
+    ci.build(items, data)
+    rep = ci.secure(items, game)
+    assert rep.decrypted_sha256 == Z4_DECRYPTED_SHA256
+    assert ci.decide(items, sha).use_secured
+    assert game.read_bytes() == base

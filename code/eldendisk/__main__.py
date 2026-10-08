@@ -4,7 +4,7 @@
   read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
   write  edit values in the running game (--set, --refill, --reset); only inside a session started by `run`
   vault  save vault tools (status, list, verify, restore, keep, prune)
-  extension  build things for the game outside the game: `extension --list`, `extension customize-items --add all`
+  extension  build things for the game outside the game: `extension --list`, `extension customize-items --add all|--secure`
 
 Every command prints concise lines; with -v it prints the log itself, live (the same lines that go to
 <vault>/eldendisk.log).
@@ -45,10 +45,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_vault_option(r)
     r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     r.add_argument("--regulation", metavar="FILE", help="swap this regulation.bin in for the session instead of building one "
-                   "from the spec (an experiment); needs the vault ON")
-    r.add_argument("--spec", metavar="FILE", default=None, help="the items to build into regulation.bin (default: items.json next to the exe, "
-                   "else the copy embedded in it); with the vault ON `run` builds it every time")
-    r.add_argument("--extension-dir", metavar="DIR", default=None, help="where the built regulation.bin goes (default: %%LOCALAPPDATA%%\\EldenDisk\\extension)")
+                   "from the draft (an experiment); needs the vault ON")
+    r.add_argument("--spec", metavar="FILE", default=None, help="the draft: the items to build into regulation.bin (default: items.draft.json next to the exe, "
+                   "else the copy embedded in it); with the vault ON `run` swaps the secured file when the draft is unchanged, else builds")
+    r.add_argument("--extension-dir", metavar="DIR", default=None, help="where the built and secured files go (default: %%LOCALAPPDATA%%\\EldenDisk\\extension)")
     r.add_argument("--offsets", default=offsets_default, help="offsets.json, checked before launching (default: %(default)s)")
     g = r.add_mutually_exclusive_group()
     g.add_argument("--vault-on", dest="protect", action="store_true",
@@ -142,20 +142,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ---- extension ----
     e = sub.add_parser("extension", help="build things for the game outside the game (customize-items)")
-    e.add_argument("--list", action="store_true", help="show every extension, its spec and its last output")
+    e.add_argument("--list", action="store_true", help="show every extension, its draft, what is secured and the last build")
     e.add_argument("--extension-dir", metavar="DIR", default=None,
                    help="where the built files go (default: %%LOCALAPPDATA%%\\EldenDisk\\extension)")
-    e.add_argument("--spec", metavar="FILE", default=None, help="the items to build (default: items.json next to the exe, else the embedded copy)")
+    e.add_argument("--spec", metavar="FILE", default=None, help="the draft (default: items.draft.json next to the exe, else the embedded copy)")
     add_verbose(e)
     es = e.add_subparsers(dest="ext_name")
-    ci = es.add_parser("customize-items", help="build a regulation.bin with the items of the spec (sources/items.json)")
-    ci.add_argument("--add", metavar="all|ID", help="build all items of the spec, or the one with this id (built every time)")
+    ci = es.add_parser("customize-items", help="build a regulation.bin with the items of the draft, or secure the one you tried")
+    ci.add_argument("--add", metavar="all|ID", help="build all items of the draft, or the one with this id (built every time)")
+    ci.add_argument("--secure", action="store_true",
+                    help="after you tried the build in the game (game closed): check it again and keep it as regulation.secured.bin; "
+                         "`run` then swaps it without building while the draft does not change")
     ci.add_argument("--dry-run", action="store_true", help="build and check in memory, write nothing")
     ci.add_argument("--source", metavar="FILE", default=argparse.SUPPRESS,
                     help="the game's original regulation.bin to build on (default: the one in the game folder)")
     ci.add_argument("--game-dir", default=argparse.SUPPRESS, help="folder containing eldenring.exe (default: auto-detect via Steam)")
     ci.add_argument("--extension-dir", metavar="DIR", default=argparse.SUPPRESS, help="where the built files go")
-    ci.add_argument("--spec", metavar="FILE", default=argparse.SUPPRESS, help="the items to build")
+    ci.add_argument("--spec", metavar="FILE", default=argparse.SUPPRESS, help="the draft")
     add_verbose(ci, leaf=True)
     e.set_defaults(fn=cmd_extension)
 
@@ -206,6 +209,8 @@ def main(argv=None) -> int:
         ap.error("give --list or an extension name (customize-items)")
     if args.cmd == "extension" and args.ext_name == "customize-items" and args.list:
         ap.error("--list stands alone")
+    if args.cmd == "extension" and args.ext_name == "customize-items" and args.secure and (args.add is not None or args.dry_run):
+        ap.error("--secure stands alone (it does not build; --add and --dry-run build)")
     if args.cmd == "run" and args.keep < 0:
         ap.error("--keep must not be negative")
     if args.cmd == "run" and args.launch_timeout <= 0:

@@ -10,7 +10,9 @@ Offline save guard and live memory reader / writer for **Elden Ring 1.17.1** (Wi
 | `README.md` | this file (written by `eldendisk.exe build`) |
 | `offsets.json`, `chr_state_ids.json` | only when the build did not embed them: the memory profile of the game and the buff / animation names; edit them here |
 
-Nothing is written next to the exe. The game folder is left as it was, except for one thing you ask for: with the vault ON, `run` builds a `regulation.bin` from the `items.json` embedded in the exe (about 15 s, every time; `extension customize-items --add all` does the same build without the game; it lives in `%LOCALAPPDATA%\EldenDisk\extension\customize-items\`) and swaps it in for the session and puts the game's own file back, checked by hash, when the game closes. The vault (snapshots, session record, `eldendisk.log`) lives in `%LOCALAPPDATA%\EldenDisk\vault`, and `--save-dir` / `--vault` are remembered in the Registry (`HKCU\Software\EldenDisk`).
+The other world never touches the real one: whatever you do in a `run` session, the vault puts the save and the game's own `regulation.bin` back byte-identical when the game closes.
+
+Nothing is written next to the exe. The game folder is left as it was, except for one thing you ask for: with the vault ON, `run` swaps a `regulation.bin` in for the session and puts the game's own file back, checked by hash, when the game closes. That file is the secured copy (`extension customize-items --secure`, after you tried it) when the `items.draft.json` embedded in the exe is unchanged, otherwise a new build (about 20 s) that the gate must pass (`extension customize-items --add all` builds without the game). The files live in `%LOCALAPPDATA%\EldenDisk\extension\customize-items\`. The vault (snapshots, session record, `eldendisk.log`) lives in `%LOCALAPPDATA%\EldenDisk\vault`, and `--save-dir` / `--vault` are remembered in the Registry (`HKCU\Software\EldenDisk`).
 
 ## Quick start
 

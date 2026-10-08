@@ -48,8 +48,8 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
 | `--launch-timeout SEC` | `120` | Seconds to wait for `eldenring.exe` to appear. |
 | `--keep N` | `5` | After a finished session keep only the newest N snapshots (never while a restore is owed); `0` = never prune. |
 | `--regulation FILE` | none | Swap this `regulation.bin` in for the session instead of building one from the spec (an experiment). Needs the vault ON. |
-| `--spec FILE` | embedded `items.json` | The items `run` builds into a `regulation.bin` (vault ON only; every run; about 15 s). See `extension`. |
-| `--extension-dir DIR` | `%LOCALAPPDATA%\EldenDisk\extension` | Where the built `regulation.bin` is written. |
+| `--spec FILE` | embedded `items.draft.json` | The draft: the items `run` builds into a `regulation.bin` (vault ON only). With a valid secured copy and an unchanged draft `run` swaps `regulation.secured.bin` and builds nothing; otherwise it builds (about 20 s) and the gate must pass. See `extension`. |
+| `--extension-dir DIR` | `%LOCALAPPDATA%\EldenDisk\extension` | Where the built and secured files are. |
 | `--vault-on` / `--vault-off` | `--vault-on` | Per run, never toggled while the host runs. **ON**: snapshot before, restore after. **OFF**: no snapshot, no session record, no restore; see below. |
 | `-v`, `--verbose` | off | Show the full log live instead of the concise view; also shows the command lines other terminals log (`read`, `write`, ...). |
 
@@ -308,26 +308,29 @@ A record from 1.6.0 / 1.6.1 (`PENDING_RESTORE.json`) is read as `RESTORE_PENDING
 
 ```commandline
 python -m eldendisk extension --list
-python -m eldendisk extension customize-items [--add all|ID] [--dry-run] [--spec FILE] [--source FILE] [--game-dir DIR] [--extension-dir DIR]
+python -m eldendisk extension customize-items [--add all|ID | --secure] [--dry-run] [--spec FILE] [--source FILE] [--game-dir DIR] [--extension-dir DIR]
 ```
 
-`extension` is a main command like `read`, `write` and `vault`. Because an extension changes game files, it depends on the vault's permission like `write` does: with the vault ON (the default) `run` also runs the extension build; with `--vault-off` it does not. There is no flag to turn it on. The build runs **every time** (about 15 s), on the game's own `regulation.bin` (never on an already modified file). Only the output is kept: `%LOCALAPPDATA%\EldenDisk\extension\customize-items\regulation.bin` (`--extension-dir` changes the folder). The commands below do the same build `run` does, without starting the game; the swap itself is the vault's job.
+`extension` is a main command like `read`, `write` and `vault`. Because an extension changes game files, it depends on the vault's permission like `write` does: with the vault ON (the default) `run` also runs the extension; with `--vault-off` it does not. There is no flag to turn it on.
 
-| Command / flag | Description |
-|:---|:---|
-| `extension --list` | The spec (path, and whether it is the embedded copy, one next to the exe, or the source), how many items it has, and the last output. |
-| `extension customize-items` | Where the spec and the output are. |
-| `--add all` / `--add ID` | Build the items of the spec into `<ext>\customize-items\regulation.bin` (about 15 s), every time. One item per build in this version: with more in the spec, name one with `--add ID`. An empty list builds nothing. |
-| `--dry-run` | Build and check in memory; write nothing. |
-| `--spec FILE` | The items to build. Default: `items.json` next to the exe, else the copy embedded by `build -c -em`, else `code/eldendisk/extension/customize_items/sources/items.json`. Also accepted by `extension --list` and `run`. |
-| `--source FILE` / `--game-dir DIR` | The game's original `regulation.bin` to build on (default: the one in the auto-detected game folder). It must be the untouched 1.17.1 file (checked by SHA-256); otherwise the build stops and suggests `vault restore`. |
-| `--extension-dir DIR` | Where the output goes. |
+A file goes **draft → built → secured**. `items.draft.json` is what you edit. `run` builds a `regulation.bin` from it on the game's own file (never on a modified one) and a **gate** judges the finished file; if the gate fails, nothing is swapped and the game is not started. When the file worked in the game, close the game and run `extension customize-items --secure`: the build is kept as `regulation.secured.bin` with a record `items.secured.json`. From then on `run` swaps the secured copy without building (and without the gate) while the draft does not change. Files live in `%LOCALAPPDATA%\EldenDisk\extension\customize-items\` (`--extension-dir` changes the folder): `regulation.bin` (latest build), `regulation.secured.bin`, `items.secured.json`. The commands below do not start the game; the swap itself is the vault's job.
 
-**`items.json`** (format 1) is the spec of the item(s) you want in the game: `items` is a list of incantations, for example the tested `reverse-curse-technique` in `code/eldendisk/extension/customize_items/sources/items.json`: `requires` (`intelligence`, `faith`, `arcane`), `fp_cost`, `stamina_cost`, `cast_motion` (`flame-grant-me-strength` or `black-flame-blade`), `effect` (heal over time), `poise_while_casting_seconds`, `shop` (`price`, `stock`), plus `name` and `description` (stored only). Unknown fields are errors; colour, icon and text need files inside the game's archives and are refused. Every problem is listed with its path.
+| Command | What it does |
+|:--|:--|
+| `extension --list` | The draft (path, and whether it is the embedded copy, one next to the exe, or the source), how many items it has, what is secured, the changes of the draft since it was secured, and the last build. |
+| `extension customize-items` | Where the files are. |
+| `--add all` / `--add ID` | Build the items of the draft into `<ext>\customize-items\regulation.bin` (about 20 s) and run the gate; always builds. One item per build in this version: with more in the draft, name one with `--add ID`. An empty list builds nothing. |
+| `--dry-run` | With `--add`: build and run the gate in memory, write nothing. |
+| `--secure` | Game closed. Runs the gate on `regulation.bin` against the current draft and the game's file, then keeps it as `regulation.secured.bin` and writes `items.secured.json`. Stands alone (not with `--add` / `--dry-run`). There is no `--force`: delete `items.secured.json` to make the next `run` build. |
+| `--spec FILE` | The draft. Default: `items.draft.json` next to the exe, else the copy embedded by `build -c -em`, else `code/eldendisk/extension/customize_items/items.draft.json`. Also accepted by `extension --list` and `run`. |
+| `--source FILE` / `--game-dir DIR` | The game's original `regulation.bin` to build on (default: the one in the auto-detected game folder). It is checked against the known original on every path. |
+| `--extension-dir DIR` | Where the files go. |
 
-Before anything is written, the finished file is checked (frame decodes to the intended bytes, no stored blocks, untouched blocks byte-identical, header sizes, only the declared rows changed). A failed check writes nothing and exits `1`; in `run` it stops the run before the game starts. A passing check is necessary, not sufficient: the real test is the game.
+**`items.draft.json`** (format 1) is the draft of the item(s) you want in the game: `items` is a list of incantations, for example the tested `reverse-curse-technique` in `code/eldendisk/extension/customize_items/items.draft.json`: `requires` (`intelligence`, `faith`, `arcane`), `fp_cost`, `stamina_cost`, `cast_motion` (`flame-grant-me-strength` or `black-flame-blade`), `effect` (heal over time), `poise_while_casting_seconds`, `shop` (`price`, `stock`), plus `name` and `description` (stored only; they do not count as a change). Unknown fields are errors; colour, icon and text need files inside the game's archives and are refused. Every problem is listed with its path. `items.schema.json` next to it is the JSON schema for editors.
 
-**In `run`:** `run --vault-on` shows `extension customize-items: building …` and `built and checked`, then the host lines (PREFLIGHT, SNAPSHOTTING, READY); the vault swaps the file in and puts the game's own back. A vault that still owes a restore: no build. Spec: [elden-disk-spec-v1.7.0](specs/elden-disk-spec-v1.7.0.md).
+**`run` uses the secured copy** only when the draft equals the secured one, the secured file has the recorded hash, the game's file is the recorded base, and the recipes are the same version. Otherwise it prints why it builds and a field-by-field diff (`reverse-curse-technique.shop.price  34590 -> 40000`). After a session that built, it hints to run `--secure`.
+
+**In `run`:** `run --vault-on` shows either `using …regulation.secured.bin (no build)` or `building because …` with the diff, then `built, gate passed`, then the host lines (PREFLIGHT, SNAPSHOTTING, READY); the vault swaps the file in and puts the game's own back. A failed gate: `GATE FAILED … nothing was swapped`, exit 1, the game is not started. A vault that still owes a restore: no build. Spec: [elden-disk-spec-v1.7.0](specs/elden-disk-spec-v1.7.0.md).
 
 Exit codes: `0` ok, `1` error, `2` usage.
 

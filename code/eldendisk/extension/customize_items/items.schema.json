@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "customize-items items.json (format 1, Level 2a)",
+  "title": "customize-items items.draft.json (format 1, Level 2a)",
   "type": "object",
   "additionalProperties": false,
   "required": ["items"],

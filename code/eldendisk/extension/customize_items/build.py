@@ -5,7 +5,7 @@ import hashlib
 import struct
 from dataclasses import dataclass, field
 
-from . import container, preflight, reblock, recipes
+from . import container, reblock, recipes
 from .container import Bnd4, Param
 from .defs import TABLE_FILES, Def
 from .reblock import BuildError, Source
@@ -23,7 +23,7 @@ class Result:
     sha256: str
     decrypted_sha256: str
     changed_blocks: int = 0
-    warnings: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
 
 
 def prepare(base: bytes):
@@ -62,17 +62,24 @@ def plan(src: Source, items: list):
     return newbody, fp
 
 
-def build(base: bytes, items: list, src: Source | None = None) -> Result:
-    src = src or prepare(base)
-    newbody, fp = plan(src, items)
-    frame, edit, converted = reblock.rewrite(src, newbody)
+def make(src: Source, items: list) -> Result:
+    """items + the game's original -> the finished (encrypted) file. NO checks here: the gate (gate.verify) judges the bytes."""
+    newbody, _fp = plan(src, items)
+    frame, _edit, _converted = reblock.rewrite(src, newbody)
     h = bytearray(src.header)
     struct.pack_into(">II", h, 0x1C, len(newbody), len(frame))
     dcx = bytes(h) + frame + b"\0" * ((-(len(h) + len(frame))) % 16)
-    problems, warnings, stats = preflight.check(src, dcx, newbody, fp)
-    if problems:
-        raise PreflightError(problems)
     data = container.encrypt(dcx)
-    if container.decrypt(data) != dcx:
-        raise BuildError("internal check failed: encrypt/decrypt does not round-trip")
-    return Result(data, hashlib.sha256(data).hexdigest(), hashlib.sha256(dcx).hexdigest(), stats.get("changed_blocks", 0), warnings)
+    return Result(data, hashlib.sha256(data).hexdigest(), hashlib.sha256(dcx).hexdigest())
+
+
+def build(base: bytes, items: list, src: Source | None = None) -> Result:
+    """make + the gate, all in memory (the service writes to disk and reads back; this is for tests and tools)."""
+    from . import gate
+    src = src or prepare(base)
+    res = make(src, items)
+    v = gate.verify(res.data, src, items)
+    if v.problems:
+        raise PreflightError(v.problems)
+    res.changed_blocks, res.notes = v.stats.get("changed_blocks", 0), v.notes
+    return res

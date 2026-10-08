@@ -13,8 +13,8 @@ from ..host.host import Hooks, Session, State
 from ..paths import describe_resource
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, session_log
-from .extension import build_items
-from ..extension.customize_items.service import ExtensionError
+from .extension import prepare_regulation
+from ..extension.customize_items.service import ExtensionError, GateFailed
 
 
 STEAM_EXE = "steam.exe"
@@ -38,10 +38,12 @@ def auto_prune(vault: SaveVault, keep: int) -> None:
         book.d("vault", "pruned: " + ", ".join(gone))
 
 
-def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> Path | None:
-    """The regulation.bin to swap in for this session, or None. `--regulation FILE` wins. Otherwise, with the vault ON, the
-    extension builds one from the spec on the game's own file, every time (about 15 s). The vault is what makes that safe:
-    it puts the game's file back. With the vault OFF the extension does not run. A build error stops `run` (ExtensionError).
+def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
+    """-> (the regulation.bin to swap in for this session or None, mode). mode: "none" | "file" (--regulation) | "secured"
+    (the confirmed copy, nothing built) | "built" (a new build the gate passed). `--regulation FILE` wins. Otherwise, with the
+    vault ON, the extension swaps the secured file when the draft is unchanged and builds (about 20 s) when it is not. The vault
+    is what makes that safe: it puts the game's file back. With the vault OFF the extension does not run. A build error or a
+    failed gate stops `run` (ExtensionError / GateFailed): nothing is swapped, the game is not started.
     The 1.6.4 place `<vault>/regulation/regulation.bin` is not read any more."""
     legacy = vault.legacy_world()
     if legacy is not None:
@@ -53,16 +55,16 @@ def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> Path |
             raise FileNotFoundError(f"--regulation {f}: file not found")
         if not protect:
             book.w("vault", f"{f} is ignored: with the vault OFF nothing would put the game's regulation.bin back")
-            return None
-        return f
+            return None, "none"
+        return f, "file"
     if not protect:
         book.i("extension", "vault OFF: the extension is not run (it changes the game's files; only the vault can put them back)")
-        return None
+        return None, "none"
     if vault.read_session() is not None:
         book.d("extension", "the vault owes a restore from an earlier session: not building; the session will say what to do")
-        return None
-    rep = build_items(args, game_dir / "regulation.bin")
-    return rep.output if rep.built else None
+        return None, "none"
+    prep = prepare_regulation(args, game_dir / "regulation.bin", allow_secured=True)
+    return prep.path, prep.mode
 
 
 def cmd_run(args) -> int:
@@ -79,14 +81,19 @@ def cmd_run(args) -> int:
     book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
     protect = getattr(args, "protect", True)
     try:
-        world = _regulation(args, vault, game_dir, protect)
+        world, mode = _regulation(args, vault, game_dir, protect)
+    except GateFailed as exc:
+        book.e("run", str(exc))
+        book.e("run", "the game was not started and nothing was swapped; the game's files are as they were")
+        return 1
     except (ExtensionError, FileNotFoundError) as exc:
         book.e("run", str(exc))
         return 1
     rows = [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
             ("mode", "vault ON (backup before, restore after)" if protect else "vault OFF (no backup, no restore)")]
     if world is not None and protect:
-        rows.append(("regulation", f"{world} replaces the game's regulation.bin for this session"))
+        what = {"secured": "secured copy, not rebuilt", "built": "new build, gate passed"}.get(mode, "your file")
+        rows.append(("regulation", f"{world} ({what}) replaces the game's regulation.bin for this session"))
     begin(args, "run", rows)
 
     def extra() -> list[str]:
@@ -123,4 +130,7 @@ def cmd_run(args) -> int:
             tail.stop()
     if State.RESTORING in session.history:   # a session really ran; never prune a vault that still owes a restore
         auto_prune(vault, args.keep)
+        if mode == "built":
+            book.i("extension", "this regulation.bin was built just now. If it worked in the game, keep it for next time: "
+                                "eldendisk extension customize-items --secure   (game closed)")
     return rc

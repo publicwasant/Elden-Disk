@@ -1,4 +1,4 @@
-"""items.json: strict validation, canonical form, and agreement with the JSON schema."""
+"""items.draft.json: strict validation, canonical form, and agreement with the JSON schema."""
 import copy
 import json
 from pathlib import Path
@@ -8,7 +8,7 @@ import pytest
 from eldendisk.extension.customize_items import spec
 
 PKG = Path(spec.__file__).parent
-Z4 = json.loads((PKG / "sources" / "items.json").read_text(encoding="utf-8"))
+Z4 = json.loads((PKG / "items.draft.json").read_text(encoding="utf-8"))
 
 
 def mutated(fn):
@@ -102,7 +102,7 @@ def test_select_all_or_one_id():
 # ---- the JSON schema (dev check only: the tool itself does not need jsonschema) ----
 def test_the_schema_and_the_validator_agree():
     jsonschema = pytest.importorskip("jsonschema")
-    schema = json.loads((PKG / "schema" / "items.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads((PKG / "items.schema.json").read_text(encoding="utf-8"))
     cases = [Z4] + [mutated(f) for f in (
         lambda i: i.update(fp_cost=-1), lambda i: i["requires"].update(faith=100), lambda i: i.update(cast_motion="x"),
         lambda i: i["shop"].update(stock=0), lambda i: i.update(surprise=1), lambda i: i.pop("shop"),

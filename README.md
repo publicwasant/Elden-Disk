@@ -16,7 +16,7 @@ Four parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (767 tests); the Steam Cloud sync on exit (T10) is still untested. **Game params (1.6.3):** the file layout and the pointer chains were measured on the real game, and writing `effectEndurance = -1` into the Black Flame row (1621000) made the burn last until the enemy died; the author later reported (2026-10-08) that `write` with `effectEndurance = -1` made **all four** Black Flame rows burn without end (an enemy burned to death and the effect bar stayed lit); the other fields (`motionInterval`, `changeHpRate`, `changeHpPoint`), `--reset` and the title screen have **not** been tried in the game yet (manual plan section 7A). **The other world (1.6.4) and extensions (1.7.0):** the `regulation.bin` swap and `extension customize-items` are verified by unit tests; the Z4 file they build is byte-identical (golden test) to a hand-built file that the real game loaded and ran, but the real game has **not** loaded a file swapped in by `run` yet (manual plans 1.6.4 and 1.7.0). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
+> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (767 tests); the Steam Cloud sync on exit (T10) is still untested. **Game params (1.6.3):** the file layout and the pointer chains were measured on the real game, and writing `effectEndurance = -1` into the Black Flame row (1621000) made the burn last until the enemy died; the author later reported (2026-10-08) that `write` with `effectEndurance = -1` made **all four** Black Flame rows burn without end (an enemy burned to death and the effect bar stayed lit); the other fields (`motionInterval`, `changeHpRate`, `changeHpPoint`), `--reset` and the title screen have **not** been tried in the game yet (manual plan section 7A). **The other world (1.6.4) and extensions (1.7.0):** the `regulation.bin` swap and `extension customize-items` are verified by unit tests; the Z4 file they build is byte-identical (golden test) to a hand-built file that the real game loaded and ran, and on 2026-10-09 the author ran a tool-built file swapped in by `run` on the real game (1.17.1): the item was sold, cast and healed, it beat a boss with infinite Black Flame (`write` with `effectEndurance = -1`), and the vault restored the save and `regulation.bin` byte-identical (the `compression.zstd` second decoder agreed on Python 3.14). The poise part and the secured path (`--secure`) have **not** been tried in the game yet (manual plans 1.6.4 and 1.7.0). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
 
 ---
 
@@ -109,11 +109,11 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 
 | Command | Role | Description |
 |:---|:---|:---|
-| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. With the vault ON it first builds a `regulation.bin` from the spec (`items.json`, every time) and swaps it in for the session (or `--regulation FILE`). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
+| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. With the vault ON it swaps a `regulation.bin` in for the session: the secured copy when `items.draft.json` is unchanged, otherwise a new build that the gate must pass (or `--regulation FILE`). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
 | `read [--query NAME [NAME ...]] [--export] [--live] [--live-buffs] [--live-animations]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-buffs` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
 | `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables); `--reset` puts the game's own params back; exit `5` without a valid session |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
-| `extension --list` \| `extension customize-items --add all\|ID` | **Extension** | Build things for the game outside the game. `customize-items` turns `items.json` into a `regulation.bin` with your own incantation (checked, built on every call); `run` (vault ON) does the same build and swaps it in |
+| `extension --list` \| `extension customize-items --add all\|ID\|--secure` | **Extension** | Build things for the game outside the game. `customize-items` turns `items.draft.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
 | `build` | Tool | Standalone `./build/dist/eldendisk/eldendisk.exe` plus a `README.md` next to it (quick start + the exe command reference) |
 
@@ -127,21 +127,28 @@ Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `an
 
 ## 🌌 The other world (`regulation.bin`, 1.6.4) and extensions (1.7.0)
 
+**Principle: the other world never touches the real one.** Everything done in a `run` session (the rules, the items, the values written, the changes to the save) exists for that session only. When the game exits, the vault puts back the save and the game's own `regulation.bin`, byte for byte, checked by hash. Nothing carries over: not the items, not the progress. The real playthrough stays exactly as it was, and it can be finished with no mod at all. The sandbox is for playing around on the days you want to; it is never required, and nothing in the real world can collapse because of it.
+
 The vault keeps *the world as it was*. `extension customize-items` builds *the world you want to play in*: a `regulation.bin` with your own incantation, made from a JSON file, offline, by the tool itself. With the vault ON, `run` builds it, swaps it in for one session and puts the game's own file back with the save.
 
 ```
-sources/items.json (embedded in the exe)  --run (vault ON) builds on the game's regulation.bin-->  regulation.bin  --vault swaps-->  the game
-%LOCALAPPDATA%\EldenDisk\extension\
-  customize-items\regulation.bin       the output of the last build (nothing else is kept)
+items.draft.json (embedded in the exe)  --run (vault ON): build on the game's regulation.bin + gate-->  regulation.bin  --vault swaps-->  the game
+                                        --extension customize-items --secure (game closed)-->  regulation.secured.bin + items.secured.json
+next run, draft unchanged: regulation.secured.bin is swapped, nothing is built
+%LOCALAPPDATA%\EldenDisk\extension\customize-items\
+  regulation.bin            the latest build (gate passed, not yet confirmed)
+  regulation.secured.bin    the copy you confirmed
+  items.secured.json        the draft behind it + hashes
 %LOCALAPPDATA%\EldenDisk\vault\
   20261008-0800\save\                 the save as it was
                 bin\regulation.bin     the game's own file, kept to put it back
 ```
 
-- **The spec is `code/eldendisk/extension/customize_items/sources/items.json`.** You edit it; `build -c -em` embeds it in the exe (like `offsets.json`). An `items.json` next to the exe, or `--spec FILE`, wins.
-- **Built every time, on the game's own file.** No manifest, no skip logic, no copy of the base: each `run --vault-on` reads the spec and the game's `regulation.bin` and builds (about 15 s). The base is never an already modified file; if the game's file is not the known original, `run` stops and suggests `vault restore`.
-- **Depends on the vault, like `write`.** No `--extension-on` flag: with `--vault-off` nothing is built or swapped. `extension --list` and `extension customize-items --add all` run the same build without starting the game.
-- **Checked before it is written.** The frame must decode to the intended bytes, untouched blocks must be the game's own bytes, only the declared rows may change. A failed check writes nothing and stops `run`. Necessary, not sufficient: the game is the real test.
+- **The draft is `code/eldendisk/extension/customize_items/items.draft.json`** (with `items.schema.json` beside it). You edit it; `build -c -em` embeds it in the exe (like `offsets.json`). An `items.draft.json` next to the exe, or `--spec FILE`, wins.
+- **Draft → built → secured.** `run` builds when there is no secured copy or the draft changed (about 20 s) and prints why, with a field-by-field diff. When it worked in the game, close the game and run `extension customize-items --secure`; after that `run` swaps the secured copy without building. Changing only `name` / `description` does not count as a change. Delete `items.secured.json` to force a build.
+- **Always on the game's own file.** The game's `regulation.bin` is checked against the known 1.17.1 original on every path; a modified file is refused with a `vault restore` hint.
+- **Depends on the vault, like `write`.** No `--extension-on` flag: with `--vault-off` nothing is built or swapped. `extension --list` and `extension customize-items --add all` build without starting the game.
+- **The gate judges the finished file, read back from disk.** The frame must decode to the intended bytes, untouched blocks must be the game's own bytes, only the declared rows may change, the id chain, shop range, stock flag and heal sign must be right. Any problem or warning is a stop: nothing is swapped and the game is not started. Necessary, not sufficient: the game is the real test.
 - **One item per build** in this version (Level 2a); name, description are stored only; colour, icon and text (Level 3) need files inside the game's archives and are refused.
 - `--regulation FILE` swaps another file instead of building. The 1.6.4 folder `<vault>\regulation\` is no longer read.
 - The order is: build, back up the save and the game's file, write the session record, swap, launch. When the game closes, `run` restores the save **and** the game's file and checks both by hash. If either fails, the record stays and the next `run` is refused until `vault restore` finishes (exit `4`). `vault keep` keeps the current *save* only; the game's own file always comes back first.

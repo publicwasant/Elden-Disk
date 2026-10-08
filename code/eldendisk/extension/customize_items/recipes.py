@@ -115,3 +115,74 @@ def apply_incantation(P: dict, D: dict, item: dict, fp: Footprint) -> None:
         D["shop"].set(data, n, v)
     row[2], row[0] = data, SHOP_LINE
     fp.removed["shop"].add(SHOP_DUMMY), fp.added["shop"].add(SHOP_LINE)
+
+
+# ---------------- checking a finished file against the spec ----------------
+SHOP_RANGE = (100500, 100524)      # the merchant's group of 25 lines that the handbook (Chapter 7) found in the game
+
+
+def _same(a, b) -> bool:
+    """Whole numbers (ids, costs) must match exactly; only a fractional spec value (seconds, stored as float32) gets a tolerance.
+    (A tolerance relative to the size of an id such as 21950111 would let a wrong id through.)"""
+    if isinstance(b, int) and not isinstance(b, bool):
+        return float(a) == float(b)
+    return abs(float(a) - float(b)) <= 1e-6 * max(1.0, abs(float(b)))
+
+
+def check_incantation(P: dict, D: dict, item: dict) -> list:
+    """Read the rows of a FINISHED file (not what the recipe meant to write) and compare them with the spec and with what the
+    handbook says breaks an item: a broken id chain (Chapter 4), a shop line outside the merchant's range or a reused stock flag
+    (Chapter 7, 16.1), a heal with the wrong sign (5.1). -> list of problems."""
+    bad = []
+
+    def row(key, rid, what):
+        r = P[key].find(rid)
+        if r is None:
+            bad.append("G11: %s row %d is missing" % (what, rid))
+            return None
+        return r[2]
+
+    def need(key, data, name, want, what, code="G11"):
+        got = D[key].get(data, name)
+        if not _same(got, want):
+            bad.append("%s: %s.%s is %s, the spec says %s" % (code, what, name, got, want))
+
+    goods, magic = row("goods", ITEM_ID, "goods"), row("magic", ITEM_ID, "magic")
+    sp, shop = row("sp", SP_ID, "SpEffect"), row("shop", SHOP_LINE, "shop line")
+    e, r = item["effect"], item["requires"]
+    if magic is not None:
+        need("magic", magic, "refCategory1", 2, "Magic %d" % ITEM_ID)
+        need("magic", magic, "refId1", SP_ID, "Magic %d" % ITEM_ID)
+        need("magic", magic, "disableParam_NT", 0, "Magic %d" % ITEM_ID)
+        for name, want in (("mp", item["fp_cost"]), ("stamina", item["stamina_cost"]), ("requirementIntellect", r["intelligence"]),
+                           ("requirementFaith", r["faith"]), ("requirementLuck", r["arcane"]), ("refType", CAST_MOTIONS[item["cast_motion"]])):
+            need("magic", magic, name, want, "Magic %d" % ITEM_ID, "G5")
+        if item.get("poise_while_casting_seconds"):
+            need("magic", magic, "refCategory2", 2, "Magic %d" % ITEM_ID)
+            need("magic", magic, "refId2", POISE_ID, "Magic %d" % ITEM_ID)
+            prow = row("sp", POISE_ID, "poise SpEffect")
+            if prow is not None:
+                need("sp", prow, "effectEndurance", item["poise_while_casting_seconds"], "SpEffect %d" % POISE_ID, "G5")
+    if sp is not None:
+        # NEGATIVE changeHpPoint heals; a positive value would drain the player (handbook 5.1)
+        for name, amount in (("changeHpPoint", e["heal_hp_per_tick"]), ("changeMpPoint", e["restore_fp_per_tick"])):
+            got = D["sp"].get(sp, name)
+            if amount > 0 and not got < 0:
+                bad.append("G13: SpEffect %d.%s is %s: a heal must be negative or it drains the player" % (SP_ID, name, got))
+            need("sp", sp, name, -amount, "SpEffect %d" % SP_ID, "G13")
+        for name, want in (("staminaRecoverChangeSpeed", e["stamina_regen_speed"]), ("effectEndurance", e["duration_seconds"]),
+                           ("motionInterval", e["tick_seconds"])):
+            need("sp", sp, name, want, "SpEffect %d" % SP_ID, "G5")
+    if shop is not None:
+        need("shop", shop, "equipId", ITEM_ID, "shop line %d" % SHOP_LINE, "G12")
+        need("shop", shop, "value", item["shop"]["price"], "shop line %d" % SHOP_LINE, "G12")
+        need("shop", shop, "sellQuantity", item["shop"]["stock"], "shop line %d" % SHOP_LINE, "G12")
+        need("shop", shop, "eventFlag_forStock", SHOP_FLAG, "shop line %d" % SHOP_LINE, "G12")
+        users = [x[0] for x in P["shop"].rows if D["shop"].get(x[2], "eventFlag_forStock") == SHOP_FLAG]
+        if users != [SHOP_LINE]:
+            bad.append("G12: stock flag %d is used by shop lines %s; it must belong to line %d only" % (SHOP_FLAG, users, SHOP_LINE))
+    if not SHOP_RANGE[0] <= SHOP_LINE <= SHOP_RANGE[1]:
+        bad.append("G12: shop line %d is outside the merchant's range %d-%d" % (SHOP_LINE, *SHOP_RANGE))
+    if goods is None and magic is not None:
+        bad.append("G11: Magic %d exists but its Goods row does not" % ITEM_ID)
+    return bad

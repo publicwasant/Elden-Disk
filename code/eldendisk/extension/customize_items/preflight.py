@@ -33,7 +33,7 @@ def _raw_lit_split(c: bytes):
 
 
 def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
-    """-> (problems, warnings, stats)"""
+    """-> (problems, warnings, stats). stats: changed_blocks and `decoded`, what the frame really decodes to (when it decodes)."""
     bad, warn = [], []
     # ---- R4 header and tail
     if new_dcx[:4] != b"DCX\0" or new_dcx[0x28:0x2C] != b"ZSTD":
@@ -58,6 +58,7 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
         return bad, warn, {}
     if got != newbody:
         bad.append("R1: the frame does not decode to the intended body")
+    decoded = got
     # ---- R2 / R3 blocks
     try:
         blocks, end = zstd.split_blocks(frame)
@@ -108,7 +109,7 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
         ob = Bnd4(src.body)
     except Exception as e:
         bad.append("R5: BND4 unreadable (%s)" % e)
-        return bad, warn, {"changed_blocks": changed + converted}
+        return bad, warn, {"changed_blocks": changed + converted, "decoded": decoded}
     if len(nb.entries) != len(ob.entries) or bytes(nb.head[:0x40]) != bytes(ob.head[:0x40]):
         bad.append("R5: the BND4 header or entry count changed")
     else:
@@ -137,4 +138,4 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
                 sorted(footprint.added[key]), sorted(footprint.modified[key])))
         if [r[0] for r in a.rows] != sorted(ra):
             bad.append("R6: table %s is not sorted by id" % key)
-    return bad, warn, {"changed_blocks": changed + converted}
+    return bad, warn, {"changed_blocks": changed + converted, "decoded": decoded}
