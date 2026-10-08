@@ -19,6 +19,11 @@
       "name": "Golden Vow",
       "categories": "INCANTATIONS",
       "abilities": "Increases attack power and defense for self and nearby allies."
+    },
+    "21950111": {
+      "name": "Reverse Curse Technique",
+      "categories": "INCANTATIONS",
+      "abilities": "Regenerates HP, FP and stamina over time for 15 s (custom spell, goods/magic id 2230000)."
     }
   },
   "animations": {
