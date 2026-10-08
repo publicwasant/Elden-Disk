@@ -32,8 +32,8 @@ def test_every_command_writes_the_logcat_file_next_to_the_vault(env, capsys):
     text = (vault.root / LOG_NAME).read_text(encoding="utf-8")
     lines = text.splitlines()
     assert all(LOGCAT.match(l) for l in lines), lines
-    assert "D cli" in lines[0] and "version " in lines[0]
-    assert "D cli" in lines[1] and "vault verify" in lines[1]          # the command line itself, no version in it
+    assert "D client" in lines[0] and "version " in lines[0]
+    assert "D client" in lines[1] and "vault verify" in lines[1]          # the command line itself, no version in it
     assert any(" I vault" in l and "matches its manifest" in l for l in lines)
     assert lines[-1].endswith("exit 0")
 
@@ -42,8 +42,8 @@ def test_the_log_file_keeps_debug_events_the_console_hides(env, capsys):
     live, vault = env
     assert cli.main(["vault", "status", "--vault", str(vault.root)]) == 0
     captured = capsys.readouterr()
-    assert " D cli" in (vault.root / LOG_NAME).read_text(encoding="utf-8")
-    assert "D cli" not in captured.err + captured.out and "exit 0" not in captured.err
+    assert " D client" in (vault.root / LOG_NAME).read_text(encoding="utf-8")
+    assert "D client" not in captured.err + captured.out and "exit 0" not in captured.err
 
 
 def test_without_v_the_console_is_concise_and_with_v_it_is_the_log(env, capsys):
@@ -58,7 +58,7 @@ def test_without_v_the_console_is_concise_and_with_v_it_is_the_log(env, capsys):
     raw = capsys.readouterr().err
     lines = raw.splitlines()
     assert lines and all(LOGCAT.match(l) for l in lines)                # nothing but log lines
-    assert any(" D cli" in l for l in lines) and "\u2713" not in raw
+    assert any(" D client" in l for l in lines) and "\u2713" not in raw
 
 
 def test_v_is_accepted_on_the_group_on_the_verb_and_on_every_command(env, capsys):
@@ -67,7 +67,7 @@ def test_v_is_accepted_on_the_group_on_the_verb_and_on_every_command(env, capsys
     for argv in (["vault", "-v", "status", "--vault", v], ["vault", "status", "-v", "--vault", v],
                  ["vault", "list", "--fast", "-v", "--vault", v]):
         cli.main(argv)
-        assert " D cli" in capsys.readouterr().err, argv
+        assert " D client" in capsys.readouterr().err, argv
     parser = cli.build_parser()
     for argv in (["run", "-v"], ["read", "--live-buffs", "-v"], ["write", "-v", "--refill", "hp"], ["write", "--refill", "hp", "-v"],
                  ["hash", "-v"], ["build", "-v"]):

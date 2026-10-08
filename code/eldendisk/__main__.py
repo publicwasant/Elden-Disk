@@ -219,10 +219,10 @@ def main(argv=None) -> int:
     try:
         code = args.fn(args)
     except KeyboardInterrupt:
-        book.w("cli", "interrupted")
+        book.w("client", "interrupted")
         code = 130
     except (OSError, ValueError, RuntimeError) as exc:
-        book.e("cli", str(exc))
+        book.e("client", str(exc))
         code = 1
     logsetup.finish(code)
     return code

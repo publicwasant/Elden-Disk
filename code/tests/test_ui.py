@@ -72,15 +72,15 @@ def test_raw_view_prints_the_log_lines_including_debug(err):
 
 def test_raw_view_colours_the_command_line_only_on_the_console(err, monkeypatch):
     monkeypatch.setenv("FORCE_COLOR", "1")
-    cmd = ev(level="D", tag="cli", msg="eldendisk.exe run -v")
+    cmd = ev(level="D", tag="client", msg="eldendisk.exe run -v")
     ui.raw_sink(err)(cmd)
     out = err.getvalue()
     assert "\x1b[36meldendisk.exe run -v\x1b[0m" in out and out.startswith("\x1b[2m10-07 23:41:02.123")   # prefix dim, command cyan
     assert "\x1b[" not in format_line(cmd)                                      # the log file line is plain
     err.truncate(0); err.seek(0)
-    ui.raw_sink(err)(ev(level="D", tag="cli", msg="exit 0"))
-    ui.raw_sink(err)(ev(level="D", tag="cli", msg="version 1.7.0"))
-    ui.raw_sink(err)(ev(level="D", tag="cli", msg="clickable paths off: output is not a terminal"))
+    ui.raw_sink(err)(ev(level="D", tag="client", msg="exit 0"))
+    ui.raw_sink(err)(ev(level="D", tag="client", msg="version 1.7.0"))
+    ui.raw_sink(err)(ev(level="D", tag="client", msg="clickable paths off: output is not a terminal"))
     assert "\x1b[36m" not in err.getvalue()                                     # exit and version stay dim
     err.truncate(0); err.seek(0)
     ui.raw_line(format_line(cmd), err)                                         # a line tailed from another terminal
@@ -104,6 +104,15 @@ def test_backticked_words_are_cyan_on_a_colour_console_and_stay_plain_otherwise(
     ui.raw_sink(err)(e)
     assert "\x1b[36mwrite\x1b[0m" in err.getvalue()
     assert "`write`" in format_line(e)                       # the log file keeps the backticks
+
+
+def test_a_bare_regulation_bin_is_cyan_but_not_inside_a_path(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    ui.pretty_sink(stream=err)(ev(msg="regulation.bin restored, byte-identical to the game's own file"))
+    assert err.getvalue().count("\x1b[36mregulation.bin\x1b[0m") == 1
+    err.truncate(0); err.seek(0)
+    ui.pretty_sink(stream=err)(ev(msg="copied to C:\\x\\regulation.bin and regulation.secured.bin"))
+    assert "\x1b[36m" not in err.getvalue()
 
 
 def test_header_shows_title_rule_and_aligned_rows(err):

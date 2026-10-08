@@ -58,10 +58,10 @@ def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
             return None, "none"
         return f, "file"
     if not protect:
-        book.i("extension", "vault OFF: the extension is not run (it changes the game's files; only the vault can put them back)")
+        book.i("ext", "vault OFF: the extension is not run (it changes the game's files; only the vault can put them back)")
         return None, "none"
     if vault.read_session() is not None:
-        book.d("extension", "the vault owes a restore from an earlier session: not building; the session will say what to do")
+        book.d("ext", "the vault owes a restore from an earlier session: not building; the session will say what to do")
         return None, "none"
     prep = prepare_regulation(args, game_dir / "regulation.bin", allow_secured=True)
     return prep.path, prep.mode
@@ -131,6 +131,6 @@ def cmd_run(args) -> int:
     if State.RESTORING in session.history:   # a session really ran; never prune a vault that still owes a restore
         auto_prune(vault, args.keep)
         if mode == "built":
-            book.i("extension", "this regulation.bin was built just now. If it worked in the game, keep it for next time: "
+            book.i("ext", "this regulation.bin was built just now. If it worked in the game, keep it for next time: "
                                 "eldendisk extension customize-items --secure   (game closed)")
     return rc

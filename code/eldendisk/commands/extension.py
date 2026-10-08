@@ -44,9 +44,9 @@ class Prepared:
 
 def _show_diff(diff: list) -> None:
     for line in diff[:MAX_DIFF_LINES]:
-        book.i("extension", "  " + line)
+        book.i("ext", "  " + line)
     if len(diff) > MAX_DIFF_LINES:
-        book.i("extension", f"  … and {len(diff) - MAX_DIFF_LINES} more (see the draft and {service.SECURED_FILE})")
+        book.i("ext", f"  … and {len(diff) - MAX_DIFF_LINES} more (see the draft and {service.SECURED_FILE})")
 
 
 def prepare_regulation(args, game_dir_file: Path | None, which: str = "all", dry_run: bool = False,
@@ -57,23 +57,23 @@ def prepare_regulation(args, game_dir_file: Path | None, which: str = "all", dry
     book.d("config", f"draft: {ci.spec_path} ({describe_resource(ci.spec_path)})")
     items = ci.items(which)
     if not items:
-        book.i("extension", f"customize-items: no items in {ci.spec_path}: nothing to build")
+        book.i("ext", f"customize-items: no items in {ci.spec_path}: nothing to build")
         return Prepared(None, "none")
     names = ", ".join(i["id"] for i in items)
     base, base_sha = ci.read_base(game_dir_file)
     if allow_secured:
         d = ci.decide(items, base_sha)
         if d.use_secured:
-            book.ok("extension", f"customize-items: {names} unchanged since it was secured: using {ci.secured_bin} (no build)")
+            book.ok("ext", f"customize-items: {names} unchanged since it was secured: using {ci.secured_bin} (no build)")
             return Prepared(ci.secured_bin, "secured")
         for r in d.reasons:
-            book.i("extension", f"customize-items: building because {r}")
+            book.i("ext", f"customize-items: building because {r}")
         _show_diff(d.diff)
-    book.i("extension", f"customize-items: building {names} on {game_dir_file} and checking (about 20 s)")
+    book.i("ext", f"customize-items: building {names} on {game_dir_file} and checking (about 20 s)")
     rep = ci.build(items, base, dry_run)
     for n in rep.notes:
-        book.d("extension", f"gate: {n}")
-    book.ok("extension", f"customize-items: {names} built, gate passed ({rep.changed_blocks} blocks re-encoded)"
+        book.d("ext", f"gate: {n}")
+    book.ok("ext", f"customize-items: {names} built, gate passed ({rep.changed_blocks} blocks re-encoded)"
                          + ("" if rep.dry_run else f" -> {rep.output}"))
     return Prepared(rep.output if rep.built else None, "built" if rep.built else "none", rep)
 
@@ -120,11 +120,11 @@ def cmd_secure(args) -> int:
         items = ci.items("all")
         rep = ci.secure(items, game_file(args))
     except service.ExtensionError as exc:
-        book.e("extension", str(exc))
+        book.e("ext", str(exc))
         return 1
     for n in rep.notes:
-        book.d("extension", f"gate: {n}")
-    book.ok("extension", f"customize-items: {', '.join(rep.items)} secured -> {rep.output}")
+        book.d("ext", f"gate: {n}")
+    book.ok("ext", f"customize-items: {', '.join(rep.items)} secured -> {rep.output}")
     ui.fields([("sha256", rep.sha256[:16] + "…"), ("record", str(ci.secured_path)),
                ("next", "`eldendisk run` swaps the secured file without building while the draft does not change")])
     return 0
@@ -143,7 +143,7 @@ def cmd_customize_items(args) -> int:
     try:
         prep = prepare_regulation(args, game_file(args), args.add, args.dry_run)
     except service.ExtensionError as exc:      # includes GateFailed
-        book.e("extension", str(exc))
+        book.e("ext", str(exc))
         return 1
     rep = prep.report
     if rep is not None and rep.items:

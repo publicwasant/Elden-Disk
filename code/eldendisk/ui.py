@@ -59,11 +59,16 @@ def paint(text: str, kind: str, color: bool) -> str:
 
 
 _TICKS = re.compile(r"`([^`\r\n]+)`")
+_FILE_WORD = re.compile(r"(?<![\\/\w.])regulation\.bin\b")       # the file's name on its own, not as the end of a path
 
 
 def emphasize(text: str, color: bool) -> str:
-    """`name` -> name in cyan on a colour console (the backticks are what the colour replaces). Without colour the text is unchanged."""
-    return _TICKS.sub(lambda m: paint(m.group(1), "cyan", True), text) if color else text
+    """`name` -> name in cyan on a colour console (the backticks are what the colour replaces); a bare `regulation.bin` is cyan too.
+    Without colour the text is unchanged."""
+    if not color:
+        return text
+    text = _TICKS.sub(lambda m: paint(m.group(1), "cyan", True), text)
+    return _FILE_WORD.sub(lambda m: paint(m.group(0), "cyan", True), text)
 
 
 def symbol(kind: str, encoding: str | None) -> str:
@@ -156,11 +161,11 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
     return sink
 
 
-_CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D cli +: )(?!(?:exit -?\d+|version \S+|clickable paths .*)$)(.+)$")
+_CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D client *: )(?!(?:exit -?\d+|version \S+|clickable paths .*)$)(.+)$")
 
 
 def _dim_line(line: str, color: bool) -> str:
-    """A debug line of the log in dim; the command that started a process (`D cli : eldendisk.exe run -v`) in cyan.
+    """A debug line of the log in dim; the command that started a process (`D client : eldendisk.exe run -v`) in cyan.
     Only the console gets the colour: the file keeps the plain line."""
     m = _CLI_LINE.match(line) if color else None
     if m:
