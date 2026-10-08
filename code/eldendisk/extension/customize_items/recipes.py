@@ -27,6 +27,8 @@ SHOP_LINE = 100508           # free line inside the merchant's 100500-100524 ran
 SHOP_FLAG = 150080           # eventFlag_forStock; unique per line
 SHOP_CLONE = 100507
 CAST_FROM = 6050             # Magic row cloned: Flame, Grant Me Strength (cast animation, sfx)
+# effect.visual -> SpEffect.vfxId: flame = the burning body of Flame! Grant Me Strength, flask = Heal's glow, none = no lingering visual
+VISUAL_VFX = {"flame": 1605000, "flask": 5030, "none": -1}
 HEAL_GOODS, HEAL_SP, FLAME_SP, ENDURE_SP, ICON_GOODS = 6421, 1642100, 1605000, 1650, 6424
 
 
@@ -69,7 +71,7 @@ def apply_incantation(P: dict, D: dict, item: dict, fp: Footprint) -> None:
     f = dict(changeHpPoint=-e["heal_hp_per_tick"], changeMpPoint=-e["restore_fp_per_tick"],
              staminaRecoverChangeSpeed=e["stamina_regen_speed"], effectEndurance=e["duration_seconds"],
              motionInterval=e["tick_seconds"], iconId=20411, spCategory=161, stateInfo=50,
-             vfxId=FLAME_SP if e["visual"] == "flame" else 5030)
+             vfxId=VISUAL_VFX[e["visual"]])
     for n in ("isExtendSpEffectLife", "isContractSpEffectLife"):
         f[n] = D["sp"].get(flame, n)
     for n, v in f.items():
@@ -171,7 +173,7 @@ def check_incantation(P: dict, D: dict, item: dict) -> list:
                 bad.append("G13: SpEffect %d.%s is %s: a heal must be negative or it drains the player" % (SP_ID, name, got))
             need("sp", sp, name, -amount, "SpEffect %d" % SP_ID, "G13")
         for name, want in (("staminaRecoverChangeSpeed", e["stamina_regen_speed"]), ("effectEndurance", e["duration_seconds"]),
-                           ("motionInterval", e["tick_seconds"])):
+                           ("motionInterval", e["tick_seconds"]), ("vfxId", VISUAL_VFX[e["visual"]])):
             need("sp", sp, name, want, "SpEffect %d" % SP_ID, "G5")
     if shop is not None:
         need("shop", shop, "equipId", ITEM_ID, "shop line %d" % SHOP_LINE, "G12")

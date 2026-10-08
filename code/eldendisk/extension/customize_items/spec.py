@@ -11,7 +11,7 @@ FORMAT = 1
 EMPTY_SPEC = '{\n  "format": 1,\n  "items": []\n}\n'      # what the first run writes: nothing to build yet
 MAX_ITEMS_2A = 1
 CAST_MOTIONS = {"flame-grant-me-strength": 31, "black-flame-blade": 32}
-VISUALS = ("flame", "flask")
+VISUALS = ("flame", "flask", "none")   # none: only the cast flash (from Flame! Grant Me Strength), nothing burning on the body afterwards
 LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "text", "flame_color", "model"}
 
 
@@ -134,7 +134,9 @@ def normalise(data) -> dict:
             e["stamina_regen_speed"] = c.integer(eff, "stamina_regen_speed", p + ".effect", 0, 9999, 100)
             e["tick_seconds"] = c.real(eff, "tick_seconds", p + ".effect", 0.1, 60, 0.5)
             e["duration_seconds"] = c.real(eff, "duration_seconds", p + ".effect", 0.5, 600, 15.0)
-            v = eff.get("visual", "flame")
+            v = eff.get("visual", "flame")      # left out: flame. An explicit null means "nothing on the body", same as "none"
+            if "visual" in eff and v is None:
+                v = "none"
             if v not in VISUALS:
                 c.bad(p + ".effect.visual", "must be one of: " + ", ".join(VISUALS))
                 v = "flame"

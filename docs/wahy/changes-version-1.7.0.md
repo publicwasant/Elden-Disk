@@ -29,6 +29,7 @@ _(baseline: **[changes-version-1.6.4.md](changes-version-1.6.4.md)**; design: **
 | 11c | **The `client` log line is the command (program name only).** `D client : version 1.7.0`, then `D client : eldendisk.exe run -v` (from `sys.orig_argv`; `python -m eldendisk …` from source). On the `-v` console the command is cyan; the log file stays plain. | `logsetup.py`, `ui.py` |
 | 11d | **Status line names `read` too, words in backticks are cyan.** `game : running, pid N; \`read\` allowed, \`write\` allowed` (or `\`write\` not allowed`). On a colour console the `backticked` words are cyan (backticks hidden); the log file keeps them. | `host/host.py`, `ui.py` |
 | 11e | **Log tags fit the column.** `cli` is now `client`, `extension` is now `ext` (the tag column is 6 wide, `extension` pushed the colon out). A bare `regulation.bin` is cyan on a colour console (not when it ends a path). | `logsetup.py`, `__main__.py`, `commands/extension.py`, `commands/run.py`, `ui.py` |
+| 11f | **`effect.visual: "none"`.** The heal buff leaves no fire on the body (SpEffect `vfxId` -1); the cast flash of Flame! Grant Me Strength (Magic `castSfxId`/`fireSfxId`) is unchanged. The gate checks `vfxId` against the draft. `flame` and `flask` build the same bytes as before (recipe version stays 1). | `spec.py`, `items.schema.json`, `recipes.py` |
 | 12 | **Docs.** Spec 1.7.0, this file, manual test plan 1.7.0, README, CLI references. | `docs/` |
 
 ## Principle

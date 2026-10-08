@@ -14,7 +14,7 @@ from eldendisk.extension.customize_items.gate import Verdict
 
 BASE = b"pretend this is the game's regulation.bin" * 50
 PKG = Path(spec.__file__).parent
-Z4 = json.loads((PKG / "items.draft.json").read_text(encoding="utf-8"))
+from tests.z4 import Z4
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def decide(c):
 # ---------------- the shipped draft ----------------
 def test_the_shipped_draft_and_schema_are_in_the_package_and_valid():
     assert service.PKG_DIR == PKG and (PKG / "items.draft.json").is_file() and (PKG / "items.schema.json").is_file()
-    assert len(spec.normalise(Z4)["items"]) == 1
+    assert len(spec.normalise(json.loads((PKG / "items.draft.json").read_text(encoding="utf-8")))["items"]) >= 1
 
 
 def test_the_default_draft_is_the_one_in_the_package(tmp_path):

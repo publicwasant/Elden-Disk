@@ -8,13 +8,18 @@ import pytest
 from eldendisk.extension.customize_items import spec
 
 PKG = Path(spec.__file__).parent
-Z4 = json.loads((PKG / "items.draft.json").read_text(encoding="utf-8"))
+from tests.z4 import Z4
 
 
 def mutated(fn):
     d = copy.deepcopy(Z4)
     fn(d["items"][0])
     return d
+
+
+def test_the_shipped_draft_is_valid_whatever_the_user_made_of_it():
+    n = spec.normalise(json.loads((PKG / "items.draft.json").read_text(encoding="utf-8")))
+    assert n["items"] and all(i["effect"]["visual"] in spec.VISUALS for i in n["items"])
 
 
 def test_the_z4_example_is_valid_and_normalises_to_itself_plus_defaults():
@@ -53,6 +58,20 @@ def test_invalid_specs_are_refused_with_the_path_of_the_problem(fn, where):
     with pytest.raises(spec.SpecError) as e:
         spec.normalise(mutated(fn))
     assert any(where in p for p in e.value.problems)
+
+
+@pytest.mark.parametrize("visual", ["flame", "flask", "none"])
+def test_every_visual_is_accepted(visual):
+    d = mutated(lambda i: i["effect"].update(visual=visual))
+    assert spec.normalise(d)["items"][0]["effect"]["visual"] == visual
+
+
+def test_an_explicit_null_visual_means_none_but_a_missing_one_means_flame():
+    assert spec.normalise(mutated(lambda i: i["effect"].update(visual=None)))["items"][0]["effect"]["visual"] == "none"
+    assert spec.normalise(mutated(lambda i: i["effect"].pop("visual")))["items"][0]["effect"]["visual"] == "flame"
+    a = spec.normalise(mutated(lambda i: i["effect"].update(visual=None)))
+    b = spec.normalise(mutated(lambda i: i["effect"].update(visual="none")))
+    assert spec.build_view(a) == spec.build_view(b)          # null and "none" are the same draft (no rebuild between them)
 
 
 @pytest.mark.parametrize("key", ["icon_file", "colour", "color", "icon", "text", "flame_color"])

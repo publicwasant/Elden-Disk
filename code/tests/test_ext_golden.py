@@ -17,7 +17,8 @@ from eldendisk.extension.customize_items.service import CustomizeItems
 ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 pytestmark = pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
 Z4_DECRYPTED_SHA256 = "1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b"
-Z4 = spec.normalise(json.loads((Path(spec.__file__).parent / "items.draft.json").read_text(encoding="utf-8")))
+from tests.z4 import Z4 as _Z4_RAW   # noqa: E402
+Z4 = spec.normalise(_Z4_RAW)               # a fixed copy, not the user's items.draft.json
 
 
 @pytest.fixture(scope="module")
@@ -153,10 +154,17 @@ def test_the_recipe_refuses_a_base_where_a_row_it_needs_is_missing(src):
 
 
 # ---- the whole flow through the service, with the real build ----
+def _z4_file(tmp_path):
+    p = tmp_path / "items.draft.json"
+    p.write_text(json.dumps(_Z4_RAW), encoding="utf-8")
+    return p
+
+
+
 def test_service_builds_on_the_game_file(tmp_path, base):
     game = tmp_path / "game.bin"
     game.write_bytes(base)
-    ci = CustomizeItems(tmp_path / "ext")                      # the draft shipped in the package
+    ci = CustomizeItems(tmp_path / "ext", _z4_file(tmp_path))
     data, _ = ci.read_base(game)
     rep = ci.build(ci.items("all"), data)
     assert rep.built and rep.decrypted_sha256 == Z4_DECRYPTED_SHA256 and rep.changed_blocks <= 11
@@ -174,6 +182,27 @@ def test_the_gate_passes_the_z4_file(built, src):
     assert v.decrypted_sha256 == Z4_DECRYPTED_SHA256 and v.stats["changed_blocks"] <= 11
 
 
+@pytest.mark.parametrize("visual,vfx", [("flask", 5030), ("none", -1)])
+def test_the_other_visuals_build_pass_the_gate_and_set_only_the_body_effect(base, src, built, visual, vfx):
+    items = copy.deepcopy(Z4["items"])
+    items[0]["effect"]["visual"] = visual
+    res = build.build(base, items, src)                     # build.build runs the gate
+    sp_of = lambda data: (lambda P, D: D["sp"].get(P["sp"].find(recipes.SP_ID)[2], "vfxId"))(*_tables(src, data))
+    assert res.data != built.data and sp_of(res.data) == vfx
+    assert sp_of(built.data) == 1605000                      # the shipped item keeps the burning body
+    magic = lambda data: (lambda P, D: D["magic"].get(P["magic"].find(recipes.ITEM_ID)[2], "castSfxId"))(*_tables(src, data))
+    assert magic(res.data) == magic(built.data) == 524400    # the cast flash of Flame! Grant Me Strength stays
+
+
+def _tables(src, data):
+    from eldendisk.extension.customize_items.container import Bnd4, Param
+    from eldendisk.extension.customize_items.defs import TABLE_FILES, Def
+    dcx = container.decrypt(data)
+    csize = struct.unpack(">I", dcx[0x20:0x24])[0]
+    bnd = Bnd4(zstd.decode_frame(dcx[0x4C:0x4C + csize]))
+    return {k: Param(bnd.get(f).data) for k, f in TABLE_FILES.items()}, {k: Def(k) for k in TABLE_FILES}
+
+
 def test_the_gate_notices_a_draft_that_is_not_what_the_file_was_built_from(built, src):
     other = copy.deepcopy(Z4["items"])
     other[0]["shop"]["price"] += 1
@@ -186,6 +215,13 @@ def test_the_gate_notices_a_flipped_byte_in_the_file(built, src):
     bad[len(bad) // 2] ^= 1
     v = gate.verify(bytes(bad), src, Z4["items"])
     assert not v.ok
+
+
+def test_the_gate_notices_a_body_effect_that_is_not_the_one_in_the_draft(built, src):
+    items = copy.deepcopy(Z4["items"])
+    items[0]["effect"]["visual"] = "none"                    # the file has the burning body (flame)
+    v = gate.verify(built.data, src, items)
+    assert not v.ok and any("vfxId" in p for p in v.problems)
 
 
 def test_the_gate_notices_that_the_file_is_the_original(base, src):
@@ -249,7 +285,7 @@ def test_the_gate_stops_on_a_second_decoder_that_disagrees(built, src, monkeypat
 def test_the_whole_service_flow_with_the_real_build_and_gate(tmp_path, base):
     game = tmp_path / "game.bin"
     game.write_bytes(base)
-    ci = CustomizeItems(tmp_path / "ext")
+    ci = CustomizeItems(tmp_path / "ext", _z4_file(tmp_path))
     items = ci.items("all")
     data, sha = ci.read_base(game)
     assert not ci.decide(items, sha).use_secured

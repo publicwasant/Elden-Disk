@@ -73,7 +73,7 @@ One object, `items`: a list (empty = no items yet). Unknown fields are errors; e
 | `requires` | `intelligence`, `faith`, `arcane` 0-99 (45 / 15 / 10) |
 | `fp_cost`, `stamina_cost` | 0-999 (80 / 0) |
 | `cast_motion` | `flame-grant-me-strength` (default) or `black-flame-blade` (`Magic.refType` 31 / 32) |
-| `effect` | heal over time: `heal_hp_per_tick`, `restore_fp_per_tick`, `stamina_regen_speed`, `tick_seconds`, `duration_seconds`, `visual` `flame`/`flask` (60 / 4 / 100 / 0.5 / 15 / flame) |
+| `effect` | heal over time: `heal_hp_per_tick`, `restore_fp_per_tick`, `stamina_regen_speed`, `tick_seconds`, `duration_seconds`, `visual` `flame` (the burning body of Flame! Grant Me Strength) / `flask` (Heal's glow) / `none` or an explicit `null` (no lingering effect on the body; the cast flash stays; leaving the field out means `flame`) (60 / 4 / 100 / 0.5 / 15 / flame) |
 | `poise_while_casting_seconds` | optional; hyper armor (Endure-style poise buff, no damage reduction) while casting (2.0) |
 | `shop` | `price` 1..99,999,999, `stock` -1 (unlimited) or 1..99 (34590 / 1) |
 

@@ -14,7 +14,7 @@ from eldendisk.extension.customize_items.gate import Verdict
 from eldendisk.vault import SaveVault
 
 BASE = b"pretend this is the game's regulation.bin" * 50
-Z4_TEXT = (Path(spec.__file__).parent / "items.draft.json").read_text(encoding="utf-8")
+from tests.z4 import Z4_TEXT
 
 
 @pytest.fixture
