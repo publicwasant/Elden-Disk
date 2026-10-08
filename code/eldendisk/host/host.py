@@ -162,7 +162,7 @@ class Session:
             self._to(State.IDLE)
             return None, 1
         self.log.attach(snap.dir / "session.log")
-        self.log.d("vault", f"backup {self.live} (steamID {self.live.name}) -> {snap.dir}")
+        self.log.d("vault", f"save {self.live.name} -> snapshot {snap.dir.name}")
         self.log.ok("vault", f"snapshot {snap.dir.name}, {len(snap.files)} file{"" if len(snap.files) == 1 else "s"} verified")
         try:   # nothing in the game folder changes here: the game's own regulation.bin is only copied into the snapshot
             reg = self.vault.backup_regulation(snap, self.hooks.game_dir, self.hooks.regulation_world) if self.hooks.game_dir is not None else None
