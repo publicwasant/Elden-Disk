@@ -39,6 +39,9 @@ def start(args, argv: list[str], real: bool = False) -> None:
     book.configure(file=log_file, console=console)
     book.d("cli", f"version {__version__}")
     book.d("cli", command_line(argv, getattr(sys, "orig_argv", None) if real else None))
+    if verbose:
+        on, why = ui.links_status(sys.stderr)
+        book.d("cli", f"clickable paths {'on' if on else 'off'}: {why}")
 
 
 def finish(code: int) -> None:

@@ -80,6 +80,7 @@ def test_raw_view_colours_the_command_line_only_on_the_console(err, monkeypatch)
     err.truncate(0); err.seek(0)
     ui.raw_sink(err)(ev(level="D", tag="cli", msg="exit 0"))
     ui.raw_sink(err)(ev(level="D", tag="cli", msg="version 1.7.0"))
+    ui.raw_sink(err)(ev(level="D", tag="cli", msg="clickable paths off: output is not a terminal"))
     assert "\x1b[36m" not in err.getvalue()                                     # exit and version stay dim
     err.truncate(0); err.seek(0)
     ui.raw_line(format_line(cmd), err)                                         # a line tailed from another terminal
@@ -245,6 +246,15 @@ def test_links_only_in_a_terminal_known_to_understand_them(clean_env, monkeypatc
     monkeypatch.delenv("NO_COLOR")
     monkeypatch.setenv("ELDENDISK_LINKS", "0")
     assert not ui.use_links(Tty())
+
+
+def test_links_status_says_why(clean_env, monkeypatch):
+    assert ui.links_status(Stream()) == (False, "output is not a terminal")
+    assert ui.links_status(Tty())[0] is False and "ELDENDISK_LINKS=1" in ui.links_status(Tty())[1]
+    monkeypatch.setenv("WT_SESSION", "x")
+    assert ui.links_status(Tty()) == (True, "WT_SESSION is set")
+    monkeypatch.setenv("ELDENDISK_LINKS", "0")
+    assert ui.links_status(Tty()) == (False, "ELDENDISK_LINKS=0")
 
 
 def test_the_switch_can_force_links_on_and_ide_run_windows_do_not_get_them_by_themselves(clean_env, monkeypatch):

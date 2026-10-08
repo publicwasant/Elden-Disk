@@ -85,20 +85,31 @@ _MODERN = ("WT_SESSION", "VTE_VERSION", "KITTY_WINDOW_ID", "WEZTERM_EXECUTABLE")
 _MODERN_PROGRAMS = ("vscode", "iTerm.app", "WezTerm", "ghostty")
 
 
-def use_links(stream) -> bool:
-    """Paths become clickable only in a real terminal known to understand OSC 8 (Windows Terminal, VS Code, ...).
-    ELDENDISK_LINKS=1 forces it on, =0 off. IDE run windows (FORCE_COLOR) are not trusted: an unknown escape could print as text."""
+def links_status(stream) -> tuple[bool, str]:
+    """(clickable paths on?, why). Only a real terminal known to understand OSC 8 (Windows Terminal, VS Code, ...) turns them on
+    by itself; ELDENDISK_LINKS=1 forces it on, =0 off. IDE run windows (FORCE_COLOR) are not trusted: an unknown escape could print as text."""
     flag = os.environ.get("ELDENDISK_LINKS")
-    if flag is not None:
-        return flag.strip().lower() in ("1", "true", "yes", "on") and not os.environ.get("NO_COLOR")
     if os.environ.get("NO_COLOR"):
-        return False
+        return False, "NO_COLOR is set"
+    if flag is not None:
+        on = flag.strip().lower() in ("1", "true", "yes", "on")
+        return on, f"ELDENDISK_LINKS={flag}"
     try:
         if not stream.isatty():
-            return False
+            return False, "output is not a terminal"
     except (AttributeError, ValueError):
-        return False
-    return any(os.environ.get(k) for k in _MODERN) or os.environ.get("TERM_PROGRAM") in _MODERN_PROGRAMS
+        return False, "output is not a terminal"
+    for k in _MODERN:
+        if os.environ.get(k):
+            return True, f"{k} is set"
+    prog = os.environ.get("TERM_PROGRAM")
+    if prog in _MODERN_PROGRAMS:
+        return True, f"TERM_PROGRAM={prog}"
+    return False, "terminal not known to support links (set ELDENDISK_LINKS=1 to try)"
+
+
+def use_links(stream) -> bool:
+    return links_status(stream)[0]
 
 
 def _link(path: str) -> str:
@@ -145,7 +156,7 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
     return sink
 
 
-_CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D cli +: )(?!(?:exit -?\d+|version \S+)$)(.+)$")
+_CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D cli +: )(?!(?:exit -?\d+|version \S+|clickable paths .*)$)(.+)$")
 
 
 def _dim_line(line: str, color: bool) -> str:
