@@ -47,7 +47,7 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
 | `--no-archive-contaminated` | off | Do not keep a copy of the modified save in the vault before restoring. |
 | `--launch-timeout SEC` | `120` | Seconds to wait for `eldenring.exe` to appear. |
 | `--keep N` | `5` | After a finished session keep only the newest N snapshots (never while a restore is owed); `0` = never prune. |
-| `--regulation FILE` | none | Swap this `regulation.bin` in for the session instead of building one from the spec (an experiment). Needs the vault ON. |
+| `--regulation FILE` | none | Swap this `regulation.bin` in for the session instead of the secured or built one (an experiment). Needs the vault ON. |
 | `--spec FILE` | embedded `items.draft.json` | The draft: the items `run` builds into a `regulation.bin` (vault ON only). With a valid secured copy and an unchanged draft `run` swaps `regulation.secured.bin` and builds nothing; otherwise it builds (about 20 s) and the gate must pass. See `extension`. |
 | `--extension-dir DIR` | `%LOCALAPPDATA%\EldenDisk\extension` | Where the built and secured files are. |
 | `--vault-on` / `--vault-off` | `--vault-on` | Per run, never toggled while the host runs. **ON**: snapshot before, restore after. **OFF**: no snapshot, no session record, no restore; see below. |
@@ -300,7 +300,7 @@ python -m eldendisk vault status
 
 A record from 1.6.0 / 1.6.1 (`PENDING_RESTORE.json`) is read as `RESTORE_PENDING`.
 
-**The other world (1.6.4, files from 1.7.0).** A `regulation.bin` named by `run` (the one it built from the spec when the vault is ON, or `--regulation FILE`) replaces the game's for a `run` with the vault ON; the game's own file is kept in each snapshot (`bin\regulation.bin`) and put back, with the save, by the same restore (`run`, `vault restore`; `vault keep` puts it back first). `--vault-off` ignores it (warning). The vault no longer looks in `<vault>\regulation\` (1.6.4): a file there is reported once and not used. `vault status` shows, for an owed session, that a different file is in the game folder; `vault verify` and `vault list` check `bin\`. A restore that cannot put the file back leaves `RESTORE_PENDING` (exit `4`). Specs: [1.7.0](specs/elden-disk-spec-v1.7.0.md), [1.6.4](specs/elden-disk-spec-v1.6.4.md).
+**The other world (1.6.4, files from 1.7.0).** A `regulation.bin` named by `run` (the secured copy or the build from `items.draft.json` when the vault is ON, or `--regulation FILE`) replaces the game's for a `run` with the vault ON; the game's own file is kept in each snapshot (`bin\regulation.bin`) and put back, with the save, by the same restore (`run`, `vault restore`; `vault keep` puts it back first). `--vault-off` ignores it (warning). The vault no longer looks in `<vault>\regulation\` (1.6.4): a file there is reported once and not used. `vault status` shows, for an owed session, that a different file is in the game folder; `vault verify` and `vault list` check `bin\`. A restore that cannot put the file back leaves `RESTORE_PENDING` (exit `4`). Specs: [1.7.0](specs/elden-disk-spec-v1.7.0.md), [1.6.4](specs/elden-disk-spec-v1.6.4.md).
 
 ---
 

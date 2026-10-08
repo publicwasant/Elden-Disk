@@ -50,5 +50,5 @@ _(baseline: **[changes-version-1.6.4.md](changes-version-1.6.4.md)**; design: **
 ## Not done / open
 
 - Confirmed on Windows (2026-10-09): `run` built (16 s, gate passed, second decoder agreed on Python 3.14.5), the item worked in the game, restore byte-identical (SW1-SW3). Not yet tried: poise (SW10) and the secured path (SC1-SC10).
-- Level 2b (several items), Level 3 (text, icon, colour).
+- Level 2b (several items): measured and planned (spec 1.7.0 section 10b), nothing built; first a small in-game test (T1: move the Goods table to the end of the body). Level 3 (text, icon, colour).
 - Poise effect unproven in the game; Paramdex licence unchecked; only one runtime verifier.

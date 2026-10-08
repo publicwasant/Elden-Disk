@@ -1,12 +1,14 @@
 # Item Customization Handbook
 ### Creating a brand-new incantation in Elden Ring 1.17.1 by editing `regulation.bin` — lab notes, experiments, and a method you can repeat
 
-> **Status:** checkpoint 2 of 3 — the *data layer* of the first item is finished and accepted (final build "Z4", Part VI); the *UI layer* (name, description text, custom image) is still open.
+> **Status:** checkpoint 1 of 2 — the *data layer* of a new item works in the real game; the *UI layer* (name, description text, custom image) is still open.
 > **Case study:** the incantation **Reverse Curse Technique** (custom; regenerates HP, FP and stamina)
 > **Game:** Elden Ring app version 1.17.1, `regulation.bin` SHA-256 `766521f9508de3a3532df61c45a1c2d93340f1ff7ed8306ab20df761712ca2ab` (2,045,728 bytes), offline play only
-> **Written:** 2026-10-08
+> **Written:** 2026-10-08 (update 2026-10-09 below)
 > **Language:** English (technical terms are explained where they first appear; Appendix D is a glossary)
 > **Companion material:** `tools/` (every script needed to reproduce the build, next to this file) and `../../memory-read-101.md` (how Elden-Disk reads the live game, which is how we *observed* the result)
+
+> **Update 2026-10-09.** The final item (Z4: Flame-style cast, 34,590 runes, stock 1, Int 45 / Fai 15 / Arc 10, FP 80, 2.0 s poise buff) worked in the real game, and **Elden-Disk now builds this file itself** (`extension customize-items`, spec 1.7.0): same bytes as `tools/make_item.py --name Z4` (decrypted SHA-256 `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`), swapped in by `run`, put back byte-identical by the vault. The Y1/Y2 "pending" lines below are superseded by Z4. The poise part is not yet confirmed in the game. For more than one item see 17.1 (measurements added) and spec 1.7.0 section 10b.
 
 ---
 
@@ -21,7 +23,6 @@ Doing that *safely and repeatably* turned out to be the hard part. This book rec
 3. **See the evidence** (Part III: every experiment, including the ones that failed and why that was useful).
 4. **Rebuild it yourself** (Part IV: a step-by-step recipe with commands, plus a configuration reference).
 5. **Know what is still unknown** (Part V).
-6. **See the finished item** and how its last requirements were mapped onto fields (Part VI, the final build `Z4`).
 
 ### Conventions used in this book
 
@@ -61,12 +62,12 @@ Create a **brand-new incantation** (not a re-skin of an existing one), by any te
 | 2a | Has an icon | ✅ (re-uses an existing icon id) | E3 |
 | 2b | Has a name and a description | ❌ shows `?GoodsName?` / `?GoodsInfo?` (text lives in `msgbnd`, not yet touched) | E3 |
 | 2c | Has a custom *image* | ⏳ not started (needs the menu-texture archive) | — |
-| 3 | Is an incantation with configurable stat requirements | ✅ shows *Incantation*, *Fai 20*, FP cost 30 (X1); final item Int 45 / Fai 15 / Arc 10, FP 80 (Z4, Part VI) | E3 / E2 |
+| 3 | Is an incantation with a configurable Faith requirement | ✅ shows *Incantation*, *Fai 20*, FP cost 30 | E3 |
 | 4 | On use: restore HP, FP and stamina | ✅ buff lasts 15.0 s, all three rise | E3 |
 | 4b | …"until full, then end" | ⏳ currently a fixed 15 s | — |
 | 5 | Appears in the inventory immediately (no purchase) | ⏳ not done; it is bought from a merchant today | — |
-| 6 | Visual effect and cast copied from vanilla | ✅ flask glow and kneel (X1); Flame-style cast and effect accepted by the owner (Y1); Black-Flame-Blade cast speed (Z4) | E3 |
-| 7 | Sold by a merchant at a fixed price, stock 1 | ✅ (X1 verified buy / memorize / cast); final item 34,590 runes, stock 1 (Z4) | E3 / E2 |
+| 6 | Visual effect copied from a vanilla animation | ✅ flask glow and kneel animation seen (X1); Flame-style cast being tested (Y1/Y2) | E3 / Z4 |
+| 7 | Sold by a merchant at a fixed price, stock 1 | ✅ (X1 verified buy / memorize / cast); price 8,990 + stock 1 in Y1/Y2; final Z4 price 34,590 | E3 / Z4 |
 
 ### 1.2 The five discoveries that mattered
 
@@ -571,7 +572,7 @@ Replacing a block with *raw literals* makes it larger (a few KB each), so the fr
 | **V1d** | line `100026`, original stock flag kept | ✅ loads; not visible |
 | **W1** | every price of lines `100000–100026` set to 7 | ✅ loads; **prices unchanged in the shop he opened** |
 | **X1** | the item in line `100502` of the **`100500–100524` group**, other prices of that group set to 7 | ✅ item **visible**, buy / memorise / cast all work (E3) |
-| **Y1 / Y2** | cast style cloned from Flame! Grant Me Strength; price 8,990, stock 1, line `100508`; Y1 = Flame vfx, Y2 = flask glow vfx | ✅ loads; the owner accepted **Y1** as the base ("I like Y1 very much"); no further detail recorded. Continued in Chapter 19 |
+| **Y1 / Y2** | cast style cloned from Flame! Grant Me Strength; price 8,990, stock 1, line `100508`; Y1 = Flame vfx, Y2 = flask glow vfx | built and verified (E1); **results pending** |
 
 V1b–d and W1 are the "wrong merchant" mistake of Chapter 7, not a loading problem: in every case the file loaded.
 
@@ -692,9 +693,6 @@ If you get that hash, your build is bit-for-bit what we built as **Y1** (cast st
 | `--shop-line 0` | — | do not sell it at all |
 | `--cast-from` | 6050 | clone the cast animation / cast effects from another Magic row (`6421` = Heal's kneel) |
 | `--flask-vfx` | off | keep Heal's flask glow (`vfxId 5030`) instead of Flame's `1605000` |
-| `--intellect`, `--arcane` | unset | `requirementIntellect`, `requirementLuck` (**Arcane lives in `requirementLuck`**) |
-| `--motion` | unset | `Magic.refType` = cast motion category (31 Flame GMS, 32 Black Flame Blade); see 19.2 |
-| `--poise-sp`, `--poise-slot`, `--poise-dur` | 0 (off), 2, 2.0 s | overwrite the named UNUSED SpEffect row with an Endure-style poise buff (no damage reduction) and link it from Magic ref slot 2 or 3; see 19.3 |
 | `--item-id`, `--sp-id` | 2230000, 21950111 | new ids; must exceed the last real ids (2,220,010 and 21,950,011) |
 | `--buff-icon`, `--magic-icon`, `--sort-magic`, `--sort-goods` | see `--help` | cosmetic |
 
@@ -704,7 +702,6 @@ Examples:
 python make_item.py --name HardMode --faith 40 --fp-cost 60 --duration 8 --hp-tick -120
 python make_item.py --name Heal-like --cast-from 6421 --flask-vfx
 python make_item.py --name Free --price 1 --qty -1
-python make_item.py --name Z4 --faith 15 --intellect 45 --arcane 10 --fp-cost 80 --price 34590 --motion 32 --poise-sp 102006   # the final item (Chapter 19)
 ```
 
 ## Chapter 14 — Install and verify in the game
@@ -806,6 +803,8 @@ The relabel trick uses the **unused dummy rows**, and each table has only one (G
 | **Repurpose an unused real row** (a row no shop, drop or script references) | Needs a trustworthy "unused" detector; `disableParam_NT` is *not* one (6050 has it set and is live) |
 | **Overwrite one item with several variants** | Works today but costs an existing item |
 
+**Measurements (2026-10-09, 1.17.1 original, decoded body 54,111,776 bytes = 826 blocks of 64 KiB).** Goods starts in block 426 (465,889 bytes, 2,329 rows of 176), Magic in 515 (60,947; 317 x 168), Shop in 627 (98,582; 1,296 x 52), SpEffect in 630 (10,627,431; 11,354 x 912). Inserting a row in place re-encodes every block behind it, about 400 from Goods on (tested so far: at most 11). Moving only the three small tables to the end of the body (copies appended, entries repointed, old copies left) changes the header block and about 11 new blocks. SpEffect is too big to move (about 162 blocks). Row names are not stored in the file (the strings area of each table holds only the table's type name), so "unused" rows cannot be found from the file. The merchant's range 100500-100524 has 7 free lines: 100508 (used), 100509, 100512, 100521-100524. Plan and first test: spec 1.7.0 section 10b.
+
 ### 17.2 What exactly does the game dislike about stored blocks?
 
 Known: every failing file had stored blocks; every compressed-only frame passed (8/8 built with our method). Unknown: the rule that makes {332–338} pass but {318–323} fail. Not size, not count, not content, not standard decoder state (10.5). A plausible class of explanation — *the game decodes with its own bespoke zstd decoder that mishandles stored blocks in some alignments* — fits the data but is untested. **We do not need the answer to build items,** only to avoid the trigger.
@@ -828,126 +827,23 @@ Today the effect lasts a fixed 15 s. SpEffect rows carry HP-ratio fields (`condi
 
 ### 17.7 Visual effects and colour
 
-Current state: cast effects are cloned from *Flame! Grant Me Strength* (Y1, accepted by the owner; Y2 never reported). A *different colour* means borrowing the effect ids (`castSfxId`, `fireSfxId`, SpEffect `vfxId`) of a spell that already has that colour (for example a black-flame or golden-effect spell) rather than recolouring particles. Not yet tested: which of the three ids produces which visible part.
+Current state: cast style and effects are cloned from *Flame! Grant Me Strength* (Y1/Y2 pending). A *different colour* means borrowing the effect ids (`castSfxId`, `fireSfxId`, SpEffect `vfxId`) of a spell that already has that colour (for example a black-flame or golden-effect spell) rather than recolouring particles. Test after Y1/Y2 tell us which of the three ids produces which visible part.
 
 ### 17.8 Re-cast behaviour
 
-Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame GMS, both 0 on Heal) make a re-cast refresh the effect and replay its visual. Y1 (which has both flags = 1) was accepted by the owner; the re-cast behaviour itself was not reported separately.
+Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame GMS, both 0 on Heal) make a re-cast refresh the effect and replay its visual. Tested by Y1/Y2.
 
 ## Chapter 18 — Roadmap
 
 | Step | Goal | Method | Risk |
 |---|---|---|---|
-| 1 | ~~Close the loop on Y1/Y2~~ — done: Y1 accepted, then the final item Z4 (Chapter 19) | in-game test | done |
+| 1 | Close the loop on Y1/Y2 (cast style, re-cast, price, stock) | in-game test | low |
 | 2 | Add text (name, description) | FMG edit + vault support for the archive | medium (new file type) |
-| 3 | Retry table growth with compressed blocks only → more items | `reencode` + a table-growing `Bnd4` | medium |
+| 3 | Retry table growth with compressed blocks only → more items (first test: move the Goods table to the end, see 17.1) | `reencode` + a table-growing `Bnd4` | medium |
 | 4 | "Until full" logic | SpEffect conditions | medium (unknown fields) |
 | 5 | Visual variants and colour | borrow ids; compare | low |
 | 6 | Custom image | texture archive | high |
-| 7 | Generalise `make_item.py` into a recipe/config format for many items | refactor | low |
-
----
-
-# Part VI — The finished item: Reverse Curse Technique ("Z4")
-
-## Chapter 19 — From the Y1 base to the final item
-
-After the Y1 build had been accepted in game ("pinned" as the base), the owner asked for four changes. This chapter records how each was mapped onto param fields, the test files that were built, and what the game actually did.
-
-### 19.1 The request and where each part lives
-
-| # | Request | Field(s) | Notes |
-|---|---|---|---|
-| 1 | Required stats **Int 45, Faith 15, Arcane 10** | `Magic.requirementIntellect`, `requirementFaith`, `requirementLuck` | **Arcane is stored in `requirementLuck`.** Y1 only set Faith. |
-| 2 | **FP cost 80** | `Magic.mp` | |
-| 3 | Cast timing like **Black Flame Blade** | `Magic.refType` = 32 | see 19.2 |
-| 4 | **34,590 runes, one in stock** | `ShopLineupParam.value`, `sellQuantity` | same line `100508`, same stock flag `150080` as Y1 |
-| 3b | *(revised)* While casting, enemies may hit us and HP drops normally, but the cast must not be interrupted | an extra SpEffect with an Endure-style poise buff, referenced from a spare ref slot of the Magic row | see 19.3 |
-
-### 19.2 Cast motion is a single byte: `refType`
-
-Diffing Black Flame Blade (Magic `6250`) against Flame! Grant Me Strength (`6050`) showed 21 differing fields. One of them, `refType`, is documented in Paramdex as **"motion category — specifies the motion, for EzState"** (enum `MAGIC_MOTION_TYPE`). Flame GMS uses `31`, Black Flame Blade uses `32`, and no other spell uses `32`. Listing `refType` over all spells shows what it is: spells that cast alike share a value (all the "Flame … Me" self-buffs are 31; Heal-type spells are 33/34; the Black Flame family is 17/22/32/99).
-
-| Field | 6050 Flame GMS | 6250 Black Flame Blade |
-|---|---|---|
-| `refType` (cast motion) | 31 | **32** |
-| `isEnchant` | 0 | 1 |
-| `subCategory1` | 21 | 20 |
-| `castSfxId` / `fireSfxId` | 524400 / 524401 | 524090 / 524091 |
-| `requirementFaith`, `mp`, `stamina`, icons, sort ids, `refId1`, `aiUseJudgeId` | differ | (cosmetic / their own effect) |
-
-For the final item we changed **only `refType`** and kept Flame's cast and fire effects (the owner liked the Y1 look). 🔬 *Confidence:* the motion really changed to Black Flame Blade's speed — **E3, reported by the owner for Z4** ("the casting speed at BFB level is fast enough").
-
-### 19.3 "Can't be interrupted" — what params can and cannot do
-
-Two things are easy to confuse:
-
-* **Invulnerability frames (I-frames)** are flags inside the *animation* (TAE) files, not in `regulation.bin`. They cannot be created from params. The nearest param-only imitation is a short SpEffect that sets every damage-cut rate to 0. The game already contains one: SpEffect `1540` (*Raptor of the Mists – Protection*: all `*DamageCutRate = 0`, all `defPlayerDmgCorrectRate_* = 0`, 1.0 s). We built it as test **Z1/Z2/Z3** (referenced from the Magic row's second ref slot). The owner then changed the requirement: damage should be taken normally. Z1–Z3 were therefore **never run**.
-* **Hyper armor / poise** is what the revised request needs: take damage normally, but do not flinch. The game's *Endure* skill does this with SpEffect `1650` (*Endure – Poise Buff*): `defFlickPower = 35` plus every `dmgLv_* = 1` (hit-reaction levels replaced), and it also reduces damage taken by about 40 % through `defPlayerDmgCorrectRate_* = 0.6` / `defEnemyDmgCorrectRate_* = 0.55`.
-
-The final effect is a **copy of `1650` with all ten `def*DmgCorrectRate_*` fields set back to 1.0** (no damage reduction), `vfxId = −1`, `iconId = −1`, `effectEndurance = 2.0` s.
-
-**Where to put the new row.** Our dummy-row trick provides exactly one spare SpEffect row (`999999999`, already used by the buff). A second row needs another free slot, and growing a table with the compressed-only method is still untested (17.1). We therefore **overwrote an existing row that the community's id list marks as unused**: SpEffect `102006`, named *"[Tear] Deflecting Hardtear – Unused"* in Paramdex; in the original file it is a near-default row (compared with Heal's SpEffect it differs only in `spCategory 20` and `eraseOnBonfireRecover 1`). ⚠️ *Risk:* "unused" is the modders' label, not a proof; if some event ever applied `102006`, that event would now grant a short poise buff. Nothing else of the original data is touched (verified: only rows `102006` and `21950111` of the SpEffect table differ).
-
-The row is linked from the Magic row by a **second reference slot**: `refCategory2 = 2` (SpEffect), `refId2 = 102006`. Z4 uses slot 2; the twin **Z5** uses slot 3 (`refCategory3/refId3`) in case the game ignored slot 2. Z5 was not run: the owner accepted Z4, and Section 19.4 explains why that does not prove the slot is honoured.
-
-### 19.4 The test files of this chapter
-
-| Tag | Content | Built | Result |
-|---|---|---|---|
-| Z1 | stats + FP + price, motion 32, **I-frame** SpEffect `1540` in slot 2 | E1 | ⚪ superseded, not run |
-| Z2 | like Z1, without the I-frame | E1 | ⚪ not run |
-| Z3 | like Z1 plus `isEnchant = 1`, `subCategory1 = 20` (full Black-Flame-Blade shape) | E1 | ⚪ not run |
-| **Z4** | stats + FP + price, motion 32, **poise buff** (copy of `1650`, no damage cut, 2.0 s) in row `102006`, slot 2 | E1 | ✅ **PASS (E2/E3)**, accepted as final |
-| Z5 | like Z4 with the poise buff in slot 3 | E1 | ⚪ not needed |
-
-All five share the changed-block set of Y1 (`426, 433, 515, 516, 627, 628, 629, 634, 792`, plus `793` converted), Z4/Z5 additionally block `718` (the row `102006`). They were produced the same way as every earlier passing file (compressed blocks only).
-
-📌 **Case File — owner's verdict on Z4** (translated from Thai). *"(1) Still flinches while casting, but that is fine, leave it as it is, because Black-Flame-Blade-level casting speed is fast enough. Summary: this one passes and is final."* In other words: speed ✅; "do not interrupt" is only partly achieved (a possible reason — hypothesis, E0 — is that the poise buff does not stop every hit reaction, or that its 2.0 s window does not cover the whole motion); the owner chose to accept it. The stats, FP cost and price were part of the file that was played; no problem was reported.
-
-🔬 *What is and is not proven:* the **motion change (E3)** and **loading/playing (E2)** are confirmed. That the poise buff is applied at all is **not** established — the owner saw flinching, which is consistent with an applied-but-too-weak buff, with a buff that is not applied through slot 2, or with a hit type that Endure does not stop. Distinguishing these needs `read --live-buffs` during the cast (look for a 2.0 s entry on `102006`); we did not run it.
-
-### 19.5 The final file
-
-| Property | Value |
-|---|---|
-| File | `regulation.customized.z4-reverse-curse-technique-i45-f15-a10-fp80-bfb-hyperarmor.bin` |
-| Stored in | the Elden-Disk vault (`…\EldenDisk\vault\regulation\`) and `docs/experiments/item-customization/subjects/` |
-| Size | 2,071,488 bytes |
-| SHA-256 (file) | `a8f0a1716e188c54b9de206b6b42031c2d4b91e54730de48996973cd3479b1a9` |
-| SHA-256 (after decrypt) | `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`, 2,071,472 bytes — the file hash differs between builds because of the random AES IV; this one is stable |
-| Built from | pristine 1.17.1 `regulation.bin` (SHA-256 `766521f9…`) |
-
-| Item property | Value |
-|---|---|
-| Goods = Magic id | `2230000` |
-| Type | Incantation (goodsType 18) |
-| Requirements | Int 45 / Faith 15 / Arcane 10 |
-| FP / stamina cost | 80 / 0 |
-| Cast | motion of Black Flame Blade (`refType 32`), Flame GMS visual effects (`castSfxId 524400`, `fireSfxId 524401`, buff `vfxId 1605000`) |
-| Effect | SpEffect `21950111`: every 0.5 s for 15.0 s: HP −60 (heals), FP −4 (restores), stamina regen speed 100 |
-| While casting | poise buff, SpEffect `102006`, 2.0 s, no damage reduction |
-| Sold | merchant group `100500–100524`, line `100508`, **34,590 runes, stock 1** (stock flag `150080`) |
-| Text | still `?GoodsName?` / `?GoodsInfo?` (UI layer open) |
-
-### 19.6 Rebuild it
-
-From the clean `tools/` folder (Chapter 12), one command:
-
-```
-python make_item.py --name Z4 --faith 15 --intellect 45 --arcane 10 --fp-cost 80 --price 34590 --motion 32 --poise-sp 102006
-```
-
-We ran exactly this in a clean directory before writing this section: the decrypted output is byte-identical to the file above (SHA-256 `1aa16ee0…db5277b`). New flags added to `make_item.py` for this item: `--intellect`, `--arcane`, `--motion`, `--poise-sp`, `--poise-slot`, `--poise-dur` (Section 13.3). `build_Y.py`-style one-offs are not needed any more.
-
-### 19.7 What this chapter taught
-
-1. **Arcane is `requirementLuck`.** The Magic row has `requirementIntellect`, `requirementFaith` and `requirementLuck`; Arcane is the last one.
-2. **Cast speed/motion is data-driven by `refType`**, so a spell can borrow another spell's motion with one byte, while keeping its own effects.
-3. **I-frames are animation data** and out of reach for a params-only build; the practical substitutes are damage-cut SpEffects (invulnerability-like) or poise SpEffects (hyper-armor-like).
-4. **A Magic row has up to four reference slots** (`refCategory1–4` / `refId1–4`); a second SpEffect can be applied on cast without any Bullet.
-5. **Reusing a row that is documented as unused is a workable way to get a second SpEffect** until table growth is solved, at the cost of the small risk described in 19.3.
-6. **Show the owner what you can and cannot prove.** The honest result for the "uninterruptible" goal is *partial*, and the book says so.
+| 7 | Generalise `make_item.py` into a recipe/config format for many items | done for one item: Elden-Disk `items.draft.json` (spec 1.7.0); several items wait for step 3 | low |
 
 ---
 
@@ -1053,10 +949,7 @@ We ran exactly this in a clean directory before writing this section: the decryp
 | V1a / V1b / V1c / V1d | item, compressed; shop 100026 / 100002 / 100026+flag | ✅ ✅(not visible) ✅(not visible) ✅(not visible) |
 | W1 | prices of lines 100000–100026 set to 7 | ✅ (no visible change; wrong group) |
 | X1 | item in line 100502 + prices of the 100500–100524 group set to 7 | ✅ + visible, buy / memorise / cast E3 |
-| Y1 / Y2 | Flame cast style, 8,990 runes, stock 1, line 100508 | ✅ Y1 accepted as base; Y2 not reported |
-| Z1 / Z2 / Z3 | Int45 Fai15 Arc10, FP 80, 34,590 runes, motion 32; I-frame SpEffect 1540 / without / full BFB shape | built, E1; ⚪ not run (requirement changed) |
-| **Z4** | like Z1, but poise buff (copy of Endure 1650, no damage cut, 2.0 s) in row 102006, slot 2 | ✅ **PASS, final** (BFB cast speed; still flinches) |
-| Z5 | like Z4, poise in slot 3 | built, E1; ⚪ not needed |
+| Y1 / Y2 | Flame cast style, 8,990 runes, stock 1, line 100508 | built, E1; ⏳ in-game |
 
 ## Appendix D — Glossary
 
@@ -1104,4 +997,4 @@ We ran exactly this in a clean directory before writing this section: the decryp
 
 ---
 
-*End of checkpoint 2. The finished data-layer item is documented in Part VI; when the UI layer (text, image, inventory placement) is done, a Part VII will be added.*
+*End of checkpoint 1. When the UI layer (text, image, inventory placement) is done, this book gets Part VI.*

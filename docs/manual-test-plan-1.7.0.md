@@ -57,6 +57,10 @@ Do these after SW2 passed (the item works in the game).
 
 A failed gate on a real build cannot be provoked from the draft (the recipe always writes a valid file); the unit and golden tests cover it.
 
+## T. Table move (several items, not built yet)
+
+Written when T1 exists (spec 1.7.0 section 10b): the game must reach the title screen and load a character with the Goods table moved to the end of `regulation.bin`; no item is added.
+
 ## Automated tests (no game)
 
 `python -m pytest code` -> see the last run in the changes file (Linux, golden tests skipped without the original). With the pristine file: `ELDENDISK_REGULATION_ORIG=<path> python -m pytest code/tests/test_ext_golden.py` (about 2 min) checks the Z4 hash `1aa16ee0…db5277b`.
