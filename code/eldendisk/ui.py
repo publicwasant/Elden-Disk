@@ -9,8 +9,10 @@ Event lines go to stderr, the result of a command (tables, status) to stdout.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
+from urllib.parse import quote
 from typing import Callable
 
 from . import __version__
@@ -69,8 +71,53 @@ def kind_of(e: Event) -> str:
     return "error" if e.level == "E" else "warn" if e.level == "W" else "ok" if e.ok else "info"
 
 
+# ---- clickable paths (OSC 8 hyperlinks) ----
+_PATH = re.compile(r"[A-Za-z]:\\[^\"'<>|*?\r\n\x1b]*")     # a Windows path; it may contain spaces, so the end is found by looking
+_MODERN = ("WT_SESSION", "VTE_VERSION", "KITTY_WINDOW_ID", "WEZTERM_EXECUTABLE")            # terminals known to understand OSC 8
+_MODERN_PROGRAMS = ("vscode", "iTerm.app", "WezTerm", "ghostty")
+
+
+def use_links(stream) -> bool:
+    """Paths become clickable only in a real terminal known to understand OSC 8 (Windows Terminal, VS Code, ...).
+    ELDENDISK_LINKS=1 forces it on, =0 off. IDE run windows (FORCE_COLOR) are not trusted: an unknown escape could print as text."""
+    flag = os.environ.get("ELDENDISK_LINKS")
+    if flag is not None:
+        return flag.strip().lower() in ("1", "true", "yes", "on") and not os.environ.get("NO_COLOR")
+    if os.environ.get("NO_COLOR"):
+        return False
+    try:
+        if not stream.isatty():
+            return False
+    except (AttributeError, ValueError):
+        return False
+    return any(os.environ.get(k) for k in _MODERN) or os.environ.get("TERM_PROGRAM") in _MODERN_PROGRAMS
+
+
+def _link(path: str) -> str:
+    url = "file:///" + quote(path.replace("\\", "/"), safe="/:")
+    return f"\x1b]8;;{url}\x1b\\{path}\x1b]8;;\x1b\\"
+
+
+def linkify(text: str, exists=None) -> str:
+    """Wrap every Windows path in `text` that exists (a file or a folder) in an OSC 8 hyperlink. The path may have spaces
+    (`...\\ELDEN RING\\Game\\regulation.bin`), so the longest prefix ending at a space or at the end that exists is taken."""
+    exists = exists or os.path.exists
+
+    def sub(m):
+        raw = m.group(0)
+        ends = sorted({len(raw)} | {i for i, c in enumerate(raw) if c == " "}, reverse=True)
+        for end in ends:
+            cand = raw[:end].rstrip(" .,;:)]")
+            if len(cand) > 3 and exists(cand):
+                return _link(cand) + raw[len(cand):]
+        return raw
+    return _PATH.sub(sub, text)
+
+
 def _emit(text: str, stream=None) -> None:
     stream = stream or sys.stderr
+    if use_links(stream):
+        text = linkify(text)
     print(printable(text, getattr(stream, "encoding", None)), file=stream, flush=True)
 
 

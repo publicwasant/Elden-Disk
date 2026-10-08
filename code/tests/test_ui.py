@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 
 from eldendisk import ui
-from eldendisk.logbook import Event, Logbook
+from eldendisk.logbook import Event, Logbook, format_line
 
 WHEN = datetime(2026, 10, 7, 23, 41, 2, 123000)
 
@@ -161,3 +161,68 @@ def test_countdowns_have_their_own_colour_and_a_change_still_wins():
     both = format_rows(rows[:1], color=True, ticking=frozenset({"a.buff_duration"}), hot=frozenset({"a.buff_duration"}))
     assert "\x1b[1;33m44.90" in both[0] and "\x1b[35m" not in both[0]
     assert "\x1b[" not in format_rows(rows, color=False, ticking=frozenset({"a.buff_duration"}))[0]
+
+
+# ---- clickable paths (OSC 8) ----
+GAME = r"D:\SteamLibrary\steamapps\common\ELDEN RING\Game\regulation.bin"
+LINK = "\x1b]8;;file:///D:/SteamLibrary/steamapps/common/ELDEN%20RING/Game/regulation.bin\x1b\\" + GAME + "\x1b]8;;\x1b\\"
+
+
+def test_an_existing_path_with_spaces_becomes_one_link_and_the_text_after_it_stays():
+    got = ui.linkify(f"backed up {GAME} (sha256 766521f9508d)", exists=lambda p: p == GAME)
+    assert got == f"backed up {LINK} (sha256 766521f9508d)"
+
+
+def test_a_path_that_does_not_exist_is_left_alone_and_so_is_trailing_punctuation():
+    assert ui.linkify(f"see {GAME}", exists=lambda p: False) == f"see {GAME}"
+    assert ui.linkify(f"({GAME}).", exists=lambda p: p == GAME).endswith(").")
+    assert ui.linkify("no path here, only 12:30", exists=lambda p: True) == "no path here, only 12:30"
+
+
+def test_colour_codes_after_a_path_are_not_swallowed():
+    got = ui.linkify(f"\x1b[33mfile {GAME}\x1b[0m", exists=lambda p: p == GAME)
+    assert got == f"\x1b[33mfile {LINK}\x1b[0m"
+
+
+def test_two_paths_in_one_line_are_both_linked():
+    a, b = r"C:\a\x.bin", r"C:\b\y.bin"
+    got = ui.linkify(f"{a} -> {b}", exists=lambda p: p in (a, b))
+    assert got.count("\x1b]8;;file:///") == 2 and got.count("\x1b]8;;\x1b\\") == 2
+
+
+class Tty(Stream):
+    def isatty(self):
+        return True
+
+
+@pytest.fixture
+def clean_env(monkeypatch):
+    for k in ("ELDENDISK_LINKS", "NO_COLOR", "FORCE_COLOR", "WT_SESSION", "VTE_VERSION", "KITTY_WINDOW_ID", "WEZTERM_EXECUTABLE", "TERM_PROGRAM"):
+        monkeypatch.delenv(k, raising=False)
+
+
+def test_links_only_in_a_terminal_known_to_understand_them(clean_env, monkeypatch):
+    assert not ui.use_links(Tty())                                   # a tty we know nothing about
+    monkeypatch.setenv("WT_SESSION", "x")
+    assert ui.use_links(Tty()) and not ui.use_links(Stream())        # Windows Terminal, but not a pipe or a file
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert not ui.use_links(Tty())
+    monkeypatch.delenv("NO_COLOR")
+    monkeypatch.setenv("ELDENDISK_LINKS", "0")
+    assert not ui.use_links(Tty())
+
+
+def test_the_switch_can_force_links_on_and_ide_run_windows_do_not_get_them_by_themselves(clean_env, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    assert not ui.use_links(Stream())                                # colour yes, links no
+    monkeypatch.setenv("ELDENDISK_LINKS", "1")
+    assert ui.use_links(Stream())
+
+
+def test_emit_links_real_paths_and_a_log_line_stays_plain(clean_env, monkeypatch):
+    monkeypatch.setenv("ELDENDISK_LINKS", "1")
+    monkeypatch.setattr(ui.os.path, "exists", lambda p: p == GAME)
+    out = Stream()
+    ui._emit(f"x {GAME}", out)
+    assert "\x1b]8;;file:///D:/" in out.getvalue()
+    assert "\x1b" not in format_line(ev(msg=f"x {GAME}"))            # the log file never gets escapes
