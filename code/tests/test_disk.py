@@ -8,8 +8,8 @@ import pytest
 
 import eldendisk
 from eldendisk.game import memory as memory_reader
-from eldendisk.game.profile import (EffectConfig, EntryLayout, Effects, Profile,
-                                    SpEffectLayout, VitalsLayout, load_effects, load_profile)
+from eldendisk.game.profile import (EntryLayout, Profile, SpEffectLayout, StateConfig, StateIds, VitalsLayout,
+                                    load_profile, load_state_ids)
 from eldendisk.reader.export import JsonLogger, build_document
 from eldendisk.reader.sampler import Sampler
 
@@ -49,14 +49,16 @@ def make_profile(mode="remaining", sp=True):
                    vitals=VitalsLayout(0x190, 0x0, 0x138))
 
 
-def effects():
-    return Effects(
-        table={
-            100: EffectConfig("Golden Vow", sources="EFFECTS", categories="INCANTATIONS", abilities="Buff"),
-            200: EffectConfig("Gold Scarab", sources="EFFECTS", categories="TALISMANS", abilities="More runes"),
-            2020210: EffectConfig("Sprint", sources="ANIMATIONS", categories="MANNER"),
-            68011: EffectConfig("Resting", sources="ANIMATIONS", categories="MANNER", abilities="Resets: HP, FP, Stamina, etc."),
-        }
+def state_ids():
+    return StateIds(
+        buffs={
+            100: StateConfig("Golden Vow", categories="INCANTATIONS", abilities="Buff"),
+            200: StateConfig("Gold Scarab", categories="TALISMANS", abilities="More runes"),
+        },
+        animations={
+            2020210: StateConfig("Sprint", categories="MANNER"),
+            68011: StateConfig("Resting", categories="MANNER", abilities="Resets: HP, FP, Stamina, etc."),
+        },
     )
 
 
@@ -106,7 +108,7 @@ def doc_for(sampler, sample, state=None):
 @pytest.mark.parametrize("mode", ["remaining", "elapsed"])
 def test_connected_sample(mode):
     m = full_world(mode)
-    s = Sampler(m, make_profile(mode), effects(), BASE)
+    s = Sampler(m, make_profile(mode), state_ids(), BASE)
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     c = r.character
@@ -122,28 +124,28 @@ def test_connected_sample(mode):
         "delta": 0,
     }
     assert c["attributes"]["strength"] == 90 and c["attributes"]["arcane"] == 10
-    assert "100" in c["effects"]
-    b = c["effects"]["100"]
+    assert "100" in c["buffs"]
+    b = c["buffs"]["100"]
     assert b["name"] == "Golden Vow"
     assert "kind" not in b
     assert b["categories"] == "INCANTATIONS"
     assert b["abilities"] == "Buff"
     assert b["times"]["buff_duration"] == 45.0 and b["times"]["max_duration"] == 80.0
     assert b["times"]["last_activated_at"] == "2026-09-30 11:59:25.000000+00:00"  # now - (80-45), UTC offset always present
-    assert "200" in c["effects"]
-    p = c["effects"]["200"]
+    assert "200" in c["buffs"]
+    p = c["buffs"]["200"]
     assert p["name"] == "Gold Scarab"
     assert "kind" not in p
     assert p["categories"] == "TALISMANS"
     assert p["abilities"] == "More runes"
     assert "times" not in p
-    assert r.ignored_effects == 1  # id 999 not in tables
+    assert r.ignored_buffs == 1  # id 999 not in tables
     valid(doc_for(s, r))
 
 
 def test_idle_state_retains_character_data():
     m = full_world()
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     d = build_document(now=NOW, state="IDLE", pid=1, anti_cheat="DISABLED_OFFLINE",
@@ -157,7 +159,7 @@ def test_idle_state_retains_character_data():
 
 def test_disconnected_state_retains_character_data():
     m = full_world()
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     d = build_document(now=NOW, state="DISCONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE",
@@ -171,7 +173,7 @@ def test_disconnected_state_retains_character_data():
 
 def test_character_retained_across_all_states():
     m = full_world()
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     r = s.sample(NOW)
     assert r.state == "CONNECTED"
     cached_char = r.character
@@ -190,7 +192,7 @@ def test_character_retained_across_all_states():
 def test_cold_boot_character_is_null():
     for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "WAITING_FOR_WORLD", "DISCONNECTED"]:
         d = build_document(now=NOW, state=state, pid=None, anti_cheat="UNKNOWN",
-                           exe_sha256=None, profile_label=None, effects_supported=False,
+                           exe_sha256=None, profile_label=None, buffs_supported=False,
                            sample=None, last_character=None)
         assert d["systems"]["status"]["tool_state"] == state
         assert d["character"] is None
@@ -199,7 +201,7 @@ def test_cold_boot_character_is_null():
 
 def test_rune_delta_and_baseline():
     m = full_world()
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     s.sample(NOW)  # baseline set to 10_008_626 at NOW
 
     later = NOW + timedelta(seconds=150)
@@ -227,7 +229,7 @@ def test_grace_reset_baseline():
     p = Profile("ab" * 32, "test", 0x1000, 0x10, 0x580, 0x68, 0x6C, 0x3C,
                 SpEffectLayout(0x178, 0x8, EntryLayout(0x08, 0x30, 0x14, 0x10, "remaining")),
                 anim=anim_lay, vitals=VitalsLayout(0x190, 0x0, 0x138), at_grace=at_grace_lay)
-    s = Sampler(m, p, effects(), BASE)
+    s = Sampler(m, p, state_ids(), BASE)
     r0 = s.sample(NOW)  # Initial Connect: baseline = 10_008_626
     assert r0.character["animations"] == {"2020210": {"name": "Sprint", "categories": "MANNER"}}
     valid(doc_for(s, r0))
@@ -259,7 +261,7 @@ def test_grace_reset_baseline():
 def test_null_world_is_silent_waiting():
     m = full_world()
     m.u64(BASE + 0x1000, 0)
-    s = Sampler(m, make_profile(), effects(), BASE)
+    s = Sampler(m, make_profile(), state_ids(), BASE)
     r = s.sample(NOW)
     assert r.state == "WAITING_FOR_WORLD" and r.error is None and r.character is None
     d = doc_for(s, r)
@@ -276,7 +278,7 @@ def test_null_world_is_silent_waiting():
 def test_range_failures_discard_sample(addr, val, frag):
     m = full_world()
     m.u32(addr, val)
-    r = Sampler(m, make_profile(), effects(), BASE).sample(NOW)
+    r = Sampler(m, make_profile(), state_ids(), BASE).sample(NOW)
     assert r.state == "WAITING_FOR_WORLD" and r.character is None and frag in r.error
 
 
@@ -284,17 +286,17 @@ def test_unreadable_memory_is_not_zero():
     m = full_world()
     for i in range(4):
         del m.b[GD + 0x6C + i]
-    r = Sampler(m, make_profile(), effects(), BASE).sample(NOW)
+    r = Sampler(m, make_profile(), state_ids(), BASE).sample(NOW)
     assert r.state == "WAITING_FOR_WORLD" and "read failed" in r.error
 
 
 def test_cycle_and_bad_pointer_discard():
     m = full_world()
     entry(m, E3, 999, 10.0, 5.0, E1)
-    assert "cycle" in Sampler(m, make_profile(), effects(), BASE).sample(NOW).error
+    assert "cycle" in Sampler(m, make_profile(), state_ids(), BASE).sample(NOW).error
     m = full_world()
     entry(m, E3, 999, 10.0, 5.0, 0x1234)
-    assert "invalid SpEffect entry pointer" in Sampler(m, make_profile(), effects(), BASE).sample(NOW).error
+    assert "invalid SpEffect entry pointer" in Sampler(m, make_profile(), state_ids(), BASE).sample(NOW).error
 
 
 def test_list_length_cap():
@@ -304,27 +306,27 @@ def test_list_length_cap():
         a = 0x300000000 + i * 0x100
         entry(m, a, 5, 1.0, 1.0, a + 0x100)
     m.u64(SP + 0x8, 0x300000000)
-    r = Sampler(m, make_profile(), effects(), BASE).sample(NOW)
+    r = Sampler(m, make_profile(), state_ids(), BASE).sample(NOW)
     assert r.state == "WAITING_FOR_WORLD" and "longer than" in r.error
 
 
 def test_expired_or_bad_timer_ignored():
     m = full_world()
     entry(m, E1, 100, 80.0, 0.0, E2)  # remaining 0 -> not active
-    r = Sampler(m, make_profile(), effects(), BASE).sample(NOW)
-    assert "100" not in r.character["effects"]
+    r = Sampler(m, make_profile(), state_ids(), BASE).sample(NOW)
+    assert "100" not in r.character["buffs"]
 
 
 def test_buffs_disabled_when_sp_layout_missing():
     m = full_world()
-    r = Sampler(m, make_profile(sp=False), effects(), BASE).sample(NOW)
-    assert r.state == "CONNECTED" and r.character["effects"] == {} and r.ignored_effects == 0
+    r = Sampler(m, make_profile(sp=False), state_ids(), BASE).sample(NOW)
+    assert r.state == "CONNECTED" and r.character["buffs"] == {} and r.ignored_buffs == 0
 
 
 def test_non_connected_states_validate():
     for state in ["WAITING_FOR_PROCESS", "EAC_ACTIVE", "EAC_DETECTED", "UNSUPPORTED_VERSION", "DISCONNECTED", "IDLE"]:
         d = build_document(now=NOW, state=state, pid=None, anti_cheat="UNKNOWN", exe_sha256=None,
-                           profile_label=None, effects_supported=False, sample=None, note="x")
+                           profile_label=None, buffs_supported=False, sample=None, note="x")
         valid(d)
 
 
@@ -356,7 +358,7 @@ def test_profile_ok_and_hex(tmp_path):
 def test_vitals_invalid_memory_discards_sample():
     m = full_world()
     m.put(DATA_MOD + 0x138, struct.pack("<10i", 890, 0, 1914, 2015, 350, 350, 350, 178, 178, 158))
-    r = Sampler(m, make_profile(), effects(), BASE).sample(NOW)
+    r = Sampler(m, make_profile(), state_ids(), BASE).sample(NOW)
     assert r.state == "WAITING_FOR_WORLD" and "invalid HP vitals" in r.error
 
 
@@ -377,15 +379,37 @@ def test_profile_partial_buffs_disables_only_buffs(tmp_path):
     assert why is None and prof.sp_effect is None and "buffs disabled" in prof.buffs_note
 
 
-def test_effects_loader(tmp_path):
-    assert load_effects(tmp_path / "missing.json") == Effects({})
-    p = write_json(tmp_path, "e.json", {"_readme": "x", "100": {"name": "A", "category": "CONSUMABLES"},
-                                        "200": {"name": "P", "category": "TALISMANS"}})
-    e = load_effects(p)
-    assert e.table[100].name == "A" and e.table[200].category == "TALISMANS"
-    p = write_json(tmp_path, "e2.json", {"1": "NOT_AN_OBJECT"})
-    with pytest.raises(ValueError):
-        load_effects(p)
+def test_state_ids_loader(tmp_path):
+    assert load_state_ids(tmp_path / "missing.json") == StateIds({}, {})
+    p = write_json(tmp_path, "e.json", {"buffs": {"_readme": "x", "100": {"name": "A", "categories": "CONSUMABLES"},
+                                                  "200": {"name": "P", "categories": "TALISMANS", "abilities": "up"}},
+                                        "animations": {"100": {"name": "Same number, another table"}}})
+    e = load_state_ids(p)
+    assert e.buffs[100].name == "A" and e.buffs[200].categories == "TALISMANS" and e.buffs[200].abilities == "up"
+    assert e.animations[100].name == "Same number, another table" and 100 in e.buffs      # two tables: no clash
+    only = write_json(tmp_path, "only.json", {"buffs": {"1": {"name": "B"}}})
+    assert load_state_ids(only).animations == {}
+
+
+@pytest.mark.parametrize("content", [
+    {"1": {"name": "x", "sources": "EFFECTS"}},                  # the 1.6.2 flat shape: not read as if it were new
+    {"buffs": {"1": "NOT_AN_OBJECT"}}, {"buffs": {"1": {"abilities": "no name"}}}, {"buffs": [1]}, [],
+])
+def test_a_malformed_state_ids_file_is_an_error(tmp_path, content):
+    with pytest.raises(ValueError, match="malformed"):
+        load_state_ids(write_json(tmp_path, "bad.json", content))
+
+
+def test_the_flat_file_error_says_how_to_convert_it(tmp_path):
+    with pytest.raises(ValueError, match="convert_state_ids"):
+        load_state_ids(write_json(tmp_path, "old.json", {"100": {"name": "A", "sources": "EFFECTS"}}))
+
+
+def test_the_shipped_chr_state_ids_json_loads_and_has_no_sources():
+    path = Path(eldendisk.__file__).parent.parent / "chr_state_ids.json"
+    ids = load_state_ids(path)
+    assert ids.buffs and ids.animations
+    assert "sources" not in path.read_text(encoding="utf-8")
 
 
 # ---- safety ----
@@ -416,12 +440,12 @@ def test_logger_refuses_game_dir_and_writes_atomically(tmp_path):
     assert not (tmp_path / "out" / "disk-state.json.tmp").exists()
 
 
-def test_raw_effects_lists_everything_unclassified():
+def test_raw_buffs_lists_everything_unclassified():
     m = full_world()
-    entries, err = Sampler(m, make_profile(), effects(), BASE).raw_effects()
+    entries, err = Sampler(m, make_profile(), state_ids(), BASE).raw_buffs()
     assert err is None and [e[0] for e in entries] == [100, 200, 999]
     m.u64(BASE + 0x1000, 0)  # title screen
-    entries, err = Sampler(m, make_profile(), effects(), BASE).raw_effects()
+    entries, err = Sampler(m, make_profile(), state_ids(), BASE).raw_buffs()
     assert entries is None
-    entries, err = Sampler(m, make_profile(sp=False), effects(), BASE).raw_effects()
+    entries, err = Sampler(m, make_profile(sp=False), state_ids(), BASE).raw_buffs()
     assert entries is None and "sp_effect" in err

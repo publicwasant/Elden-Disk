@@ -1,4 +1,4 @@
-"""A ledger of ids seen over time, for the effect and animation monitors (pure: no console, no memory).
+"""A ledger of ids seen over time, for the buff and animation monitors (pure: no console, no memory).
 
 Every id is one row, whatever number of times it comes and goes. An id is *active* while it is present and stops being
 active only after it has been absent for `SETTLE_S` (the game flips some animation ids every frame; without the delay

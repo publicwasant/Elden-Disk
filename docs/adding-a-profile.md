@@ -291,17 +291,17 @@ identical. On a throwaway character raise **one** attribute by one point and con
 
 ## Part E — Buffs (optional, after Part D)
 
-Buffs need two things: the **layout** of the effect list (already filled with starting values in A2 — you *verify* it) and a
-table of **effect IDs** with names (`effects.json`).
+Buffs need two things: the **layout** of the buff list (already filled with starting values in A2 — you *verify* it) and a
+table of **buff IDs** with names (`chr_state_ids.json`, the `buffs` object).
 
-**E1. Verify the layout.** In-world, run:
+**E1. Verify the layout.** In-world, run (with the game started by `eldendisk run`):
 
 ```powershell
-python -m eldendisk effects -q
+python -m eldendisk read --live-buffs -q
 ```
 
-You should see a list, e.g. `--- 8 effects now active ---` with lines `id | duration | timer`, and it should stay stable.
-Equip and unequip one talisman at a Site of Grace: exactly one permanent line (`-1.00 | -1.00`) must disappear and come back.
+You should see a table with one row per id (`id`, `name`, `timer`, `time`), and it should stay stable.
+Equip and unequip one talisman at a Site of Grace: exactly one `permanent` row must go away and come back.
 
 | Message                                                                            | Suspect field                        |
 |------------------------------------------------------------------------------------|--------------------------------------|
@@ -309,55 +309,56 @@ Equip and unequip one talisman at a Site of Grace: exactly one permanent line (`
 | `read failed: SpEffect list head`                                                  | `sp_effect.head`                     |
 | `invalid SpEffect entry pointer` / `cycle in SpEffect list`                        | `sp_effect.entry.next`               |
 | IDs look random                                                                    | `sp_effect.entry.id`                 |
-| permanent effects do not show `-1.00`                                              | `sp_effect.entry.duration` / `timer` |
+| permanent buffs do not show `permanent`                                            | `sp_effect.entry.duration` / `timer` |
 
-**E2. Timer direction.** Use a buff that lasts at least 30 s (for example Golden Vow) and watch its line in `effects`:
+**E2. Timer direction.** Use a buff that lasts at least 30 s (for example Golden Vow) and watch its row in `--live-buffs`:
 
 - timer goes **down** from `duration` towards 0 → `"timer_mode": "remaining"`
 - timer goes **up** from 0 towards `duration` → `"timer_mode": "elapsed"`
 
 Set it in the profile. A wrong value does not crash — it reports wrong times with confidence (a fresh 80 s buff would show about 4 s left).
 
-**E3. Collect IDs.** Keep `effects` running and do one thing at a time. Note the `+` lines:
+**E3. Collect IDs.** Keep `--live-buffs` running and do one thing at a time. Note the `+` rows:
 
 | You do                      | You see (reference build)                                          |
 |-----------------------------|--------------------------------------------------------------------|
-| unequip / equip Gold Scarab | `- 311100` then `+ 311100 │ -1.00 │ -1.00` → permanent (passive)   |
-| use Gold-Pickled Fowl Foot  | `+ 3971 │ 180.00 │ …` → timed (active)                             |
-| cast Golden Vow             | `+ 1660000 │ 80.00 │ …` (plus tiny `…001`, `…002` helpers: ignore) |
+| unequip / equip Gold Scarab | `311100` goes `-`, then `+` again with `permanent`                 |
+| use Gold-Pickled Fowl Foot  | `+ 3971` with a timer of about `180 s`                             |
+| cast Golden Vow             | `+ 1660000` with about `80 s` (plus tiny `…001`, `…002` helpers: ignore) |
 
-Ignore anything that flickers with duration under 1 s (internal engine effects) and anything whose timer stays equal to its duration forever (refreshed every frame, not a real countdown).
+Ignore anything that flickers with a duration under 1 s (internal engine buffs; `-q` hides them) and anything whose timer stays equal to its duration forever (refreshed every frame, not a real countdown).
 
-**E4. Write `effects.json`.** Timed buffs go under `active`, permanent talisman effects under `passive`:
+**E4. Write `chr_state_ids.json`.** Two objects, keys are the IDs as strings. Buff ids go under `buffs`; animation ids (`read --live-animations`) go under `animations`. Each entry has a `name`, and optionally `categories` and `abilities`:
 
 ```json
 {
-  "active": {
-    "3971":    { "name": "Gold-Pickled Fowl Foot" },
-    "1605000": { "name": "Flame, Grant Me Strength" },
-    "1660000": { "name": "Golden Vow" }
+  "buffs": {
+    "3971":    { "name": "Gold-Pickled Fowl Foot", "categories": "CONSUMABLES" },
+    "1605000": { "name": "Flame, Grant Me Strength", "categories": "INCANTATIONS" },
+    "1660000": { "name": "Golden Vow", "categories": "INCANTATIONS" },
+    "311100":  { "name": "Gold Scarab", "categories": "TALISMANS" }
   },
-  "passive": {
-    "311100": { "name": "Gold Scarab", "category": "TALISMAN", "source_name": "Gold Scarab" }
+  "animations": {
+    "2020110": { "name": "Running", "categories": "MANNER" }
   }
 }
 ```
 
-Allowed `category` values: `TALISMAN`, `ARMOR`, `WEAPON`, `GREAT_RUNE`. Keys are the IDs as strings.
+A buff and an animation may use the same number: they are two tables. A 1.6.2 file (one flat list with a `sources` field) is converted by `python code/tools/convert_state_ids.py chr_state_ids.json`. The monitors re-read the file while they run, so names you add show at once.
 
-**E5. End-to-end test.** While a buff is running: `python -m eldendisk run --attach -v`, open the JSON twice about five seconds apart.
-`remaining_seconds` must have dropped by about five, `max_duration_seconds` must equal the duration you saw, and the buff must vanish when it ends.
+**E5. End-to-end test.** While a buff is running: `python -m eldendisk read --query buffs` twice, about five seconds apart.
+`buff_duration` must have dropped by about five, `max_duration` must equal the duration you saw, and the buff must vanish when it ends.
 
-> 🟢 **Checkpoint E:** the buffs you configured show correct names and counting-down times in `active_buffs`, talismans appear in `passive_buffs`.
+> 🟢 **Checkpoint E:** the buffs you configured show correct names and counting-down times in `character.buffs`.
 
 Mapping every ID to an item name can wait. A param editor such as Smithbox lists the `SpEffectParam`, `EquipParamAccessory`
-(talismans, link via `refId`), `Goods` (items) and `Magic` (spells) tables; entries you do not list simply count towards `ignored_effects`.
+(talismans, link via `refId`), `Goods` (items) and `Magic` (spells) tables; ids you do not list simply count towards `systems.status.ignored.buffs`.
 
 ---
 
 ## Part F — Wrap-up
 
-1. **Back up** `offsets.json` and `effects.json` (or commit them). They are the product of this whole exercise.
+1. **Back up** `offsets.json` and `chr_state_ids.json` (or commit them). They are the product of this whole exercise.
 2. Fill the sign-off row for your build in the spec (§7.8). Stats verified and restart-tested is "PROVISIONAL"; add a 30-minute session
    with `python tools\soak_check.py` (spec V-06) to call it "VERIFIED".
 3. **After the next game patch** run `hash` again. The tool will say `UNSUPPORTED_VERSION` (safe). Add a **new** profile under the
@@ -396,18 +397,17 @@ It reproduces the profile that was verified on this build: stats matched the in-
 }
 ```
 
-Starter `effects.json` for the same build (IDs observed in-game):
+Starter `chr_state_ids.json` for the same build (IDs observed in-game):
 
 ```json
 {
-  "active": {
-    "3971":    { "name": "Gold-Pickled Fowl Foot" },
-    "1605000": { "name": "Flame, Grant Me Strength" },
-    "1660000": { "name": "Golden Vow" }
+  "buffs": {
+    "3971":    { "name": "Gold-Pickled Fowl Foot", "categories": "CONSUMABLES" },
+    "1605000": { "name": "Flame, Grant Me Strength", "categories": "INCANTATIONS" },
+    "1660000": { "name": "Golden Vow", "categories": "INCANTATIONS" },
+    "311100":  { "name": "Gold Scarab", "categories": "TALISMANS" }
   },
-  "passive": {
-    "311100": { "name": "Gold Scarab", "category": "TALISMAN", "source_name": "Gold Scarab" }
-  }
+  "animations": {}
 }
 ```
 
@@ -430,3 +430,33 @@ A profile is pinned to one `eldenring.exe` hash, so nothing is borrowed from ano
 
 - `vitals` is **required** (`player_to_modules`, `modules_to_data`, `data_to_vitals`). Without it the profile is rejected with `UNSUPPORTED_VERSION: profile incomplete`.
 - `at_grace` is `null` (Grace detection off) or `{ "source": "anim", "equals": ["0x109AB"] }`. `equals` is required; there is no default ID.
+
+---
+
+## Optional block: `params` (since 1.6.3)
+
+`params` lets `read` / `write` reach the game's own tables (`SpEffectParam`: the game's table of effects: buffs, burns, ...). It is **optional**: a profile without it still works, and `params` is then `null` in `disk-state.json` and `write --set params...` says the game version has no params. A block that is there must be complete, or the profile is rejected (`UNSUPPORTED_VERSION: profile incomplete: params...`). The values of the 1.17.1 profile are in `code/offsets.json`; the way they were found is in `docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md`.
+
+```json
+"params": {
+  "file_layout": { "row_count": "0xA", "data_start": "0x30", "descriptors": "0x40",
+                   "descriptor_size": "0x18", "descriptor_id": "0x0", "descriptor_data_offset": "0x8" },
+  "tables": {
+    "effects": {
+      "table": "SpEffectParam", "row_size": "0x390",
+      "head_chains": [ { "rva": "0x4861FB0", "offsets": ["0x98", "0xE8", "0x130"] } ],
+      "fields": { "effectEndurance": { "offset": "0x8", "type": "f32", "writable": true, "min": -1, "max": 9999 },
+                  "vfxId":           { "offset": "0x170", "type": "s32", "writable": false } },
+      "rows": { "1621000": { "name": "Black Flame", "defaults": { "effectEndurance": 2 } } }
+    }
+  }
+}
+```
+
+- **`tables.<name>`:** the name is what you type and what `disk-state.json` shows: `params.effects.<row id>.<field>`.
+- **`file_layout`:** a param file in memory starts with a header (row count as `u16`, data start as `u64`), then a table of row descriptors (`descriptor_size` bytes each: row id `u32`, offset of the row data from the file start `u64`), then the rows (`row_size` bytes each). The tool requires `data_start == descriptors + row_count * descriptor_size`; this is how it knows a chain really leads to a param file. Other param files of the game have the same layout, a different `row_size` and different chains.
+- **`head_chains`:** `[...[[base + rva] + o1] + o2 ...]` is the **start of the file**: read an 8-byte pointer at `base + rva`, add `o1`, read a pointer there, and so on; the last pointer read is the file head. Cheat Engine lists these offsets the other way round (last applied first) and its final entry is the row field offset, not part of the chain. Give several chains: the first that leads to a valid file is used.
+- **`fields`:** offset inside a row, type (`f32` or `s32`), `writable`. A writable field needs `min` and `max` (the range `write` clamps to). Offsets come from the Paramdex definition of the param (`Defs/<Param>.xml`) and are reliable for the fields the definition lists; check one in the game before trusting it.
+- **`rows`:** the key is the row **id** (digits, no leading zero), `name` is a text for people (shown as `name` in `disk-state.json`, never written, and not a field name you can use); every writable field needs its game value in `defaults` (what `write --reset` puts back; take it from the CSV export of the param). The tool finds a row by id in the descriptor table. A field called `name` is rejected in `fields`.
+
+To find the chains and the file on a new build: export the rows with Smithbox (view/export only), scan Cheat Engine for the first bytes of one row as an array of byte, find the file head (row count and data start next to it), then run a pointer scan on the head address (static addresses only, 8-byte aligned, level 4, max offset 16383) and keep the paths that are still right after restarting the game twice.

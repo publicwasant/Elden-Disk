@@ -1,22 +1,24 @@
-"""`write --set NAME=VALUE... --refill LIST`: apply edits once to the running game, inside an authorised session."""
+"""`write --set NAME=VALUE... --refill LIST --reset NAME...`: apply edits once to the running game, inside an authorised
+session. Names under `params.` edit the game's own tables (and `--reset` puts the game's own values back)."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from ..console import require_windows_x64
 from ..logbook import book
-from ..game.attach import EXIT_NO_SESSION, AttachError, Target, locate
+from ..game.attach import EXIT_NO_SESSION, EXIT_UNSUPPORTED, AttachError, Target, locate
 from ..game.layout import Layout
+from ..game.params import ParamLockedError, ParamNameError
 from ..game.processes import process_started
 from ..vault import VaultError, authorise, resolve_vault
 from ..vault import session as vault_session
-from ..writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy
+from ..writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
 
 
 def cmd_write(args) -> int:
     require_windows_x64()
     try:
-        policy = parse_policy(args.set, args.refill)
+        policy = parse_policy(args.set, args.refill, getattr(args, "reset", None))
     except ValueError as exc:   # unknown or unsettable name, bad value
         book.e("write", str(exc))
         return 1
@@ -34,6 +36,17 @@ def cmd_write(args) -> int:
     except AttachError as exc:
         book.e("write", str(exc))
         return exc.code
+
+    try:   # what the params names mean needs the profile; a read-only field is refused before the session is looked at
+        policy, notes = plan_params(target.profile.params, policy)
+    except ParamLockedError as exc:
+        book.e("write", f"{exc}; nothing was written")
+        return EXIT_UNSUPPORTED
+    except ParamNameError as exc:
+        book.e("write", f"{exc}; nothing was written")
+        return 1
+    for note in notes:
+        book.i("write", note)
 
     problems = authorise(record, game_pid=target.pid, game_started=target.started,
                          exe_sha256=target.sha256, started_of=process_started)
@@ -56,7 +69,7 @@ def cmd_write(args) -> int:
     failed = [r.name for r in results if not r.wrote]
     for r in results:
         if r.wrote:
-            book.ok("write", f"{r.name} = {r.value}")
+            book.ok("write", f"{r.name} = {r.value}" + (f"  ({r.note})" if r.note else ""))
     if writer.skipped or failed:
         for why in writer.skipped:
             book.e("write", f"not applied: {why}")

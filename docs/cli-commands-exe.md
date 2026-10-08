@@ -26,7 +26,7 @@ Terminal 2:  eldendisk.exe write --set vigor=99
 >
 > **Steam Cloud** has not been verified against the real game (spec test T10). The game runs offline and the save is restored afterwards, so it is assumed harmless.
 
-**Exit codes:** `0` ok · `1` error / not applied · `2` unsupported `eldenring.exe` · `3` EasyAntiCheat loaded · `4` restore pending · `5` no valid session · `130` interrupted.
+**Exit codes:** `0` ok · `1` error / not applied · `2` unsupported `eldenring.exe` (or a read-only `params` field named in `write`) · `3` EasyAntiCheat loaded · `4` restore pending · `5` no valid session · `130` interrupted.
 
 ---
 
@@ -56,14 +56,14 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
 
 - `write` is **refused** (exit `5`): with no session record no edit would be covered by a snapshot.
 - An owed restore from an earlier session still blocks `run` (exit `4`), also with `--vault-off`; run `vault restore` or `vault keep` first.
-- Game-running and anti-cheat checks stay; nothing is written to the save or the game folder; no automatic pruning of snapshots.
+- Game-running and anti-cheat checks stay; nothing is written to the save or the game folder (except the `regulation.bin` swap of 1.6.4, see `vault`); no automatic pruning of snapshots.
 - Ctrl+C only stops the host (exit `130`); the game keeps running.
 - `--vault DIR` (where the vault lives) and `--vault-off` (no protection) are unrelated.
 
 ```commandline
 eldendisk.exe run --vault-off -v
 eldendisk.exe read --live --query runes        (other terminal)
-eldendisk.exe read --live-effects               (other terminal)
+eldendisk.exe read --live-buffs               (other terminal)
 ```
 
 **Vault location.** Resolved the same way by every command: `--vault` → the path remembered by an earlier `run --vault X` → `%LOCALAPPDATA%\EldenDisk\vault`. It is deliberately not next to the exe (a rebuild deletes `build/`). If the remembered folder is unavailable (drive missing) the command stops with an error instead of creating a fresh, empty vault.
@@ -93,7 +93,7 @@ With `-v` the banner and these lines are replaced by the log itself (see "Log an
 ## 2. `read` (reader)
 
 ```commandline
-eldendisk.exe read [--query NAME [NAME ...]] [--flat] [--export] [--live] [--live-effects] [--live-animations] [options]
+eldendisk.exe read [--query NAME [NAME ...]] [--flat] [--export] [--live] [--live-buffs] [--live-animations] [options]
 ```
 
 Read-only: it never opens a write handle. Works with or without `run` (a game started from Steam's Play button has EasyAntiCheat, which hides the game from `read`: exit `3`, start it with `run`). Stops with exit `3` if EasyAntiCheat is or becomes loaded.
@@ -106,12 +106,12 @@ Read-only: it never opens a write handle. Works with or without `run` (a game st
 | `read --live` | the same as `read`, but keep going: on a terminal the tree is redrawn where it stands and a value that just changed is highlighted for a second; in an IDE run window or a pipe the tree is printed once, then one line per changed value |
 | `read --query NAME [NAME ...] --live` | keep following those values or groups |
 | `read --export --live` | keep writing `disk-state.json` for other programs (sampled at `--hz`, written only when the content changed, at most every `--export-interval`) |
-| `read --live-effects` | effects monitor: one row per effect id, kept current (see below) |
+| `read --live-buffs` | buffs monitor: one row per buff id, kept current (see below) |
 | `read --live-animations` | animation monitor: one row per animation id; with both, two tables |
 
 `--live` means "do not stop"; Ctrl+C ends it and the game keeps running. One-shot commands wait up to `--timeout` seconds for the game and for a loaded world, then exit `1`; the live commands wait for ever.
 
-**Names.** A name is a path into `disk-state.json`: `character.level`, `character.runes.total`, `character.attributes.vigor`, `character.vitals.hit_point.current`, `character.effects`, `systems.status.pid`. Short forms work: `character.` can be left out, `attrs` = `attributes`, `hp` = `hit_point`, `fp` = `focus_point`, `max` = `maximum`. A group name shows the whole group; `*` selects several values. A wrong name is an error with suggestions.
+**Names.** A name is a path into `disk-state.json`: `character.level`, `character.runes.total`, `character.attributes.vigor`, `character.vitals.hit_point.current`, `character.buffs`, `systems.status.pid`. Short forms work: `character.` can be left out, `attrs` = `attributes`, `hp` = `hit_point`, `fp` = `focus_point`, `max` = `maximum`. A group name shows the whole group; `*` selects several values. A wrong name is an error with suggestions. The game's own tables are under `params` (`params.effects.1621000.effectEndurance`; typed in full, any letter case; `read` with no flag shows them last, `character.*` never includes them). They are read about once a second, and `params` is `null` (and `read --query params...` says why) when the table cannot be found or checked. `--export` writes them as the third block `params`, `null` when no game is attached.
 
 **Several names, and the tree.** `--query` takes any number of names (`--query runes hp attrs.vigor`); the result is one selection, in the order asked, each value once. Whatever is selected (a group, a wildcard, several names) is printed **in its place in the tree**, the same layout as `read` itself (`character` > `runes` > `total`), so `--live` redraws and highlights it the same way. Exactly one single value is the exception: it stays one `path  value` line (handy in scripts). `--json` prints a flat object `{"path": value, ...}` for the selection.
 
@@ -140,12 +140,12 @@ eldendisk.exe read --query attrs.*
      vigor  80
      mind   60
      ...
-eldendisk.exe read --query character.runes.* character.effects.* --live
+eldendisk.exe read --query character.runes.* character.buffs.* --live
  character
    runes
      total     40,402,709
      ...
-   effects
+   buffs
      311100
        name        Gold Scarab
        categories  TALISMANS
@@ -157,7 +157,7 @@ Results go to **stdout**, events to stderr; `--json` prints the result as JSON i
 
 A terminal that cannot move the cursor (IDE run window, pipe, `TERM=dumb`) gets the change lines. If the tree is taller than the window the rest is summarised in one line (make the window taller, or use `--query`). **Loading screens** (warp, death, quit to title): on a terminal the last tree stays where it is with one dim line `waiting for a loaded world …` below it, and the next frame redraws over both (the details go to the log only); elsewhere the two events `waiting for a loaded world` / `world loaded` are printed once each. Ctrl+C stops; the last frame stays on screen.
 
-`read` with no name and `--live` show the whole document of `disk-state.json`: `systems` and `character` (level, vitals, runes, attributes) **including `character.effects` and `character.animations`**, the same content as the file. With many effects the tree is long: a live view taller than the window is cut with a `… N more lines` line (make the window taller, or ask for a part with `--query`). `--query effects`, `--query character.effects.*`, `--query animations` show just the lists, also with `--live`; `character.*` includes them. The lists come and go, so a name inside them that matches nothing **right now** is not an error: `--live` shows `none active` (and keeps running, rows reappear when something starts), a one-shot query says `nothing matches` and exits `0`. A misspelt list name (`character.effectz.*`) is still an unknown name. `--live-effects` / `--live-animations` are the monitors (one row per id: what appeared / disappeared, with times). Buff countdowns (`buff_duration`) tick in the live tree in their own colour (magenta) so they stand out from constants; they do not count as changes, so they are not highlighted as such. The file schema is unchanged.
+`read` with no name and `--live` show the whole document of `disk-state.json`: `systems` and `character` (level, vitals, runes, attributes) **including `character.buffs` and `character.animations`**, the same content as the file. With many buffs the tree is long: a live view taller than the window is cut with a `… N more lines` line (make the window taller, or ask for a part with `--query`). `--query buffs`, `--query character.buffs.*`, `--query animations` show just the lists, also with `--live`; `character.*` includes them. The lists come and go, so a name inside them that matches nothing **right now** is not an error: `--live` shows `none active` (and keeps running, rows reappear when something starts), a one-shot query says `nothing matches` and exits `0`. A misspelt list name (`character.buffz.*`) is still an unknown name. `--live-buffs` / `--live-animations` are the monitors (one row per id: what appeared / disappeared, with times). Buff countdowns (`buff_duration`) tick in the live tree in their own colour (magenta) so they stand out from constants; they do not count as changes, so they are not highlighted as such. The file schema is unchanged.
 
 **`--export`** writes `disk-state.json` (to `--out`, never inside the game folder) and says where: `✓ export  disk-state.json (4.1 KB) written to <dir>`. The document and its schema are unchanged. `systems.session` is `{"mode": "sandbox", "sandbox": true}` while a valid `RUNNING` session covers the game, otherwise `{"mode": "telemetry", "sandbox": false}`; `read_only` is always `true`. With `--live` the writing loop is the 1.6.2 one: `IDLE` while the game window is unfocused (`--no-idle` to keep reading), a countdown-only change is written at most every `--timer-interval`, one more write on exit.
 
@@ -165,25 +165,25 @@ A terminal that cannot move the cursor (IDE run window, pipe, `TERM=dumb`) gets 
 |:---|:---|:---|:---|
 | `--query NAME [NAME ...]` | all values | print, `--live` | One or more values or groups to show. |
 | `--flat` | off (tree) | print, `--live` | One `full.path  value` row per value instead of the tree. |
-| `--export` / `--live` / `--live-effects` / `--live-animations` | off | | Modes above. `--export` and `--query` cannot be combined; the two monitors stand alone (together is fine). |
+| `--export` / `--live` / `--live-buffs` / `--live-animations` | off | | Modes above. `--export` and `--query` cannot be combined; the two monitors stand alone (together is fine). |
 | `--json` | off | one-shot | Print as JSON. |
 | `--timeout SEC` | `15` | one-shot | Seconds to wait for the game and a loaded world. |
 | `--offsets FILE` | `offsets.json` | all | Profiles. |
-| `--effects FILE` | `chr_state_ids.json` | all | Names for effect and animation IDs (monitors re-read it when it changes). |
+| `--state-ids FILE` | `chr_state_ids.json` | all | Names for buff and animation IDs (`{"buffs": {id: {...}}, "animations": {id: {...}}}`) (monitors re-read it when it changes). |
 | `--vault DIR` | remembered, else `%LOCALAPPDATA%\EldenDisk\vault` | all | Where to look for the session record (labels the export). |
 | `--hz N` | `60` (1-120) | live | Reads per second. 60 matches the game's frame lock; up to 120 samples every frame. |
-| `-q`, `--quiet` | off | `--live-effects` | Hide short-lived internal effects (0 ≤ duration < 1 s). |
-| `--mapped` / `--unmapped` | off | `--live-effects`, `--live-animations` | Show only ids that are / are not in `chr_state_ids.json`. |
+| `-q`, `--quiet` | off | `--live-buffs` | Hide short-lived internal buffs (0 ≤ duration < 1 s). |
+| `--mapped` / `--unmapped` | off | `--live-buffs`, `--live-animations` | Show only ids that are / are not in `chr_state_ids.json`. |
 | `--out DIR` | `<tool>/output` | `--export` | Directory of `disk-state.json`. |
 | `--no-idle` | off | `--export --live` | Keep reading while the game window is unfocused. |
 | `--export-interval SEC` | `0.5` | `--export --live` | Minimum seconds between file writes. |
 | `--timer-interval SEC` | `2` | `--export --live` | Seconds between writes that only change a buff countdown; `0` = never. |
 | `-v`, `--verbose` | off | all | Show the full log live instead of the concise view. |
 
-**`--live-effects` / `--live-animations`** are the discovery monitors: what is active right now, and everything that came and went, so ids can be named in `chr_state_ids.json`. One row per id, however often it comes back; a terminal gets a table that is redrawn where it stands:
+**`--live-buffs` / `--live-animations`** are the discovery monitors: what is active right now, and everything that came and went, so ids can be named in `chr_state_ids.json`. One row per id, however often it comes back; a terminal gets a table that is redrawn where it stands:
 
 ```commandline
- effects   3 active · 5 seen · 2 unmapped
+ buffs   3 active · 5 seen · 2 unmapped
            id  name         timer            time
  +     311100  Gold Scarab  permanent        04:06:12.750
  +       3971  Unknown      141.2 / 180.0 s  04:06:12.750
@@ -199,18 +199,18 @@ A terminal that cannot move the cursor (IDE run window, pipe, `TERM=dumb`) gets 
 - `+` (green) is active now, `-` (dim) has gone; `time` is when it appeared, or when it was last seen. A row that just changed is highlighted for a second.
 - **Order:** active first (newest on top), then the ones that left (latest first). The order is refreshed at most once a second, so ids that flip every frame (the game does that with some animations) do not shuffle the list. An id counts as gone only after 0.25 s without it.
 - `Unknown` (cyan) is an id that is not in `chr_state_ids.json`; the title line counts them. `--unmapped` shows only those, `--mapped` only the others (the counts stay).
-- `chr_state_ids.json` is re-read when it changes (`✓ read  chr_state_ids.json reloaded (N ids)`), so a name you just added shows at once. If the file cannot be read the old names stay and a warning says why.
+- `chr_state_ids.json` is re-read when it changes (`✓ read  chr_state_ids.json reloaded (N buffs, N animations)`), so a name you just added shows at once. If the file cannot be read the old names stay and a warning says why.
 - Rows are kept for the whole run. If the table is taller than the window the oldest are summarised in one line; with both flags the window is shared (the smaller table first).
-- Effects: the timer is `remaining / total s`, or `permanent`; `-q` hides short-lived internal effects.
+- Buffs: the timer is `remaining / total s`, or `permanent`; `-q` hides short-lived internal buffs.
 - Timestamps here are `HH:MM:SS.mmm`; `disk-state.json` and the log keep the ISO form.
-- In a console that cannot redraw (IDE run window, pipe) each change is a line instead: `+ 2020110  Running  04:06:12.766` (`[effects]` / `[animations]` prefix when both run).
+- In a console that cannot redraw (IDE run window, pipe) each change is a line instead: `+ 2020110  Running  04:06:12.766` (`[buffs]` / `[animations]` prefix when both run).
 
 ---
 
 ## 3. `write` (writer)
 
 ```commandline
-eldendisk.exe write [--vault DIR] [--offsets FILE] [-v] --set NAME=VALUE [NAME=VALUE ...] [--refill LIST]
+eldendisk.exe write [--vault DIR] [--offsets FILE] [-v] --set NAME=VALUE [NAME=VALUE ...] [--refill LIST] [--reset NAME [NAME ...]]
 ```
 
 Applies edits **once**, reads them back, closes and exits. Run it again to re-apply. `--set` may be repeated; `--vault`, `--offsets` and `-v` can come before or after. Prints one `✓ write  NAME = VALUE` line per applied edit (or `values already match`), no `-v` needed.
@@ -229,13 +229,41 @@ It works only inside a session. Exit `5` and no write handle if any of these fai
 
 A pattern that names a group sets all of it: `--set attrs.*=50`, `--set vitals.*.current=1`. Not everything at once: `*` and `character.*` are refused. `--refill` takes the vitals (`hp,fp,stamina`) and sets them to their maximum.
 
-Values the game or the tool computes cannot be set, and the error says why: `hp.max` / `fp.base` ... (the game recomputes them from your stats; set the attribute), `runes.delta` / `runes.baseline` (computed by the tool), effects, animations and `systems.*`. Bare group names (`attributes`, `vitals`) are refused as groups.
+**Game params (1.6.3).** Names under `params.` edit the game's own tables: `params.<table>.<row>.<field>`, typed in full (no short forms), in any letter case; a row is its game id. Today the table is `effects` (SpEffectParam) and the rows are the four Black Flame spells listed in `offsets.json`. Each row also shows `name` (its text from `offsets.json`, e.g. `Black Flame`): it is shown, never written (`--set ...name=...` is refused like a locked field).
+
+| Field | Type | Range | Writable | Meaning |
+|:---|:---:|:---:|:---:|:---|
+| `effectEndurance` | f32 | -1 - 9999 | yes | seconds the effect lasts; `-1` = until removed, `0` = one instant tick; the game's value is `2` |
+| `motionInterval` | f32 | 0.01 - 999 | yes | seconds between ticks (game: `0.1`) |
+| `changeHpRate` | f32 | -100 - 100 | yes | size of each tick (game: `0.1`) |
+| `changeHpPoint` | s32 | -9999 - 999 | yes | size of each tick (game: `1`) |
+| `atkOccurrenceSpEffectId` | s32 | - | **no** | another effect applied to whoever is hit (`-1` = none) |
+| `vfxId` | s32 | - | **no** | visual effect (game: `9010` for the Black Flame burns) |
+
+Rows: `1621000` Black Flame, `1623000` Scouring Black Flame, `1625000` Black Flame Ritual, `1626001` Black Flame Blade. `--set` takes one field (`params.effects.1621000.effectEndurance=-1`) or a pattern (`"params.effects.*.effectEndurance=-1"`, quote it so the shell leaves the `*` alone); a pattern says how many values it matched and skips read-only fields (`skipped (locked): ...`). A read-only field named exactly, or a name that matches nothing, a group (`params.effects.1621000`), a value of the wrong kind (`changeHpPoint=1.5`) or a field set twice stops the command before anything is written (exit `2` for the read-only field, `1` for the rest). A value outside the range is clamped and the line says `(clamped from ...)`.
+
+**`--reset NAME ...`** puts the game's own values back (they are in `offsets.json`): `params.effects.1621000.effectEndurance` (one field), `params.effects.1621000` (one row, its writable fields), a pattern, or `all` (every param). It takes no `=VALUE`, and only `params` names or `all`. Nothing to reset prints `values already match`. A param edit goes through the same session check as every other edit, and every call finds the table again through the pointer chains in `offsets.json` and checks it (the header must add up, the row id must be in the file) before it writes; a failed check is reported as `not applied: ...` (exit `1`).
+
+Params exist only in the game's memory: they are gone when the game closes. A burn already on an enemy keeps the duration it had. **Offline only** (`run` starts the game offline): changing params online or with anti-cheat active can get an account banned.
+
+Values the game or the tool computes cannot be set, and the error says why: `hp.max` / `fp.base` ... (the game recomputes them from your stats; set the attribute), `runes.delta` / `runes.baseline` (computed by the tool), buffs, animations and `systems.*`. Bare group names (`attributes`, `vitals`) are refused as groups.
 
 ```commandline
 eldendisk.exe write --set vigor=90 hit_point=1 --refill fp
  ✓  write  vigor = 90
  ✓  write  hp = 1
  ✓  write  fp = 350
+eldendisk.exe write --set params.effects.1621000.effectEndurance=-1
+ ✓  write  params.effects.1621000.effectEndurance = -1.0
+eldendisk.exe write --set "params.effects.*.effectEndurance=-1"
+ ·  write  params.effects.*.effectEndurance matches 4 values: 1621000.effectEndurance, 1623000.effectEndurance, 1625000.effectEndurance, 1626001.effectEndurance
+ ✓  write  params.effects.1621000.effectEndurance = -1.0
+ ...
+eldendisk.exe write --set params.effects.1621000.vfxId=0
+ ✖  write  params.effects.1621000.vfxId is locked (read-only); nothing was written
+eldendisk.exe write --reset all
+ ✓  write  params.effects.1621000.effectEndurance = 2.0
+ ...
 eldendisk.exe write --set hp.max=9999
  ✖  write  'hp.max' cannot be set: computed by the game from your stats (set the attribute, or use hp/fp/stamina for the current value)
 ```
@@ -268,6 +296,8 @@ eldendisk.exe vault status
 ```
 
 A record from 1.6.0 / 1.6.1 (`PENDING_RESTORE.json`) is read as `RESTORE_PENDING`.
+
+**The other world (1.6.4).** `<vault>\regulation\regulation.bin`, if present, replaces the game's `regulation.bin` for a `run` with the vault ON; the game's own file is kept in each snapshot (`bin\regulation.bin`) and put back, with the save, by the same restore (`run`, `vault restore`; `vault keep` puts it back first). No option: the file's presence is the switch. `--vault-off` ignores it (warning). `vault status` shows the file (path, size, short hash) and, for an owed session, that a different file is in the game folder; `vault verify` and `vault list` check `bin\`. A restore that cannot put the file back leaves `RESTORE_PENDING` (exit `4`). Spec: [elden-disk-spec-v1.6.4](specs/elden-disk-spec-v1.6.4.md).
 
 ---
 
@@ -327,8 +357,8 @@ eldendisk.exe read --query attrs.*
 # follow a value while playing
 eldendisk.exe read --query runes --live
 
-# find effect and animation IDs while playing
-eldendisk.exe read --live-effects -q
+# find buff and animation IDs while playing
+eldendisk.exe read --live-buffs -q
 eldendisk.exe read --live-animations
 
 # one JSON document and exit; or keep it fresh for another program (written at most every second)
@@ -338,6 +368,11 @@ eldendisk.exe read --export --live --export-interval 1
 # edit while playing
 eldendisk.exe write --set level=150 runes=999999999
 eldendisk.exe write --set attrs.*=50 --refill hp,fp,stamina
+
+# game params (offline only; gone when the game closes): Black Flame burns until the target dies
+eldendisk.exe read --query params.effects.1621000
+eldendisk.exe write --set "params.effects.*.effectEndurance=-1"
+eldendisk.exe write --reset all
 
 # keep the edits permanently: write, let the game save (grace / quit to title), stop the host, close the game, then
 eldendisk.exe vault keep --yes

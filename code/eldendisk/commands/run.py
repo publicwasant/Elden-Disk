@@ -49,9 +49,14 @@ def cmd_run(args) -> int:
 
     book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
     protect = getattr(args, "protect", True)
-    begin(args, "run", [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
-                        ("mode", "vault ON (backup before, restore after)" if protect
-                         else "vault OFF (no backup, no restore)")])
+    world = vault.regulation_world()
+    rows = [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
+            ("mode", "vault ON (backup before, restore after)" if protect else "vault OFF (no backup, no restore)")]
+    if world is not None and protect:
+        rows.append(("regulation", f"{world} replaces the game's regulation.bin for this session"))
+    begin(args, "run", rows)
+    if world is not None and not protect:
+        book.w("vault", f"{world} is ignored: with the vault OFF nothing would put the game's regulation.bin back")
 
     def extra() -> list[str]:
         out = []

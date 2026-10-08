@@ -13,6 +13,7 @@ from ..logbook import book
 from ..vault import SaveVault, SessionState, VaultError, recover, resolve_vault
 from ..vault.recover import keep_from_record
 from ..vault.session import host_alive
+from ..vault.vault import REGULATION_DIR, REGULATION_NAME
 from .common import live_dir, session_log
 
 
@@ -66,7 +67,8 @@ def cmd_keep(args) -> int:
         ui.result("warn", "this keeps the CURRENT save as the new baseline and ends the session")
         ui.fields([("save", record.live_save_dir),
                    ("backup", "the current save is snapshotted first"),
-                   ("kept", f"pre-session snapshot {Path(record.snapshot_dir).name} stays in the vault")])
+                   ("kept", f"pre-session snapshot {Path(record.snapshot_dir).name} stays in the vault")]
+                  + ([("regulation", "the game's own regulation.bin is put back first")] if record.regulation else []))
         ui.out()
         ui.out("     run again with --yes to do it, or `eldendisk vault restore` to go back to the pre-session save")
         return 1
@@ -86,10 +88,16 @@ def cmd_status(args) -> int:
         ui.result("error", f"session {rec.state.value}: the live save is NOT trusted until it is restored")
         if rec.state.value == "RUNNING":
             rows.append(("running", f"host pid {rec.host_pid}, game pid {rec.game_pid}"))
+        if rec.regulation:
+            rows.append(("regulation", "a different regulation.bin was swapped into the game folder; the restore puts the original back"))
         rows += [("since", rec.created), ("snapshot", rec.snapshot_dir),
                  ("next", f"close the game, then run `{vault.restore_hint()}`")]
     else:
         ui.result("ok", "no unresolved session, the live save is trusted")
+    w = s["world"]
+    rows.append(("regulation", f"{w['path']} ({w['size'] / 2**20:.1f} MiB, sha256 {w['sha256'][:12]}): the next `run` with the vault ON swaps it in"
+                 if w else f"no file: put yours at {vault.root / REGULATION_DIR / REGULATION_NAME} to swap it in "
+                           "(the folder is not created for you); without it the game keeps its own"))
     rows.append(("snapshots", f"{s['snapshots']}, last {s['last'] or '-'}"
                  + (", verified" if s["last"] and not s["last_problems"] else "")))
     if s["last"] and s["last_problems"]:

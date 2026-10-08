@@ -1,5 +1,5 @@
 {
-  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. See README section 'Adding a profile'.",
+  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. params (optional): the game's own tables (SpEffectParam), see docs/adding-a-profile.md. See README section 'Adding a profile'.",
   "profiles": {
     "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891": {
       "label": "Elden Ring 1.17.1",
@@ -24,7 +24,38 @@
         "modules_to_data": "0x0",
         "data_to_vitals": "0x138"
       },
-      "at_grace": { "source": "anim", "equals": ["0x109AB"] }
+      "at_grace": { "source": "anim", "equals": ["0x109AB"] },
+      "params": {
+        "file_layout": {
+          "row_count": "0xA", "data_start": "0x30", "descriptors": "0x40",
+          "descriptor_size": "0x18", "descriptor_id": "0x0", "descriptor_data_offset": "0x8"
+        },
+        "tables": {
+          "effects": {
+            "table": "SpEffectParam",
+            "row_size": "0x390",
+            "head_chains": [
+              { "rva": "0x4861FB0", "offsets": ["0x98", "0xE8", "0x130"] },
+              { "rva": "0x3D7D568", "offsets": ["0x148", "0xE8", "0x130"] },
+              { "rva": "0x3D85F58", "offsets": ["0x4C0", "0x80", "0x80"] }
+            ],
+            "fields": {
+              "effectEndurance":         { "offset": "0x8",   "type": "f32", "writable": true, "min": -1, "max": 9999 },
+              "motionInterval":          { "offset": "0xC",   "type": "f32", "writable": true, "min": 0.01, "max": 999 },
+              "changeHpRate":            { "offset": "0x9C",  "type": "f32", "writable": true, "min": -100, "max": 100 },
+              "changeHpPoint":           { "offset": "0xA0",  "type": "s32", "writable": true, "min": -9999, "max": 999 },
+              "atkOccurrenceSpEffectId": { "offset": "0x12C", "type": "s32", "writable": false },
+              "vfxId":                   { "offset": "0x170", "type": "s32", "writable": false }
+            },
+            "rows": {
+              "1621000": { "name": "Black Flame",           "defaults": { "effectEndurance": 2, "motionInterval": 0.1, "changeHpRate": 0.1, "changeHpPoint": 1 } },
+              "1623000": { "name": "Scouring Black Flame",  "defaults": { "effectEndurance": 2, "motionInterval": 0.1, "changeHpRate": 0.1, "changeHpPoint": 1 } },
+              "1625000": { "name": "Black Flame Ritual",    "defaults": { "effectEndurance": 2, "motionInterval": 0.1, "changeHpRate": 0.1, "changeHpPoint": 1 } },
+              "1626001": { "name": "Black Flame Blade",     "defaults": { "effectEndurance": 2, "motionInterval": 0.1, "changeHpRate": 0.1, "changeHpPoint": 1 } }
+            }
+          }
+        }
+      }
     }
   }
 }

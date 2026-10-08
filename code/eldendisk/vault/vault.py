@@ -1,7 +1,9 @@
-"""SaveVault: snapshot / restore / verify of the live save folder (spec 1.6.2, sections 3-4).
+"""SaveVault: snapshot / restore / verify of the live save folder (spec 1.6.2, sections 3-4) and, since 1.6.4, the swap
+of the game's `regulation.bin` (spec 1.6.4).
 
-Pure filesystem. It knows nothing about the game process and is the only component that touches save files.
-The one guarantee: after a verified restore the live save folder is byte-identical to the snapshot taken before.
+Pure filesystem. It knows nothing about the game process and is the only component that touches save files and the one
+game file the tool may replace. The one guarantee: after a verified restore the live save folder is byte-identical to the
+snapshot taken before, and the game folder holds its own `regulation.bin` again.
 
 Ordering: snapshot complete + hash-verified -> session record written -> ... -> verified restore -> record removed.
 """
@@ -26,6 +28,9 @@ from .session import SessionRecord, SessionState, atomic_write_json
 
 MANIFEST_NAME = "manifest.json"
 SAVE_SUBDIR = "save"
+BIN_SUBDIR = "bin"                    # <snapshot>/bin/regulation.bin: the game's own file, kept to put it back
+REGULATION_DIR = "regulation"         # <vault>/regulation/regulation.bin: the file the user wants the game to load
+REGULATION_NAME = "regulation.bin"
 CONTAMINATED_SUBDIR = "contaminated"
 TMP_SUFFIX = ".eldendisk-tmp"
 SPACE_FACTOR = 3                      # free space >= 3x the save folder
@@ -66,6 +71,10 @@ class Snapshot:
     def save_dir(self) -> Path:
         return self.dir / SAVE_SUBDIR
 
+    @property
+    def bin_dir(self) -> Path:
+        return self.dir / BIN_SUBDIR
+
 
 class SaveVault:
     def __init__(self, root: Path, *, timeout: float = RESTORE_TIMEOUT_S,
@@ -87,14 +96,101 @@ class SaveVault:
         sess.clear(self.root)
 
     def new_record(self, snap: Snapshot, live_dir: Path, *, exe_sha256: str | None, game_dir: Path | None = None,
-                   host_pid: int | None = None, host_started: int | None = None) -> SessionRecord:
+                   host_pid: int | None = None, host_started: int | None = None,
+                   regulation: dict | None = None) -> SessionRecord:
         """The READY record of a snapshot that has just been verified."""
         return SessionRecord(
             state=SessionState.READY, snapshot_dir=str(snap.dir), live_save_dir=str(live_dir),
             hashes={rel: info["sha256"] for rel, info in snap.files.items()},
             created=datetime.now().astimezone().isoformat(timespec="seconds"),
             snapshot_verified=True, exe_sha256=exe_sha256, game_dir=str(game_dir) if game_dir else None,
-            host_pid=host_pid, host_started=host_started)
+            host_pid=host_pid, host_started=host_started, regulation=regulation)
+
+    # ---------------- the game's regulation.bin (spec 1.6.4) ----------------
+    def regulation_world(self) -> Path | None:
+        """The user's own regulation.bin in `<vault>/regulation/`, the file a session may swap in; None when absent."""
+        p = self.root / REGULATION_DIR / REGULATION_NAME
+        return p if p.is_file() else None
+
+    def world_info(self) -> dict | None:
+        world = self.regulation_world()
+        if world is None:
+            return None
+        return {"path": str(world), "size": world.stat().st_size, "sha256": sha256_of(world)}
+
+    def regulation_problems(self, game_dir: Path) -> list[str]:
+        """What stops a swap before anything is touched (empty when there is no file to swap in)."""
+        world = self.regulation_world()
+        if world is None:
+            return []
+        problems = []
+        if world.stat().st_size == 0:
+            problems.append(f"{world} is empty")
+        if not (Path(game_dir) / REGULATION_NAME).is_file():
+            problems.append(f"{Path(game_dir) / REGULATION_NAME} not found, so there is nothing to back up before the swap")
+        return problems
+
+    def backup_regulation(self, snap: Snapshot, game_dir: Path) -> dict | None:
+        """Copy the game's own regulation.bin to `<snapshot>/bin/`, verify the copy and note both hashes in the manifest.
+
+        Returns what the session record needs, or None when there is no file to swap in. The game folder is not touched.
+        """
+        world = self.regulation_world()
+        if world is None:
+            return None
+        game_file = Path(game_dir) / REGULATION_NAME
+        original = sha256_of(game_file)
+        dst = snap.bin_dir / REGULATION_NAME
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(game_file, dst)
+        if sha256_of(dst) != original or sha256_of(game_file) != original:
+            raise VaultError("the backup of regulation.bin does not match the game's file, or the file changed while it was copied")
+        info = {"game_file": str(game_file), "world_file": str(world), "original_sha256": original,
+                "world_sha256": sha256_of(world)}
+        manifest = self.load_manifest(snap.dir)
+        manifest["regulation"] = {"original_sha256": original, "world_sha256": info["world_sha256"]}
+        atomic_write_json(snap.dir / MANIFEST_NAME, manifest)
+        return info
+
+    def install_regulation(self, info: dict) -> None:
+        """Replace the game's regulation.bin with the user's file. Only after the session record holds `info`."""
+        world, game_file = Path(info["world_file"]), Path(info["game_file"])
+        if not world.is_file() or sha256_of(world) != info["world_sha256"]:
+            raise VaultError(f"{world} changed while the session was being prepared; nothing was swapped")
+        tmp = game_file.with_name(game_file.name + TMP_SUFFIX)
+
+        def _swap():
+            tmp.unlink(missing_ok=True)
+            shutil.copy2(world, tmp)
+            os.replace(tmp, game_file)
+
+        self._retry(_swap, f"swap {REGULATION_NAME}")
+        if sha256_of(game_file) != info["world_sha256"]:
+            raise VaultError(f"{REGULATION_NAME} in the game folder does not match your file after the swap")
+
+    def restore_regulation(self, record: SessionRecord) -> bool:
+        """Give the game folder its own regulation.bin back and verify it. True when a file was put back; False when
+        the record has no swap or the game folder already holds the original (idempotent, also after a crash)."""
+        info = record.regulation
+        if not info:
+            return False
+        game_file = Path(info["game_file"])
+        backup = Path(record.snapshot_dir) / BIN_SUBDIR / REGULATION_NAME
+        tmp = game_file.with_name(game_file.name + TMP_SUFFIX)
+        tmp.unlink(missing_ok=True)   # left by an interrupted swap or restore
+        if game_file.is_file() and sha256_of(game_file) == info["original_sha256"]:
+            return False   # the record's hash is the truth: also when the backup is gone and the user put the file back
+        if not backup.is_file() or sha256_of(backup) != info["original_sha256"]:
+            raise VaultError(f"the backup {backup} is missing or damaged; {REGULATION_NAME} was not touched")
+
+        def _put():
+            shutil.copy2(backup, tmp)
+            os.replace(tmp, game_file)
+
+        self._retry(_put, f"restore {REGULATION_NAME}")
+        if sha256_of(game_file) != info["original_sha256"]:
+            raise VaultError(f"{REGULATION_NAME} in the game folder does not match the backup after the restore")
+        return True
 
     # ---------------- preflight (FR-1, vault part) ----------------
     def restore_hint(self) -> str:
@@ -177,13 +273,30 @@ class SaveVault:
         except (OSError, ValueError) as exc:
             raise VaultError(f"manifest of {snap_dir} is unusable: {exc}") from exc
 
-    def verify_snapshot(self, snap_dir: Path) -> list[str]:
-        """Problems found re-hashing the snapshot against its own manifest (empty list = intact)."""
+    def _save_problems(self, snap_dir: Path) -> list[str]:
+        """The `save/` part of a snapshot against its manifest. A restore of the save depends on this part only."""
         try:
             files = self.load_manifest(snap_dir)["files"]
         except VaultError as exc:
             return [str(exc)]
         return _compare(scan(Path(snap_dir) / SAVE_SUBDIR) if (Path(snap_dir) / SAVE_SUBDIR).is_dir() else {}, files)
+
+    def _bin_problems(self, snap_dir: Path) -> list[str]:
+        """The `bin/` part (the game's own regulation.bin), when the manifest says there is one."""
+        try:
+            reg = self.load_manifest(snap_dir).get("regulation")
+        except VaultError:
+            return []   # already reported by _save_problems
+        if not reg:
+            return []
+        f = Path(snap_dir) / BIN_SUBDIR / REGULATION_NAME
+        if not f.is_file():
+            return [f"missing: {BIN_SUBDIR}/{REGULATION_NAME}"]
+        return [] if sha256_of(f) == reg["original_sha256"] else [f"hash mismatch: {BIN_SUBDIR}/{REGULATION_NAME}"]
+
+    def verify_snapshot(self, snap_dir: Path) -> list[str]:
+        """Problems found re-hashing the snapshot against its own manifest (empty list = intact)."""
+        return self._save_problems(snap_dir) + self._bin_problems(snap_dir)
 
     def list_snapshots(self, verify: bool = True) -> list[dict]:
         if not self.root.is_dir():
@@ -193,7 +306,7 @@ class SaveVault:
             if not (d.is_dir() and SNAPSHOT_NAME.match(d.name)):
                 continue
             has_manifest = (d / MANIFEST_NAME).exists()
-            size = dir_size(d / SAVE_SUBDIR) if (d / SAVE_SUBDIR).is_dir() else 0
+            size = sum(dir_size(d / sub) for sub in (SAVE_SUBDIR, BIN_SUBDIR) if (d / sub).is_dir())
             verified = (not self.verify_snapshot(d)) if (verify and has_manifest) else None
             out.append({"name": d.name, "path": d, "size": size, "has_manifest": has_manifest, "verified": verified})
         return out
@@ -217,7 +330,7 @@ class SaveVault:
             record = self.read_session()
         except VaultError as exc:
             record_error = str(exc)
-        return {"session": record, "session_error": record_error, "snapshots": len(snaps),
+        return {"session": record, "session_error": record_error, "snapshots": len(snaps), "world": self.world_info(),
                 "last": last["name"] if last else None,
                 "last_problems": self.verify_snapshot(last["path"]) if last else [],
                 "vault_bytes": dir_size(self.root) if self.root.is_dir() else 0}
@@ -244,7 +357,7 @@ class SaveVault:
     def restore(self, snap_dir: Path, live_dir: Path) -> None:
         """Make live_dir byte-identical to the snapshot. The snapshot is verified first; a damaged one is never used."""
         snap_dir, live = Path(snap_dir), Path(live_dir)
-        problems = self.verify_snapshot(snap_dir)
+        problems = self._save_problems(snap_dir)   # a damaged bin/ must not stop the save from coming back
         if problems:
             raise VaultError("snapshot is damaged, nothing was touched: " + "; ".join(problems[:3]))
         files = self.load_manifest(snap_dir)["files"]

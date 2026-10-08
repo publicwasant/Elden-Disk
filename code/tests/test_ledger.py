@@ -1,11 +1,11 @@
-"""The id ledger behind --live-effects / --live-animations, and the monitors' lines."""
+"""The id ledger behind --live-buffs / --live-animations, and the monitors' lines."""
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from eldendisk import ui
-from eldendisk.game.profile import EffectConfig, Effects
+from eldendisk.game.profile import StateConfig, StateIds
 from eldendisk.reader.animations import AnimationsMonitor
-from eldendisk.reader.effects import EffectsMonitor
+from eldendisk.reader.buffs import BuffsMonitor
 from eldendisk.reader.ledger import HOLD_S, SETTLE_S, Ledger, Line, stamp
 
 T0 = datetime(2026, 10, 7, 4, 6, 12, 750218, tzinfo=timezone(timedelta(hours=7)))
@@ -59,8 +59,8 @@ def test_the_highlight_lasts_a_second_after_a_change():
 
 
 def table():
-    return Effects({100: EffectConfig("Golden Vow", sources="EFFECTS"), 2020110: EffectConfig("Running", sources="ANIMATIONS"),
-                    300: EffectConfig("An animation id", sources="ANIMATIONS")})
+    return StateIds(buffs={100: StateConfig("Golden Vow")},
+                    animations={2020110: StateConfig("Running"), 300: StateConfig("An animation id")})
 
 
 class Fake(SimpleNamespace):
@@ -68,7 +68,7 @@ class Fake(SimpleNamespace):
 
 
 def monitor(cls, out, **kw):
-    sampler = Fake(effects=table(), profile=Fake(sp_effect=Fake(entry=Fake(timer_mode="remaining"))))
+    sampler = Fake(state_ids=table(), profile=Fake(sp_effect=Fake(entry=Fake(timer_mode="remaining"))))
     return cls(sampler, out, now=lambda: monitor.clock[0], **kw), sampler
 
 
@@ -105,10 +105,10 @@ def test_waiting_is_said_once_and_kept_for_the_table():
     assert got == ["[waiting] no player"] and m.waiting == "no player"
 
 
-def test_effects_monitor_shows_timer_and_treats_animation_rows_as_unmapped():
+def test_buffs_monitor_shows_timer_and_treats_animation_rows_as_unmapped():
     got = []
-    m, sampler = monitor(EffectsMonitor, got.append)
-    sampler.raw_effects = lambda: ([(100, 80.0, 45.0), (200, -1.0, 0.0), (300, 10.0, 5.0)], None)
+    m, sampler = monitor(BuffsMonitor, got.append)
+    sampler.raw_buffs = lambda: ([(100, 80.0, 45.0), (200, -1.0, 0.0), (300, 10.0, 5.0)], None)
     m.tick()
     assert "45.0 / 80.0 s" in got[0] and "permanent" in got[1] and "Unknown" in got[2]
     assert m.summary() == "3 active · 3 seen · 2 unmapped"
@@ -116,10 +116,10 @@ def test_effects_monitor_shows_timer_and_treats_animation_rows_as_unmapped():
     assert [l.id for l in m.lines(T0)] == [200, 300] and m.summary().endswith("showing unmapped")
 
 
-def test_quiet_hides_short_internal_effects():
+def test_quiet_hides_short_internal_buffs():
     got = []
-    m, sampler = monitor(EffectsMonitor, got.append, quiet=True)
-    sampler.raw_effects = lambda: ([(1, 0.5, 0.2), (2, 5.0, 2.0), (3, -1.0, 0.0)], None)
+    m, sampler = monitor(BuffsMonitor, got.append, quiet=True)
+    sampler.raw_buffs = lambda: ([(1, 0.5, 0.2), (2, 5.0, 2.0), (3, -1.0, 0.0)], None)
     m.tick()
     assert sorted(e for e in m.ledger.entries) == [2, 3]
 
@@ -128,14 +128,14 @@ def test_the_table_draws_a_row_per_id_highlight_and_unknown():
     lines = [Line(True, 311100, "Gold Scarab", "permanent", "04:06:12.750", False),
              Line(True, 3971, None, "141.2 / 180.0 s", "04:06:12.750", True),
              Line(False, 2000000, "Standing", "", "04:06:07.512", False)]
-    plain = ui.format_ledger("effects", "2 active", lines, columns=80)
-    assert plain[0] == " effects   2 active" and plain[1].split() == ["id", "name", "timer", "time"]
+    plain = ui.format_ledger("buffs", "2 active", lines, columns=80)
+    assert plain[0] == " buffs   2 active" and plain[1].split() == ["id", "name", "timer", "time"]
     assert plain[2].split()[:3] == ["+", "311100", "Gold"] and plain[4].startswith(" -  ")
     assert "Unknown" in plain[3] and "141.2 / 180.0 s" in plain[3]
-    colored = ui.format_ledger("effects", "2 active", lines, color=True, columns=80)
+    colored = ui.format_ledger("buffs", "2 active", lines, color=True, columns=80)
     assert colored[3].count("\x1b[1;33m") >= 4 and "\x1b[1;33m" not in colored[2]   # only the row that just changed
     assert "\x1b[32m+" in colored[2] and "\x1b[2m-" in colored[4]    # active green, gone dim
-    cut = ui.format_ledger("effects", "x", lines * 5, columns=80, max_rows=6)
+    cut = ui.format_ledger("buffs", "x", lines * 5, columns=80, max_rows=6)
     assert len(cut) == 6 and "more (make the window taller" in cut[-1]
     assert ui.format_ledger("a", "x", [], waiting="no player")[0].endswith("waiting: no player")
     assert all(len(l) <= 40 for l in ui.format_ledger("e", "x", lines, columns=40)[2:])

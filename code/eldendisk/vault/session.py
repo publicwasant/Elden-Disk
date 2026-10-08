@@ -45,6 +45,7 @@ class SessionRecord:
     host_started: int | None = None
     game_pid: int | None = None
     game_started: int | None = None
+    regulation: dict | None = None       # 1.6.4: {game_file, world_file, original_sha256, world_sha256} while a swap is owed
     version: int = RECORD_VERSION
 
     def to_json(self) -> dict:
@@ -152,6 +153,11 @@ class SessionLog:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._flush()
+
+    def detach(self) -> None:
+        """Stop writing to the session.log file (its directory is about to be deleted); events still go to `emit`."""
+        self.path = None
+        self._buffer = []
 
     def write(self, msg: str, *, level: str = "I", tag: str = "host", ok: bool = False) -> None:
         stamp = datetime.now().astimezone().isoformat(timespec="seconds")

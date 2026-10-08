@@ -472,3 +472,13 @@ def test_ctrl_c_in_a_vault_off_session_just_stops_waiting(env):
     s, world = make(env, World(lifetime=50, on_tick=on_tick), protect=False)
     assert s.run() == 130
     assert vault.read_session() is None and s.history[-1] == State.IDLE
+
+
+def test_a_record_that_cannot_be_written_discards_the_snapshot_without_tripping_over_its_log(env, monkeypatch):
+    """The snapshot's session.log is deleted with it; the host must not write there afterwards (found in 1.6.4)."""
+    _, live, game, vault = env
+    before = tree(live)
+    monkeypatch.setattr(vault, "write_session", lambda r: (_ for _ in ()).throw(OSError("disk full")))
+    s, world = make(env)
+    assert s.run() == 1 and world.launched == 0
+    assert tree(live) == before and not vault.list_snapshots() and vault.read_session() is None

@@ -4,6 +4,9 @@ itself: every file operation goes through the vault.
   H1 preflight -> H2 snapshot+verify -> H3 record READY -> H4 launch -> H5 record RUNNING -> H6 wait for exit
   -> H7 record RESTORING + restore -> H8 verify -> H9 cleanup + record removed
 
+Since 1.6.4, when `<vault>/regulation/regulation.bin` exists, H2 also backs up the game's own regulation.bin and H3b (after
+the record, before the launch) swaps the user's file in; H7 puts the original back with the save. The host only calls the vault.
+
 Invariant I1: at every instant either live save == snapshot and there is no record, or a record exists whose snapshot
 is verified. Any failure after H3 ends in the restore path, or leaves the record as RESTORE_PENDING.
 """
@@ -86,6 +89,8 @@ class Session:
             problems.append("anti-cheat processes are running; the host is offline-only")
         if self.protect and self.hooks.process_started(self.pid) is None:
             problems.append("cannot read this process's start time, so `write` could never be authorised")
+        if self.protect and self.hooks.game_dir is not None:
+            problems += self.vault.regulation_problems(self.hooks.game_dir)
         problems += self.hooks.extra_preflight()
         return problems
 
@@ -137,6 +142,11 @@ class Session:
         return code
 
     # ---- H2, H3 ----
+    def _discard(self, snap) -> None:
+        """Remove a snapshot nobody owes a restore for. Its session.log goes with it, so the log must stop writing there."""
+        self.log.detach()
+        shutil.rmtree(snap.dir, ignore_errors=True)
+
     def _prepare(self):
         """(snapshot, 0) when the session may start, else (None, exit code)."""
         self._to(State.SNAPSHOTTING)
@@ -153,25 +163,48 @@ class Session:
         self.log.attach(snap.dir / "session.log")
         self.log.d("vault", f"backup {self.live} (steamID {self.live.name}) -> {snap.dir}")
         self.log.ok("vault", f"snapshot {snap.dir.name}, {len(snap.files)} file{"" if len(snap.files) == 1 else "s"} verified")
+        try:   # nothing in the game folder changes here: the game's own regulation.bin is only copied into the snapshot
+            reg = self.vault.backup_regulation(snap, self.hooks.game_dir) if self.hooks.game_dir is not None else None
+        except KeyboardInterrupt:
+            self.log.w("host", "interrupted while backing up regulation.bin; nothing changed")
+            self._discard(snap)
+            self._to(State.IDLE)
+            return None, 130
+        except (VaultError, OSError) as exc:
+            self.log.e("vault", f"could not back up regulation.bin, discarding the snapshot: {exc}")
+            self._discard(snap)
+            self._to(State.IDLE)
+            return None, 1
+        if reg:
+            self.log.ok("vault", f"game's regulation.bin backed up to {snap.dir.name}/bin (sha256 {reg['original_sha256'][:12]})")
         guard = self.hooks.game_guard
         if guard is not None:
             guard.take_listing()
         try:   # the record is written BEFORE the game is launched and AFTER the snapshot is verified
             self.vault.write_session(self.vault.new_record(
                 snap, self.live, exe_sha256=self.hooks.exe_sha256, game_dir=self.hooks.game_dir,
-                host_pid=self.pid, host_started=self.hooks.process_started(self.pid)))
+                host_pid=self.pid, host_started=self.hooks.process_started(self.pid), regulation=reg))
         except KeyboardInterrupt:
             self.log.w("host", "interrupted before the session started; nothing changed")
             self._to(State.IDLE)
             return None, 130
         except OSError as exc:
             self.log.e("vault", f"could not write the session record, discarding the snapshot: {exc}")
-            shutil.rmtree(snap.dir, ignore_errors=True)
+            self._discard(snap)
             self._to(State.IDLE)
             return None, 1
         if guard is not None:
             guard._on_change = lambda files: self.vault.update_session(game_folder_files_created=list(files))
         self._to(State.READY)
+        if reg:   # H3b: the record exists, so every way out of here ends in the restore
+            try:
+                self.vault.install_regulation(reg)
+            except (VaultError, OSError, KeyboardInterrupt) as exc:
+                interrupted = isinstance(exc, KeyboardInterrupt)
+                self.log.e("vault", "interrupted while swapping regulation.bin" if interrupted
+                           else f"could not swap regulation.bin: {exc}")
+                return None, self._restore(130 if interrupted else 1)
+            self.log.ok("vault", f"regulation.bin: your file replaces the game's for this session (sha256 {reg['world_sha256'][:12]})")
         return snap, 0
 
     # ---- H4 .. H9 ----

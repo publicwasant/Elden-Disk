@@ -26,9 +26,10 @@ POLICY_KEY = {   # settable value -> the key of the writer's edit policy
     "character.vitals.stamina.current": "stamina",
 }
 WRITABLE = tuple(POLICY_KEY)
-_SEGMENTS = {"attrs": "attributes", "rune": "runes", "animation": "animations", "hp": "hit_point", "fp": "focus_point",
+_SEGMENTS = {"attrs": "attributes", "rune": "runes", "animation": "animations", "buff": "buffs", "hp": "hit_point", "fp": "focus_point",
              "max": "maximum"}
-_ROOTS = ("character", "systems")
+_ROOTS = ("character", "systems", "params")
+PARAMS = "params"   # the third block of the document: tables of the game itself, always typed in full (`params.effects...`)
 _READ_ONLY_WHY = (
     ("character.vitals.", ("maximum", "base"),
      "computed by the game from your stats (set the attribute, or use hp/fp/stamina for the current value)"),
@@ -46,7 +47,10 @@ class UnknownName(ValueError):
 def normalize(name: str) -> str:
     """The canonical dotted path of `name` (wildcards pass through). Does not check that the path exists."""
     n = name.strip().lower()
-    segs = [_SEGMENTS.get(s, s) for s in n.split(".") if s != ""]
+    parts = [s for s in n.split(".") if s != ""]
+    if parts and parts[0] == PARAMS:   # no short forms and no aliases below `params`: its names come from offsets.json
+        return ".".join(parts)
+    segs = [_SEGMENTS.get(s, s) for s in parts]
     if segs and segs[0] == "character":
         segs = segs[1:] or ["character"]
         if segs == ["character"]:
@@ -60,6 +64,11 @@ def normalize(name: str) -> str:
             segs.insert(0, "vitals")
         segs.insert(0, "character")
     return ".".join(segs) if segs else ""
+
+
+def is_param_name(name: str) -> bool:
+    """True for `params` and everything under it (the names `--set` and `--reset` hand to game.params)."""
+    return normalize(name).split(".")[0] == PARAMS
 
 
 def suggest(name: str, candidates) -> list[str]:
@@ -98,7 +107,7 @@ def write_targets(name: str) -> list[str]:
     for prefix, fields, why in _READ_ONLY_WHY:
         if path.startswith(prefix) and path.rsplit(".", 1)[1] in fields:
             raise ValueError(f"{name!r} cannot be set: {why}")
-    if path.startswith(("character.effects", "character.animations", "systems")):
+    if path.startswith(("character.buffs", "character.animations", "systems")):
         raise ValueError(f"{name!r} cannot be set: it is not a stored character value")
     if path in ("character", "character.attributes", "character.vitals"):
         raise ValueError(f"{name!r} is a group: name one value, or use a pattern such as attributes.*")

@@ -12,7 +12,7 @@ DOC = {
         "runes": {"total": 40_402_709, "baseline": 40_401_505, "delta": 1204},
         "attributes": {"vigor": 80, "faith": 60},
         "vitals": {"hit_point": {"current": 1460, "maximum": 1460, "base": 1400}},
-        "effects": {"311100": {"name": "x", "times": {"buff_duration": 45.2, "max_duration": 80.0}}},
+        "buffs": {"311100": {"name": "x", "times": {"buff_duration": 45.2, "max_duration": 80.0}}},
     },
 }
 
@@ -27,7 +27,7 @@ DOC = {
     ("hp.max", "character.vitals.hit_point.maximum"), ("fp.base", "character.vitals.focus_point.base"),
     ("focus_point.current", "character.vitals.focus_point.current"), ("stamina", "character.vitals.stamina"),
     ("vitals.hit_point.current", "character.vitals.hit_point.current"),
-    ("effects", "character.effects"), ("animation", "character.animations"), ("systems.status.pid", "systems.status.pid"),
+    ("buffs", "character.buffs"), ("buff", "character.buffs"), ("animation", "character.animations"), ("systems.status.pid", "systems.status.pid"),
     ("attrs.*", "character.attributes.*"),
 ])
 def test_normalize(name, path):
@@ -56,7 +56,7 @@ def test_a_group_pattern_expands_to_every_settable_value_in_it():
     ("*", "pattern must name a group"), ("character.*", "pattern must name a group"), ("ALL", "unknown name"),
     ("hp.max", "computed by the game"), ("hit_point.base", "computed by the game"),
     ("runes.delta", "computed by the tool"), ("runes.baseline", "computed by the tool"),
-    ("effects", "not a stored character value"), ("effects.311100.times.buff_duration", "not a stored character value"),
+    ("buffs", "not a stored character value"), ("buffs.311100.times.buff_duration", "not a stored character value"),
     ("systems.status.pid", "not a stored character value"), ("animations", "not a stored character value"),
     ("attributes", "is a group"), ("vitals", "is a group"), ("character", "is a group"),
     ("vitals.*.maximum", "matches no value you can set"), ("vigr", "did you mean character.attributes.vigor"),
@@ -121,10 +121,10 @@ def test_rows_group_and_leaf_formatting():
 def test_changes_ignore_buff_countdowns_and_report_appearing_values():
     a = view.flatten(DOC)
     b = view.flatten({"character": {**DOC["character"], "level": 151,
-                                    "effects": {"311100": {"name": "x", "times": {"buff_duration": 44.9, "max_duration": 80.0}},
+                                    "buffs": {"311100": {"name": "x", "times": {"buff_duration": 44.9, "max_duration": 80.0}},
                                                 "100": {"name": "y"}}},
                       "systems": DOC["systems"]})
-    assert view.changes(a, b) == [("character.effects.100.name", None, "y"), ("character.level", 150, 151)]
+    assert view.changes(a, b) == [("character.buffs.100.name", None, "y"), ("character.level", 150, 151)]
     assert view.changes(a, a) == []
 
 
@@ -134,21 +134,21 @@ def test_as_json_for_one_selection_and_for_the_whole_document():
     assert json.loads(view.as_json(view.select(DOC, None))) == DOC
 
 
-# ---- effects and animations are part of the document, like in disk-state.json ----
-def test_the_whole_view_includes_effects_and_animations():
+# ---- buffs and animations are part of the document, like in disk-state.json ----
+def test_the_whole_view_includes_buffs_and_animations():
     doc = {**DOC, "character": {**DOC["character"], "animations": {"7": {"name": "roll"}}}}
     paths = {r.path for r in view.rows(view.select(doc, None))}
-    assert "character.effects.311100.name" in paths and "character.animations.7.name" in paths
+    assert "character.buffs.311100.name" in paths and "character.animations.7.name" in paths
 
 
-def test_effects_and_animations_are_selected_like_any_other_name():
+def test_buffs_and_animations_are_selected_like_any_other_name():
     doc = {**DOC, "character": {**DOC["character"], "animations": {"7": {"name": "roll"}}}}
-    assert view.select(doc, "effects") == [("character.effects", doc["character"]["effects"])]
+    assert view.select(doc, "buffs") == [("character.buffs", doc["character"]["buffs"])]
     assert view.select(doc, "character.animations.7.name") == [("character.animations.7.name", "roll")]
-    hits = dict(view.select(doc, "character.effects.*"))
-    assert hits["character.effects.311100.name"] == "x" and "character.level" not in hits
-    assert dict(view.select(doc, "character.*"))["character.effects.311100.name"] == "x"
-    assert view.select(doc, "effects.999") == []         # not active now; the lists come and go
+    hits = dict(view.select(doc, "character.buffs.*"))
+    assert hits["character.buffs.311100.name"] == "x" and "character.level" not in hits
+    assert dict(view.select(doc, "character.*"))["character.buffs.311100.name"] == "x"
+    assert view.select(doc, "buffs.999") == []         # not active now; the lists come and go
     with pytest.raises(UnknownName):
         view.select(doc, "character.effectz.999")
 
@@ -165,10 +165,10 @@ def test_several_names_are_one_selection_in_the_order_asked_without_repeats():
 
 def test_a_wildcard_and_several_names_print_as_one_tree():
     doc = {**DOC, "character": {**DOC["character"], "animations": {"7": {"name": "roll"}}}}
-    rows = view.rows(view.select(doc, ["character.runes.*", "character.effects.*", "animations.*"]))
+    rows = view.rows(view.select(doc, ["character.runes.*", "character.buffs.*", "animations.*"]))
     shape = [(r.indent, r.key, r.value) for r in rows]
     assert shape[:6] == [(0, "character", None), (1, "runes", None), (2, "total", "40,402,709"),
-                         (2, "baseline", "40,401,505"), (2, "delta", "+1,204"), (1, "effects", None)]
+                         (2, "baseline", "40,401,505"), (2, "delta", "+1,204"), (1, "buffs", None)]
     assert (2, "311100", None) in shape and (3, "name", "x") in shape
     assert (1, "animations", None) in shape and (3, "name", "roll") in shape
     assert shape.count((0, "character", None)) == 1            # one `character` heading, not one per name

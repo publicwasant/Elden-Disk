@@ -11,7 +11,7 @@ from eldendisk.game.attach import EXIT_EAC, AttachError, Target
 from eldendisk.game.memory import Module
 from eldendisk.game.profile import AnimLayout
 from eldendisk.vault import SaveVault, SessionState
-from tests.test_disk import BASE, GD, effects, full_world, make_profile
+from tests.test_disk import BASE, GD, state_ids, full_world, make_profile
 
 EXE_SHA = "ab" * 32
 HOST_PID, HOST_STARTED, GAME_PID, GAME_STARTED = 100, 555, 4242, 777
@@ -46,7 +46,7 @@ def rig(tmp_path, monkeypatch):
     monkeypatch.setattr(rcmd, "require_windows_x64", lambda: None)
     monkeypatch.setattr(rcmd, "locate", lambda offsets: box["locate"](offsets))
     monkeypatch.setattr(rcmd, "open_read", lambda t: mem)
-    monkeypatch.setattr(rcmd, "load_effects", lambda p: effects())
+    monkeypatch.setattr(rcmd, "load_state_ids", lambda p: state_ids())
     monkeypatch.setattr(rcmd, "eac_loaded", lambda pid: box["eac"])
     monkeypatch.setattr(rcmd, "is_window_active", lambda pid: box["active"])
     monkeypatch.setattr(rcmd, "process_started",
@@ -54,8 +54,8 @@ def rig(tmp_path, monkeypatch):
     monkeypatch.setattr(rcmd.time, "sleep", fake_sleep)
 
     def args(**kw):
-        d = dict(query=None, export=False, live=False, live_effects=False, live_animations=False, json=False,
-                 timeout=1.0, offsets="x", effects="y", vault=str(tmp_path / "vault"), hz=60.0, quiet=False,
+        d = dict(query=None, export=False, live=False, live_buffs=False, live_animations=False, json=False,
+                 timeout=1.0, offsets="x", state_ids="y", vault=str(tmp_path / "vault"), hz=60.0, quiet=False,
                  mapped=False, unmapped=False, flat=False, no_idle=True, out=str(tmp_path / "out"), export_interval=0.0, timer_interval=0.0, verbose=False)
         return argparse.Namespace(**{**d, **kw})
 
@@ -249,17 +249,17 @@ def test_live_without_a_name_follows_every_value(rig, capsys):
     assert "character" in out and "hit_point" in out and "10,008,626" in out
 
 
-def test_the_whole_views_show_effects_and_animations_like_the_export(rig, capsys):
+def test_the_whole_views_show_buffs_and_animations_like_the_export(rig, capsys):
     tmp, mem, target, box, args = rig
     assert rcmd.cmd_read(args(export=True)) == 0
     lists = doc(tmp)["character"]
-    assert lists["effects"] and "animations" in lists
-    ids = list(lists["effects"])
+    assert lists["buffs"] and "animations" in lists
+    ids = list(lists["buffs"])
     for kw in (dict(), dict(live=True)):
         capsys.readouterr()
         assert rcmd.cmd_read(args(**kw)) == 0
         out = capsys.readouterr().out
-        assert "hit_point" in out and "effects" in out and "animations" in out
+        assert "hit_point" in out and "buffs" in out and "animations" in out
         assert all(i in out.split() for i in ids)
 
 
@@ -293,14 +293,14 @@ def test_live_on_a_terminal_redraws_in_place_and_highlights_what_changed(rig, mo
 def test_the_lists_can_be_queried_by_name(rig, capsys):
     tmp, mem, target, box, args = rig
     assert rcmd.cmd_read(args(export=True)) == 0
-    ids = list(doc(tmp)["character"]["effects"])
+    ids = list(doc(tmp)["character"]["buffs"])
     capsys.readouterr()
-    assert rcmd.cmd_read(args(query="character.effects.*")) == 0
+    assert rcmd.cmd_read(args(query="character.buffs.*")) == 0
     out = capsys.readouterr().out
     assert any(i in out for i in ids) and "level" not in out
     assert rcmd.cmd_read(args(query="animations")) == 0
     assert capsys.readouterr().out.strip()
-    assert rcmd.cmd_read(args(query="effects", live=True)) == 0
+    assert rcmd.cmd_read(args(query="buffs", live=True)) == 0
     assert any(i in capsys.readouterr().out for i in ids)
 
 
@@ -310,14 +310,14 @@ def test_live_with_an_unknown_name_stops_before_the_loop(rig, capsys):
     assert "unknown name" in capsys.readouterr().err and box["sleeps"] == 0
 
 
-# ---- --live-effects / --live-animations ----
+# ---- --live-buffs / --live-animations ----
 def _lines(out, prefix):
     return [l for l in out.splitlines() if l.startswith(prefix)]
 
 
-def test_live_effects_without_a_terminal_prints_each_id_once_with_its_name(rig, capsys):
+def test_live_buffs_without_a_terminal_prints_each_id_once_with_its_name(rig, capsys):
     tmp, mem, target, box, args = rig
-    assert rcmd.cmd_read(args(live_effects=True)) == 0
+    assert rcmd.cmd_read(args(live_buffs=True)) == 0
     out = capsys.readouterr().out
     plus = _lines(out, "+")
     assert [l.split()[1] for l in plus] == ["100", "200", "999"]
@@ -328,20 +328,20 @@ def test_live_effects_without_a_terminal_prints_each_id_once_with_its_name(rig, 
 
 def test_mapped_and_unmapped_filter_the_ids(rig, capsys):
     tmp, mem, target, box, args = rig
-    assert rcmd.cmd_read(args(live_effects=True, unmapped=True)) == 0
+    assert rcmd.cmd_read(args(live_buffs=True, unmapped=True)) == 0
     assert [l.split()[1] for l in _lines(capsys.readouterr().out, "+")] == ["999"]
     mem.ticks = 3
-    assert rcmd.cmd_read(args(live_effects=True, mapped=True)) == 0
+    assert rcmd.cmd_read(args(live_buffs=True, mapped=True)) == 0
     assert [l.split()[1] for l in _lines(capsys.readouterr().out, "+")] == ["100", "200"]
 
 
 def test_both_monitors_share_one_process_and_are_prefixed(rig, capsys):
     tmp, mem, target, box, args = rig
-    assert rcmd.cmd_read(args(live_effects=True, live_animations=True)) == 0
+    assert rcmd.cmd_read(args(live_buffs=True, live_animations=True)) == 0
     out = capsys.readouterr().out
-    assert "[effects] Format:" in out and "[animations] Format:" in out and out.count("[effects] Format:") == 1
+    assert "[buffs] Format:" in out and "[animations] Format:" in out and out.count("[buffs] Format:") == 1
     assert any(l.startswith("[animations] + ") and "Sprint" in l for l in out.splitlines())
-    assert any(l.startswith("[effects] + ") and "Golden Vow" in l for l in out.splitlines())
+    assert any(l.startswith("[buffs] + ") and "Golden Vow" in l for l in out.splitlines())
 
 
 def test_on_a_terminal_the_monitors_draw_one_table_each_in_place(rig, monkeypatch, capsys):
@@ -349,10 +349,10 @@ def test_on_a_terminal_the_monitors_draw_one_table_each_in_place(rig, monkeypatc
     monkeypatch.setattr(rcmd.ui, "can_redraw", lambda stream=None: True)
     monkeypatch.setattr(rcmd.ui.shutil, "get_terminal_size", lambda fallback=None: os.terminal_size((100, 40)))
     tmp, mem, target, box, args = rig
-    assert rcmd.cmd_read(args(live_effects=True, live_animations=True)) == 0
+    assert rcmd.cmd_read(args(live_buffs=True, live_animations=True)) == 0
     out = capsys.readouterr().out
     assert out.startswith("\x1b[?25l") and out.endswith("\x1b[?25h")
-    assert "effects   3 active \u00b7 3 seen \u00b7 1 unmapped" in out and "animations   1 active \u00b7 1 seen" in out
+    assert "buffs   3 active \u00b7 3 seen \u00b7 1 unmapped" in out and "animations   1 active \u00b7 1 seen" in out
     assert "Golden Vow" in out and "Unknown" in out and "Sprint" in out
     assert not _lines(out, "+") and "Format:" not in out       # nothing is printed as a stream
 
@@ -360,10 +360,10 @@ def test_on_a_terminal_the_monitors_draw_one_table_each_in_place(rig, monkeypatc
 def test_chr_state_ids_is_reloaded_when_it_changes(rig, monkeypatch, capsys):
     tmp, mem, target, box, args = rig
     names = tmp / "chr_state_ids.json"
-    names.write_text(json.dumps({"100": {"name": "Golden Vow", "sources": "EFFECTS"}}), encoding="utf-8")
+    names.write_text(json.dumps({"buffs": {"100": {"name": "Golden Vow"}}}), encoding="utf-8")
     mem.ticks = 6
-    from eldendisk.game.profile import load_effects as real_load
-    monkeypatch.setattr(rcmd, "load_effects", real_load)   # the rig fakes it; this test reads real files
+    from eldendisk.game.profile import load_state_ids as real_load
+    monkeypatch.setattr(rcmd, "load_state_ids", real_load)   # the rig fakes it; this test reads real files
     clock = {"t": 100.0}
     monkeypatch.setattr(rcmd.time, "monotonic", lambda: clock["t"])
     n = {"i": 0}
@@ -372,16 +372,29 @@ def test_chr_state_ids_is_reloaded_when_it_changes(rig, monkeypatch, capsys):
         clock["t"] += 2.5
         n["i"] += 1
         if n["i"] == 1:
-            names.write_text(json.dumps({"100": {"name": "Golden Vow", "sources": "EFFECTS"},
-                                         "999": {"name": "Found It", "sources": "EFFECTS"}, "x": 1}), encoding="utf-8")
+            names.write_text(json.dumps({"buffs": {"100": {"name": "Golden Vow"}, "999": {"name": "Found It"}, "x": 1}}),
+                             encoding="utf-8")
         if n["i"] == 2:
-            names.write_text(json.dumps({"100": {"name": "Golden Vow", "sources": "EFFECTS"},
-                                         "999": {"name": "Found It", "sources": "EFFECTS"}}), encoding="utf-8")
+            names.write_text(json.dumps({"buffs": {"100": {"name": "Golden Vow"}, "999": {"name": "Found It"}},
+                                         "animations": {"7": {"name": "Walk"}}}), encoding="utf-8")
 
     monkeypatch.setattr(rcmd.time, "sleep", sleep)
-    assert rcmd.cmd_read(args(live_effects=True, effects=str(names), unmapped=False)) == 0
+    assert rcmd.cmd_read(args(live_buffs=True, state_ids=str(names), unmapped=False)) == 0
     err = capsys.readouterr().err
-    assert "changed but cannot be read" in err and "chr_state_ids.json reloaded (2 ids)" in err
+    assert "changed but cannot be read" in err and "chr_state_ids.json reloaded (2 buffs, 1 animations)" in err
+
+
+def test_an_old_flat_chr_state_ids_file_is_a_clear_error_before_the_game_is_looked_for(rig, monkeypatch, capsys):
+    tmp, mem, target, box, args = rig
+    names = tmp / "chr_state_ids.json"
+    names.write_text(json.dumps({"100": {"name": "Golden Vow", "sources": "EFFECTS"}}), encoding="utf-8")
+    from eldendisk.game.profile import load_state_ids as real_load
+    monkeypatch.setattr(rcmd, "load_state_ids", real_load)
+    box["locate"] = lambda offsets: pytest.fail("the game must not be looked for")
+    for kw in ({}, {"live_buffs": True}):
+        assert rcmd.cmd_read(args(state_ids=str(names), **kw)) == 1
+        err = capsys.readouterr().err
+        assert "malformed" in err and "convert_state_ids" in err
 
 
 def test_waits_for_the_game_instead_of_failing_when_live(rig, capsys):
@@ -395,7 +408,7 @@ def test_waits_for_the_game_instead_of_failing_when_live(rig, capsys):
         return target
 
     box["locate"] = locate
-    assert rcmd.cmd_read(args(live_effects=True)) == 0
+    assert rcmd.cmd_read(args(live_buffs=True)) == 0
     cap = capsys.readouterr()
     assert calls["n"] == 3 and cap.err.count("waiting for eldenring.exe") == 1 and box["sleeps"] >= 2
 
@@ -429,10 +442,10 @@ def test_read_never_opens_a_writable_handle():
 def test_a_list_name_with_nothing_active_is_empty_not_unknown():
     from eldendisk.reader import view
     from eldendisk.game.values import UnknownName
-    d = {"systems": {}, "character": {"level": 1, "effects": {}, "animations": {}}}
-    assert view.select(d, "character.effects.*") == []
+    d = {"systems": {}, "character": {"level": 1, "buffs": {}, "animations": {}}}
+    assert view.select(d, "character.buffs.*") == []
     assert view.select(d, "animations.*") == []
-    assert view.select(d, "character.effects.311100.name") == []
+    assert view.select(d, "character.buffs.311100.name") == []
     with pytest.raises(UnknownName):
         view.select(d, "character.effectz.*")
 
@@ -446,7 +459,7 @@ def test_live_query_of_a_list_survives_the_last_effect_ending(rig, monkeypatch, 
     def build(self, state, sample):
         d = real(self, state, sample)
         if gone["on"]:
-            d["character"]["effects"] = {}
+            d["character"]["buffs"] = {}
         return d
 
     monkeypatch.setattr(rcmd.ExportWriter, "build", build)
@@ -458,7 +471,7 @@ def test_live_query_of_a_list_survives_the_last_effect_ending(rig, monkeypatch, 
             gone["on"] = True
 
     monkeypatch.setattr(rcmd.time, "sleep", sleep)
-    assert rcmd.cmd_read(args(query="character.effects.*", live=True)) == 0
+    assert rcmd.cmd_read(args(query="character.buffs.*", live=True)) == 0
     cap = capsys.readouterr()
     assert "unknown name" not in cap.err
     assert "→ -" in cap.out        # what was active is shown as gone, the loop kept running
@@ -470,11 +483,11 @@ def test_one_shot_query_of_an_empty_list_says_so_and_succeeds(rig, monkeypatch, 
 
     def build(self, state, sample):
         d = real(self, state, sample)
-        d["character"]["effects"] = {}
+        d["character"]["buffs"] = {}
         return d
 
     monkeypatch.setattr(rcmd.ExportWriter, "build", build)
-    assert rcmd.cmd_read(args(query="character.effects.*")) == 0
+    assert rcmd.cmd_read(args(query="character.buffs.*")) == 0
     assert "nothing matches" in capsys.readouterr().err
 
 
@@ -571,7 +584,87 @@ def test_live_on_a_terminal_paints_buff_countdowns_in_their_own_colour(rig, monk
     monkeypatch.delenv("NO_COLOR", raising=False)
     tmp, mem, target, box, args = rig
     mem.ticks = 5
-    assert rcmd.cmd_read(args(query=["character.effects.*"], live=True)) == 0
+    assert rcmd.cmd_read(args(query=["character.buffs.*"], live=True)) == 0
     out = capsys.readouterr().out
     assert re.search(r"buff_duration\s*\x1b\[0m\s+\x1b\[35m45\.00\x1b\[0m", out)          # the countdown
     assert re.search(r"max_duration\s*\x1b\[0m\s+80\.00\n", out)                          # a constant beside it stays plain
+
+
+# ---- game params (spec 1.6.3) ----
+from tests import paramfile as pf   # noqa: E402
+from tests.test_disk import valid   # noqa: E402
+
+BF = "params.effects.1621000"
+
+
+@pytest.fixture
+def prig(rig):
+    """The same rig, with a param file in the game's memory and a profile that knows about it."""
+    tmp, mem, target, box, args = rig
+    pf.build_file(mem.m, pf.small_ids(), rows={pf.ROWS["black_flame"]: pf.row_bytes(effect_endurance=-1.0)})
+    pf.wire(mem.m, 0)
+    prof = dataclasses.replace(target.profile, params=pf.params_profile().params)
+    box["locate"] = lambda offsets: dataclasses.replace(target, profile=prof)
+    return tmp, mem, target, box, args
+
+
+def test_query_a_params_value_and_a_group(prig, capsys):
+    tmp, mem, target, box, args = prig
+    assert rcmd.cmd_read(args(query=f"{BF}.effectEndurance")) == 0
+    assert capsys.readouterr().out.split() == [f"{BF}.effectEndurance", "-1.0"]
+    assert rcmd.cmd_read(args(query=f"{BF}.vfxId")) == 0
+    assert capsys.readouterr().out.split() == [f"{BF}.vfxId", "9010"]
+    assert rcmd.cmd_read(args(query="PARAMS.effects.1625000")) == 0
+    out = capsys.readouterr().out
+    assert [l.strip() for l in out.splitlines()[:3]] == ["params", "effects", "1625000"]
+    assert re.search(r"\bname\s+Black Flame Ritual\n", out) and re.search(r"\beffectEndurance\s+2\.0\n", out) and re.search(r"\bvfxId\s+9010\n", out)
+    assert rcmd.cmd_read(args(query=[f"{BF}.effectEndurance", "level"])) == 0
+    assert "level" in capsys.readouterr().out
+
+
+def test_query_with_a_pattern_and_in_json(prig, capsys):
+    tmp, mem, target, box, args = prig
+    assert rcmd.cmd_read(args(query="params.effects.*.effectEndurance", flat=True)) == 0
+    rows = [l.split() for l in capsys.readouterr().out.splitlines()]
+    assert [r[0] for r in rows] == [f"params.effects.{i}.effectEndurance" for i in pf.ROWS.values()]
+    assert [r[1] for r in rows] == ["-1.0", "2.0", "2.0", "2.0"]
+    assert rcmd.cmd_read(args(query=f"{BF}", json=True)) == 0
+    assert json.loads(capsys.readouterr().out)[BF]["effectEndurance"] == -1.0
+
+
+def test_no_flag_prints_the_params_too_and_character_stars_do_not(prig, capsys):
+    tmp, mem, target, box, args = prig
+    assert rcmd.cmd_read(args()) == 0
+    out = capsys.readouterr().out
+    assert "params" in out and "1621000" in out and "Scouring Black Flame" in out
+    assert rcmd.cmd_read(args(query="character.*")) == 0
+    assert "params" not in capsys.readouterr().out
+
+
+def test_the_export_has_the_params_block_and_it_is_valid(prig):
+    tmp, mem, target, box, args = prig
+    assert rcmd.cmd_read(args(export=True)) == 0
+    d = doc(tmp)
+    valid(d)
+    assert list(d) == ["systems", "character", "params"]
+    assert d["params"]["effects"]["1621000"] == {"name": "Black Flame", "effectEndurance": -1.0, "motionInterval": 0.1, "changeHpRate": 0.1,
+                                                      "changeHpPoint": 1, "atkOccurrenceSpEffectId": -1, "vfxId": 9010}
+    assert d["params"]["effects"]["1623000"]["effectEndurance"] == 2.0
+
+
+def test_params_that_cannot_be_read_are_a_clear_error_and_the_rest_still_works(prig, capsys):
+    tmp, mem, target, box, args = prig
+    mem.m.put(pf.HEAD + 0x30, b"\0" * 8)                   # the file no longer looks like a param file
+    assert rcmd.cmd_read(args(query=f"{BF}.effectEndurance")) == 1
+    err = capsys.readouterr().err
+    assert "params cannot be read" in err and "data start" in err
+    assert rcmd.cmd_read(args(query="level")) == 0
+    assert rcmd.cmd_read(args(export=True)) == 0
+    assert doc(tmp)["params"] is None and doc(tmp)["character"]["level"] == 386
+
+
+def test_a_game_version_without_params_says_so(rig, capsys):
+    tmp, mem, target, box, args = rig
+    assert rcmd.cmd_read(args(query=f"{BF}.effectEndurance")) == 1
+    assert "no params block in offsets.json" in capsys.readouterr().err
+    assert rcmd.cmd_read(args(query="level")) == 0

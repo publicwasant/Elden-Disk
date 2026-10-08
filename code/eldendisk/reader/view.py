@@ -9,13 +9,13 @@ import json
 from fnmatch import fnmatchcase
 from typing import Iterator, NamedTuple
 
-from ..game.values import UnknownName, is_pattern, normalize, suggest
+from ..game.values import PARAMS, UnknownName, is_pattern, normalize, suggest
 
 TICKING = (".buff_duration",)     # countdowns: the live views paint them in their own colour, they are never "changes"
-VOLATILE = (*TICKING, "systems.status.ignored.effects", "systems.status.ignored.animations")
-# buff countdowns and the counters of ignored effects / animations change every few frames; the change stream
+VOLATILE = (*TICKING, "systems.status.ignored.buffs", "systems.status.ignored.animations")
+# buff countdowns and the counters of ignored buffs / animations change every few frames; the change stream
 # (the fallback for consoles that cannot redraw in place) leaves them out
-LISTS = ("character.effects", "character.animations")   # these come and go: no match now is not a wrong name
+LISTS = ("character.buffs", "character.animations")   # these come and go: no match now is not a wrong name
 
 
 class Row(NamedTuple):
@@ -46,7 +46,7 @@ def _walk(path: str, value) -> object:
 
 
 def _names_a_list(path: str) -> bool:
-    """True when `path` (a name or a pattern) points into the effect or animation list."""
+    """True when `path` (a name or a pattern) points into the buff or animation list."""
     return any(path == m or path.startswith(m + ".") for m in LISTS)
 
 
@@ -65,7 +65,7 @@ def select(doc: dict, names: str | list[str] | None) -> list[tuple[str, object]]
     """[(canonical path, value or subtree)] for one name or several; the whole document (what `disk-state.json`
     holds) for none. A path selected twice (`runes` and `runes.total`) is listed once, in the order first asked.
 
-    UnknownName if a name matches nothing, except for names inside the effect and animation lists: they are empty
+    UnknownName if a name matches nothing, except for names inside the buff and animation lists: they are empty
     when nothing is active, so no match there gives nothing.
     """
     wanted = _wanted(names)
@@ -79,25 +79,38 @@ def select(doc: dict, names: str | list[str] | None) -> list[tuple[str, object]]
     return out
 
 
+def _canonical(leaves: dict[str, object]) -> dict[str, str]:
+    """{lower-case path: path as the document spells it}, for every leaf and every group above it."""
+    out: dict[str, str] = {}
+    for p in leaves:
+        parts = p.split(".")
+        for i in range(1, len(parts) + 1):
+            q = ".".join(parts[:i])
+            out.setdefault(q.lower(), q)
+    return out
+
+
 def _select_one(doc: dict, name: str) -> list[tuple[str, object]]:
     path = normalize(name)
     leaves = flatten(doc)
     if is_pattern(path):
-        hits = [(p, v) for p, v in leaves.items() if fnmatchcase(p, path)]
+        hits = [(p, v) for p, v in leaves.items() if fnmatchcase(p.lower(), path)]
         if hits:
             return hits
     else:
+        if path.startswith(PARAMS):   # `params` names are typed in any letter case (effectEndurance), the rest is lower-case
+            path = _canonical(leaves).get(path, path)
         try:
             return [(path, _walk(path, doc))]
         except KeyError:
             pass
     if _names_a_list(path):
-        return []       # the lists come and go (an effect ends, an animation stops): no match now is not a wrong name
+        return []       # the lists come and go (a buff ends, an animation stops): no match now is not a wrong name
     known = (set(leaves) | {p.rsplit(".", 1)[0] for p in leaves if "." in p}) - {"character", "systems"}
     raise UnknownName(name, suggest(name, sorted(known)))
 
 
-def fmt(key: str, value) -> str:
+def fmt(key: str, value, path: str = "") -> str:
     if value is None:
         return "-"
     if isinstance(value, bool):
@@ -105,9 +118,9 @@ def fmt(key: str, value) -> str:
     if isinstance(value, int):
         if key == "delta":
             return f"{value:+,}"
-        return str(value) if key in ("pid", "code") else f"{value:,}"
+        return str(value) if key in ("pid", "code") or path.startswith(PARAMS + ".") else f"{value:,}"   # ids: no commas
     if isinstance(value, float):
-        return f"{value:.2f}"
+        return repr(value) if path.startswith(PARAMS + ".") else f"{value:.2f}"   # params: -1.0 and 0.01 as they are
     if isinstance(value, list):
         return ", ".join(fmt(key, v) for v in value) if all(not isinstance(v, (dict, list)) for v in value) \
             else json.dumps(value)
@@ -121,7 +134,7 @@ def _rows(value: dict, indent: int, prefix: str) -> Iterator[Row]:
             yield Row(indent, str(key), None, path)
             yield from _rows(v, indent + 1, path)
         else:
-            yield Row(indent, str(key), fmt(str(key), v), path)
+            yield Row(indent, str(key), fmt(str(key), v, path), path)
 
 
 def _graft(tree: dict, parts: list[str], value) -> None:
@@ -150,11 +163,11 @@ def rows(selection: list[tuple[str, object]], flat: bool = False) -> list[Row]:
     exactly as the whole document is printed, so a wildcard or several names read like `read` itself. One single
     value is one `path  value` row. `flat`: every value is one `full.path  value` row, no headings."""
     if flat:
-        return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value), path)
+        return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value, path), path)
                 for top, sub in selection for path, value in flatten(sub, top).items()]
     if len(selection) == 1 and selection[0][0] and not isinstance(selection[0][1], dict):
         path, value = selection[0]
-        return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value), path)]
+        return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value, path), path)]
     tree: dict = {}
     for path, value in selection:
         _graft(tree, path.split(".") if path else [], value)

@@ -1,4 +1,4 @@
-"""What `--live-effects` and `--live-animations` have in common: a ledger of ids, a filter, and two views of it.
+"""What `--live-buffs` and `--live-animations` have in common: a ledger of ids, a filter, and two views of it.
 
 A monitor reads the game once per tick and updates its ledger. A console that cannot redraw gets the transitions as
 lines through `out` (`+ id  name  time`); a terminal gets `lines(now)` and `summary()` to draw as a table.
@@ -32,6 +32,11 @@ class LedgerMonitor:
         """(ids present now with their detail, None) | (None, why not) | (None, None) = nothing new this tick."""
         raise NotImplementedError
 
+    @property
+    def table(self) -> dict:
+        """The names of this monitor's ids (`chr_state_ids.json`: buffs or animations)."""
+        raise NotImplementedError
+
     def is_mapped(self, eid: int) -> bool:
         raise NotImplementedError
 
@@ -47,7 +52,7 @@ class LedgerMonitor:
         return self.show == "all" or (self.show == "mapped") == self.is_mapped(eid)
 
     def name_of(self, eid: int) -> str | None:
-        cfg = self.sampler.effects.table.get(eid) if self.is_mapped(eid) else None
+        cfg = self.table.get(eid)
         return cfg.name if cfg is not None else None
 
     def tick(self) -> None:
