@@ -1,5 +1,5 @@
-"""The regulation.bin swap (spec 1.6.4): `<vault>/regulation/regulation.bin` replaces the game's file for one session
-and the game's own file comes back with the save. Fault injection at every boundary, like the save itself."""
+"""The regulation.bin swap (spec 1.6.4, since 1.7.0 the caller names the file): it replaces the game's file for one
+session and the game's own file comes back with the save. Fault injection at every boundary, like the save itself."""
 import json
 from pathlib import Path
 
@@ -12,7 +12,8 @@ from eldendisk.vault import (EXIT_RESTORE_PENDING, GameFolderGuard, SessionLog, 
                              recover, restore_from_record)
 from eldendisk.vault import session as sess
 from eldendisk.vault.recover import keep_from_record
-from tests.test_host import GAME_PID, Killed, World, contaminate, env, make, tree   # noqa: F401  (env is a fixture)
+from tests.test_host import GAME_PID, Killed, World, contaminate, env, tree   # noqa: F401  (env is a fixture)
+from tests.test_host import make as _make
 
 ORIGINAL = b"GAME-REGULATION-" * 4000
 WORLD = b"MY-OTHER-WORLD-" * 5000
@@ -28,9 +29,21 @@ def renv(env):
     return env
 
 
+def world_path(vault):
+    """Where the tests keep 'the user's file': anywhere outside the vault (the caller of the host names it)."""
+    return vault.root.parent / "mine" / "regulation.bin"
+
+
 def put_world(vault, data):
-    (vault.root / "regulation").mkdir(parents=True, exist_ok=True)
-    (vault.root / "regulation" / "regulation.bin").write_bytes(data)
+    world_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    world_path(vault).write_bytes(data)
+
+
+def make(env, world=None, **kw):
+    """The host with the user's file named, when the test has put one down."""
+    if "regulation_world" not in kw and world_path(env[3]).is_file():
+        kw["regulation_world"] = world_path(env[3])
+    return _make(env, world, **kw)
 
 
 def game_file(env):
@@ -57,7 +70,7 @@ def test_the_game_runs_with_the_users_file_and_gets_its_own_back(renv):
     assert listing(game) == before and not (game / TMP).exists()                # nothing else changed in the game folder
     snap = vault.root / vault.list_snapshots()[0]["name"]
     assert (snap / "bin" / "regulation.bin").read_bytes() == ORIGINAL           # the vault keeps the original
-    assert (vault.root / "regulation" / "regulation.bin").read_bytes() == WORLD  # and never touches the user's file
+    assert world_path(vault).read_bytes() == WORLD  # and never touches the user's file
     assert json.loads((snap / "manifest.json").read_text())["regulation"]["original_sha256"] == reg["original_sha256"]
     assert vault.verify_snapshot(snap) == []
     log = (snap / "session.log").read_text()
@@ -292,7 +305,7 @@ def test_a_damaged_backup_is_never_copied_back_and_never_blocks_the_save(renv):
 def test_save_only_restore_does_not_depend_on_the_bin_folder(renv):
     _, live, game, vault = renv
     snap = vault.snapshot(live)
-    info = vault.backup_regulation(snap, game)
+    info = vault.backup_regulation(snap, game, world_path(vault))
     (snap.dir / "bin" / "regulation.bin").write_bytes(b"damaged")
     contaminate(live)
     vault.restore(snap.dir, live)                                                # `vault restore --snapshot` style
@@ -336,10 +349,11 @@ def test_list_status_and_prune_know_about_bin(renv):
     assert make(renv)[0].run() == 0
     row = vault.list_snapshots()[0]
     assert row["verified"] is True and row["size"] > len(ORIGINAL)               # save + bin
-    assert vault.status()["world"]["size"] == len(WORLD) and len(vault.status()["world"]["sha256"]) == 64
+    info = vault.world_info(world_path(vault))
+    assert info["size"] == len(WORLD) and len(info["sha256"]) == 64 and vault.world_info(None) is None
     assert vault.prune(0 + 1) == [] and make(renv)[0].run() == 0
     assert len(vault.prune(1)) == 1
-    assert (vault.root / "regulation" / "regulation.bin").is_file()              # prune never touches the user's file
+    assert world_path(vault).is_file()                                           # prune never touches the user's file
     assert [s["name"] for s in vault.list_snapshots(verify=False)] == [vault.status()["last"]]
 
 
@@ -348,24 +362,31 @@ def test_the_regulation_folder_is_not_a_snapshot(renv):
     assert vault.list_snapshots() == [] and vault.status()["snapshots"] == 0
 
 
-def test_status_without_a_file_has_no_world(env):
-    assert env[3].status()["world"] is None
+def test_status_knows_the_legacy_file_of_1_6_4_but_never_reads_it(env):
+    vault = env[3]
+    assert vault.status()["legacy_world"] is None
+    (vault.root / "regulation").mkdir(parents=True)
+    (vault.root / "regulation" / "regulation.bin").write_bytes(b"old")
+    assert vault.status()["legacy_world"] == vault.root / "regulation" / "regulation.bin"
+    assert vault.regulation_problems(env[2], None) == []                         # no file named -> nothing to swap
 
 
-def test_vault_status_without_a_file_says_where_to_put_it(env, monkeypatch, capsys):
+def test_vault_status_reports_the_legacy_file_as_not_read(env, monkeypatch, capsys):
     vault = env[3]
     monkeypatch.setattr(vcmd, "require_windows_x64", lambda: None)
     assert cli.main(["vault", "status", "--vault", str(vault.root)]) == 0
-    out = capsys.readouterr().out.replace("\n", " ")
-    assert str(vault.root / "regulation" / "regulation.bin") in " ".join(out.split())
-    assert not (vault.root / "regulation").exists()                              # a query creates nothing
+    assert "regulation" not in capsys.readouterr().out
+    (vault.root / "regulation").mkdir(parents=True)
+    (vault.root / "regulation" / "regulation.bin").write_bytes(b"old")
+    assert cli.main(["vault", "status", "--vault", str(vault.root)]) == 0
+    assert "no longer read" in " ".join(capsys.readouterr().out.split())
 
 
 # ---- the session record ----
 def test_the_record_roundtrips_and_an_older_record_reads_as_no_swap(renv, tmp_path):
     _, live, game, vault = renv
     snap = vault.snapshot(live)
-    info = vault.backup_regulation(snap, game)
+    info = vault.backup_regulation(snap, game, world_path(vault))
     vault.write_session(vault.new_record(snap, live, exe_sha256="abc", regulation=info))
     assert vault.read_session().regulation == info
     raw = json.loads((vault.root / sess.SESSION_NAME).read_text())
@@ -375,13 +396,12 @@ def test_the_record_roundtrips_and_an_older_record_reads_as_no_swap(renv, tmp_pa
 
 
 # ---- command surface ----
-def test_vault_status_names_the_file_and_a_pending_swap(renv, monkeypatch, capsys):
+def test_vault_status_names_a_pending_swap(renv, monkeypatch, capsys):
     _, live, game, vault = renv
     monkeypatch.setattr(vcmd, "require_windows_x64", lambda: None)
     v = ["--vault", str(vault.root)]
     assert cli.main(["vault", "status", *v]) == 0
-    out = capsys.readouterr().out
-    assert "regulation" in out and "swaps it in" in out
+    assert "restore puts the original back" not in capsys.readouterr().out
 
     def on_tick(w, n):
         raise Killed

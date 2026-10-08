@@ -1,9 +1,10 @@
-"""CLI: eldendisk run | read | write | vault | build | hash
+"""CLI: eldendisk run | read | write | vault | extension | build | hash
 
   run    host: back up the save, launch the game offline, restore the save when it exits (leave this open)
   read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
   write  edit values in the running game (--set, --refill, --reset); only inside a session started by `run`
   vault  save vault tools (status, list, verify, restore, keep, prune)
+  extension  build things for the game outside the game: `extension --list`, `extension customize-items --add all`
 
 Every command prints concise lines; with -v it prints the log itself, live (the same lines that go to
 <vault>/eldendisk.log).
@@ -20,6 +21,7 @@ if __package__ is None or __package__ == "":   # run as a script (frozen exe, `p
 from eldendisk import __version__  # noqa: E402
 from eldendisk.commands.build import cmd_build, cmd_hash  # noqa: E402
 from eldendisk.commands.common import add_vault_option, add_verbose  # noqa: E402
+from eldendisk.commands.extension import cmd_extension  # noqa: E402
 from eldendisk.commands.read import cmd_read  # noqa: E402
 from eldendisk.commands.run import cmd_run  # noqa: E402
 from eldendisk.commands.vault import cmd_vault  # noqa: E402
@@ -42,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--save-dir", help="live save folder (default: auto-detected / remembered in the Windows Registry)")
     add_vault_option(r)
     r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
+    r.add_argument("--regulation", metavar="FILE", help="swap this regulation.bin in for the session instead of building one "
+                   "from the spec (an experiment); needs the vault ON")
+    r.add_argument("--spec", metavar="FILE", default=None, help="the items to build into regulation.bin (default: items.json next to the exe, "
+                   "else the copy embedded in it); with the vault ON `run` builds it every time")
+    r.add_argument("--extension-dir", metavar="DIR", default=None, help="where the built regulation.bin goes (default: %%LOCALAPPDATA%%\\EldenDisk\\extension)")
     r.add_argument("--offsets", default=offsets_default, help="offsets.json, checked before launching (default: %(default)s)")
     g = r.add_mutually_exclusive_group()
     g.add_argument("--vault-on", dest="protect", action="store_true",
@@ -133,6 +140,25 @@ def build_parser() -> argparse.ArgumentParser:
         add_verbose(sp, leaf=True)
         sp.set_defaults(fn=cmd_vault)
 
+    # ---- extension ----
+    e = sub.add_parser("extension", help="build things for the game outside the game (customize-items)")
+    e.add_argument("--list", action="store_true", help="show every extension, its spec and its last output")
+    e.add_argument("--extension-dir", metavar="DIR", default=None,
+                   help="where the built files go (default: %%LOCALAPPDATA%%\\EldenDisk\\extension)")
+    e.add_argument("--spec", metavar="FILE", default=None, help="the items to build (default: items.json next to the exe, else the embedded copy)")
+    add_verbose(e)
+    es = e.add_subparsers(dest="ext_name")
+    ci = es.add_parser("customize-items", help="build a regulation.bin with the items of the spec (sources/items.json)")
+    ci.add_argument("--add", metavar="all|ID", help="build all items of the spec, or the one with this id (built every time)")
+    ci.add_argument("--dry-run", action="store_true", help="build and check in memory, write nothing")
+    ci.add_argument("--source", metavar="FILE", default=argparse.SUPPRESS,
+                    help="the game's original regulation.bin to build on (default: the one in the game folder)")
+    ci.add_argument("--game-dir", default=argparse.SUPPRESS, help="folder containing eldenring.exe (default: auto-detect via Steam)")
+    ci.add_argument("--extension-dir", metavar="DIR", default=argparse.SUPPRESS, help="where the built files go")
+    ci.add_argument("--spec", metavar="FILE", default=argparse.SUPPRESS, help="the items to build")
+    add_verbose(ci, leaf=True)
+    e.set_defaults(fn=cmd_extension)
+
     # ---- tooling ----
     h = sub.add_parser("hash", help="print SHA-256 of eldenring.exe (key for offsets.json)")
     h.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
@@ -176,6 +202,10 @@ def main(argv=None) -> int:
             ap.error("--json is for the one-shot print and --query only")
     if args.cmd == "write" and not args.set and not args.refill:
         ap.error("nothing to do: give --set NAME=VALUE and/or --refill LIST")
+    if args.cmd == "extension" and not args.list and not args.ext_name:
+        ap.error("give --list or an extension name (customize-items)")
+    if args.cmd == "extension" and args.ext_name == "customize-items" and args.list:
+        ap.error("--list stands alone")
     if args.cmd == "run" and args.keep < 0:
         ap.error("--keep must not be negative")
     if args.cmd == "run" and args.launch_timeout <= 0:

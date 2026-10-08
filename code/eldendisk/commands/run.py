@@ -13,6 +13,8 @@ from ..host.host import Hooks, Session, State
 from ..paths import describe_resource
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, session_log
+from .extension import build_items
+from ..extension.customize_items.service import ExtensionError
 
 
 STEAM_EXE = "steam.exe"
@@ -36,6 +38,33 @@ def auto_prune(vault: SaveVault, keep: int) -> None:
         book.d("vault", "pruned: " + ", ".join(gone))
 
 
+def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> Path | None:
+    """The regulation.bin to swap in for this session, or None. `--regulation FILE` wins. Otherwise, with the vault ON, the
+    extension builds one from the spec on the game's own file, every time (about 15 s). The vault is what makes that safe:
+    it puts the game's file back. With the vault OFF the extension does not run. A build error stops `run` (ExtensionError).
+    The 1.6.4 place `<vault>/regulation/regulation.bin` is not read any more."""
+    legacy = vault.legacy_world()
+    if legacy is not None:
+        book.w("vault", f"{legacy} is no longer read (since 1.7.0); the extension builds the file from the spec now, "
+                        "or pass a file as --regulation FILE")
+    if getattr(args, "regulation", None):
+        f = Path(args.regulation)
+        if not f.is_file():
+            raise FileNotFoundError(f"--regulation {f}: file not found")
+        if not protect:
+            book.w("vault", f"{f} is ignored: with the vault OFF nothing would put the game's regulation.bin back")
+            return None
+        return f
+    if not protect:
+        book.i("extension", "vault OFF: the extension is not run (it changes the game's files; only the vault can put them back)")
+        return None
+    if vault.read_session() is not None:
+        book.d("extension", "the vault owes a restore from an earlier session: not building; the session will say what to do")
+        return None
+    rep = build_items(args, game_dir / "regulation.bin")
+    return rep.output if rep.built else None
+
+
 def cmd_run(args) -> int:
     require_windows_x64()
     try:
@@ -49,14 +78,16 @@ def cmd_run(args) -> int:
 
     book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
     protect = getattr(args, "protect", True)
-    world = vault.regulation_world()
+    try:
+        world = _regulation(args, vault, game_dir, protect)
+    except (ExtensionError, FileNotFoundError) as exc:
+        book.e("run", str(exc))
+        return 1
     rows = [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
             ("mode", "vault ON (backup before, restore after)" if protect else "vault OFF (no backup, no restore)")]
     if world is not None and protect:
         rows.append(("regulation", f"{world} replaces the game's regulation.bin for this session"))
     begin(args, "run", rows)
-    if world is not None and not protect:
-        book.w("vault", f"{world} is ignored: with the vault OFF nothing would put the game's regulation.bin back")
 
     def extra() -> list[str]:
         out = []
@@ -74,6 +105,7 @@ def cmd_run(args) -> int:
         anticheat_running=lambda: bool(anticheat_processes(list_process_names())),
         launch=lambda: launcher.launch(game_dir),
         exe_sha256=sha, game_dir=game_dir, game_guard=GameFolderGuard(game_dir), extra_preflight=extra,
+        regulation_world=world,
         launch_timeout=args.launch_timeout,
     )
     if any(n.lower() == STEAM_EXE for n in list_process_names()):

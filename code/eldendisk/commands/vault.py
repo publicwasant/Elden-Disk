@@ -13,7 +13,6 @@ from ..logbook import book
 from ..vault import SaveVault, SessionState, VaultError, recover, resolve_vault
 from ..vault.recover import keep_from_record
 from ..vault.session import host_alive
-from ..vault.vault import REGULATION_DIR, REGULATION_NAME
 from .common import live_dir, session_log
 
 
@@ -94,10 +93,8 @@ def cmd_status(args) -> int:
                  ("next", f"close the game, then run `{vault.restore_hint()}`")]
     else:
         ui.result("ok", "no unresolved session, the live save is trusted")
-    w = s["world"]
-    rows.append(("regulation", f"{w['path']} ({w['size'] / 2**20:.1f} MiB, sha256 {w['sha256'][:12]}): the next `run` with the vault ON swaps it in"
-                 if w else f"no file: put yours at {vault.root / REGULATION_DIR / REGULATION_NAME} to swap it in "
-                           "(the folder is not created for you); without it the game keeps its own"))
+    if s["legacy_world"]:
+        rows.append(("regulation", f"{s['legacy_world']} is no longer read (since 1.7.0); see `eldendisk extension --list`"))
     rows.append(("snapshots", f"{s['snapshots']}, last {s['last'] or '-'}"
                  + (", verified" if s["last"] and not s["last_problems"] else "")))
     if s["last"] and s["last_problems"]:

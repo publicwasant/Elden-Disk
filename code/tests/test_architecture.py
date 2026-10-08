@@ -16,6 +16,7 @@ ALLOWED = {
     "host": ["eldendisk.host", "eldendisk.vault", "eldendisk.paths", "eldendisk.game.processes"],
     "reader": ["eldendisk.reader", "eldendisk.game", "eldendisk.paths", "eldendisk.vault.session"],
     "writer": ["eldendisk.writer", "eldendisk.game", "eldendisk.vault.session"],
+    "extension": ["eldendisk.extension"],        # builds files; knows nothing of the vault, the host or the game
 }
 
 
@@ -110,3 +111,15 @@ def test_the_engines_never_see_the_console_or_the_logbook():
         for f in (PKG / pkg).rglob("*.py"):
             bad = [m for m in internal_imports(f) if m in ("eldendisk.logbook", "eldendisk.ui", "eldendisk.logsetup")]
             assert not bad, f"{f.relative_to(PKG).as_posix()} imports {bad}"
+
+
+def test_the_extension_package_uses_only_the_standard_library():
+    """The exe is built without third-party packages; cryptography, zstandard and jsonschema are for the dev tests only."""
+    import sys
+    std = set(sys.stdlib_module_names)
+    for f in (PKG / "extension").rglob("*.py"):
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
+                [node.module] if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module else []
+            for n in names:
+                assert n.split(".")[0] in std | {"eldendisk"}, f"{f.relative_to(PKG).as_posix()} imports {n}"

@@ -1,2 +1,5 @@
 pytest
 jsonschema
+# cross-checks of the extension's own AES and zstd code (tests skip them when missing)
+cryptography
+zstandard

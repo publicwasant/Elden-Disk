@@ -81,6 +81,7 @@ def test_run_v_shows_the_lines_other_terminals_log(tmp_path, monkeypatch, capsys
     monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
     monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
+    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: None)       # not what this test is about (it would build)
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x",
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=True)
     assert run_cmd.cmd_run(args) == 0 and seen["ran"]
@@ -94,8 +95,8 @@ def _run_with_world(tmp_path, monkeypatch, capsys, *, protect):
     import argparse
     from eldendisk.logbook import book
 
-    (tmp_path / "vault" / "regulation").mkdir(parents=True)
-    (tmp_path / "vault" / "regulation" / "regulation.bin").write_bytes(b"mine")
+    (tmp_path / "mine").mkdir()
+    (tmp_path / "mine" / "regulation.bin").write_bytes(b"mine")
 
     class FakeSession:
         history = []
@@ -112,7 +113,8 @@ def _run_with_world(tmp_path, monkeypatch, capsys, *, protect):
     monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x",
-                              no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False, protect=protect)
+                              no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False, protect=protect,
+                              regulation=str(tmp_path / "mine" / "regulation.bin"), extension_dir=str(tmp_path / "ext"))
     assert run_cmd.cmd_run(args) == 0
     captured = capsys.readouterr()
     book.close()
@@ -127,3 +129,10 @@ def test_run_header_names_the_file_that_will_replace_the_games(tmp_path, monkeyp
 def test_run_with_the_vault_off_warns_that_the_file_is_ignored(tmp_path, monkeypatch, capsys):
     out = _run_with_world(tmp_path, monkeypatch, capsys, protect=False)
     assert "is ignored: with the vault OFF" in out and "replaces the game's" not in out
+
+
+def test_run_ignores_the_1_6_4_folder_and_says_so(tmp_path, monkeypatch, capsys):
+    (tmp_path / "vault" / "regulation").mkdir(parents=True)
+    (tmp_path / "vault" / "regulation" / "regulation.bin").write_bytes(b"old")
+    out = _run_with_world(tmp_path, monkeypatch, capsys, protect=True)
+    assert "is no longer read" in " ".join(out.split())

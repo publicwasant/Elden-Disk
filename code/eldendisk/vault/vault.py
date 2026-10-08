@@ -29,7 +29,7 @@ from .session import SessionRecord, SessionState, atomic_write_json
 MANIFEST_NAME = "manifest.json"
 SAVE_SUBDIR = "save"
 BIN_SUBDIR = "bin"                    # <snapshot>/bin/regulation.bin: the game's own file, kept to put it back
-REGULATION_DIR = "regulation"         # <vault>/regulation/regulation.bin: the file the user wants the game to load
+REGULATION_DIR = "regulation"         # <vault>/regulation/regulation.bin: the folder 1.6.4 read the swap file from; ignored since 1.7.0
 REGULATION_NAME = "regulation.bin"
 CONTAMINATED_SUBDIR = "contaminated"
 TMP_SUFFIX = ".eldendisk-tmp"
@@ -106,38 +106,41 @@ class SaveVault:
             snapshot_verified=True, exe_sha256=exe_sha256, game_dir=str(game_dir) if game_dir else None,
             host_pid=host_pid, host_started=host_started, regulation=regulation)
 
-    # ---------------- the game's regulation.bin (spec 1.6.4) ----------------
-    def regulation_world(self) -> Path | None:
-        """The user's own regulation.bin in `<vault>/regulation/`, the file a session may swap in; None when absent."""
+    # ---------------- the game's regulation.bin (spec 1.6.4; since 1.7.0 the caller names the file to swap in) ----------------
+    def legacy_world(self) -> Path | None:
+        """`<vault>/regulation/regulation.bin`, where 1.6.4 looked for the swap file. Not read any more; only reported."""
         p = self.root / REGULATION_DIR / REGULATION_NAME
         return p if p.is_file() else None
 
-    def world_info(self) -> dict | None:
-        world = self.regulation_world()
+    @staticmethod
+    def world_info(world: Path | None) -> dict | None:
         if world is None:
             return None
-        return {"path": str(world), "size": world.stat().st_size, "sha256": sha256_of(world)}
+        return {"path": str(world), "size": Path(world).stat().st_size, "sha256": sha256_of(Path(world))}
 
-    def regulation_problems(self, game_dir: Path) -> list[str]:
+    @staticmethod
+    def regulation_problems(game_dir: Path, world: Path | None) -> list[str]:
         """What stops a swap before anything is touched (empty when there is no file to swap in)."""
-        world = self.regulation_world()
         if world is None:
             return []
+        world = Path(world)
         problems = []
-        if world.stat().st_size == 0:
+        if not world.is_file():
+            problems.append(f"{world} not found")
+        elif world.stat().st_size == 0:
             problems.append(f"{world} is empty")
         if not (Path(game_dir) / REGULATION_NAME).is_file():
             problems.append(f"{Path(game_dir) / REGULATION_NAME} not found, so there is nothing to back up before the swap")
         return problems
 
-    def backup_regulation(self, snap: Snapshot, game_dir: Path) -> dict | None:
+    def backup_regulation(self, snap: Snapshot, game_dir: Path, world: Path | None) -> dict | None:
         """Copy the game's own regulation.bin to `<snapshot>/bin/`, verify the copy and note both hashes in the manifest.
 
         Returns what the session record needs, or None when there is no file to swap in. The game folder is not touched.
         """
-        world = self.regulation_world()
         if world is None:
             return None
+        world = Path(world)
         game_file = Path(game_dir) / REGULATION_NAME
         original = sha256_of(game_file)
         dst = snap.bin_dir / REGULATION_NAME
@@ -330,7 +333,7 @@ class SaveVault:
             record = self.read_session()
         except VaultError as exc:
             record_error = str(exc)
-        return {"session": record, "session_error": record_error, "snapshots": len(snaps), "world": self.world_info(),
+        return {"session": record, "session_error": record_error, "snapshots": len(snaps), "legacy_world": self.legacy_world(),
                 "last": last["name"] if last else None,
                 "last_problems": self.verify_snapshot(last["path"]) if last else [],
                 "vault_bytes": dir_size(self.root) if self.root.is_dir() else 0}

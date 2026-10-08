@@ -47,6 +47,9 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
 | `--no-archive-contaminated` | off | Do not keep a copy of the modified save in the vault before restoring. |
 | `--launch-timeout SEC` | `120` | Seconds to wait for `eldenring.exe` to appear. |
 | `--keep N` | `5` | After a finished session keep only the newest N snapshots (never while a restore is owed); `0` = never prune. |
+| `--regulation FILE` | none | Swap this `regulation.bin` in for the session instead of building one from the spec (an experiment). Needs the vault ON. |
+| `--spec FILE` | embedded `items.json` | The items `run` builds into a `regulation.bin` (vault ON only; every run; about 15 s). See `extension`. |
+| `--extension-dir DIR` | `%LOCALAPPDATA%\EldenDisk\extension` | Where the built `regulation.bin` is written. |
 | `--vault-on` / `--vault-off` | `--vault-on` | Per run, never toggled while the host runs. **ON**: snapshot before, restore after. **OFF**: no snapshot, no session record, no restore; see below. |
 | `-v`, `--verbose` | off | Show the full log live instead of the concise view; also shows the command lines other terminals log (`read`, `write`, ...). |
 
@@ -56,7 +59,7 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
 
 - `write` is **refused** (exit `5`): with no session record no edit would be covered by a snapshot.
 - An owed restore from an earlier session still blocks `run` (exit `4`), also with `--vault-off`; run `vault restore` or `vault keep` first.
-- Game-running and anti-cheat checks stay; nothing is written to the save or the game folder (except the `regulation.bin` swap of 1.6.4, see `vault`); no automatic pruning of snapshots.
+- Game-running and anti-cheat checks stay; nothing is written to the save or the game folder (except the `regulation.bin` swap, see `vault` and `extension`); no automatic pruning of snapshots.
 - Ctrl+C only stops the host (exit `130`); the game keeps running.
 - `--vault DIR` (where the vault lives) and `--vault-off` (no protection) are unrelated.
 
@@ -297,7 +300,36 @@ python -m eldendisk vault status
 
 A record from 1.6.0 / 1.6.1 (`PENDING_RESTORE.json`) is read as `RESTORE_PENDING`.
 
-**The other world (1.6.4).** `<vault>\regulation\regulation.bin`, if present, replaces the game's `regulation.bin` for a `run` with the vault ON; the game's own file is kept in each snapshot (`bin\regulation.bin`) and put back, with the save, by the same restore (`run`, `vault restore`; `vault keep` puts it back first). No option: the file's presence is the switch. `--vault-off` ignores it (warning). `vault status` shows the file (path, size, short hash) and, for an owed session, that a different file is in the game folder; `vault verify` and `vault list` check `bin\`. A restore that cannot put the file back leaves `RESTORE_PENDING` (exit `4`). Spec: [elden-disk-spec-v1.6.4](specs/elden-disk-spec-v1.6.4.md).
+**The other world (1.6.4, files from 1.7.0).** A `regulation.bin` named by `run` (the one it built from the spec when the vault is ON, or `--regulation FILE`) replaces the game's for a `run` with the vault ON; the game's own file is kept in each snapshot (`bin\regulation.bin`) and put back, with the save, by the same restore (`run`, `vault restore`; `vault keep` puts it back first). `--vault-off` ignores it (warning). The vault no longer looks in `<vault>\regulation\` (1.6.4): a file there is reported once and not used. `vault status` shows, for an owed session, that a different file is in the game folder; `vault verify` and `vault list` check `bin\`. A restore that cannot put the file back leaves `RESTORE_PENDING` (exit `4`). Specs: [1.7.0](specs/elden-disk-spec-v1.7.0.md), [1.6.4](specs/elden-disk-spec-v1.6.4.md).
+
+---
+
+## 4b. `extension` (build things for the game outside the game)
+
+```commandline
+python -m eldendisk extension --list
+python -m eldendisk extension customize-items [--add all|ID] [--dry-run] [--spec FILE] [--source FILE] [--game-dir DIR] [--extension-dir DIR]
+```
+
+`extension` is a main command like `read`, `write` and `vault`. Because an extension changes game files, it depends on the vault's permission like `write` does: with the vault ON (the default) `run` also runs the extension build; with `--vault-off` it does not. There is no flag to turn it on. The build runs **every time** (about 15 s), on the game's own `regulation.bin` (never on an already modified file). Only the output is kept: `%LOCALAPPDATA%\EldenDisk\extension\customize-items\regulation.bin` (`--extension-dir` changes the folder). The commands below do the same build `run` does, without starting the game; the swap itself is the vault's job.
+
+| Command / flag | Description |
+|:---|:---|
+| `extension --list` | The spec (path, and whether it is the embedded copy, one next to the exe, or the source), how many items it has, and the last output. |
+| `extension customize-items` | Where the spec and the output are. |
+| `--add all` / `--add ID` | Build the items of the spec into `<ext>\customize-items\regulation.bin` (about 15 s), every time. One item per build in this version: with more in the spec, name one with `--add ID`. An empty list builds nothing. |
+| `--dry-run` | Build and check in memory; write nothing. |
+| `--spec FILE` | The items to build. Default: `items.json` next to the exe, else the copy embedded by `build -c -em`, else `code/eldendisk/extension/customize_items/sources/items.json`. Also accepted by `extension --list` and `run`. |
+| `--source FILE` / `--game-dir DIR` | The game's original `regulation.bin` to build on (default: the one in the auto-detected game folder). It must be the untouched 1.17.1 file (checked by SHA-256); otherwise the build stops and suggests `vault restore`. |
+| `--extension-dir DIR` | Where the output goes. |
+
+**`items.json`** (format 1) is the spec of the item(s) you want in the game: `items` is a list of incantations, for example the tested `reverse-curse-technique` in `code/eldendisk/extension/customize_items/sources/items.json`: `requires` (`intelligence`, `faith`, `arcane`), `fp_cost`, `stamina_cost`, `cast_motion` (`flame-grant-me-strength` or `black-flame-blade`), `effect` (heal over time), `poise_while_casting_seconds`, `shop` (`price`, `stock`), plus `name` and `description` (stored only). Unknown fields are errors; colour, icon and text need files inside the game's archives and are refused. Every problem is listed with its path.
+
+Before anything is written, the finished file is checked (frame decodes to the intended bytes, no stored blocks, untouched blocks byte-identical, header sizes, only the declared rows changed). A failed check writes nothing and exits `1`; in `run` it stops the run before the game starts. A passing check is necessary, not sufficient: the real test is the game.
+
+**In `run`:** `run --vault-on` shows `extension customize-items: building …` and `built and checked`, then the host lines (PREFLIGHT, SNAPSHOTTING, READY); the vault swaps the file in and puts the game's own back. A vault that still owes a restore: no build. Spec: [elden-disk-spec-v1.7.0](specs/elden-disk-spec-v1.7.0.md).
+
+Exit codes: `0` ok, `1` error, `2` usage.
 
 ---
 

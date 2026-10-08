@@ -4,7 +4,7 @@ itself: every file operation goes through the vault.
   H1 preflight -> H2 snapshot+verify -> H3 record READY -> H4 launch -> H5 record RUNNING -> H6 wait for exit
   -> H7 record RESTORING + restore -> H8 verify -> H9 cleanup + record removed
 
-Since 1.6.4, when `<vault>/regulation/regulation.bin` exists, H2 also backs up the game's own regulation.bin and H3b (after
+Since 1.6.4 (1.7.0: the file comes from the caller, `Hooks.regulation_world`), when there is a file to swap in, H2 also backs up the game's own regulation.bin and H3b (after
 the record, before the launch) swaps the user's file in; H7 puts the original back with the save. The host only calls the vault.
 
 Invariant I1: at every instant either live save == snapshot and there is no record, or a record exists whose snapshot
@@ -44,6 +44,7 @@ class Hooks:
     exe_sha256: str | None = None
     game_dir: Path | None = None
     game_guard: GameFolderGuard | None = None
+    regulation_world: Path | None = None           # 1.7.0: the regulation.bin to swap in for this session (named by the caller)
     extra_preflight: Callable[[], list[str]] = lambda: []
     sleep: Callable[[float], None] = time.sleep
     clock: Callable[[], float] = time.monotonic
@@ -90,7 +91,7 @@ class Session:
         if self.protect and self.hooks.process_started(self.pid) is None:
             problems.append("cannot read this process's start time, so `write` could never be authorised")
         if self.protect and self.hooks.game_dir is not None:
-            problems += self.vault.regulation_problems(self.hooks.game_dir)
+            problems += self.vault.regulation_problems(self.hooks.game_dir, self.hooks.regulation_world)
         problems += self.hooks.extra_preflight()
         return problems
 
@@ -164,7 +165,7 @@ class Session:
         self.log.d("vault", f"backup {self.live} (steamID {self.live.name}) -> {snap.dir}")
         self.log.ok("vault", f"snapshot {snap.dir.name}, {len(snap.files)} file{"" if len(snap.files) == 1 else "s"} verified")
         try:   # nothing in the game folder changes here: the game's own regulation.bin is only copied into the snapshot
-            reg = self.vault.backup_regulation(snap, self.hooks.game_dir) if self.hooks.game_dir is not None else None
+            reg = self.vault.backup_regulation(snap, self.hooks.game_dir, self.hooks.regulation_world) if self.hooks.game_dir is not None else None
         except KeyboardInterrupt:
             self.log.w("host", "interrupted while backing up regulation.bin; nothing changed")
             self._discard(snap)

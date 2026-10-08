@@ -1,7 +1,7 @@
 # Elden-Disk
 
 > **Elden-Disk Memory I/O (Read / Write) Tools: offline save guard + live memory reader and writer for Elden Ring 1.17.1**  
-> **Version:** `1.6.4` | **Spec Version:** `1.6.4` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable (`eldendisk.exe`) or Python 3.11+
+> **Version:** `1.7.0` | **Spec Version:** `1.7.0` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable (`eldendisk.exe`) or Python 3.11+
 
 Four parts with one job each:
 
@@ -16,7 +16,7 @@ Four parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (657 tests); the Steam Cloud sync on exit (T10) is still untested. **Game params (1.6.3):** the file layout and the pointer chains were measured on the real game, and writing `effectEndurance = -1` into the Black Flame row (1621000) made the burn last until the enemy died; the author later reported (2026-10-08) that `write` with `effectEndurance = -1` made **all four** Black Flame rows burn without end (an enemy burned to death and the effect bar stayed lit); the other fields (`motionInterval`, `changeHpRate`, `changeHpPoint`), `--reset` and the title screen have **not** been tried in the game yet (manual plan section 7A). **The other world (1.6.4):** the `regulation.bin` swap is verified by unit tests only; the real game has **not** loaded a swapped file through it yet (manual plan 1.6.4). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
+> **Real-game status (author, 1.17.1):** `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors have been used on the real game. Everything else is verified by unit tests with fake Windows and memory layers (767 tests); the Steam Cloud sync on exit (T10) is still untested. **Game params (1.6.3):** the file layout and the pointer chains were measured on the real game, and writing `effectEndurance = -1` into the Black Flame row (1621000) made the burn last until the enemy died; the author later reported (2026-10-08) that `write` with `effectEndurance = -1` made **all four** Black Flame rows burn without end (an enemy burned to death and the effect bar stayed lit); the other fields (`motionInterval`, `changeHpRate`, `changeHpPoint`), `--reset` and the title screen have **not** been tried in the game yet (manual plan section 7A). **The other world (1.6.4) and extensions (1.7.0):** the `regulation.bin` swap and `extension customize-items` are verified by unit tests; the Z4 file they build is byte-identical (golden test) to a hand-built file that the real game loaded and ran, but the real game has **not** loaded a file swapped in by `run` yet (manual plans 1.6.4 and 1.7.0). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
 
 ---
 
@@ -65,7 +65,7 @@ If the session is cut short (power loss, host killed, console closed, second Ctr
 4. **Restore never destroys unarchived data:** a modified save is copied into the vault before it is overwritten (`--no-archive-contaminated` to skip).
 5. **Interrupts:** first Ctrl+C is absorbed (the game keeps running); second, console close, logoff or shutdown leave `RESTORE_PENDING`.
 6. **No automatic recovery:** `run` with an owed restore exits `4` and prints the one command to run.
-7. **No changes in the game folder,** with one exception: the `regulation.bin` you keep in `<vault>\regulation\` is swapped in for a `run --vault-on` session and the game's own file is put back, hash-checked, with the save (see below). `read --export` refuses to write there.
+7. **No changes in the game folder,** with one exception: the `regulation.bin` that `extension customize-items` built (or `--regulation FILE`) is swapped in for a `run --vault-on` session and the game's own file is put back, hash-checked, with the save (see below). `read --export` refuses to write there.
 8. **EAC guard:** `read` and `write` stop when EasyAntiCheat is loaded; `run` refuses when anti-cheat processes are running.
 9. **Few disk writes:** the export is written only when its content changed, at most every `--export-interval` (0.5 s); buff countdowns at most every `--timer-interval` (2 s).
 
@@ -83,7 +83,7 @@ eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID
 ```
 
 ```commandline
- Elden-Disk 1.6.4 · run
+ Elden-Disk 1.7.0 · run
  ────────────────────────────────────────────────────────────────
    vault  %LOCALAPPDATA%\EldenDisk\vault
    save   C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>
@@ -109,10 +109,11 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 
 | Command | Role | Description |
 |:---|:---|:---|
-| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. If `<vault>\regulation\regulation.bin` exists, it replaces the game's for the session (vault ON only). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
+| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. With the vault ON it first builds a `regulation.bin` from the spec (`items.json`, every time) and swaps it in for the session (or `--regulation FILE`). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
 | `read [--query NAME [NAME ...]] [--export] [--live] [--live-buffs] [--live-animations]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-buffs` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
 | `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables); `--reset` puts the game's own params back; exit `5` without a valid session |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
+| `extension --list` \| `extension customize-items --add all\|ID` | **Extension** | Build things for the game outside the game. `customize-items` turns `items.json` into a `regulation.bin` with your own incantation (checked, built on every call); `run` (vault ON) does the same build and swaps it in |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
 | `build` | Tool | Standalone `./build/dist/eldendisk/eldendisk.exe` plus a `README.md` next to it (quick start + the exe command reference) |
 
@@ -120,28 +121,32 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 
 Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `animations` (now `read --live-buffs` / `--live-animations`), JSON output of `run` (now `read --export`), the verbs `read effects|animations|export`, `write set|refill` (now flags) and `--once` (a read without `--live` is already one shot). Values are addressed by name only; there are no memory addresses or scans.
 
-**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md)
+**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md)
 
 ---
 
-## 🌌 The other world (`regulation.bin`, new in 1.6.4)
+## 🌌 The other world (`regulation.bin`, 1.6.4) and extensions (1.7.0)
 
-The vault keeps *the world as it was*. It can also hold *the world you want to play in*: a `regulation.bin` you made with an external editor (new spells, items or effects added as rows). The tool only swaps the file; it does not edit it.
+The vault keeps *the world as it was*. `extension customize-items` builds *the world you want to play in*: a `regulation.bin` with your own incantation, made from a JSON file, offline, by the tool itself. With the vault ON, `run` builds it, swaps it in for one session and puts the game's own file back with the save.
 
 ```
-<vault>\
-  regulation\regulation.bin     your file (the tool never writes or deletes it)
-  20261008-0800\
-    save\                       the save as it was
-    bin\regulation.bin          the game's own file, kept to put it back
+sources/items.json (embedded in the exe)  --run (vault ON) builds on the game's regulation.bin-->  regulation.bin  --vault swaps-->  the game
+%LOCALAPPDATA%\EldenDisk\extension\
+  customize-items\regulation.bin       the output of the last build (nothing else is kept)
+%LOCALAPPDATA%\EldenDisk\vault\
+  20261008-0800\save\                 the save as it was
+                bin\regulation.bin     the game's own file, kept to put it back
 ```
 
-- **No option.** `run` with the vault ON swaps when your file is in `<vault>\regulation\`; without it nothing changes. With `--vault-off` the file is ignored and a warning says so.
-- The order is: back up the save and the game's file, write the session record, swap, launch. When the game closes, `run` restores the save **and** the game's file and checks both by hash. If either fails, the record stays and the next `run` is refused until `vault restore` finishes (exit `4`).
-- `vault keep` keeps the current *save* only; the game's own file always comes back first.
-- The file stays in effect on **every** `run --vault-on` until you move it out. `vault status` and the `run` banner show it.
+- **The spec is `code/eldendisk/extension/customize_items/sources/items.json`.** You edit it; `build -c -em` embeds it in the exe (like `offsets.json`). An `items.json` next to the exe, or `--spec FILE`, wins.
+- **Built every time, on the game's own file.** No manifest, no skip logic, no copy of the base: each `run --vault-on` reads the spec and the game's `regulation.bin` and builds (about 15 s). The base is never an already modified file; if the game's file is not the known original, `run` stops and suggests `vault restore`.
+- **Depends on the vault, like `write`.** No `--extension-on` flag: with `--vault-off` nothing is built or swapped. `extension --list` and `extension customize-items --add all` run the same build without starting the game.
+- **Checked before it is written.** The frame must decode to the intended bytes, untouched blocks must be the game's own bytes, only the declared rows may change. A failed check writes nothing and stops `run`. Necessary, not sufficient: the game is the real test.
+- **One item per build** in this version (Level 2a); name, description are stored only; colour, icon and text (Level 3) need files inside the game's archives and are refused.
+- `--regulation FILE` swaps another file instead of building. The 1.6.4 folder `<vault>\regulation\` is no longer read.
+- The order is: build, back up the save and the game's file, write the session record, swap, launch. When the game closes, `run` restores the save **and** the game's file and checks both by hash. If either fails, the record stays and the next `run` is refused until `vault restore` finishes (exit `4`). `vault keep` keeps the current *save* only; the game's own file always comes back first.
 - Offline only (as every param change). `write --set params.…` works inside a swapped session, so a new row can be tuned live.
-- Details: [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md).
+- Details: [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md), [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md); the research is in the [item-customization handbook](docs/experiments/item-customization/item-customization-handbook.md).
 
 ---
 
@@ -207,11 +212,14 @@ How the table was found and what was and was not tested: [docs/experiments/param
 # Build standalone executable with embedded configs
 python -m eldendisk build -c -em
 
-# Run E2E pipeline (pre-check tests + build + dry run)
+# Run E2E pipeline (pre-check tests + build with embedded configs + launch; `run -v` builds the extension itself)
 python code/tools/dev_pipeline.py --dry-run
 
 # Options the pipeline does not know go to `run`: ends in `eldendisk.exe run -v --vault-off`
 python code/tools/dev_pipeline.py --vault-off
+
+# Extension options go to `run` too (a failed extension build stops `run` before the game starts)
+python code/tools/dev_pipeline.py --spec my-items.json
 ```
 
 ---
@@ -247,7 +255,7 @@ The 1.6.2 file was one flat list with a `sources` field; `python code/tools/conv
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (657 tests)
+# Run unit test suite (767 tests)
 python -m pytest
 
 # Run soak stability check (V-06)

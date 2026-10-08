@@ -6,7 +6,8 @@ Execution Flow:
 3. Launch: Executes `./build/dist/eldendisk/eldendisk.exe run -v [options]` (the live log; also kept in <vault>/eldendisk.log).
 
 Every option this script does not know is handed to `run`, so `python dev_pipeline.py --vault-off` ends in
-`eldendisk.exe run -v --vault-off`. The options are checked against the real `run` parser first, before the tests
+`eldendisk.exe run -v --vault-off`. With the vault ON (the default) `run` itself builds the regulation.bin from the embedded
+items.json (every time, about 15 s) and the vault swaps it in; `--spec FILE` and `--extension-dir DIR` go to `run` too. The options are checked against the real `run` parser first, before the tests
 and the build take their time.
 """
 

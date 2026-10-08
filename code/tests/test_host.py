@@ -67,12 +67,12 @@ class World:
         return self.clock
 
 
-def make(env, world=None, *, running=False, ac=False, extra=None, guard=False, started=None, **kw):
+def make(env, world=None, *, running=False, ac=False, extra=None, guard=False, started=None, regulation_world=None, **kw):
     _, live, game, vault = env
     world = world or World()
     h = Hooks(find_game_pid=(lambda: GAME_PID) if running else world.find,
               process_started=started or world.started, anticheat_running=lambda: ac, launch=world.launch,
-              exe_sha256="abc", game_dir=game, game_guard=GameFolderGuard(game) if guard else None,
+              exe_sha256="abc", game_dir=game, game_guard=GameFolderGuard(game) if guard else None, regulation_world=regulation_world,
               extra_preflight=(lambda: extra) if extra else (lambda: []), sleep=world.sleep, clock=world.now,
               launch_timeout=10.0, exit_settle=1.0, install_close_handler=lambda cb: (lambda: None))
     return Session(vault, live, h, pid=HOST_PID, **kw), world
