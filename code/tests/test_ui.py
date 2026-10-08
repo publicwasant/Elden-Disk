@@ -70,6 +70,26 @@ def test_raw_view_prints_the_log_lines_including_debug(err):
     assert line.startswith("10-07 23:41:02.123  4242 D vault : state PREFLIGHT")
 
 
+def test_raw_view_colours_the_command_line_only_on_the_console(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    cmd = ev(level="D", tag="cli", msg=".\\eldendisk.exe run -v")
+    ui.raw_sink(err)(cmd)
+    out = err.getvalue()
+    assert "\x1b[36m.\\eldendisk.exe run -v\x1b[0m" in out and out.startswith("\x1b[2m10-07 23:41:02.123")   # prefix dim, command cyan
+    assert "\x1b[" not in format_line(cmd)                                      # the log file line is plain
+    err.truncate(0); err.seek(0)
+    ui.raw_sink(err)(ev(level="D", tag="cli", msg="exit 0"))
+    ui.raw_sink(err)(ev(level="D", tag="cli", msg="version 1.7.0"))
+    assert "\x1b[36m" not in err.getvalue()                                     # exit and version stay dim
+    err.truncate(0); err.seek(0)
+    ui.raw_line(format_line(cmd), err)                                         # a line tailed from another terminal
+    assert "\x1b[36m.\\eldendisk.exe run -v" in err.getvalue()
+    monkeypatch.setenv("NO_COLOR", "1")
+    err.truncate(0); err.seek(0)
+    ui.raw_sink(err)(cmd)
+    assert "\x1b[" not in err.getvalue()
+
+
 def test_header_shows_title_rule_and_aligned_rows(err):
     ui.header("run", [("vault", "C:\\v"), ("game", "D:\\g")], stream=err)
     out = err.getvalue().splitlines()

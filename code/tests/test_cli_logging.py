@@ -3,6 +3,8 @@ import re
 
 import pytest
 
+import os
+
 import eldendisk.__main__ as cli
 import eldendisk.commands.vault as vcmd
 from eldendisk.logbook import LOG_NAME
@@ -30,7 +32,8 @@ def test_every_command_writes_the_logcat_file_next_to_the_vault(env, capsys):
     text = (vault.root / LOG_NAME).read_text(encoding="utf-8")
     lines = text.splitlines()
     assert all(LOGCAT.match(l) for l in lines), lines
-    assert "D cli" in lines[0] and "vault verify" in lines[0]          # the command line itself
+    assert "D cli" in lines[0] and "version " in lines[0]
+    assert "D cli" in lines[1] and "vault verify" in lines[1]          # the command line itself, no version in it
     assert any(" I vault" in l and "matches its manifest" in l for l in lines)
     assert lines[-1].endswith("exit 0")
 
@@ -123,3 +126,14 @@ def test_a_host_session_reports_concise_events_in_order(tmp_path):
     assert any(e.level == "D" and e.msg == "state RUNNING" for e in events)
     text = (tmp_path / "vault" / LOG_NAME).read_text(encoding="utf-8")
     assert "state RESTORING" in text and "byte-identical" in text
+
+
+def test_command_line_is_the_command_as_typed(tmp_path):
+    from eldendisk import logsetup
+    exe = tmp_path / "eldendisk.exe"
+    assert logsetup.command_line(["run", "-v"]) == "eldendisk run -v"                      # from code: no process to look at
+    orig = [str(exe), "run", "-v"]
+    assert logsetup.command_line(["run", "-v"], orig, cwd=tmp_path) == "." + os.sep + "eldendisk.exe run -v"
+    assert logsetup.command_line(["run", "-v"], ["python", "-m", "eldendisk", "run", "-v"], cwd=tmp_path) == "python -m eldendisk run -v"
+    assert logsetup.command_line(["write", "--set", "a b=1"], ["x", "write", "--set", "a b=1"], cwd=tmp_path) == 'x write --set "a b=1"'
+    assert logsetup.command_line(["run"], ["other", "args"], cwd=tmp_path) == "eldendisk run"   # orig does not end with argv: ignore it

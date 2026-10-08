@@ -215,7 +215,7 @@ def main(argv=None) -> int:
         ap.error("--keep must not be negative")
     if args.cmd == "run" and args.launch_timeout <= 0:
         ap.error("--launch-timeout must be positive")
-    logsetup.start(args, logsetup.argv_of(argv))
+    logsetup.start(args, logsetup.argv_of(argv), real=argv is None)
     try:
         code = args.fn(args)
     except KeyboardInterrupt:

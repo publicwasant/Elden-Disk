@@ -137,6 +137,18 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
     return sink
 
 
+_CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D cli +: )(?!(?:exit -?\d+|version \S+)$)(.+)$")
+
+
+def _dim_line(line: str, color: bool) -> str:
+    """A debug line of the log in dim; the command that started a process (`D cli : .\\eldendisk.exe run -v`) in cyan.
+    Only the console gets the colour: the file keeps the plain line."""
+    m = _CLI_LINE.match(line) if color else None
+    if m:
+        return paint(m.group(1), "dim", color) + paint(m.group(2), "cyan", color)
+    return paint(line, "dim", color)
+
+
 def raw_sink(stream=None) -> Callable[[Event], None]:
     """`-v`: the log itself, live."""
     def sink(e: Event) -> None:
@@ -144,7 +156,7 @@ def raw_sink(stream=None) -> Callable[[Event], None]:
         color = use_color(out)
         kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(e.level)
         line = format_line(e)
-        _emit(paint(line, kind, color) if kind else line, out)
+        _emit(_dim_line(line, color) if e.level == "D" else paint(line, kind, color) if kind else line, out)
     return sink
 
 
@@ -153,7 +165,8 @@ def raw_line(line: str, stream=None) -> None:
     out = stream or sys.stderr
     got = parse_line(line)
     kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(got[1]) if got else None
-    _emit(paint(line, kind, use_color(out)) if kind else line, out)
+    color = use_color(out)
+    _emit(_dim_line(line, color) if got and got[1] == "D" else paint(line, kind, color) if kind else line, out)
 
 
 def header(title: str, rows: list[tuple[str, str]] | None = None, stream=None) -> None:

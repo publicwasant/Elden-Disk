@@ -357,7 +357,8 @@ Builds `./build/dist/eldendisk/eldendisk.exe` (no version in the path); progress
 Every command logs **every event** to `<vault>/eldendisk.log` (the folder of `vault status`), in the style of Android's logcat, at all levels:
 
 ```text
-10-07 12:00:00.123  4242 D cli   : eldendisk 1.6.2 run -v
+10-07 12:00:00.123  4242 D cli   : version 1.7.0
+10-07 12:00:00.123  4242 D cli   : .\eldendisk.exe run -v
 10-07 12:00:00.981  4242 I vault : snapshot 20261006-120000, 2 files verified
 10-07 12:00:09.411  4242 I game  : running, pid 8812; `write` is now allowed
 10-07 12:31:42.007  4242 W host  : Ctrl+C: the game keeps running; the save is restored when it exits (press again to postpone the restore)
@@ -369,10 +370,11 @@ Format `MM-DD HH:MM:SS.mmm  PID L tag : message`; levels `V` verbose, `D` debug,
 
 **`-v`, `--verbose`** (every command, also after the subcommand: `write --set level=150 -v`) forgets the concise view and shows the log itself, live: the very lines of `eldendisk.log`, debug included, nothing else.
 
-**Every terminal is in the log.** Each command, in any terminal, writes `D cli : eldendisk 1.6.2 <arguments>` when it starts and `D cli : exit N` when it ends. `run -v` also follows the file and prints the lines of **other** terminals as they are written (from the moment `run -v` starts, own lines are not repeated, rotation is followed), so one window shows `read`, `write` and `vault` commands next to the host's events. The format is the same as above; several processes may write the file at once, and if a rotation cannot rename the file (another process holds it, Windows) logging simply carries on.
+**Every terminal is in the log.** Each command, in any terminal, writes `D cli : version 1.7.0` and then `D cli : <the command as you typed it>` (`.\eldendisk.exe run -v`; on the `-v` console the command is highlighted, the file has no colour) when it starts and `D cli : exit N` when it ends. `run -v` also follows the file and prints the lines of **other** terminals as they are written (from the moment `run -v` starts, own lines are not repeated, rotation is followed), so one window shows `read`, `write` and `vault` commands next to the host's events. The format is the same as above; several processes may write the file at once, and if a rotation cannot rename the file (another process holds it, Windows) logging simply carries on.
 
 ```text
-10-07 13:53:07.306 14004 D cli   : eldendisk 1.6.2 write --set level=150
+10-07 13:53:07.306 14004 D cli   : version 1.7.0
+10-07 13:53:07.306 14004 D cli   : .\eldendisk.exe write --set level=150
 10-07 13:53:07.501 14004 D cli   : exit 0
 ```
 
