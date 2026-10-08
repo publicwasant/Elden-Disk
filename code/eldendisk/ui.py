@@ -149,7 +149,7 @@ _CLI_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ D cli +: )(?!(?:
 
 
 def _dim_line(line: str, color: bool) -> str:
-    """A debug line of the log in dim; the command that started a process (`D cli : .\\eldendisk.exe run -v`) in cyan.
+    """A debug line of the log in dim; the command that started a process (`D cli : eldendisk.exe run -v`) in cyan.
     Only the console gets the colour: the file keeps the plain line."""
     m = _CLI_LINE.match(line) if color else None
     if m:

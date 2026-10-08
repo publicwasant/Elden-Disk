@@ -133,7 +133,7 @@ def test_command_line_is_the_command_as_typed(tmp_path):
     exe = tmp_path / "eldendisk.exe"
     assert logsetup.command_line(["run", "-v"]) == "eldendisk run -v"                      # from code: no process to look at
     orig = [str(exe), "run", "-v"]
-    assert logsetup.command_line(["run", "-v"], orig, cwd=tmp_path) == "." + os.sep + "eldendisk.exe run -v"
-    assert logsetup.command_line(["run", "-v"], ["python", "-m", "eldendisk", "run", "-v"], cwd=tmp_path) == "python -m eldendisk run -v"
-    assert logsetup.command_line(["write", "--set", "a b=1"], ["x", "write", "--set", "a b=1"], cwd=tmp_path) == 'x write --set "a b=1"'
-    assert logsetup.command_line(["run"], ["other", "args"], cwd=tmp_path) == "eldendisk run"   # orig does not end with argv: ignore it
+    assert logsetup.command_line(["run", "-v"], orig) == "eldendisk.exe run -v"
+    assert logsetup.command_line(["run", "-v"], ["python", "-m", "eldendisk", "run", "-v"]) == "python -m eldendisk run -v"
+    assert logsetup.command_line(["write", "--set", "a b=1"], ["x", "write", "--set", "a b=1"]) == 'x write --set "a b=1"'
+    assert logsetup.command_line(["run"], ["other", "args"]) == "eldendisk run"   # orig does not end with argv: ignore it
