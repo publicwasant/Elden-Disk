@@ -228,6 +228,9 @@ python code/tools/dev_pipeline.py --vault-off
 
 # Extension options go to `run` too (a failed gate or build stops `run` before the game starts)
 python code/tools/dev_pipeline.py --spec my-draft.json
+
+# Try a ready regulation.bin in the game (the vault swaps it in and puts the original back)
+python code/tools/dev_pipeline.py --regulation t1/regulation.T1-goods-moved.bin
 ```
 
 ---

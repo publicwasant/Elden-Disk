@@ -204,9 +204,26 @@ def _lit_header_form(n: int, form: int) -> bytes:
     return bytes([((n & 15) << 4) | 12, (n >> 4) & 255, n >> 12])
 
 
-def _assemble(src: Source, newcontent: dict) -> bytes:
+def _assemble(src: Source, newcontent: dict, appended=()) -> bytes:
+    """The frame: the source blocks (those in `newcontent` re-encoded) and the `appended` block contents (a longer body).
+    The game's frame ends with an EMPTY stored block that carries the last flag (after the 826 data blocks); appended blocks go
+    in front of it. A frame without such a block would pass the last flag on to the final appended block."""
+    n_data = (len(src.body) + BS - 1) // BS
+    sentinel = len(src.blocks) > n_data
     out = bytearray(src.frame[:6])
+
+    def put_appended():
+        for k, c in enumerate(appended):
+            if len(c) >= 1 << 17:
+                raise BuildError("appended block %d would exceed the 128 KiB block limit" % k)
+            fin = 1 if (not sentinel and k == len(appended) - 1) else 0
+            out.extend(struct.pack("<I", (len(c) << 3) | (2 << 1) | fin)[:3] + c)
+
     for i, (p, ty, size, last) in enumerate(src.blocks):
+        if appended and i == n_data:
+            put_appended()
+        if appended and not sentinel:
+            last = 0
         if i in newcontent:
             c = newcontent[i]
             if len(c) >= 1 << 17:
@@ -214,10 +231,12 @@ def _assemble(src: Source, newcontent: dict) -> bytes:
             out += struct.pack("<I", (len(c) << 3) | (2 << 1) | last)[:3] + c
         else:
             out += src.frame[p:p + 3 + (1 if ty == 1 else size)]
+    if appended and not sentinel:
+        put_appended()
     return bytes(out)
 
 
-def _pack(src: Source, edited: dict, free_knobs: int = 20) -> bytes:
+def _pack(src: Source, edited: dict, free_knobs: int = 20, appended=()) -> bytes:
     """Assemble the frame so that header + frame leaves exactly TAIL_ZEROS bytes of padding to a multiple of 16 (as in the
     original). The free knob is the literal-size header form of untouched raw-literal blocks."""
     cand = []
@@ -240,7 +259,7 @@ def _pack(src: Source, edited: dict, free_knobs: int = 20) -> bytes:
     for attempt in range(20000):
         forms = [0] * len(idx) if attempt == 0 else [rnd.choice((0, 0, 1, 2)) for _ in idx]
         nc = {i: _lit_header_form(len(base[i][0]), f) + base[i][0] + base[i][1] for i, f in zip(idx, forms)}
-        fr = _assemble(src, nc)
+        fr = _assemble(src, nc, appended)
         if (0x4C + len(fr)) % 16 == 16 - TAIL_ZEROS:
             return fr
     raise BuildError("could not bring the file tail to the original shape")
@@ -281,6 +300,56 @@ def rewrite(src: Source, newbody: bytes, max_iter: int = 12):
             return frame, edit, set(res) - edit
         bad = next(k for k in range(len(newbody)) if got[k:k + 1] != newbody[k:k + 1]) // BS if len(got) == len(newbody) else None
         if bad is None or bad in edit:
+            raise BuildError("the rewritten frame does not decode to the intended body")
+        edit.add(bad)
+    raise BuildError("no fixed point after %d rounds" % max_iter)
+
+
+def literal_block(raw: bytes) -> bytes:
+    """The content of a compressed block that holds `raw` as raw literals and has no sequences (for appended data)."""
+    return _lit_header_form(len(raw), 0) + raw + b"\x00"
+
+
+def rewrite_grow(src: Source, newbody: bytes, max_iter: int = 12):
+    """Like rewrite(), but newbody may be LONGER than the source body (data appended at the end; nothing is removed).
+
+    The old last block is re-encoded (it gets more bytes), the blocks that changed are re-encoded as in rewrite(), and the
+    appended data becomes new blocks of 64 KiB (compressed blocks with raw literals, no sequences). Returns
+    (frame, edited_blocks, converted_blocks, appended_block_count)."""
+    old_len = len(src.body)
+    old_n = (old_len + BS - 1) // BS                 # blocks that hold data (the game's frame has one more: an empty last block)
+    if len(newbody) < old_len:
+        raise BuildError("rewrite_grow only appends (%d -> %d)" % (old_len, len(newbody)))
+    nblocks = (len(newbody) + BS - 1) // BS
+    appended = [literal_block(newbody[i * BS:(i + 1) * BS]) for i in range(old_n, nblocks)]
+    edit = {i for i in range(old_n) if newbody[i * BS:(i + 1) * BS] != src.body[i * BS:(i + 1) * BS]}
+    for _ in range(max_iter):
+        todo = set(edit)
+        for t in list(edit):
+            if src.lit_type.get(t) == 2:
+                j = t + 1
+                while j < old_n and src.lit_type.get(j) == 3:
+                    todo.add(j)
+                    j += 1
+        res = {}
+        for i in sorted(todo):
+            c = src.content(i)
+            if i in edit:
+                info = parse_block(c, src.rep_before[i], src.huf_before[i])
+                lits, seqs = resegment(info, i * BS, newbody)
+                res[i] = (lits, fse.encode_sequences(seqs))
+            else:
+                d = zstd.Dec()
+                d.huf = src.huf_before[i]
+                lit, q = d.literals(c, 0)
+                res[i] = (lit, bytes(c[q:]))
+        frame = _pack(src, res, appended=appended)
+        got = zstd.decode_frame(frame)
+        if got == newbody:
+            return frame, edit, set(res) - edit, len(appended)
+        bad = next((k for k in range(min(len(got), len(newbody))) if got[k] != newbody[k]), None)
+        bad = None if bad is None else bad // BS
+        if bad is None or bad in edit or bad >= old_n:
             raise BuildError("the rewritten frame does not decode to the intended body")
         edit.add(bad)
     raise BuildError("no fixed point after %d rounds" % max_iter)

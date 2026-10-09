@@ -57,3 +57,8 @@ def test_extension_options_go_to_run(steps, tmp_path):
     other = str(tmp_path / "other")
     assert dev_pipeline.main(["--extension-dir", other, "--spec", "x.json"]) == 0
     assert exe_cmds(steps) == [["run", "-v", "--extension-dir", other, "--spec", "x.json"]]
+
+
+def test_regulation_goes_to_run(steps):
+    assert dev_pipeline.main(["--regulation", "t1.bin"]) == 0
+    assert exe_cmds(steps) == [["run", "-v", "--regulation", "t1.bin"]]
