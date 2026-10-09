@@ -226,7 +226,7 @@ def test_an_enchant_adds_goods_magic_speffect_and_shop_rows_only():
     ids = recipes.slot_rows(1)
     assert sorted(jobs) == ["EquipParamGoods", "Magic", "ShopLineupParam", "SpEffectParam"]
     assert fp.added == {"goods": {ids["goods"]}, "magic": {ids["magic"]}, "sp": {ids["sp_copy_base"], ids["sp_copy_base"] + 1},
-                        "shop": {ids["shop_line"]}, "bullet": set()}
+                        "shop": {ids["shop_line"]}, "bullet": set(), "atk": set()}
     assert not any(fp.removed.values()) and not any(fp.modified.values())
 
 

@@ -122,6 +122,19 @@ Does the game load a file with a **fifth table that grows** (Bullet, 4.5 MB) and
 
 If the game stops at the title screen or crashes, tell me when (the loading screen, the title, after loading the character): the answer decides whether more blocks or a fifth table is the problem.
 
+## T8. The envelope test with a sixth table (Phase 2.4; did NOT pass in the game 2026-10-10)
+
+Does the game load a file with **AtkParam_Pc grown** (4 unreferenced copies of Black Flame attack rows, ids 710002000-710002003) next to 4 unreferenced Bullet copies (500002000-500002003)? The tool says: 25 re-encoded blocks, body growth 6,266,672, frame growth 6,387,296 (the gate: 20 blocks, 219,000 and 235,000), because AtkParam_Npc (6.17 MB), the entry in front of AtkParam_Pc, has to move.
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| T8a | `python tools\envelope_test.py --source "<game folder>\regulation.bin" --out regulation.envelope-test.bin` | `written ...`; warnings R2 and R7 only. Passed 2026-10-10: written, 25 blocks | ✓ |
+| T8b | `python -m eldendisk run --regulation regulation.envelope-test.bin --vault-on -v`: reach the title screen, Continue | the world loads. 2026-10-10: the game stopped at the title screen with "Failed to save game. Save data is corrupted."; the game did not touch the save | ✗ |
+| T8c | Control: `run --vault-on -v` with the normal build right after | the game loads like normal. 2026-10-10: played normally, so the failure is the T8 file, not the save or Steam | ✓ |
+| T8d | `vault status` after T8b | original restored. 2026-10-10: save and regulation.bin restored byte-identical | ✓ |
+
+Result: a 6.3 MB growth is beyond what the game accepts (the gate keeps its numbers from T7).
+
 ## T. Table move (several items, not built yet)
 
 Written when T1 exists (spec 1.7.0 section 10b): the game must reach the title screen and load a character with the Goods table moved to the end of `regulation.bin`; no item is added.

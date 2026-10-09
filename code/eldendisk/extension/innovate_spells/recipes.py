@@ -30,8 +30,8 @@ SHOP_CLONE = 100507
 VISUAL_VFX = {"flame": 1605000, "flask": 5030, "none": -1}
 HEAL_GOODS, HEAL_SP, FLAME_SP, ENDURE_SP, ICON_GOODS = 6421, 1642100, 1605000, 1650, 6424
 
-KEYS = ("goods", "magic", "sp", "shop", "bullet")      # the tables a recipe may add rows to
-NAME_FROM = {"goods": DUMMY, "magic": DUMMY, "sp": DUMMY, "shop": SHOP_DUMMY, "bullet": DUMMY}   # the row whose name pointer new rows share
+KEYS = ("goods", "magic", "sp", "shop", "bullet", "atk")      # the tables a recipe may add rows to
+NAME_FROM = {"goods": DUMMY, "magic": DUMMY, "sp": DUMMY, "shop": SHOP_DUMMY, "bullet": DUMMY, "atk": DUMMY}   # the row whose name pointer new rows share
 
 # --- the rows a slot owns (fixed: slot 1 has the ids of the Z4 spell that was tested in the game) ---
 ITEM_BASE = 2230000          # Goods id == Magic id; above the last real goods id (2220010)

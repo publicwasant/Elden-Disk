@@ -3,9 +3,12 @@ game whether the game accepts it. The gate keeps its numbers (preflight.MAX_*) u
 
     python tools/envelope_test.py --source <game>/regulation.bin --out regulation.envelope-test.bin [--spec extension.json]
 
-T7 = the spells of the design (as in a normal build) + 4 UNREFERENCED copies of the Black Flame bullets (Bullet rows 10623000,
-10623001, 10623050, 10623051 under the ids 500000000-500000003). Nothing points at the copies: the game must simply load the file.
-What it tests: a fifth table (Bullet, 15,475 rows, 4.5 MB) that grows, and about 20 re-encoded blocks. T7 passed in the game on 2026-10-10 (the gate then went from 13 to 20 blocks); the tool stays for the next, bigger experiment.
+T8 = the spells of the design (as in a normal build) + 4 UNREFERENCED copies of Black Flame bullets (as in T7: Bullet rows 10623000,
+10623001, 10623050, 10623051 under the ids 500002000-500002003, outside the 64 slot blocks) + 4 UNREFERENCED copies of attack rows (AtkParam_Pc rows 62101,
+62106, 62502, 62503 under the ids 710002000-710002003). Nothing points at the copies: the game must simply load the file.
+What it tests: a sixth table (AtkParam_Pc, 11,017 rows, 5.3 MB) that grows together with the fifth (Bullet), which is what a
+`projectile` spell does; the tool prints the re-encoded blocks and the growth. T7 (the Bullet copies alone) passed in the game on
+2026-10-10, the gate then went from 13 to 20 blocks.
 
 Everything the gate checks is checked here too (R1-R6, G11-G13) EXCEPT the envelope numbers: those are printed. The file is not
 written when anything else is wrong. Use it on the game's own file only; write the result to a path of your own, then put it
@@ -25,7 +28,8 @@ from eldendisk.extension.innovate_spells import bases, build, chain as chainmod,
 from eldendisk.extension.innovate_spells.container import Bnd4, Param, ParamView                                           # noqa: E402
 from eldendisk.extension.innovate_spells.defs import TABLE_FILES, Def                                                       # noqa: E402
 
-COPIES = {500000000: 10623000, 500000001: 10623001, 500000002: 10623050, 500000003: 10623051}      # new id -> Black Flame bullet it copies
+COPIES = {500002000: 10623000, 500002001: 10623001, 500002002: 10623050, 500002003: 10623051}      # new id -> Black Flame bullet it copies
+ATK_COPIES = {710002000: 62101, 710002001: 62106, 710002002: 62502, 710002003: 62503}              # new id -> AtkParam_Pc row it copies
 ENVELOPE = ("R2: ", "R7: ")          # the warnings this tool lets through (they are the point of the test)
 
 
@@ -53,8 +57,17 @@ def main(argv=None) -> int:
             print("Bullet row %d is missing: not the 1.17.1 file" % old, file=sys.stderr)
             return 2
         rows.append((new, bytes(r[2])))
-    jobs["Bullet"] = {"rows": rows, "name_from": recipes.NAME_FROM["bullet"]}
-    fp.added["bullet"] = set(COPIES)
+    jobs["Bullet"] = {"rows": jobs.get("Bullet", {"rows": []})["rows"] + rows, "name_from": recipes.NAME_FROM["bullet"]}     # after the design's own rows, if any
+    fp.added["bullet"] |= set(COPIES)
+    arows = []
+    for new, old in ATK_COPIES.items():
+        r = P["atk"].find(old)
+        if r is None:
+            print("AtkParam_Pc row %d is missing: not the 1.17.1 file" % old, file=sys.stderr)
+            return 2
+        arows.append((new, bytes(r[2])))
+    jobs["AtkParam_Pc"] = {"rows": jobs.get("AtkParam_Pc", {"rows": []})["rows"] + arows, "name_from": recipes.NAME_FROM["atk"]}
+    fp.added["atk"] |= set(ATK_COPIES)
     newbody, _ = grow.grow(src.body, jobs)
     frame, *_ = reblock.rewrite_grow(src, newbody)
     h = bytearray(src.header)
@@ -72,6 +85,10 @@ def main(argv=None) -> int:
             got, want = V["bullet"].find(new), V["bullet"].find(old)
             if got is None or want is None or bytes(got[2]) != bytes(want[2]):
                 problems.append("T7: bullet copy %d is not a byte-for-byte copy of %d" % (new, old))
+        for new, old in ATK_COPIES.items():
+            got, want = V["atk"].find(new), V["atk"].find(old)
+            if got is None or want is None or bytes(got[2]) != bytes(want[2]):
+                problems.append("T8: attack copy %d is not a byte-for-byte copy of %d" % (new, old))
     if problems:
         print("NOT written, the file is wrong in ways that are not the envelope:", *problems, sep="\n  ", file=sys.stderr)
         return 1
@@ -80,7 +97,7 @@ def main(argv=None) -> int:
     print("written %s" % a.out)
     print("  sha256 %s" % hashlib.sha256(data).hexdigest())
     print("  decrypted sha256 %s" % hashlib.sha256(dcx).hexdigest())
-    print("  re-encoded blocks %d (gate limit %d, tested in the game: 20)" % (stats["changed_blocks"], preflight.MAX_CHANGED_BLOCKS))
+    print("  re-encoded blocks %d (gate limit %d, tested in the game: 20 with the Bullet copies; this file is T8)" % (stats["changed_blocks"], preflight.MAX_CHANGED_BLOCKS))
     print("  body growth %d (gate limit %d)" % (stats["body_growth"], preflight.MAX_BODY_GROWTH))
     print("  frame growth %d (gate limit %d)" % (stats["frame_growth"], preflight.MAX_FRAME_GROWTH))
     print("  envelope warnings: %s" % ("; ".join(warn) or "none"))

@@ -11,7 +11,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-TABLES = {"goods": "EquipParamGoods", "magic": "MagicParam", "sp": "SpEffect", "shop": "ShopLineupParam", "bullet": "BulletParam"}
+TABLES = {"goods": "EquipParamGoods", "magic": "MagicParam", "sp": "SpEffect", "shop": "ShopLineupParam", "bullet": "BulletParam", "atk": "AtkParam"}
 SIZES = {"s8": 1, "u8": 1, "dummy8": 1, "s16": 2, "u16": 2, "s32": 4, "u32": 4, "f32": 4, "b32": 4}
 
 
