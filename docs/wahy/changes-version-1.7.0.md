@@ -72,6 +72,10 @@ Measured in the game: a Magic row is read at the cast, a Bullet row when the bul
 
 Re-applied from the copy kept earlier: the encoder fix for repeat-offset states (`reblock.encode_offsets_flex`, `rewrite_grow` carries the state to the next block; R3 allows that block to differ), `Bullet` as a fifth table in `TABLE_FILES` and `paramdefs.py` (`tools/gen_paramdefs.py` writes it), the recipe's `KEYS` / `NAME_FROM`, and `tools/envelope_test.py` (T7: the design plus 4 unreferenced Black Flame bullet copies; a file beyond the gate's numbers, checked in every other way). T7 passed in the game 2026-10-10 (a grown Bullet table, 20 re-encoded blocks, body +96,176, frame +174,944), so `MAX_CHANGED_BLOCKS` is now 20; the body and frame limits are unchanged. Two golden tests that expected the old limit now say that 16 spells pass and 64 are stopped by the growth (R7).
 
+## Phase 2.3: `kind: projectile` (2026-10-10)
+
+`{"kind": "projectile", "from": 6210, "set": {"SpEffect.1621000.effectEndurance": 30, "Bullet.10621000.life": 6}}` copies a spell that throws Bullets together with its own Bullet and SpEffect rows (rows that no more than 3 spells of the game reach; the walk stops at generic rows and at attack rows), remaps the links between the copies, and `set` takes `Bullet.<id>.<field>` (link fields refused). Bullet ids `500000000 + (n-1)*16` (block of 16 per slot). The attack rows (AtkParam_Pc) stay the game's: their damage comes with Phase 2.4. `chain.copy_set` replaces the old closure rule for the copied rows (same result for the 23 buff and enchant templates). Gate `check_template` checks the Bullet copies too; `build.plan` accepts the kind; the schema has it. Tests: `test_ext_projectile.py` (41). P1 and P2 passed in the game 2026-10-10 (the copy burns 30 s; `read --param-check`: every row equal, Bullet +4); P3-P5 are optional.
+
 ## Decisions taken while implementing
 
 - **Exactly one item per file** (2a) until table growth is researched.

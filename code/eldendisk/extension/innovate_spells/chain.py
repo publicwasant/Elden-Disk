@@ -17,6 +17,11 @@ DUMMY = 999999999
 BULLET = {"size": 272, "bullet": (104, 172), "atk": (0,), "sp": (96, 108, 112, 116, 120, 124)}   # HitBulletID, intervalCreateBulletId | atkId_Bullet | spEffectIDForShooter, spEffectId0-4
 ATK = {"size": 456, "sp": (24, 28, 32, 36, 40)}                                                  # spEffectId0-4
 SP_LINKS = ("cycleOccurrenceSpEffectId", "atkOccurrenceSpEffectId", "replaceSpEffectId")
+# the fields that call another row, by name, as (table called, field): what the builder remaps in a copy (the offsets above are checked
+# against these names in the tests)
+SP_PAIRS = tuple(("sp", n) for n in SP_LINKS)
+BULLET_LINKS = (("bullet", "HitBulletID"), ("bullet", "intervalCreateBulletId"), ("sp", "spEffectIDForShooter"),
+                ("sp", "spEffectId0"), ("sp", "spEffectId1"), ("sp", "spEffectId2"), ("sp", "spEffectId3"), ("sp", "spEffectId4"))
 CATEGORY = {0: "atk", 1: "bullet", 2: "sp"}
 TABLES = ("atk", "bullet", "sp")
 
@@ -69,6 +74,21 @@ class Chain:
                 continue
             got[t].add(i)
             stack.extend(self.links(t, i))
+        return got
+
+    def copy_set(self, magic_id: int, shared_above: int = 3) -> dict:
+        """{'bullet': set, 'sp': set}: the rows a copy of this spell takes along: the spell's own Bullet and SpEffect rows (reached by
+        no more than `shared_above` Magic rows of the game) that the spell reaches through such rows. The walk stops at a generic row and
+        at every AtkParam_Pc row (attack rows are not copied yet): what hangs below them is called by the game's rows, not by the copy."""
+        got = {"bullet": set(), "sp": set()}
+        own = lambda t, i: t in got and self.reach(t, i) <= shared_above
+        stack = [(t, i) for _n, t, i in self.refs(magic_id) if own(t, i)]
+        while stack:
+            t, i = stack.pop()
+            if i in got[t]:
+                continue
+            got[t].add(i)
+            stack.extend((t2, i2) for t2, i2 in self.links(t, i) if own(t2, i2))
         return got
 
     def reach(self, table: str, rid: int) -> int:

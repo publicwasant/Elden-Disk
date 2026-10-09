@@ -39,6 +39,8 @@ SP_BASE = 21950111           # the heal-over-time SpEffect; above the last real 
 POISE_BASE = 21950211        # the poise SpEffect of a spell that has `poise_while_casting_seconds`
 COPY_SP_BASE = 21951000      # the SpEffect rows a spell made from a template copies: a block of 8 per slot, above the two blocks above
 COPY_SP_BLOCK = 8
+COPY_BULLET_BASE = 500000000   # the Bullet rows a projectile copies: a block of 16 per slot (the range T7 loaded in the game; the game's own ids end at 400,000,002)
+COPY_BULLET_BLOCK = 16
 SHARED_ABOVE = 3             # a row that more than this many Magic rows of the game reach is generic: shared, never copied
 # The merchant's group 100500-100524 has 7 lines that are free in the game's own file; a slot above 7 has no shop line.
 SHOP_LINES = (100508, 100509, 100512, 100521, 100522, 100523, 100524)
@@ -51,7 +53,8 @@ def slot_rows(slot: int) -> dict:
         raise RecipeError("slot %r is outside 1..%d" % (slot, MAX_SLOTS))
     line = SHOP_LINES[slot - 1] if slot <= len(SHOP_LINES) else None
     return {"goods": ITEM_BASE + slot - 1, "magic": ITEM_BASE + slot - 1, "sp_effect": SP_BASE + slot - 1,
-            "poise_sp_effect": POISE_BASE + slot - 1, "sp_copy_base": COPY_SP_BASE + (slot - 1) * COPY_SP_BLOCK, "shop_line": line,
+            "poise_sp_effect": POISE_BASE + slot - 1, "sp_copy_base": COPY_SP_BASE + (slot - 1) * COPY_SP_BLOCK,
+            "bullet_copy_base": COPY_BULLET_BASE + (slot - 1) * COPY_BULLET_BLOCK, "shop_line": line,
             "shop_flag": None if line is None else 150000 + (line - 100500) * 10}      # the game's own pattern for this group
 
 
@@ -88,11 +91,12 @@ class Built(NamedTuple):
     goods: bytes
     magic: bytes
     sp: list           # [(new id, bytes)] the SpEffect rows copied (none for a clone), sorted by id
-    own: dict          # {template id: new id} of those rows
+    bullet: list       # [(new id, bytes)] the Bullet rows copied (only kind projectile), sorted by id
+    own: dict          # {"sp": {template id: new id}, "bullet": {template id: new id}} of those rows
 
 
 def is_template(spell: dict) -> bool:
-    """A spell made from a game spell (clone, enchant, buff with `from`), not the heal-over-time buff of the first recipe."""
+    """A spell made from a game spell (clone, enchant, projectile, buff with `from`), not the heal-over-time buff of the first recipe."""
     return "from" in spell
 
 
@@ -100,12 +104,16 @@ def needs_chain(spell: dict) -> bool:
     return is_template(spell) and spell.get("kind", "buff") != "clone"
 
 
+_TABLE_NAME = {"sp": "SpEffect", "bullet": "Bullet", "atk": "attack"}
+
+
 def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
     """The rows of a spell made from a game spell: the template's Goods and Magic rows (the Goods row has the Magic row's id) with
-    only the fields the design names written over them; for `enchant` and `buff` also copies of the template's own SpEffect rows
-    (the rows that no more than SHARED_ABOVE Magic rows of the game reach), pointing at each other, called by the Magic copy,
-    with `set` written over them. P: the ORIGINAL tables (the template is a row of the game). `chain`: chain.Chain of the original
-    (needed for enchant and buff)."""
+    only the fields the design names written over them; for `enchant`, `buff` and `projectile` also copies of the template's own
+    SpEffect rows and, for `projectile`, Bullet rows (the rows no more than SHARED_ABOVE Magic rows of the game reach, found by
+    chain.copy_set), pointing at each other, called by the Magic copy, with `set` written over them. Attack rows (AtkParam_Pc) are
+    not copied yet: the copies keep calling the game's. P: the ORIGINAL tables (the template is a row of the game). `chain`:
+    chain.Chain of the original (needed for every kind but clone)."""
     src, who, kind = spell["from"], "%s (slot %d)" % (spell["id"], spell["slot"]), spell.get("kind", "buff")
     magic, goods = P["magic"].find(src), P["goods"].find(src)
     if magic is None:
@@ -120,48 +128,57 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
         raise RecipeError("%s: `from` %d is %s %s: a copy cannot change `type` (the cast motion and the catalyst follow it)"
                           % (who, src, "an" if GOODS_TYPES[gtype] == "incantation" else "a", GOODS_TYPES[gtype]))
     g, m = bytearray(goods[2]), bytearray(magic[2])
-    own, sp_rows = {}, []
+    own, sp_rows, bullet_rows = {"sp": {}, "bullet": {}}, [], []
     if kind != "clone":
         if chain is None:
             raise RecipeError("%s: internal error: no chain reader for kind %s" % (who, kind))
         enchant = D["magic"].get(m, "isEnchant") or D["magic"].get(m, "isShieldEnchant")
         refs = chain.refs(src)
+        tables = {t for _n, t, _i in refs}
+        called = ", ".join(sorted(_TABLE_NAME[t] for t in tables)) or "nothing"
         if kind == "enchant" and not enchant:
             raise RecipeError("%s: `from` %d is not a weapon or shield enchant (use kind %s)"
-                              % (who, src, "buff" if refs and all(t == "sp" for _n, t, _i in refs) else "clone"))
+                              % (who, src, "buff" if refs and tables == {"sp"} else "projectile" if "bullet" in tables else "clone"))
+        if kind in ("buff", "enchant") and (not refs or tables != {"sp"}):
+            raise RecipeError("%s: `from` %d calls %s, not only SpEffect rows: kind %s needs a spell that only applies an effect "
+                              "(for a spell that throws something use kind projectile, for an attack kind clone)" % (who, src, called, kind))
         if kind == "buff" and enchant:
             raise RecipeError("%s: `from` %d is an enchant: use kind enchant" % (who, src))
-        if not refs or any(t != "sp" for _n, t, _i in refs):
-            called = sorted({{"sp": "SpEffect", "bullet": "Bullet", "atk": "attack"}[t] for _n, t, _i in refs})
-            raise RecipeError("%s: `from` %d calls %s, not only SpEffect rows: kind %s needs a spell that only applies an effect "
-                              "(for a projectile or an attack use kind clone)" % (who, src, ", ".join(called) or "nothing", kind))
-        closure = chain.closure(src)["sp"]
-        ids = sorted(i for i in closure if chain.reach("sp", i) <= SHARED_ABOVE)
-        if len(ids) > COPY_SP_BLOCK:
-            raise RecipeError("%s: the chain of %d has %d SpEffect rows of its own; a slot has room for %d" % (who, src, len(ids), COPY_SP_BLOCK))
-        base = slot_rows(spell["slot"])["sp_copy_base"]
-        own = {old: base + k for k, old in enumerate(ids)}
-        for n, _t, rid in refs:
-            if rid in own:
-                D["magic"].set(m, "refId%d" % n, own[rid])
-        sets = {}
+        if kind == "projectile" and "bullet" not in tables:
+            raise RecipeError("%s: `from` %d calls %s and no Bullet row: kind projectile needs a spell that throws or creates a Bullet "
+                              "(a spell that only applies an effect is kind buff or enchant, an attack is kind clone)" % (who, src, called))
+        take = chain.copy_set(src, SHARED_ABOVE)
+        for t, block, base, name in (("sp", COPY_SP_BLOCK, slot_rows(spell["slot"])["sp_copy_base"], "SpEffect"),
+                                     ("bullet", COPY_BULLET_BLOCK, slot_rows(spell["slot"])["bullet_copy_base"], "Bullet")):
+            ids = sorted(take[t])
+            if len(ids) > block:
+                raise RecipeError("%s: the chain of %d has %d %s rows of its own; a slot has room for %d" % (who, src, len(ids), name, block))
+            own[t] = {old: base + k for k, old in enumerate(ids)}
+        for n, t, rid in refs:
+            if t in own and rid in own[t]:
+                D["magic"].set(m, "refId%d" % n, own[t][rid])
+        sets = {"sp": {}, "bullet": {}}
         for key, v in spell.get("set", {}).items():
             table, rid, name = key.split(".", 2)
-            if table == "SpEffect":
-                if int(rid) not in own:
-                    why = ("is shared with %d spells of the game and is not copied" % chain.reach("sp", int(rid))) if int(rid) in closure \
-                        else "is not part of the chain of %d" % src
-                    raise RecipeError("%s: set %s: SpEffect %s %s (copied rows: %s)" % (who, key, rid, why, ", ".join(map(str, own)) or "none"))
-                sets.setdefault(int(rid), []).append((name, v))
-        for old, new in own.items():
-            data = bytearray(chain.rows["sp"][old])
-            for link in chainmod.SP_LINKS:
-                target = D["sp"].get(data, link)
-                if target in own:
-                    D["sp"].set(data, link, own[target])
-            for name, v in sets.get(old, []):
-                D["sp"].set(data, name, v)
-            sp_rows.append((new, bytes(data)))
+            t = {"SpEffect": "sp", "Bullet": "bullet"}.get(table)
+            if t is None:
+                continue
+            if int(rid) not in own[t]:
+                reach = chain.reach(t, int(rid))
+                why = ("is shared with %d spells of the game and is not copied" % reach) if int(rid) in chain.closure(src)[t] and reach > SHARED_ABOVE \
+                    else "is not part of the chain of %d that is copied" % src
+                raise RecipeError("%s: set %s: %s %s %s (copied %s rows: %s)" % (who, key, table, rid, why, table, ", ".join(map(str, own[t])) or "none"))
+            sets[t].setdefault(int(rid), []).append((name, v))
+        for t, rows, links in (("sp", sp_rows, chainmod.SP_PAIRS), ("bullet", bullet_rows, chainmod.BULLET_LINKS)):
+            for old, new in own[t].items():
+                data = bytearray(chain.rows[t][old])
+                for table, link in links:
+                    target = D[t].get(data, link)
+                    if target in own[table]:
+                        D[t].set(data, link, own[table][target])
+                for name, v in sets[t].get(old, []):
+                    D[t].set(data, name, v)
+                rows.append((new, bytes(data)))
     r = spell.get("requires", {})
     friendly = {"mp": spell.get("fp_cost"), "stamina": spell.get("stamina_cost"), "requirementIntellect": r.get("intelligence"),
                 "requirementFaith": r.get("faith"), "requirementLuck": r.get("arcane")}      # Arcane is stored in requirementLuck
@@ -170,9 +187,9 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
             D["magic"].set(m, name, v)
     for key, v in spell.get("set", {}).items():
         table, _rid, name = key.split(".", 2)
-        if table != "SpEffect":
+        if table in ("Magic", "Goods"):
             D["magic" if table == "Magic" else "goods"].set(m if table == "Magic" else g, name, v)
-    return Built(bytes(g), bytes(m), sp_rows, own)
+    return Built(bytes(g), bytes(m), sp_rows, bullet_rows, own)
 
 
 def make_rows(P: dict, D: dict, spells: list, chain=None):
@@ -191,6 +208,7 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
             rows["goods"].append((ids["goods"], built.goods))
             rows["magic"].append((ids["magic"], built.magic))
             rows["sp"].extend(built.sp)
+            rows["bullet"].extend(built.bullet)
             sh = _shop_row(P, D, spell, ids)
             if sh is not None:
                 rows["shop"].append((ids["shop_line"], sh))
@@ -340,8 +358,8 @@ def _differing_fields(d: Def, a: bytes, b: bytes) -> list:
 
 
 def check_template(P: dict, D: dict, spell: dict, B: dict, chain=None) -> list:
-    """The same kind of reading as check_incantation, for a spell made from a game spell (clone, enchant, buff with `from`): the
-    Goods, Magic and copied SpEffect rows of the FINISHED file must equal what the template in the ORIGINAL (B) gives with only
+    """The same kind of reading as check_incantation, for a spell made from a game spell (clone, enchant, projectile, buff with `from`):
+    the Goods, Magic and copied SpEffect and Bullet rows of the FINISHED file must equal what the template in the ORIGINAL (B) gives with only
     the design's fields changed (a difference names the fields), the design's costs and requirements must be in the Magic row,
     every SpEffect the copies call must exist and none may still call a SpEffect that was copied (a pointer back to the
     template's own row), the copies must sit in the slot's block of ids, and the shop line must be right. -> list of problems."""
@@ -371,22 +389,23 @@ def check_template(P: dict, D: dict, spell: dict, B: dict, chain=None) -> list:
         if got is not None and bytes(got) != expected:
             bad.append("G11: %s: %s is not the template's row %d with only the design's fields changed (differs in: %s)"
                        % (who, name, spell["from"], ", ".join(_differing_fields(D[key], bytes(got), expected))))
-    lo = ids["sp_copy_base"]
-    for new, expected in want.sp:
-        if not lo <= new < lo + COPY_SP_BLOCK:
-            bad.append("G11: %s: SpEffect %d is outside the slot's block %d-%d" % (who, new, lo, lo + COPY_SP_BLOCK - 1))
-        got = row("sp", new, "SpEffect")
-        if got is None:
-            continue
-        if bytes(got) != expected:
-            bad.append("G11: %s: SpEffect %d is not the template's row with only the design's fields changed (differs in: %s)"
-                       % (who, new, ", ".join(_differing_fields(D["sp"], bytes(got), expected))))
-        for link in chainmod.SP_LINKS:
-            target = D["sp"].get(got, link)
-            if target in want.own:
-                bad.append("G11: %s: SpEffect %d.%s still points at the template's row %d, not at its copy" % (who, new, link, target))
-            elif target > 0 and P["sp"].find(target) is None:
-                bad.append("G11: %s: SpEffect %d.%s points at SpEffect %d, which is not in the file" % (who, new, link, target))
+    for t, rows, base, block, name, links in (("sp", want.sp, ids["sp_copy_base"], COPY_SP_BLOCK, "SpEffect", chainmod.SP_PAIRS),
+                                              ("bullet", want.bullet, ids["bullet_copy_base"], COPY_BULLET_BLOCK, "Bullet", chainmod.BULLET_LINKS)):
+        for new, expected in rows:
+            if not base <= new < base + block:
+                bad.append("G11: %s: %s %d is outside the slot's block %d-%d" % (who, name, new, base, base + block - 1))
+            got = row(t, new, name)
+            if got is None:
+                continue
+            if bytes(got) != expected:
+                bad.append("G11: %s: %s %d is not the template's row with only the design's fields changed (differs in: %s)"
+                           % (who, name, new, ", ".join(_differing_fields(D[t], bytes(got), expected))))
+            for table, link in links:
+                target = D[t].get(got, link)
+                if target in want.own[table]:
+                    bad.append("G11: %s: %s %d.%s still points at the template's row %d, not at its copy" % (who, name, new, link, target))
+                elif target > 0 and table in P and P[table].find(target) is None and target != DUMMY:
+                    bad.append("G11: %s: %s %d.%s points at %s %d, which is not in the file" % (who, name, new, link, table, target))
     if magic is not None:
         mname, r = "Magic %d" % ids["magic"], spell.get("requires", {})
         for name, wanted in (("mp", spell.get("fp_cost")), ("stamina", spell.get("stamina_cost")),
@@ -394,12 +413,14 @@ def check_template(P: dict, D: dict, spell: dict, B: dict, chain=None) -> list:
                              ("requirementLuck", r.get("arcane"))):
             if wanted is not None:
                 need("magic", magic, name, wanted, mname, "G5")
-        for i in range(1, 11):       # a SpEffect the copy calls must exist (Bullet and attack rows are not in the tables read here)
-            if D["magic"].get(magic, "refCategory%d" % i) == 2:
+        for i in range(1, 11):       # a SpEffect or Bullet the copy calls must exist (attack rows are not in the tables read here)
+            table = {1: "bullet", 2: "sp"}.get(D["magic"].get(magic, "refCategory%d" % i))
+            if table:
                 rid = D["magic"].get(magic, "refId%d" % i)
-                if rid in want.own:
-                    bad.append("G11: %s: %s.refId%d still calls the template's SpEffect %d, not its copy" % (who, mname, i, rid))
-                elif rid > 0 and P["sp"].find(rid) is None:
-                    bad.append("G11: %s: %s.refId%d points at SpEffect %d, which is not in the file" % (who, mname, i, rid))
+                label = {"sp": "SpEffect", "bullet": "Bullet"}[table]
+                if rid in want.own[table]:
+                    bad.append("G11: %s: %s.refId%d still calls the template's %s %d, not its copy" % (who, mname, i, label, rid))
+                elif rid > 0 and P[table].find(rid) is None:
+                    bad.append("G11: %s: %s.refId%d points at %s %d, which is not in the file" % (who, mname, i, label, rid))
     _check_shop(P, D, spell, ids, who, row, need, bad)
     return bad

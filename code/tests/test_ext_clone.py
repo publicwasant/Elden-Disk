@@ -68,7 +68,7 @@ def test_a_clone_and_a_buff_can_share_one_file():
     assert kinds == ["buff", "clone"]
 
 
-@pytest.mark.parametrize("kind", ["projectile", "attack"])
+@pytest.mark.parametrize("kind", ["attack"])
 def test_the_kinds_that_are_planned_are_refused_by_name(kind):
     assert any("planned but not built yet" in p for p in problems(design(kind=kind)))
 
@@ -113,7 +113,8 @@ def test_a_buff_with_from_is_a_template_spell_and_cannot_mix_with_the_heal_over_
 
 @pytest.mark.parametrize("key, value, why", [
     ("Magic.6210", 1, "a key looks like"),
-    ("Bullet.10621000.life", 3.0, "a key looks like"),
+    ("Bullet.10621000.life", 3.0, "does not copy them"),
+    ("Bulle.10621000.life", 3.0, "a key looks like"),
     ("Magic.6230.mp", 1, "row id must be this spell's `from`"),
     ("Magic.6210.nope", 1, "no field 'nope'"),
     ("Magic.6210.castSfxId", "7", "needs a number"),
@@ -143,7 +144,7 @@ def test_the_schema_and_the_validator_agree_on_clones():
     cases = [design(), design(fp_cost=25, requires={"arcane": 12}, shop={"price": 500}, type="sorcery"),
              design(set={"Magic.6210.castSfxId": 7}), design(kind="projectile"), design(kind="enchant"), design(kind="buff"),
              design(fp_cost=1000), design(requires={"faith": 100}), design(type="spell"), design(surprise=1), design(**{"from": 0}),
-             design(set={"Bullet.1.life": 1}), design(set={"Magic.6210.castSfxId": "7"}), design(effect={}),
+             design(set={"Bullets.1.life": 1}), design(set={"Magic.6210.castSfxId": "7"}), design(effect={}),
              file_of({"x": {"kind": "clone"}}), file_of({Z4_ID: {**Z4_SPELL, "from": 6050}}), file_of({Z4_ID: {**Z4_SPELL, "kind": "buff"}})]
     for d in cases:
         ok_schema = jsonschema.Draft202012Validator(schema).is_valid(d)

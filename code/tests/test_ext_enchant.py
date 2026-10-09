@@ -86,7 +86,7 @@ def test_the_schema_and_the_validator_agree_on_enchants():
     schema = json.loads((PKG / "spells.schema.json").read_text(encoding="utf-8"))
     cases = [design(), design(fp_cost=5, shop={"price": 10}), design(set={"SpEffect.1626000.effectEndurance": 600}),
              design(set={"SpEffect.1626000.effectEndurance": "600"}), design(set={"SpEffect.1626000": 6}),
-             design(set={"Bullet.1.life": 1}), design(effect={}), design(**{"from": 0}),
+             design(set={"Bullets.1.life": 1}), design(effect={}), design(**{"from": 0}),
              file_of({"b": {"kind": "buff", "from": 6050}}), file_of({"b": {"kind": "buff", "from": 6050, "set": {"SpEffect.1605000.effectEndurance": 9}}}),
              file_of({"b": {"kind": "buff", "from": 6050, "cast_motion": "black-flame-blade"}}), file_of({"b": {"kind": "enchant"}})]
     for d in cases:
@@ -148,7 +148,7 @@ def test_an_enchant_copies_its_own_rows_into_the_slots_block_and_leaves_the_gene
     P, D, C = _tables()
     b = recipes.template_rows(P, D, _spell(), C)
     base = recipes.slot_rows(2)["sp_copy_base"]
-    assert b.own == {1000: base, 1001: base + 1} and [i for i, _ in b.sp] == [base, base + 1]
+    assert b.own == {"sp": {1000: base, 1001: base + 1}, "bullet": {}} and [i for i, _ in b.sp] == [base, base + 1]
     assert D["magic"].get(b.magic, "refId1") == base and D["magic"].get(b.magic, "refCategory1") == 2
     first, second = (D["sp"].get(b.sp[0][1], "cycleOccurrenceSpEffectId"), D["sp"].get(b.sp[1][1], "atkOccurrenceSpEffectId"))
     assert first == base + 1 and second == 500            # the link between the copies is remapped, the generic row is not copied

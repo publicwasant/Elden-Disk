@@ -143,6 +143,21 @@ Both take the fields of a clone (`type`, `requires`, `fp_cost`, `stamina_cost`, 
 
 Rows added: Goods, Magic, the copied SpEffect rows and the shop line; nothing existing changes. The footprint declares them. Gate: `check_template` also checks every copied SpEffect row: the file's row must equal the *original* template row with only the remapped links and the `set` fields changed (a difference names the fields), it lies in the slot's block, no copy still points at a template-private row, every SpEffect the copies call exists. The `copy` / `share` overrides and the printed plan of the draft come with 2.3.
 
+### 4d. `projectile` (Phase 2.3)
+
+For a spell that throws or creates a Bullet (185 of the game's player spells: Black Flame, Glintstone Pebble, Lightning Spear, mists, beams...). It is an `enchant` that also copies **Bullet rows**: `from` must be a Magic row that calls at least one Bullet (`refCategory` 1); it may also call SpEffect rows (copied) and attack rows (shared, see below). A spell that calls no Bullet is an error that names the right kind (`buff`/`enchant` for an effect, `clone` for an attack). `buff` and `enchant` refuse a template that calls a Bullet and say to use `projectile`.
+
+**The chain.** `chain.copy_set` walks from the Magic row through the template's *own* Bullet and SpEffect rows (reached by no more than 3 Magic rows of the game) and copies them; the walk stops at a generic row (it stays shared) and at every **AtkParam_Pc** row. Black Flame (6210) copies Bullets 10621000, 10621001, 10621050, 10621051 and SpEffect 1621000 (the burn); the attack rows 62101 and 62106 and the generic 79980 / 79990 stay the game's. New ids: Bullet `500000000 + (n-1)*16 + k` (a block of 16 per slot; the range T7 loaded in the game), SpEffect as in 4c (block of 8). More own rows than a block (23 of the 185 templates) is an error that says so. The builder remaps `HitBulletID`, `intervalCreateBulletId` (to copied Bullets), `spEffectIDForShooter` and `spEffectId0-4` (to copied SpEffects) and the Magic `refId` of both tables; `atkId_Bullet` is never changed.
+
+**`set`.** As in 4c plus `"Bullet.<template row id>.<field>": number` (`life`, `dist`, `initVellocity`, `hitRadius`, ...): the row id must be one of the copied Bullets, the link fields (`HitBulletID`, `intervalCreateBulletId`, `atkId_Bullet`, `spEffectIDForShooter`, `spEffectId0-4`) are refused. A `Bullet` key is an error in every other kind. The damage the Bullet does comes from the AtkParam_Pc row it calls, which is **not copied in this phase**: changing it needs the sixth table (Phase 2.4).
+
+```json
+"black_flame_long_burn": {"kind": "projectile", "from": 6210, "fp_cost": 20, "shop": {"price": 1000, "stock": -1},
+                          "set": {"SpEffect.1621000.effectEndurance": 30, "Bullet.10621000.life": 6}}
+```
+
+Rows added: Goods, Magic, the copied Bullet and SpEffect rows and the shop line. Gate: `check_template` also checks every copied Bullet row against the original template row (only the remapped links and the `set` fields may differ), the slot's block, that no copy still points at a template row that was copied, and that every Bullet and SpEffect the copies call exists. The limits of the file are the gate's (20 re-encoded blocks since T7).
+
 ## 5. How a file is built
 
 1. validate the spec (an invalid spec stops here; the existing build is untouched);

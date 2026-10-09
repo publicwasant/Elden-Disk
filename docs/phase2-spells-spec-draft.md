@@ -114,4 +114,13 @@ Where it differs from this draft:
 
 - The reach count is computed from the game's file (`chain.py` reads Bullet and AtkParam_Pc too), not from a hard-coded list.
 - The three link fields followed are `replaceSpEffectId`, `cycleOccurrenceSpEffectId` and `atkOccurrenceSpEffectId`; `applyIdOnGetSoul`, `accumuOverFireId` and `accumuUnderFireId` are refused in `set` but not followed (none of the 23 templates of the game has a value in them).
-- The footprint only adds SpEffect rows; the `copy` / `share` overrides and the printed plan are left to 2.3.
+- (2.3 adds Bullet rows to the footprint, see section 11.) The footprint only adds SpEffect rows; the `copy` / `share` overrides and the printed plan are left to 2.3.
+
+## 11. What 2.3 built (2026-10-10)
+
+`projectile` as approved: the engine now also copies the template's own Bullet rows (block of 16 ids per slot). Where it differs from this draft:
+
+- Bullet ids start at `500000000` (the range T7 loaded in the game), not `410000000` as planned in section 4.
+- The attack rows (AtkParam_Pc) are **not** copied (that is 2.4): the copies keep calling the game's, so the damage of a projectile does not change yet; its range, life, speed and what it applies on hit do.
+- The walk that decides which rows are copied (`chain.copy_set`) goes only through *own* Bullet and SpEffect rows and stops at generic rows and attack rows, so a row that only a shared row calls is not copied.
+- T7 passed in the game first, so the gate allows 20 re-encoded blocks.

@@ -55,7 +55,18 @@
           "SpEffect.1626000.effectEndurance": 600
         }
       },
-      "<id-4>": null,
+      "black_flame_long_burn": {
+        "kind": "projectile",
+        "from": 6210,
+        "fp_cost": 5,
+        "shop": {
+          "price": 9999,
+          "stock": -1
+        },
+        "set": {
+          "SpEffect.1621000.effectEndurance": 30
+        }
+      },
       "<id-5>": null,
       "<id-6>": null,
       "<id-7>": null,

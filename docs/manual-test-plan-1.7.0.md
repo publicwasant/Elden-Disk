@@ -98,6 +98,18 @@ Slot 3 (slot 1 the tested spell, slot 2 the Black Flame clone). `extension innov
 | E3 | `read --param-check` after E1 | every row equal; SpEffect shows the new rows (2 for the blade copy) | [ ] |
 | E4 | `"kind": "enchant", "from": 6050`, then `--add all --dry-run` | error: `from` 6050 is not a weapon or shield enchant, nothing built | [ ] |
 
+## P. `kind: projectile` (Phase 2.3; P1 and P2 passed in the game 2026-10-10; P3-P5 open)
+
+Slot 4 (slots 1-3: the tested spell, the Black Flame clone, the Black Flame Blade copy). `extension innovate-spells --add all --dry-run` must pass the gate before `run`.
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| P1 | Slot 4: `"black_flame_long_burn": {"kind": "projectile", "from": 6210, "fp_cost": 5, "shop": {"price": 1000, "stock": -1}, "set": {"SpEffect.1621000.effectEndurance": 30}}`; `run`; buy, memorize, cast at an enemy | the fireball flies and hits like the normal Black Flame, and the enemy burns for about 30 s (the normal Black Flame: about 2 s); the normal Black Flame is unchanged. This is the first test of Bullet rows that the game really calls. Passed in the game 2026-10-10: the build (20 blocks, gate passed) loaded, the copy is in the merchant's list (FP 5, Fai 20), can be bought and memorized, and the cast is Black Flame with a burn of about 30 s; the normal Black Flame is unchanged | ✓ |
+| P2 | After P1, `read --param-check` | every row equal; Bullet shows 4 new rows, SpEffect 1 more than before. Passed 2026-10-10: Goods 2333, Magic 321, SpEffect 11359, Bullet 15479 (+4), AtkParam_Pc 11017, ShopLineup 1300, all equal | ✓ |
+| P3 | Change P1's set to `{"Bullet.10621000.life": 0.3}` | the first fireball (10621000) vanishes soon after leaving the hand; a different, visible change of a Bullet field | [ ] |
+| P4 | Change P1's set to `{"SpEffect.1621000.changeHpRate": -0.05}` and hit a damaged enemy | the burn heals instead of damaging (check the enemy's health bar); the direct hit damage is still dealt | [ ] |
+| P5 | `"kind": "projectile", "from": 6250` (an enchant) then `--add all --dry-run` | error: `from` 6250 calls SpEffect and no Bullet row, nothing built | [ ] |
+
 ## T7. The envelope test (Phase 2.3; beyond the gate on purpose; passed in the game 2026-10-10)
 
 Does the game load a file with a **fifth table that grows** (Bullet, 4.5 MB) and about **20 re-encoded blocks** (the gate allows 13)? Nothing in the file uses the new rows: four unreferenced copies of the Black Flame bullets.
