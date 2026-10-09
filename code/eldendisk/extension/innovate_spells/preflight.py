@@ -3,23 +3,30 @@ regulation.bin is the game itself (handbook Part IV/VI), so a pass here means "n
 
 Rules (each one is a lesson from a rejected or accepted test file in the handbook):
  R1 the frame decodes to exactly the intended body;
- R2 no stored/RLE block that the original frame did not have in the same place, and edited blocks are compressed blocks;
+ R2 no stored/RLE block that the original frame did not have in the same place, and edited blocks are compressed blocks; blocks
+    appended at the end (the body is longer) are compressed blocks in front of the original's empty last block;
  R3 blocks whose decoded bytes did not change are byte-identical to the original (the only allowed difference is the
     literal-size-header form of raw-literal blocks, used to shape the tail);
  R4 DCX header: sizes correct, other bytes untouched; file length is 16 + a multiple of 16; exactly 2 zero bytes after the frame;
- R5 BND4: same entries, only the four tables differ;
- R6 PARAM tables: same row size and count, sorted, same header and strings; only rows named in the recipe's footprint differ.
+ R5 BND4: same entries, every entry inside the body and none overlapping another, only the four tables differ;
+ R6 PARAM tables (read by following each record's own pointer): same row size and strings, every old row byte for byte the same and
+    moved by exactly the shift of its table, sorted; only rows named in the recipe's footprint were added, none removed or changed;
+ R7 growth: no more than what the game was seen to accept (decoded body, compressed frame, blocks re-encoded).
 """
 from __future__ import annotations
 
 import struct
 
 from . import zstd
-from .container import Bnd4, Param
-from .defs import TABLE_FILES
+from .container import Bnd4, ParamView
+from .defs import TABLE_FILES, Def
 from .reblock import BS, TAIL_ZEROS, Source
 
-MAX_CHANGED_BLOCKS = 11      # the most blocks any in-game-tested file (Z4) had re-encoded
+# What the game was seen to accept (handbook Part VI; T6 = 64 new rows in each of the four tables). Beyond these the file is
+# untested: the gate stops, and the way forward is a new in-game test that raises the number, never a bypass.
+MAX_CHANGED_BLOCKS = 13      # blocks re-encoded (T6: 13)
+MAX_BODY_GROWTH = 219_000    # decoded bytes added (passed: 219 KB; 466 KB failed whatever the content)
+MAX_FRAME_GROWTH = 235_000   # compressed frame bytes added (T6: +234,768)
 
 
 def _raw_lit_split(c: bytes):
@@ -69,14 +76,28 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
         bad.append("R2: the frame has bytes after its last block")
     if frame[:6] != src.frame[:6]:
         bad.append("R2: the frame header changed")
-    if len(blocks) != len(src.blocks):
-        bad.append("R2: %d blocks, the original has %d" % (len(blocks), len(src.blocks)))
+    n_src = (len(src.body) + BS - 1) // BS                   # blocks that hold data (the frame has one more: the empty last block)
+    nadd = (len(newbody) + BS - 1) // BS - n_src             # blocks appended because the body is longer
+    if nadd < 0:
+        bad.append("R2: the body is shorter than the original")
+        return bad, warn, {}
+    if len(blocks) != len(src.blocks) + nadd:
+        bad.append("R2: %d blocks, expected %d (the original has %d, %d appended)" % (len(blocks), len(src.blocks) + nadd, len(src.blocks), nadd))
         return bad, warn, {}
     changed = converted = 0
     for i, (p, ty, size, last) in enumerate(blocks):
-        sp_, sty, ssize, slast = src.blocks[i]
+        if n_src <= i < n_src + nadd:                         # an appended block
+            if ty != 2:
+                bad.append("R2: appended block %d is not a compressed block (stored/RLE blocks are never accepted by the game)" % i)
+            if last:
+                bad.append("R2: appended block %d has the last-block flag" % i)
+            if size >= 1 << 17:
+                bad.append("R2: block %d is larger than 128 KiB" % i)
+            continue
+        si = i if i < n_src else i - nadd                     # the matching block of the original
+        sp_, sty, ssize, slast = src.blocks[si]
         c = frame[p + 3:p + 3 + (1 if ty == 1 else size)]
-        same_decoded = newbody[i * BS:(i + 1) * BS] == src.body[i * BS:(i + 1) * BS]
+        same_decoded = newbody[i * BS:(i + 1) * BS] == src.body[si * BS:(si + 1) * BS] if si < n_src else True
         if last != slast:
             bad.append("R2: block %d: last-block flag changed" % i)
         if (ty != 2) != (sty != 2):
@@ -86,14 +107,14 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
             if frame[p:p + 3 + (1 if ty == 1 else size)] != src.frame[sp_:sp_ + 3 + (1 if sty == 1 else ssize)]:
                 bad.append("R3: block %d (not compressed) differs from the original" % i)
             continue
-        oc = src.content(i)
+        oc = src.content(si)
         if c == oc:
             continue
         if same_decoded:
             a, b = _raw_lit_split(c), _raw_lit_split(oc)
             if a and b and a == b:
                 continue                                  # only the literal-size header form differs
-            if src.lit_type.get(i) == 3 and (c[0] & 3) == 0:
+            if src.lit_type.get(si) == 3 and (c[0] & 3) == 0:
                 converted += 1                            # treeless literals turned into raw ones (their Huffman tree was replaced)
                 continue
             bad.append("R3: block %d has the same decoded bytes but different encoded bytes" % i)
@@ -103,32 +124,56 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
             bad.append("R2: block %d is larger than 128 KiB" % i)
     if changed + converted > MAX_CHANGED_BLOCKS:
         warn.append("R2: %d blocks were re-encoded (more than %d, the most we have tested in the game)" % (changed + converted, MAX_CHANGED_BLOCKS))
+    # ---- R7 growth
+    grown, comp_grown = len(newbody) - len(src.body), csize - struct.unpack(">I", src.header[0x20:0x24])[0]
+    if grown > MAX_BODY_GROWTH:
+        warn.append("R7: the body grew by %d bytes (more than %d, the most the game was seen to accept)" % (grown, MAX_BODY_GROWTH))
+    if comp_grown > MAX_FRAME_GROWTH:
+        warn.append("R7: the frame grew by %d bytes (more than %d, the most the game was seen to accept)" % (comp_grown, MAX_FRAME_GROWTH))
     # ---- R5 / R6 BND4 and tables
+    stats = {"changed_blocks": changed + converted, "decoded": decoded, "body_growth": grown, "frame_growth": comp_grown}
     try:
         nb = Bnd4(newbody)
         ob = Bnd4(src.body)
     except Exception as e:
         bad.append("R5: BND4 unreadable (%s)" % e)
-        return bad, warn, {"changed_blocks": changed + converted, "decoded": decoded}
+        return bad, warn, stats
     if len(nb.entries) != len(ob.entries) or bytes(nb.head[:0x40]) != bytes(ob.head[:0x40]):
         bad.append("R5: the BND4 header or entry count changed")
     else:
         targets = set(TABLE_FILES.values())
+        spans = []
         for a, b in zip(nb.entries, ob.entries):
             short = a.name.replace("\\", "/").rsplit("/", 1)[-1][:-len(".param")]
             if (a.name, a.id) != (b.name, b.id):
                 bad.append("R5: entry %s changed name or id" % b.name)
             elif short not in targets and a.data != b.data:
                 bad.append("R5: entry %s changed but is not one of the edited tables" % b.name)
+            if bytes(a.hdr[:8]) + bytes(a.hdr[0x1C:]) != bytes(b.hdr[:8]) + bytes(b.hdr[0x1C:]):
+                bad.append("R5: entry %s: its header changed outside size and offset" % b.name)
+            off = struct.unpack_from("<I", a.hdr, 0x18)[0]
+            spans.append((off, off + len(a.data), b.name))
+        spans.sort()
+        if spans and spans[-1][1] > len(newbody):
+            bad.append("R5: entry %s reaches past the end of the body" % spans[-1][2])
+        for x, y in zip(spans, spans[1:]):
+            if x[1] > y[0]:
+                bad.append("R5: entries %s and %s overlap" % (x[2], y[2]))
     for key, fname in TABLE_FILES.items():
+        size = Def(key).size
         try:
-            a, b = Param(nb.get(fname).data), Param(ob.get(fname).data)
+            a, b = ParamView(nb.get(fname).data, size), ParamView(ob.get(fname).data, size)
         except Exception as e:
             bad.append("R6: table %s unreadable (%s)" % (key, e))
             continue
-        if (a.count, a.row_size, bytes(a.head), a.tail) != (b.count, b.row_size, bytes(b.head), b.tail):
-            bad.append("R6: table %s changed its size, header or strings" % key)
+        shift = a.strings_off - b.strings_off
+        mask = lambda h: bytes(h[4:0x0A]) + bytes(h[0x0C:0x10]) + bytes(h[0x18:0x30]) + bytes(h[0x38:0x40])    # not: strings_off, count, type-name ptr, data_start
+        if mask(a.head) != mask(b.head) or a.tail != b.tail:
+            bad.append("R6: table %s changed its header or strings" % key)
             continue
+        if struct.unpack_from("<Q", a.head, 0x10)[0] != a.strings_off or struct.unpack_from("<Q", a.head, 0x30)[0] != b.data_start + shift:
+            bad.append("R6: table %s: the header pointers are not the original ones moved by %d" % (key, shift))
+        oa, ob_ = a.offsets(), b.offsets()
         ra, rb = {r[0]: bytes(r[2]) for r in a.rows}, {r[0]: bytes(r[2]) for r in b.rows}
         removed, added = set(rb) - set(ra), set(ra) - set(rb)
         modified = {i for i in set(ra) & set(rb) if ra[i] != rb[i]}
@@ -136,6 +181,9 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
             bad.append("R6: table %s: rows removed %s / added %s / changed %s differ from the recipe's declared %s / %s / %s" % (
                 key, sorted(removed), sorted(added), sorted(modified), sorted(footprint.removed[key]),
                 sorted(footprint.added[key]), sorted(footprint.modified[key])))
-        if [r[0] for r in a.rows] != sorted(ra):
-            bad.append("R6: table %s is not sorted by id" % key)
-    return bad, warn, {"changed_blocks": changed + converted, "decoded": decoded}
+        moved = [i for i in rb if i in oa and oa[i] != (ob_[i][0] + shift, ob_[i][1] + shift)]
+        if moved:
+            bad.append("R6: table %s: row %d is not where it should be (every old row moves by exactly %d)" % (key, moved[0], shift))
+        if a.count != b.count + len(added):
+            bad.append("R6: table %s: %d rows, expected %d" % (key, a.count, b.count + len(added)))
+    return bad, warn, stats

@@ -1,7 +1,7 @@
 """The gate: does this regulation.bin look like a file the game accepts? Stdlib only.
 
 It judges the bytes of the FILE (read back from disk, decrypted again), not what the builder believes it wrote. It rebuilds
-the intended content from the draft and the game's own file and compares, then reads the rows of the file itself.
+the intended content from the design and the game's own file and compares, then reads the rows of the file itself.
 Every rule is a lesson from the handbook (R1-R6 in preflight.py; G5, G11-G13, G16 here). Any problem, and also any
 warning, is a stop: the file is not swapped and the game is not started.
 
@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from . import container, preflight, recipes
 from .build import plan
-from .container import Bnd4, Param
+from .container import Bnd4, ParamView
 from .defs import TABLE_FILES, Def
 from .reblock import BuildError, Source
 
@@ -46,8 +46,8 @@ def second_decode(frame: bytes):
         return "error", str(e)
 
 
-def verify(data: bytes, src: Source, items: list) -> Verdict:
-    """`data`: the encrypted regulation.bin as it is on disk. `src`: the game's original. `items`: the draft's items."""
+def verify(data: bytes, src: Source, spells: list) -> Verdict:
+    """`data`: the encrypted regulation.bin as it is on disk. `src`: the game's original. `spells`: the design's spells."""
     v = Verdict(sha256=hashlib.sha256(data).hexdigest())
     try:
         dcx = container.decrypt(data)
@@ -56,7 +56,7 @@ def verify(data: bytes, src: Source, items: list) -> Verdict:
         return v
     v.decrypted_sha256 = hashlib.sha256(dcx).hexdigest()
     try:
-        newbody, fp = plan(src, items)             # what the file must contain, computed again from the draft and the game's file
+        newbody, fp = plan(src, spells)             # what the file must contain, computed again from the design and the game's file
     except BuildError as e:
         v.problems.append("G5: the intended content cannot be computed (%s)" % e)
         return v
@@ -70,12 +70,12 @@ def verify(data: bytes, src: Source, items: list) -> Verdict:
     try:
         bnd = Bnd4(decoded)
         D = {k: Def(k) for k in TABLE_FILES}
-        P = {k: Param(bnd.get(f).data) for k, f in TABLE_FILES.items()}
+        P = {k: ParamView(bnd.get(f).data, D[k].size) for k, f in TABLE_FILES.items()}
     except Exception as e:
         v.problems.append("G11: the tables of the file cannot be read (%s)" % e)
         return v
-    for item in items:
-        v.problems += recipes.check_incantation(P, D, item)
+    for spell in spells:
+        v.problems += recipes.check_incantation(P, D, spell)
     csize = struct.unpack(">I", dcx[0x20:0x24])[0]
     state, other = second_decode(dcx[0x4C:0x4C + csize])
     if state == "unavailable":

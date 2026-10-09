@@ -1,11 +1,12 @@
-"""customize-items: draft -> built -> secured.
+"""innovate-spells: design -> built -> secured.
 
-    items.draft.json          the spec you edit (in this package; the exe embeds a copy)
+    extension.json            the design you edit (code/extension.json; section `innovate_spells`; the exe embeds a copy)
     <game>/regulation.bin     the base: always the game's own, untouched file
-    <extension dir>/customize-items/
+    <extension dir>/innovate-spells/
         regulation.bin            the latest build (judged by the gate, not yet confirmed in the game)
         regulation.secured.bin    a copy of the build you confirmed (`--secure`)
-        items.secured.json        the spec behind that copy + the proof (hashes, recipe version, base)
+        spells.commit.json        the commit: the spec behind that copy, the rows each slot took, and the proof (hashes, recipe
+                                  version, base)
 
 `run` swaps the secured file without building when nothing changed (see `decide`); otherwise it builds, and the gate judges the
 FILE (read back from disk) before it may replace regulation.bin. A failed gate raises GateFailed and nothing is swapped.
@@ -19,15 +20,17 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import bases, gate, spec as specmod
+from . import bases, gate, recipes, spec as specmod
 from .build import make, prepare
 from .reblock import BuildError
 
-NAME = "customize-items"
-PKG_DIR = Path(__file__).resolve().parent                 # where items.draft.json and items.schema.json live in the source tree
-SPEC_FILE, SCHEMA_FILE = "items.draft.json", "items.schema.json"
-OUTPUT_FILE, SECURED_BIN, SECURED_FILE = "regulation.bin", "regulation.secured.bin", "items.secured.json"
-SECURED_KIND = "customize-items secured"
+NAME = "innovate-spells"
+PKG_DIR = Path(__file__).resolve().parent                 # where spells.schema.json lives
+CODE_DIR = PKG_DIR.parents[2]                             # code/: where extension.json lives in the source tree
+SPEC_FILE, SCHEMA_FILE = "extension.json", "spells.schema.json"
+OUTPUT_FILE, SECURED_BIN, SECURED_FILE = "regulation.bin", "regulation.secured.bin", "spells.commit.json"
+SECURED_KIND = "innovate-spells commit"
+COMMIT_FORMAT = 2
 
 
 class ExtensionError(Exception):
@@ -76,12 +79,12 @@ _MISSING = object()
 
 
 def diff_specs(old_view: dict, new_view: dict) -> list:
-    """build_view of two specs -> lines like `reverse-curse-technique.shop.price  34590 -> 40000`."""
+    """build_view of two specs -> lines like `reverse_curse_technique.shop.price  34590 -> 40000`."""
     lines = []
     if old_view.get("format") != new_view.get("format"):
         lines.append(f"format  {_shown(old_view.get('format', _MISSING))} -> {_shown(new_view.get('format', _MISSING))}")
-    old = {it["id"]: it for it in old_view.get("items", [])}
-    new = {it["id"]: it for it in new_view.get("items", [])}
+    old = {it["id"]: it for it in old_view.get("spells", [])}
+    new = {it["id"]: it for it in new_view.get("spells", [])}
     for iid in sorted(set(old) | set(new)):
         if iid not in new:
             lines.append(f"{iid}  removed")
@@ -103,7 +106,7 @@ def diff_specs(old_view: dict, new_view: dict) -> list:
 class Decision:
     use_secured: bool
     reasons: list = field(default_factory=list)      # why a build is needed (empty when use_secured)
-    diff: list = field(default_factory=list)         # field-by-field changes of the draft since it was secured
+    diff: list = field(default_factory=list)         # field-by-field changes of the design since it was secured
 
 
 @dataclass
@@ -116,22 +119,22 @@ class Report:
     changed_blocks: int = 0
     notes: list = field(default_factory=list)
     output: Path | None = None
-    items: list = field(default_factory=list)
+    spells: list = field(default_factory=list)
 
 
-class CustomizeItems:
+class InnovateSpells:
     def __init__(self, ext_dir: Path, spec_path: Path | None = None):
         self.ext = Path(ext_dir)
         self.dir = self.ext / NAME
-        self.spec_path = Path(spec_path) if spec_path else PKG_DIR / SPEC_FILE
+        self.spec_path = Path(spec_path) if spec_path else CODE_DIR / SPEC_FILE
         self.output_path = self.dir / OUTPUT_FILE
         self.secured_bin = self.dir / SECURED_BIN
         self.secured_path = self.dir / SECURED_FILE
 
-    # ---------------- the draft ----------------
+    # ---------------- the design ----------------
     def load_spec(self) -> dict:
         if not self.spec_path.is_file():
-            raise ExtensionError(f"the draft {self.spec_path} was not found")
+            raise ExtensionError(f"the design {self.spec_path} was not found")
         try:
             return specmod.parse(self.spec_path.read_text(encoding="utf-8"))
         except specmod.SpecError as e:
@@ -140,16 +143,17 @@ class CustomizeItems:
             raise ExtensionError(f"{self.spec_path} must be UTF-8 text")
 
     def items(self, which: str = "all") -> list:
-        """The items to build: all of them, or the one with this id. An empty list means nothing to do."""
+        """The spells to build: all of them, or the one with this id. An empty list means nothing to do."""
         raw = self.load_spec()
         try:
-            items = specmod.select(raw, which)
+            spells = specmod.select(raw, which)
         except specmod.SpecError as e:
             raise ExtensionError(str(e))
-        if len(items) > specmod.MAX_ITEMS_2A:
-            raise ExtensionError(f"the draft has {len(items)} items; this version builds one item per file (Level 2a). "
-                                 "Choose one with --add <id>")
-        return items
+        for s in spells:
+            if s.get("shop") is not None and recipes.slot_rows(s["slot"])["shop_line"] is None:
+                raise ExtensionError(f"{s['id']} is in slot {s['slot']} and has a `shop`, but only the first {len(recipes.SHOP_LINES)} "
+                                     "slots have a shop line (the merchant's group has no more free lines): remove its `shop`")
+        return spells
 
     # ---------------- the base ----------------
     def read_base(self, game_file: Path | None) -> tuple:
@@ -167,31 +171,32 @@ class CustomizeItems:
 
     # ---------------- secured state ----------------
     def read_secured(self) -> dict | None:
-        """The record of items.secured.json, or None when there is none. A record that cannot be read raises ValueError."""
+        """The record of spells.commit.json, or None when there is none. A record that cannot be read raises ValueError."""
         if not self.secured_path.is_file():
             return None
         try:
             rec = json.loads(self.secured_path.read_text(encoding="utf-8"))
-            ok = (isinstance(rec, dict) and rec.get("kind") == SECURED_KIND and isinstance(rec["spec"]["items"], list)
+            ok = (isinstance(rec, dict) and rec.get("kind") == SECURED_KIND and rec.get("format") == COMMIT_FORMAT
+                  and isinstance(rec["spec"]["spells"], list) and isinstance(rec["rows"], dict)
                   and isinstance(rec["bin"]["sha256"], str) and isinstance(rec["base_sha256"], str)
                   and isinstance(rec["recipe_version"], int))
         except (OSError, ValueError, KeyError, TypeError) as e:
             raise ValueError(f"{self.secured_path.name} cannot be read ({e})")
         if not ok:
-            raise ValueError(f"{self.secured_path.name} is not a customize-items record")
+            raise ValueError(f"{self.secured_path.name} is not a innovate-spells record")
         return rec
 
-    def decide(self, items: list, base_sha: str) -> Decision:
-        """Use the secured file as it is, or build? Secured only when ALL hold: the draft equals the secured spec (name,
+    def decide(self, spells: list, base_sha: str) -> Decision:
+        """Use the secured file as it is, or build? Secured only when ALL hold: the design equals the secured spec (name,
         description, whitespace, key order do not count), the secured file has the recorded hash, the game's file is the base
         the record was made on, and the recipes are the same version. Nothing is ever built to decide this."""
-        want = {"format": specmod.FORMAT, "items": items}
+        want = {"format": specmod.FORMAT, "spells": spells}      # build_view looks only at the spells
         try:
             rec = self.read_secured()
         except ValueError as e:
             return Decision(False, [f"{e}: building again"])
         if rec is None:
-            return Decision(False, ["no secured build yet (first run, or items.secured.json was deleted)"])
+            return Decision(False, ["no secured build yet (first run, or spells.commit.json was deleted)"])
         reasons, diff = [], []
         if rec["recipe_version"] != bases.RECIPE_VERSION:
             reasons.append(f"the recipes changed (secured with version {rec['recipe_version']}, now {bases.RECIPE_VERSION})")
@@ -199,7 +204,7 @@ class CustomizeItems:
             reasons.append("the game's regulation.bin is not the file the secured build was made on")
         diff = diff_specs(specmod.build_view(rec["spec"]), specmod.build_view(want))
         if diff:
-            reasons.append(f"the draft changed since it was secured ({len(diff)} field{'s' if len(diff) != 1 else ''})")
+            reasons.append(f"the design changed since it was secured ({len(diff)} field{'s' if len(diff) != 1 else ''})")
         if not self.secured_bin.is_file():
             reasons.append(f"{SECURED_BIN} is missing")
         elif sha256_file(self.secured_bin) != rec["bin"]["sha256"]:
@@ -207,19 +212,19 @@ class CustomizeItems:
         return Decision(not reasons, reasons, diff)
 
     # ---------------- the build ----------------
-    def build(self, items: list, base: bytes, dry_run: bool = False) -> Report:
-        """Build `items` on the game's original file; the gate judges the bytes READ BACK from disk; only then does the result
+    def build(self, spells: list, base: bytes, dry_run: bool = False) -> Report:
+        """Build `spells` on the game's original file; the gate judges the bytes READ BACK from disk; only then does the result
         replace regulation.bin. A failed gate raises GateFailed and leaves regulation.bin and the secured files as they were."""
-        if not items:
-            return Report(False, dry_run, f"no items in {self.spec_path}: nothing to build", output=self.output_path)
+        if not spells:
+            return Report(False, dry_run, f"no spells in {self.spec_path}: nothing to build", output=self.output_path)
         try:
             src = prepare(base)
-            res = make(src, items)
+            res = make(src, spells)
         except BuildError as e:
             raise ExtensionError(f"build failed: {e}")
         tmp = self.output_path.with_name(self.output_path.name + ".tmp")
         if dry_run:
-            v = gate.verify(res.data, src, items)
+            v = gate.verify(res.data, src, spells)
         else:
             self.dir.mkdir(parents=True, exist_ok=True)
             with open(tmp, "wb") as f:
@@ -227,7 +232,7 @@ class CustomizeItems:
                 f.flush()
                 os.fsync(f.fileno())
             try:
-                v = gate.verify(tmp.read_bytes(), src, items)
+                v = gate.verify(tmp.read_bytes(), src, spells)
             except BaseException:
                 tmp.unlink(missing_ok=True)
                 raise
@@ -238,31 +243,32 @@ class CustomizeItems:
             os.replace(tmp, self.output_path)
         return Report(not dry_run, dry_run, "built and checked" if not dry_run else "dry run: built in memory and checked, nothing written",
                       res.sha256, res.decrypted_sha256, v.stats.get("changed_blocks", 0), list(v.notes), self.output_path,
-                      [i["id"] for i in items])
+                      [i["id"] for i in spells])
 
-    def secure(self, items: list, game_file: Path | None) -> Report:
-        """Confirm the current regulation.bin: the gate judges it against the CURRENT draft, then it is copied to
+    def secure(self, spells: list, game_file: Path | None) -> Report:
+        """Commit the current regulation.bin: the gate judges it against the CURRENT design, then it is copied to
         regulation.secured.bin and the record is written (the bin first, the record last, so a half-done secure is just 'not secured')."""
-        if not items:
-            raise ExtensionError(f"no items in {self.spec_path}: nothing to secure")
+        if not spells:
+            raise ExtensionError(f"no spells in {self.spec_path}: nothing to secure")
         if not self.output_path.is_file():
-            raise ExtensionError(f"{self.output_path} does not exist yet: build it first (`eldendisk run`, or `extension customize-items --add all`)")
+            raise ExtensionError(f"{self.output_path} does not exist yet: build it first (`eldendisk run`, or `extension innovate-spells --add all`)")
         base, base_sha = self.read_base(game_file)
         try:
             src = prepare(base)
         except BuildError as e:
             raise ExtensionError(f"the base cannot be read: {e}")
         data = self.output_path.read_bytes()
-        v = gate.verify(data, src, items)
+        v = gate.verify(data, src, spells)
         if not v.ok:
-            raise GateFailed(v.problems + [f"(if the draft changed after this regulation.bin was built, build again first: it must match {self.spec_path.name})"])
+            raise GateFailed(v.problems + [f"(if the design changed after this regulation.bin was built, build again first: it must match {self.spec_path.name})"])
         _write_atomic(self.secured_bin, data)
         if sha256_file(self.secured_bin) != v.sha256:
             raise ExtensionError(f"{self.secured_bin} was not written correctly (hash differs); nothing was secured")
-        rec = {"kind": SECURED_KIND, "format": 1, "secured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        rec = {"kind": SECURED_KIND, "format": COMMIT_FORMAT, "committed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                "recipe_version": bases.RECIPE_VERSION, "base_version": bases.version_of(base_sha), "base_sha256": base_sha,
                "bin": {"file": SECURED_BIN, "sha256": v.sha256, "decrypted_sha256": v.decrypted_sha256, "size": len(data)},
-               "spec": {"format": specmod.FORMAT, "items": items}}
+               "rows": {s["id"]: recipes.slot_rows(s["slot"]) for s in spells},       # what each committed spell took in the game
+               "spec": {"format": specmod.FORMAT, "spells": spells}}
         _write_atomic(self.secured_path, (json.dumps(rec, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8"))
         return Report(True, False, "secured", v.sha256, v.decrypted_sha256, v.stats.get("changed_blocks", 0), list(v.notes),
-                      self.secured_bin, [i["id"] for i in items])
+                      self.secured_bin, [i["id"] for i in spells])

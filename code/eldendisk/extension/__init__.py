@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-NAMES = ("customize-items",)
+NAMES = ("innovate-spells",)
 
 
 def default_dir() -> Path:
@@ -18,6 +18,6 @@ def data_dir(explicit: str | None = None) -> Path:
     return Path(explicit) if explicit else default_dir()
 
 
-def open_customize_items(explicit: str | None = None, spec_path: Path | str | None = None):
-    from .customize_items.service import CustomizeItems
-    return CustomizeItems(data_dir(explicit), spec_path)
+def open_innovate_spells(explicit: str | None = None, spec_path: Path | str | None = None):
+    from .innovate_spells.service import InnovateSpells
+    return InnovateSpells(data_dir(explicit), spec_path)

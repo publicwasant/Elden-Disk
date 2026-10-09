@@ -141,3 +141,56 @@ class Param:
             rec += struct.pack("<iIQQ", rid, 0, self.data_start + i * self.row_size, noff)
             data += rd
         return bytes(head) + bytes(rec) + bytes(data) + self.tail
+
+
+class ParamView:
+    """A .param file read the way the game reads it: every row is where ITS OWN record points, not where the position in the list
+    says. Needed for a table that has grown (grow.py: the new rows sit right after the records, the old rows stay where they
+    were), and fine for an untouched one. Read only. `rows` and `find` look like Param's, so checks can use either.
+
+    The layout is checked, not trusted: records sorted by unique id, every row inside the data area and inside the file, no two
+    rows overlapping, every name pointer inside the file."""
+
+    def __init__(self, blob: bytes, row_size: int):
+        self.size, self.row_size = len(blob), row_size
+        if len(blob) < 0x40:
+            raise ContainerError("not a PARAM file: too short")
+        self.head = bytes(blob[:0x40])
+        self.strings_off = u32(blob, 0)
+        self.count = struct.unpack_from("<H", blob, 0x0A)[0]
+        self.data_start = u64(blob, 0x30)
+        first_row = 0x40 + 24 * self.count
+        if first_row > self.strings_off or self.strings_off > len(blob):
+            raise ContainerError("the record table or the strings start lies outside the file")
+        self.rows, self.doffs = [], []
+        prev = None
+        for i in range(self.count):
+            rid, pad, doff, noff = struct.unpack_from("<iIQQ", blob, 0x40 + 24 * i)
+            if pad != 0:
+                raise ContainerError("record %d: padding is not zero" % i)
+            if prev is not None and rid <= prev:
+                raise ContainerError("records are not sorted by unique id (at id %d)" % rid)
+            prev = rid
+            if doff < first_row or doff + row_size > self.strings_off:
+                raise ContainerError("row %d points outside the data area" % rid)
+            if noff >= len(blob):
+                raise ContainerError("row %d: the name pointer lies outside the file" % rid)
+            self.rows.append([rid, noff, bytearray(blob[doff:doff + row_size])])
+            self.doffs.append(doff)
+        ordered = sorted(self.doffs)
+        for a, b in zip(ordered, ordered[1:]):
+            if b - a < row_size:
+                raise ContainerError("two rows overlap in the data area")
+        self.tail = bytes(blob[self.strings_off:])
+
+    def ids(self) -> list[int]:
+        return [r[0] for r in self.rows]
+
+    def find(self, rid: int):
+        ids = self.ids()
+        i = bisect.bisect_left(ids, rid)
+        return self.rows[i] if i < len(ids) and ids[i] == rid else None
+
+    def offsets(self) -> dict:
+        """id -> (data offset, name offset) as the records say."""
+        return {r[0]: (d, r[1]) for r, d in zip(self.rows, self.doffs)}

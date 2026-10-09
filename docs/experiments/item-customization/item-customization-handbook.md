@@ -8,7 +8,7 @@
 > **Language:** English (technical terms are explained where they first appear; Appendix D is a glossary)
 > **Companion material:** `tools/` (every script needed to reproduce the build, next to this file) and `../../memory-read-101.md` (how Elden-Disk reads the live game, which is how we *observed* the result)
 
-> **Update 2026-10-09.** The final item (Z4: Flame-style cast, 34,590 runes, stock 1, Int 45 / Fai 15 / Arc 10, FP 80, 2.0 s poise buff) worked in the real game, and **Elden-Disk now builds this file itself** (`extension customize-items`, spec 1.7.0): same bytes as `tools/make_item.py --name Z4` (decrypted SHA-256 `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`), swapped in by `run`, put back byte-identical by the vault. The Y1/Y2 "pending" lines below are superseded by Z4. The poise part is not yet confirmed in the game. For more than one item see 17.1 (measurements added) and spec 1.7.0 section 10b.
+> **Update 2026-10-09.** The final item (Z4: Flame-style cast, 34,590 runes, stock 1, Int 45 / Fai 15 / Arc 10, FP 80, 2.0 s poise buff) worked in the real game, and **Elden-Disk now builds this file itself** (`extension innovate-spells`, spec 1.7.0): same bytes as `tools/make_item.py --name Z4` (decrypted SHA-256 `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`), swapped in by `run`, put back byte-identical by the vault. The Y1/Y2 "pending" lines below are superseded by Z4. The poise part is not yet confirmed in the game. For more than one item see 17.1 (measurements added) and spec 1.7.0 section 10b.
 
 ---
 
@@ -843,7 +843,7 @@ Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame G
 | 4 | "Until full" logic | SpEffect conditions | medium (unknown fields) |
 | 5 | Visual variants and colour | borrow ids; compare | low |
 | 6 | Custom image | texture archive | high |
-| 7 | Generalise `make_item.py` into a recipe/config format for many items | done for one item: Elden-Disk `items.draft.json` (spec 1.7.0); several items wait for step 3 | low |
+| 7 | Generalise `make_item.py` into a recipe/config format for many items | done for one item: Elden-Disk `spells.design.json` (spec 1.7.0); several items wait for step 3 | low |
 
 ---
 

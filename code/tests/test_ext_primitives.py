@@ -1,12 +1,12 @@
-"""The building blocks of customize-items on synthetic data: AES, FSE sequence coding, zstd frames, block rewriting,
+"""The building blocks of innovate-spells on synthetic data: AES, FSE sequence coding, zstd frames, block rewriting,
 BND4/PARAM containers, field definitions."""
 import random
 import struct
 
 import pytest
 
-from eldendisk.extension.customize_items import aes, container, fse, reblock, zstd
-from eldendisk.extension.customize_items.defs import Def
+from eldendisk.extension.innovate_spells import aes, container, fse, reblock, zstd
+from eldendisk.extension.innovate_spells.defs import Def
 from tests import ext_helpers as H
 
 

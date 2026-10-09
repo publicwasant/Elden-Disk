@@ -108,6 +108,18 @@ def test_a_header_that_does_not_add_up_is_refused(kw, why):
         store(m).resolve(KEY)
 
 
+def test_a_file_grown_by_an_extension_has_a_gap_before_its_data_and_is_still_read():
+    m = small_world(data_start_field=0x40 + 30 * 24 + 1824)           # two rows' worth of space after the descriptors (SpEffect rows are 912 bytes)
+    assert store(m).resolve(KEY).head == pf.HEAD
+
+
+@pytest.mark.parametrize("gap", [-16, 8, (1 << 20) + 16])
+def test_a_gap_that_is_not_a_whole_number_of_16s_or_too_big_or_negative_is_refused(gap):
+    m = small_world(data_start_field=0x40 + 30 * 24 + gap)
+    with pytest.raises(P.ParamError, match="does not match"):
+        store(m).resolve(KEY)
+
+
 def test_the_row_count_is_not_hard_coded():
     m = FakeMem()
     ids = pf.small_ids(extra_rows=range(5_000_000, 5_000_020))

@@ -1,15 +1,22 @@
-"""The items.draft.json spec: a strict stdlib validator.
+"""The `innovate_spells` section of extension.json: a strict stdlib validator.
 
-Level 2a rules (handbook Part VI): one incantation per build; text (name, description) is stored but not written into the
-game; anything that needs files inside the game's archives (colour, icon) is Level 3 and refused."""
+    {"innovate_spells": {"maximum": 64, "slots": {"<spell-id>": {...the spell...}, "<id-2>": null, ...}}}
+
+A slot is a place in the list, counted from 1 in file order; its number fixes the rows the spell gets in the game (so a spell
+that moves to another slot gets other rows). A slot holding null is empty and is not built. The other sections of extension.json
+belong to other extensions and are left alone.
+
+Level 2a rules (handbook Part VI): text (name, description) is stored but not written into the game; anything that needs files
+inside the game's archives (colour, icon) is Level 3 and refused."""
 from __future__ import annotations
 
 import json
 import re
 
-FORMAT = 1
-EMPTY_SPEC = '{\n  "format": 1,\n  "items": []\n}\n'      # what the first run writes: nothing to build yet
-MAX_ITEMS_2A = 1
+FORMAT = 1                    # the canonical form (what `normalise` returns and the commit record stores)
+SECTION = "innovate_spells"   # the key of this extension in extension.json
+MAX_SLOTS = 64                # proven in the game (T6): 64 new rows in each of Goods, Magic, ShopLineup and SpEffect
+ID_RE = r"[a-z0-9][a-z0-9_-]{0,39}"
 CAST_MOTIONS = {"flame-grant-me-strength": 31, "black-flame-blade": 32}
 VISUALS = ("flame", "flask", "none")   # none: only the cast flash (from Flame! Grant Me Strength), nothing burning on the body afterwards
 LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "text", "flame_color", "model"}
@@ -74,37 +81,49 @@ class _Check:
         return v
 
 
+def empty_text(maximum: int = MAX_SLOTS) -> str:
+    """An extension.json with `maximum` empty slots: nothing to build yet."""
+    slots = ",\n".join('      "<id-%d>": null' % n for n in range(1, maximum + 1))
+    return '{\n  "%s": {\n    "maximum": %d,\n    "slots": {\n%s\n    }\n  }\n}\n' % (SECTION, maximum, slots)
+
+
 def normalise(data) -> dict:
-    """Validate and fill in defaults -> the canonical form. Raises SpecError listing every problem found."""
+    """Validate and fill in defaults -> the canonical form {"format", "maximum", "spells": [{"slot", "id", ...}]}, filled slots
+    only, in slot order. Raises SpecError listing every problem found."""
     c = _Check()
     if not isinstance(data, dict):
         raise SpecError(["the file must contain a JSON object"])
-    c.keys(data, "$", ["items"], ["format"])
-    if data.get("format", FORMAT) != FORMAT:
-        c.bad("$.format", "must be %d" % FORMAT)
-    items = data.get("items")
+    sec = data.get(SECTION)
+    if not isinstance(sec, dict):
+        raise SpecError(['$.%s: missing (an object with "maximum" and "slots")' % SECTION])
+    top = "$." + SECTION
+    c.keys(sec, top, ["maximum", "slots"], [])
+    maximum = sec.get("maximum")
+    if not _int(maximum) or not 1 <= maximum <= MAX_SLOTS:
+        c.bad(top + ".maximum", "must be a whole number from 1 to %d" % MAX_SLOTS)
+        maximum = 0
+    slots = sec.get("slots")
     out = []
-    if not isinstance(items, list):
-        c.bad("$.items", "must be a list (an empty list means: no items yet)")
-        items = []
-    seen = set()
-    for n, it in enumerate(items):
-        p = "$.items[%d]" % n
-        if not isinstance(it, dict):
-            c.bad(p, "must be an object")
+    if not isinstance(slots, dict):
+        c.bad(top + ".slots", "must be an object: one key per slot, null for an empty slot")
+        slots = {}
+    elif maximum and len(slots) != maximum:
+        c.bad(top + ".slots", "has %d slots but maximum is %d (a slot's place in the list fixes its rows: keep every slot, "
+                              "use null for an empty one)" % (len(slots), maximum))
+    for n, (iid, it) in enumerate(slots.items(), 1):
+        if it is None:
             continue
-        c.keys(it, p, ["id", "type", "requires", "fp_cost", "shop"],
-               ["name", "description", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds"])
-        iid = it.get("id")
-        if not isinstance(iid, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", iid):
-            c.bad(p + ".id", "must be 1-40 characters: lower-case letters, digits and '-'")
-        elif iid in seen:
-            c.bad(p + ".id", "duplicate id")
-        else:
-            seen.add(iid)
+        p = "%s.slots[%s]" % (top, iid)
+        if not re.fullmatch(ID_RE, iid):
+            c.bad(p, "a filled slot's key is the spell's id: 1-40 characters, lower-case letters, digits, '_' and '-'")
+        if not isinstance(it, dict):
+            c.bad(p, "must be an object (or null for an empty slot)")
+            continue
+        c.keys(it, p, ["type", "requires", "fp_cost"],
+               ["name", "description", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop"])
         if it.get("type") != "incantation":
             c.bad(p + ".type", 'only "incantation" is supported')
-        o = {"id": iid if isinstance(iid, str) else "", "type": "incantation",
+        o = {"slot": n, "id": iid, "type": "incantation",
              "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
         req = it.get("requires")
         r = {"intelligence": 0, "faith": 0, "arcane": 0}
@@ -144,35 +163,55 @@ def normalise(data) -> dict:
         o["effect"] = e
         if "poise_while_casting_seconds" in it:
             o["poise_while_casting_seconds"] = c.real(it, "poise_while_casting_seconds", p, 0.1, 10, 2.0)
-        shop = it.get("shop")
-        s = {"price": 0, "stock": 1}
-        if not isinstance(shop, dict):
-            c.bad(p + ".shop", "must be an object")
-        else:
-            c.keys(shop, p + ".shop", ["price"], ["stock"])
-            s["price"] = c.integer(shop, "price", p + ".shop", 1, 99999999, 1)
-            s["stock"] = c.integer(shop, "stock", p + ".shop", -1, 99, 1)
-            if s["stock"] == 0:
-                c.bad(p + ".shop.stock", "must be -1 (unlimited) or 1 to 99")
-        o["shop"] = s
+        if "shop" in it:       # optional: a spell without a shop line is built but cannot be bought (slots above 7 have no line)
+            shop = it["shop"]
+            s = {"price": 0, "stock": 1}
+            if not isinstance(shop, dict):
+                c.bad(p + ".shop", "must be an object")
+            else:
+                c.keys(shop, p + ".shop", ["price"], ["stock"])
+                s["price"] = c.integer(shop, "price", p + ".shop", 1, 99999999, 1)
+                s["stock"] = c.integer(shop, "stock", p + ".shop", -1, 99, 1)
+                if s["stock"] == 0:
+                    c.bad(p + ".shop.stock", "must be -1 (unlimited) or 1 to 99")
+            o["shop"] = s
         out.append(o)
     if c.problems:
         raise SpecError(c.problems)
-    return {"format": FORMAT, "items": out}
+    return {"format": FORMAT, "maximum": maximum, "spells": out}
+
+
+def _no_duplicate_keys(pairs):
+    d = {}
+    for k, v in pairs:
+        if k in d:
+            raise ValueError("the key %r appears twice in one object (the second would silently replace the first)" % k)
+        d[k] = v
+    return d
 
 
 def parse(text: str) -> dict:
     try:
-        data = json.loads(text)
+        data = json.loads(text, object_pairs_hook=_no_duplicate_keys)
     except ValueError as e:
         raise SpecError(["not valid JSON: %s" % e])
     return normalise(data)
 
 
+def as_file(spec: dict) -> dict:
+    """The canonical form back into the shape of extension.json (filled slots keep their numbers, the others are null)."""
+    by_slot = {s["slot"]: s for s in spec["spells"]}
+    slots = {}
+    for n in range(1, spec["maximum"] + 1):
+        s = by_slot.get(n)
+        slots[s["id"] if s else "<id-%d>" % n] = {k: v for k, v in s.items() if k not in ("slot", "id")} if s else None
+    return {SECTION: {"maximum": spec["maximum"], "slots": slots}}
+
+
 def build_view(spec: dict) -> dict:
     """What decides the bytes of the build (the text fields do not)."""
     return {"format": spec["format"],
-            "items": [{k: v for k, v in it.items() if k not in ("name", "description")} for it in spec["items"]]}
+            "spells": [{k: v for k, v in it.items() if k not in ("name", "description")} for it in spec["spells"]]}
 
 
 def dumps(spec: dict) -> str:
@@ -180,10 +219,10 @@ def dumps(spec: dict) -> str:
 
 
 def select(spec: dict, which: str) -> list:
-    """`all` or an item id -> the items to build."""
+    """`all` or a spell id -> the spells to build."""
     if which == "all":
-        return list(spec["items"])
-    hit = [i for i in spec["items"] if i["id"] == which]
+        return list(spec["spells"])
+    hit = [i for i in spec["spells"] if i["id"] == which]
     if not hit:
-        raise SpecError(["no item with id %r (have: %s)" % (which, ", ".join(i["id"] for i in spec["items"]))])
+        raise SpecError(["no spell with id %r (have: %s)" % (which, ", ".join(i["id"] for i in spec["spells"]))])
     return hit

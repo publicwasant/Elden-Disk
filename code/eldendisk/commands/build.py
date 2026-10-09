@@ -45,17 +45,14 @@ def _build_layout() -> dict:
 
 
 def _config_files(layout: dict) -> list[Path]:
-    """offsets.json and chr_state_ids.json (from code/ or the project root) and the extension draft items.draft.json
-    (from the customize_items package); only those that exist."""
+    """offsets.json, chr_state_ids.json and the extensions' design extension.json (from code/ or the project root); only those
+    that exist."""
     out = []
-    for name in ("offsets.json", "chr_state_ids.json"):
+    for name in ("offsets.json", "chr_state_ids.json", "extension.json"):
         for base in (layout["code_dir"], layout["project_root"]):
             if (base / name).exists():
                 out.append(base / name)
                 break
-    spec = layout["code_dir"] / "eldendisk" / "extension" / "customize_items" / "items.draft.json"
-    if spec.exists():
-        out.append(spec)
     return out
 
 

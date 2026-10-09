@@ -4,8 +4,8 @@ decoder and (when installed) the `zstandard` library."""
 import random
 import struct
 
-from eldendisk.extension.customize_items import fse, zstd
-from eldendisk.extension.customize_items.reblock import BS
+from eldendisk.extension.innovate_spells import fse, zstd
+from eldendisk.extension.innovate_spells.reblock import BS
 
 FRAME_HEADER = bytes([0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x80])
 

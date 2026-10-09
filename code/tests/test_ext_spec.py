@@ -1,38 +1,40 @@
-"""items.draft.json: strict validation, canonical form, and agreement with the JSON schema."""
+"""extension.json (innovate_spells): strict validation, canonical form, and agreement with the JSON schema."""
 import copy
 import json
 from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.customize_items import spec
+from eldendisk.extension.innovate_spells import spec
 
 PKG = Path(spec.__file__).parent
-from tests.z4 import Z4
+CODE = PKG.parents[2]
+from tests.z4 import ID, SPELL, Z4, file_of, spell_of
 
 
 def mutated(fn):
     d = copy.deepcopy(Z4)
-    fn(d["items"][0])
+    fn(spell_of(d))
     return d
 
 
-def test_the_shipped_draft_is_valid_whatever_the_user_made_of_it():
-    n = spec.normalise(json.loads((PKG / "items.draft.json").read_text(encoding="utf-8")))
-    assert n["items"] and all(i["effect"]["visual"] in spec.VISUALS for i in n["items"])
+def test_the_shipped_design_is_valid_whatever_the_user_made_of_it():
+    n = spec.normalise(json.loads((CODE / "extension.json").read_text(encoding="utf-8")))
+    assert n["spells"] and all(i["effect"]["visual"] in spec.VISUALS for i in n["spells"])
 
 
 def test_the_z4_example_is_valid_and_normalises_to_itself_plus_defaults():
     n = spec.normalise(Z4)
-    it = n["items"][0]
+    it = n["spells"][0]
     assert it["requires"] == {"intelligence": 45, "faith": 15, "arcane": 10} and it["stamina_cost"] == 0
     assert it["effect"]["visual"] == "flame" and it["poise_while_casting_seconds"] == 2.0
-    assert spec.normalise(json.loads(spec.dumps(n))) == n                      # canonical form is a fixed point
+    assert spec.normalise(spec.as_file(n)) == n                                # canonical form <-> file form round trip
+    assert it["slot"] == 1 and it["id"] == ID and n["maximum"] == 64
 
 
 def test_missing_optional_parts_get_the_documented_defaults():
     d = mutated(lambda i: [i.pop(k) for k in ("effect", "cast_motion", "poise_while_casting_seconds", "name", "description")])
-    it = spec.normalise(d)["items"][0]
+    it = spec.normalise(d)["spells"][0]
     assert it["cast_motion"] == "flame-grant-me-strength" and it["effect"]["heal_hp_per_tick"] == 60
     assert "poise_while_casting_seconds" not in it and it["name"] == ""
 
@@ -52,7 +54,7 @@ def test_missing_optional_parts_get_the_documented_defaults():
     (lambda i: i["effect"].update(tick_seconds=0), "effect.tick_seconds"),
     (lambda i: i.update(poise_while_casting_seconds=99), "poise_while_casting_seconds"),
     (lambda i: i.update(surprise=1), "surprise"),
-    (lambda i: i.pop("shop"), "shop"),
+    (lambda i: i["shop"].pop("price"), "shop.price"),
 ])
 def test_invalid_specs_are_refused_with_the_path_of_the_problem(fn, where):
     with pytest.raises(spec.SpecError) as e:
@@ -63,15 +65,15 @@ def test_invalid_specs_are_refused_with_the_path_of_the_problem(fn, where):
 @pytest.mark.parametrize("visual", ["flame", "flask", "none"])
 def test_every_visual_is_accepted(visual):
     d = mutated(lambda i: i["effect"].update(visual=visual))
-    assert spec.normalise(d)["items"][0]["effect"]["visual"] == visual
+    assert spec.normalise(d)["spells"][0]["effect"]["visual"] == visual
 
 
 def test_an_explicit_null_visual_means_none_but_a_missing_one_means_flame():
-    assert spec.normalise(mutated(lambda i: i["effect"].update(visual=None)))["items"][0]["effect"]["visual"] == "none"
-    assert spec.normalise(mutated(lambda i: i["effect"].pop("visual")))["items"][0]["effect"]["visual"] == "flame"
+    assert spec.normalise(mutated(lambda i: i["effect"].update(visual=None)))["spells"][0]["effect"]["visual"] == "none"
+    assert spec.normalise(mutated(lambda i: i["effect"].pop("visual")))["spells"][0]["effect"]["visual"] == "flame"
     a = spec.normalise(mutated(lambda i: i["effect"].update(visual=None)))
     b = spec.normalise(mutated(lambda i: i["effect"].update(visual="none")))
-    assert spec.build_view(a) == spec.build_view(b)          # null and "none" are the same draft (no rebuild between them)
+    assert spec.build_view(a) == spec.build_view(b)          # null and "none" are the same design (no rebuild between them)
 
 
 @pytest.mark.parametrize("key", ["icon_file", "colour", "color", "icon", "text", "flame_color"])
@@ -88,32 +90,92 @@ def test_all_problems_are_listed_not_just_the_first():
     assert len(e.value.problems) >= 2
 
 
-def test_duplicate_ids_and_wrong_shapes_are_refused():
-    d = copy.deepcopy(Z4)
-    d["items"].append(copy.deepcopy(d["items"][0]))
-    with pytest.raises(spec.SpecError):
-        spec.normalise(d)
-    assert spec.normalise({"items": []}) == {"format": 1, "items": []}         # "no items yet" is a valid spec
-    with pytest.raises(spec.SpecError):
-        spec.normalise({"items": {}})
+def test_wrong_shapes_are_refused():
+    for bad in ({}, {"innovate_spells": []}, {"innovate_spells": {"maximum": 64}}, {"innovate_spells": {"slots": {}}},
+                {"innovate_spells": {"maximum": 65, "slots": {}}}, {"innovate_spells": {"maximum": 0, "slots": {}}},
+                {"innovate_spells": {"maximum": True, "slots": {}}},
+                {"innovate_spells": {"maximum": 2, "slots": {"<id-1>": None, "<id-2>": None}, "surprise": 1}},
+                {"innovate_spells": {"maximum": 2, "slots": []}}):
+        with pytest.raises(spec.SpecError):
+            spec.normalise(bad)
     with pytest.raises(spec.SpecError):
         spec.parse("{not json")
     with pytest.raises(spec.SpecError):
         spec.normalise([])
 
 
+def test_other_extensions_sections_are_left_alone():
+    d = copy.deepcopy(Z4)
+    d["some_other_extension"] = {"anything": [1, 2, 3]}
+    assert spec.normalise(d) == spec.normalise(Z4)
+
+
+def test_slots_are_numbered_by_position_and_empty_slots_are_skipped():
+    d = file_of({"<id-1>": None, "first": copy.deepcopy(SPELL), "<id-3>": None, "second": copy.deepcopy(SPELL)}, maximum=5)
+    n = spec.normalise(d)
+    assert [(s["slot"], s["id"]) for s in n["spells"]] == [(2, "first"), (4, "second")] and n["maximum"] == 5
+    assert spec.normalise(spec.as_file(n)) == n
+    assert list(spec.as_file(n)["innovate_spells"]["slots"]) == ["<id-1>", "first", "<id-3>", "second", "<id-5>"]
+
+
+def test_the_slot_count_must_equal_maximum():
+    for count in (3, 5):
+        d = file_of({ID: copy.deepcopy(SPELL)}, maximum=count)
+        d["innovate_spells"]["maximum"] = 4
+        with pytest.raises(spec.SpecError) as e:
+            spec.normalise(d)
+        assert any("maximum is 4" in p for p in e.value.problems)
+
+
+def test_a_filled_slot_key_is_the_id_and_must_be_a_valid_one():
+    d = file_of({"Bad Id": copy.deepcopy(SPELL)})
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(d)
+    assert any("Bad Id" in p and "id" in p for p in e.value.problems)
+    d = mutated(lambda i: i.update(id="x"))               # the id is the key now, not a field
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(d)
+    assert any(".id" in p and "unknown field" in p for p in e.value.problems)
+    # an empty slot may have any key
+    assert spec.normalise(file_of({ID: copy.deepcopy(SPELL), "<anything goes>": None}))["spells"][0]["slot"] == 1
+
+
+@pytest.mark.parametrize("good", ["reverse_curse_technique", "reverse-curse-technique", "a1", "x_2-y", "0day"])
+def test_ids_may_use_underscore_or_hyphen(good):
+    assert spec.normalise(file_of({good: copy.deepcopy(SPELL)}))["spells"][0]["id"] == good
+
+
+@pytest.mark.parametrize("bad", ["_x", "-x", "Upper", "has space", "a.b", "a" * 41, "ก"])
+def test_ids_that_are_not_safe_names_are_refused(bad):
+    with pytest.raises(spec.SpecError):
+        spec.normalise(file_of({bad: copy.deepcopy(SPELL)}))
+
+
+def test_a_key_that_appears_twice_is_refused_instead_of_silently_replaced():
+    text = json.dumps(Z4).replace('"<id-2>": null', '"<id-3>": null', 1)        # now <id-3> is twice in the object
+    with pytest.raises(spec.SpecError) as e:
+        spec.parse(text)
+    assert "twice" in str(e.value)
+
+
+def test_moving_a_spell_to_another_slot_is_a_change_of_what_decides_the_build():
+    a = spec.normalise(file_of({ID: copy.deepcopy(SPELL)}))
+    b = spec.normalise(file_of({"<id-1>": None, ID: copy.deepcopy(SPELL)}))
+    assert b["spells"][0]["slot"] == 2 and spec.build_view(a) != spec.build_view(b)
+
+
 def test_text_fields_do_not_change_what_decides_the_build():
     a = spec.normalise(Z4)
     b = copy.deepcopy(a)
-    b["items"][0]["name"], b["items"][0]["description"] = "Other name", "Other text"
+    b["spells"][0]["name"], b["spells"][0]["description"] = "Other name", "Other text"
     assert spec.build_view(a) == spec.build_view(b)
-    b["items"][0]["fp_cost"] += 1
+    b["spells"][0]["fp_cost"] += 1
     assert spec.build_view(a) != spec.build_view(b)
 
 
 def test_select_all_or_one_id():
     n = spec.normalise(Z4)
-    assert spec.select(n, "all") == n["items"] and spec.select(n, "reverse-curse-technique") == n["items"]
+    assert spec.select(n, "all") == n["spells"] and spec.select(n, "reverse_curse_technique") == n["spells"]
     with pytest.raises(spec.SpecError):
         spec.select(n, "nope")
 
@@ -121,13 +183,15 @@ def test_select_all_or_one_id():
 # ---- the JSON schema (dev check only: the tool itself does not need jsonschema) ----
 def test_the_schema_and_the_validator_agree():
     jsonschema = pytest.importorskip("jsonschema")
-    schema = json.loads((PKG / "items.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads((PKG / "spells.schema.json").read_text(encoding="utf-8"))
     cases = [Z4] + [mutated(f) for f in (
         lambda i: i.update(fp_cost=-1), lambda i: i["requires"].update(faith=100), lambda i: i.update(cast_motion="x"),
         lambda i: i["shop"].update(stock=0), lambda i: i.update(surprise=1), lambda i: i.pop("shop"),
-        lambda i: i.update(id="Bad Id"), lambda i: i["effect"].update(tick_seconds=0), lambda i: i.update(icon_file="a.png"),
+        lambda i: i["effect"].update(tick_seconds=0), lambda i: i.update(icon_file="a.png"),
         lambda i: i["shop"].update(stock=-1), lambda i: i["shop"].update(price=99999999),
         lambda i: i.update(poise_while_casting_seconds=0.1))]
+    cases += [file_of({"Bad Id": copy.deepcopy(SPELL)}), file_of({"Bad Id": None}), file_of({ID: None}), file_of({}, maximum=64),
+              {"innovate_spells": {"maximum": 65, "slots": {}}}, {}]
     for d in cases:
         ok_schema = jsonschema.Draft202012Validator(schema).is_valid(d)
         try:
@@ -139,5 +203,12 @@ def test_the_schema_and_the_validator_agree():
 
 
 
-def test_what_the_first_run_writes_is_a_valid_empty_spec():
-    assert spec.parse(spec.EMPTY_SPEC) == {"format": 1, "items": []}
+def test_the_empty_file_is_a_valid_design_with_nothing_to_build():
+    assert spec.parse(spec.empty_text()) == {"format": 1, "maximum": 64, "spells": []}
+    assert spec.parse(spec.empty_text(3)) == {"format": 1, "maximum": 3, "spells": []}
+
+
+def test_a_spell_without_a_shop_is_valid():
+    f = copy.deepcopy(Z4)
+    spell_of(f).pop("shop")
+    assert spec.normalise(f)["spells"][0].get("shop") is None

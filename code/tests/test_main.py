@@ -85,9 +85,7 @@ def project(tmp_path, monkeypatch):
     (code / "offsets.json").write_text("{}")
     (code / "chr_state_ids.json").write_text("{}")
     (code / "eldendisk" / "__main__.py").write_text("")
-    sources = code / "eldendisk" / "extension" / "customize_items"
-    sources.mkdir(parents=True)
-    (sources / "items.draft.json").write_text('{"format": 1, "items": []}')
+    (code / "extension.json").write_text('{"innovate_spells": {"maximum": 1, "slots": {"<id-1>": null}}}')
     monkeypatch.setattr(build_cmd, "HERE", code)
     return tmp_path
 
@@ -114,14 +112,14 @@ def test_pyinstaller_embed_adds_configs_not_schema(project, monkeypatch):
     cmd = calls[0]
     assert rc == 0 and "PyInstaller" in cmd and "--onefile" in cmd
     adds = [c for c in cmd if c.startswith("--add-data=")]
-    assert len(adds) == 3 and not any("schema" in a for a in adds) and any(a.endswith("items.draft.json;.") or a.endswith("items.draft.json:.") for a in adds)
+    assert len(adds) == 3 and not any("schema" in a for a in adds) and any(a.endswith("extension.json;.") or a.endswith("extension.json:.") for a in adds)
     assert not (project / "build" / "dist" / "eldendisk" / "offsets.json").exists()  # embedded: nothing copied
 
 
 def test_nuitka_embed_includes_data_files(project, monkeypatch):
     rc, calls = _run_build(monkeypatch, _args(engine="nuitka", embed_configs=True))
     inc = [c for c in calls[0] if c.startswith("--include-data-files=")]
-    assert rc == 0 and len(inc) == 3 and inc[0].endswith("=offsets.json") and inc[-1].endswith("=items.draft.json")
+    assert rc == 0 and len(inc) == 3 and inc[0].endswith("=offsets.json") and inc[-1].endswith("=extension.json")
     assert "--output-filename=eldendisk.exe" in calls[0]
 
 

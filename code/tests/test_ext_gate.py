@@ -3,7 +3,7 @@ and Python 3.13 has no compression.zstd). The rest of the gate needs the real fi
 import sys
 import types
 
-from eldendisk.extension.customize_items import gate
+from eldendisk.extension.innovate_spells import gate
 
 
 def test_without_the_module_it_is_only_a_note(monkeypatch):
@@ -32,6 +32,6 @@ def test_a_module_that_raises_is_an_error_not_a_crash(monkeypatch):
 
 
 def test_ids_are_compared_exactly_and_seconds_with_a_float32_tolerance():
-    from eldendisk.extension.customize_items.recipes import _same
+    from eldendisk.extension.innovate_spells.recipes import _same
     assert not _same(21950112, 21950111) and _same(21950111.0, 21950111) and not _same(80.5, 80)
     assert _same(0.5, 0.5) and _same(0.5000001, 0.5) and not _same(0.51, 0.5) and _same(15.0, 15)

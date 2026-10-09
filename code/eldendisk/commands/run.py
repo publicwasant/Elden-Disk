@@ -14,7 +14,7 @@ from ..paths import describe_resource
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, session_log
 from .extension import prepare_regulation
-from ..extension.customize_items.service import ExtensionError, GateFailed
+from ..extension.innovate_spells.service import ExtensionError, GateFailed
 
 
 STEAM_EXE = "steam.exe"
@@ -41,7 +41,7 @@ def auto_prune(vault: SaveVault, keep: int) -> None:
 def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
     """-> (the regulation.bin to swap in for this session or None, mode). mode: "none" | "file" (--regulation) | "secured"
     (the confirmed copy, nothing built) | "built" (a new build the gate passed). `--regulation FILE` wins. Otherwise, with the
-    vault ON, the extension swaps the secured file when the draft is unchanged and builds (about 20 s) when it is not. The vault
+    vault ON, the extension swaps the secured file when the design is unchanged and builds (about 20 s) when it is not. The vault
     is what makes that safe: it puts the game's file back. With the vault OFF the extension does not run. A build error or a
     failed gate stops `run` (ExtensionError / GateFailed): nothing is swapped, the game is not started.
     The 1.6.4 place `<vault>/regulation/regulation.bin` is not read any more."""
@@ -132,5 +132,5 @@ def cmd_run(args) -> int:
         auto_prune(vault, args.keep)
         if mode == "built":
             book.i("ext", "this regulation.bin was built just now. If it worked in the game, keep it for next time: "
-                                "eldendisk extension customize-items --secure   (game closed)")
+                                "eldendisk extension innovate-spells --secure   (game closed)")
     return rc

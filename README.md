@@ -9,7 +9,7 @@ Five parts with one job each:
 - **Vault (`vault`):** snapshots, the session record, restore and recovery. It is the part that must not fail: a restore that could not finish leaves a record, and the next `run` refuses until `vault restore` has been run.
 - **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree (`--flat`: one `full.path  value` row each); `--export` writes `disk-state.json` once; `--live` keeps going; `--live-buffs` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. Values are addressed by **name** only. Read-only; works with or without `run`.
 - **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST` / `write --reset NAME ...`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...; and the game's own tables: `params.effects.1621000.effectEndurance`). It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
-- **Extension (`extension`):** builds things for the game outside the game. The first one, `customize-items`, turns `items.draft.json` into a `regulation.bin` with your own incantation (draft → built → secured, judged by a gate). With the vault ON, `run` swaps it in for one session and the vault puts the game's own file back with the save.
+- **Extension (`extension`):** builds things for the game outside the game. The first one, `innovate-spells`, turns `extension.json` into a `regulation.bin` with your own incantation (design → built → secured, judged by a gate). With the vault ON, `run` swaps it in for one session and the vault puts the game's own file back with the save.
 - **Zero configuration files:** `--save-dir` and `--vault` are remembered in the Windows Registry (`HKCU\Software\EldenDisk`). The vault lives in `%LOCALAPPDATA%\EldenDisk\vault` by default, never next to the exe, so a rebuild cannot delete it.
 
 > [!IMPORTANT]
@@ -17,7 +17,7 @@ Five parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** used on the real game: `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors, `write` of game params (`effectEndurance = -1` makes all four Black Flame rows burn without end), and (2026-10-09) the **other world**: a `regulation.bin` built by the tool (`extension customize-items`, gate passed, second decoder agreed on Python 3.14) swapped in by `run`, an own incantation sold, cast and healing, a boss beaten with infinite Black Flame, save and `regulation.bin` restored byte-identical; `extension customize-items --secure` ran and wrote the secured copy. **Not tried in the game yet:** the poise part of the item (manual plan SW10), `run` using the secured copy (SC3-SC10), the other `write` params fields (`motionInterval`, `changeHpRate`, `changeHpPoint`), `--reset` and the title screen (manual plan 7A), and the Steam Cloud sync on exit (T10). Everything else is verified by unit tests with fake Windows and memory layers (829 tests; 24 golden tests need the game's original `regulation.bin`). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
+> **Real-game status (author, 1.17.1):** used on the real game: `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors, `write` of game params (`effectEndurance = -1` makes all four Black Flame rows burn without end), and (2026-10-09) the **other world**: a `regulation.bin` built by the tool (`extension innovate-spells`, gate passed, second decoder agreed on Python 3.14) swapped in by `run`, an own incantation sold, cast and healing, a boss beaten with infinite Black Flame, save and `regulation.bin` restored byte-identical; `extension innovate-spells --secure` ran and wrote the secured copy. **Not tried in the game yet:** the poise part of the item (manual plan SW10), `run` using the secured copy (SC3-SC10), the other `write` params fields (`motionInterval`, `changeHpRate`, `changeHpPoint`), `--reset` and the title screen (manual plan 7A), and the Steam Cloud sync on exit (T10). Everything else is verified by unit tests with fake Windows and memory layers (829 tests; 24 golden tests need the game's original `regulation.bin`). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
 
 ---
 
@@ -66,7 +66,7 @@ If the session is cut short (power loss, host killed, console closed, second Ctr
 4. **Restore never destroys unarchived data:** a modified save is copied into the vault before it is overwritten (`--no-archive-contaminated` to skip).
 5. **Interrupts:** first Ctrl+C is absorbed (the game keeps running); second, console close, logoff or shutdown leave `RESTORE_PENDING`.
 6. **No automatic recovery:** `run` with an owed restore exits `4` and prints the one command to run.
-7. **No changes in the game folder,** with one exception: the `regulation.bin` that `extension customize-items` built (or `--regulation FILE`) is swapped in for a `run --vault-on` session and the game's own file is put back, hash-checked, with the save (see below). `read --export` refuses to write there.
+7. **No changes in the game folder,** with one exception: the `regulation.bin` that `extension innovate-spells` built (or `--regulation FILE`) is swapped in for a `run --vault-on` session and the game's own file is put back, hash-checked, with the save (see below). `read --export` refuses to write there.
 8. **EAC guard:** `read` and `write` stop when EasyAntiCheat is loaded; `run` refuses when anti-cheat processes are running.
 9. **Few disk writes:** the export is written only when its content changed, at most every `--export-interval` (0.5 s); buff countdowns at most every `--timer-interval` (2 s).
 
@@ -110,11 +110,11 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 
 | Command | Role | Description |
 |:---|:---|:---|
-| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. With the vault ON it swaps a `regulation.bin` in for the session: the secured copy when `items.draft.json` is unchanged, otherwise a new build that the gate must pass (or `--regulation FILE`). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
+| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. With the vault ON it swaps a `regulation.bin` in for the session: the secured copy when `extension.json` is unchanged, otherwise a new build that the gate must pass (or `--regulation FILE`). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
 | `read [--query NAME [NAME ...]] [--export] [--live] [--live-buffs] [--live-animations]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-buffs` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
 | `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables); `--reset` puts the game's own params back; exit `5` without a valid session |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
-| `extension --list` \| `extension customize-items --add all\|ID\|--secure` | **Extension** | Build things for the game outside the game. `customize-items` turns `items.draft.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in |
+| `extension --list` \| `extension innovate-spells --add all\|ID\|--secure` | **Extension** | Build things for the game outside the game. `innovate-spells` turns `extension.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
 | `build` | Tool | Standalone `./build/dist/eldendisk/eldendisk.exe` plus a `README.md` next to it (quick start + the exe command reference) |
 
@@ -130,25 +130,25 @@ Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `an
 
 **Principle: the other world never touches the real one.** Everything done in a `run` session (the rules, the items, the values written, the changes to the save) exists for that session only. When the game exits, the vault puts back the save and the game's own `regulation.bin`, byte for byte, checked by hash. Nothing carries over: not the items, not the progress. The real playthrough stays exactly as it was, and it can be finished with no mod at all. The sandbox is for playing around on the days you want to; it is never required, and nothing in the real world can collapse because of it.
 
-The vault keeps *the world as it was*. `extension customize-items` builds *the world you want to play in*: a `regulation.bin` with your own incantation, made from a JSON file, offline, by the tool itself. With the vault ON, `run` builds it, swaps it in for one session and puts the game's own file back with the save.
+The vault keeps *the world as it was*. `extension innovate-spells` builds *the world you want to play in*: a `regulation.bin` with your own incantation, made from a JSON file, offline, by the tool itself. With the vault ON, `run` builds it, swaps it in for one session and puts the game's own file back with the save.
 
 ```
-items.draft.json (embedded in the exe)  --run (vault ON): build on the game's regulation.bin + gate-->  regulation.bin  --vault swaps-->  the game
-                                        --extension customize-items --secure (game closed)-->  regulation.secured.bin + items.secured.json
-next run, draft unchanged: regulation.secured.bin is swapped, nothing is built
-%LOCALAPPDATA%\EldenDisk\extension\customize-items\
+extension.json (embedded in the exe)  --run (vault ON): build on the game's regulation.bin + gate-->  regulation.bin  --vault swaps-->  the game
+                                        --extension innovate-spells --secure (game closed)-->  regulation.secured.bin + spells.commit.json
+next run, design unchanged: regulation.secured.bin is swapped, nothing is built
+%LOCALAPPDATA%\EldenDisk\extension\innovate-spells\
   regulation.bin            the latest build (gate passed, not yet confirmed)
   regulation.secured.bin    the copy you confirmed
-  items.secured.json        the draft behind it + hashes
+  spells.commit.json        the design behind it + hashes
 %LOCALAPPDATA%\EldenDisk\vault\
   20261008-0800\save\                 the save as it was
                 bin\regulation.bin     the game's own file, kept to put it back
 ```
 
-- **The draft is `code/eldendisk/extension/customize_items/items.draft.json`** (with `items.schema.json` beside it). You edit it; `build -c -em` embeds it in the exe (like `offsets.json`). An `items.draft.json` next to the exe, or `--spec FILE`, wins.
-- **Draft → built → secured.** `run` builds when there is no secured copy or the draft changed (about 20 s) and prints why, with a field-by-field diff. When it worked in the game, close the game and run `extension customize-items --secure`; after that `run` swaps the secured copy without building. Changing only `name` / `description` does not count as a change. Delete `items.secured.json` to force a build.
+- **The design is `code/extension.json`** (section `innovate_spells`: 64 slots; the JSON schema is `spells.schema.json` in the `innovate_spells` package). You edit it; `build -c -em` embeds it in the exe (like `offsets.json`). An `extension.json` next to the exe, or `--spec FILE`, wins.
+- **Design → built → secured.** `run` builds when there is no secured copy or the design changed (about 20 s) and prints why, with a field-by-field diff. When it worked in the game, close the game and run `extension innovate-spells --secure`; after that `run` swaps the secured copy without building. Changing only `name` / `description` does not count as a change. Delete `spells.commit.json` to force a build.
 - **Always on the game's own file.** The game's `regulation.bin` is checked against the known 1.17.1 original on every path; a modified file is refused with a `vault restore` hint.
-- **Depends on the vault, like `write`.** No `--extension-on` flag: with `--vault-off` nothing is built or swapped. `extension --list` and `extension customize-items --add all` build without starting the game.
+- **Depends on the vault, like `write`.** No `--extension-on` flag: with `--vault-off` nothing is built or swapped. `extension --list` and `extension innovate-spells --add all` build without starting the game.
 - **The gate judges the finished file, read back from disk.** The frame must decode to the intended bytes, untouched blocks must be the game's own bytes, only the declared rows may change, the id chain, shop range, stock flag and heal sign must be right. Any problem or warning is a stop: nothing is swapped and the game is not started. Necessary, not sufficient: the game is the real test.
 - **One item per build** in this version (Level 2a). Several items (Level 2b) is the next step: the file has no spare rows left, so tables must grow (design in spec 1.7.0 section 10, nothing built yet). Name and description are stored only; colour, icon and text (Level 3) need files inside the game's archives and are refused.
 - `--regulation FILE` swaps another file instead of building. The 1.6.4 folder `<vault>\regulation\` is no longer read.
@@ -227,7 +227,7 @@ python code/tools/dev_pipeline.py --dry-run
 python code/tools/dev_pipeline.py --vault-off
 
 # Extension options go to `run` too (a failed gate or build stops `run` before the game starts)
-python code/tools/dev_pipeline.py --spec my-draft.json
+python code/tools/dev_pipeline.py --spec my-design.json
 
 # Try a ready regulation.bin in the game (the vault swaps it in and puts the original back)
 python code/tools/dev_pipeline.py --regulation t1/regulation.T1-goods-moved.bin
