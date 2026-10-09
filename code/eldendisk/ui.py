@@ -20,7 +20,7 @@ from .console import printable
 from .logbook import Event, format_line, parse_line
 
 _SYMBOLS = {"ok": ("\u2713", "+"), "info": ("\u00b7", "-"), "warn": ("!", "!"), "error": ("\u2716", "x")}
-_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36", "spell": "35"}
+_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36", "spell": "35", "file": "38;5;208"}
 RULE = "\u2500"
 
 
@@ -58,17 +58,38 @@ def paint(text: str, kind: str, color: bool) -> str:
     return f"\x1b[{_COLORS[kind]}m{text}\x1b[0m" if color and kind in _COLORS else text
 
 
-_TICKS = re.compile(r"`([^`\r\n]+)`")
-_FILE_WORD = re.compile(r"(?<![\\/\w.])regulation\.bin\b")       # the file's name on its own, not as the end of a path
+FILE_EXTENSIONS = ("bin", "sl2", "bak", "err", "vdf", "json", "exe", "log", "txt", "dll", "ini", "cfg", "csv", "md", "py",
+                   "toml", "xml", "tmp", "zip")
+# A file name with an extension: `regulation.bin`, `ER0000.sl2.bak`, `steam_autocloud.vdf`. Not the end of a path (`...\Game\regulation.bin`
+# stays as it is: colour codes in the middle of a path would break its clickable link) and not part of a longer word or dotted name.
+_FILE_NAME = r"[A-Za-z0-9_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*\.(?:%s)\b" % "|".join(FILE_EXTENSIONS)
+_FILE_ONLY = re.compile(_FILE_NAME, re.IGNORECASE)
+_EMPHASIS = re.compile(r"`([^`\r\n]+)`|(?<![\\/\w.:-])(%s)(?![\w\\/-])" % _FILE_NAME, re.IGNORECASE)
 
 
-def emphasize(text: str, color: bool) -> str:
-    """`name` -> name in cyan on a colour console (the backticks are what the colour replaces); a bare `regulation.bin` is cyan too.
-    Without colour the text is unchanged."""
+def emphasize(text: str, color: bool, resume: str = "", ticks: bool = True) -> str:
+    """On a colour console: a file name with an extension (`regulation.bin`, `ER0000.sl2.bak`, `steam_autocloud.vdf`), with or without
+    backticks, is orange; any other `name` in backticks is cyan (the backticks are what the colour replaces; `ticks=False` leaves them,
+    as in warnings). `resume` is the colour code of the line the text sits in, put back after each painted word. The end of a path is
+    not touched here (see `paint_tails`). Without colour the text is unchanged."""
     if not color:
         return text
-    text = _TICKS.sub(lambda m: paint(m.group(1), "cyan", True), text)
-    return _FILE_WORD.sub(lambda m: paint(m.group(0), "cyan", True), text)
+
+    def sub(m):
+        if m.group(1) is not None:
+            if not ticks:
+                return m.group(0)
+            return paint(m.group(1), "file" if _FILE_ONLY.fullmatch(m.group(1)) else "cyan", True) + resume
+        return paint(m.group(2), "file", True) + resume
+    return _EMPHASIS.sub(sub, text)
+
+
+_TAIL = re.compile(r"(?<=[\\/])(%s)(?![\w\\/-])" % _FILE_NAME, re.IGNORECASE)
+
+
+def paint_tails(text: str, resume: str = "") -> str:
+    """The file name at the end of a path (`...\\Game\\regulation.bin`) in orange; the folders stay as they are."""
+    return _TAIL.sub(lambda m: paint(m.group(1), "file", True) + resume, text)
 
 
 _SPELL_IDS: re.Pattern | None = None
@@ -135,15 +156,18 @@ def use_links(stream) -> bool:
     return links_status(stream)[0]
 
 
-def _link(path: str) -> str:
+def _link(path: str, color: bool = False, resume: str = "") -> str:
     url = "file:///" + quote(path.replace("\\", "/"), safe="/:")
-    return f"\x1b]8;;{url}\x1b\\{path}\x1b]8;;\x1b\\"
+    shown = paint_tails(path, resume) if color else path       # the colour is in the visible text only, never in the url
+    return f"\x1b]8;;{url}\x1b\\{shown}\x1b]8;;\x1b\\"
 
 
-def linkify(text: str, exists=None) -> str:
+def linkify(text: str, exists=None, color: bool = False, resume: str = "") -> str:
     """Wrap every Windows path in `text` that exists (a file or a folder) in an OSC 8 hyperlink. The path may have spaces
-    (`...\\ELDEN RING\\Game\\regulation.bin`), so the longest prefix ending at a space or at the end that exists is taken."""
+    (`...\\ELDEN RING\\Game\\regulation.bin`), so the longest prefix ending at a space or at the end that exists is taken.
+    `color`: the file name at the end of a path is orange in the visible text (never in the url); a path that is not linked gets it too."""
     exists = exists or os.path.exists
+    tails = (lambda t: paint_tails(t, resume)) if color else (lambda t: t)
 
     def sub(m):
         raw = m.group(0)
@@ -151,15 +175,19 @@ def linkify(text: str, exists=None) -> str:
         for end in ends:
             cand = raw[:end].rstrip(" .,;:)]")
             if len(cand) > 3 and exists(cand):
-                return _link(cand) + raw[len(cand):]
-        return raw
+                return _link(cand, color, resume) + tails(raw[len(cand):])
+        return tails(raw)
     return _PATH.sub(sub, text)
 
 
-def _emit(text: str, stream=None) -> None:
+def _emit(text: str, stream=None, resume: str = "") -> None:
+    """Print a line. `resume`: the colour code the whole line is painted in (warning, error, dim), put back after an orange file name."""
     stream = stream or sys.stderr
+    color = use_color(stream)
     if use_links(stream):
-        text = linkify(text)
+        text = linkify(text, color=color, resume=resume)
+    elif color:
+        text = paint_tails(text, resume)
     print(printable(text, getattr(stream, "encoding", None)), file=stream, flush=True)
 
 
@@ -174,8 +202,10 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
         sym = paint(symbol(kind, getattr(out, "encoding", None)), kind, color)
         stamp = paint(f"{e.when:%H:%M:%S}", "dim", color) + "  " if show_time else ""
         tag = paint(f"{e.tag:<6}", "dim", color)
-        msg = paint(e.msg, kind, color) if kind in ("warn", "error") else emphasize(highlight_spells(e.msg, color, e.tag), color)
-        _emit(f" {stamp}{sym}  {tag} {msg}", out)
+        resume = f"\x1b[{_COLORS[kind]}m" if kind in ("warn", "error") else ""
+        msg = (paint(emphasize(e.msg, color, resume, ticks=False), kind, color) if resume
+               else emphasize(highlight_spells(e.msg, color, e.tag), color))
+        _emit(f" {stamp}{sym}  {tag} {msg}", out, resume)
     return sink
 
 
@@ -188,7 +218,17 @@ def _dim_line(line: str, color: bool) -> str:
     m = _CLI_LINE.match(line) if color else None
     if m:
         return paint(m.group(1), "dim", color) + paint(m.group(2), "cyan", color)
-    return paint(line, "dim", color)
+    return paint(emphasize(line, color, "\x1b[2m", ticks=False), "dim", color)
+
+
+def _line(line: str, kind: str | None, color: bool, level: str) -> tuple[str, str]:
+    """(the log line painted for its level, the colour code to resume after a path's file name)."""
+    if level == "D":
+        return _dim_line(line, color), "\x1b[2m"
+    if kind:
+        code = f"\x1b[{_COLORS[kind]}m"
+        return paint(emphasize(line, color, code, ticks=False), kind, color), code
+    return emphasize(line, color), ""
 
 
 _EXT_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ [VDIWE] ext +: )(.*)$")
@@ -201,7 +241,8 @@ def raw_sink(stream=None) -> Callable[[Event], None]:
         color = use_color(out)
         kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(e.level)
         line = format_line(e._replace(msg=highlight_spells(e.msg, color, e.tag)) if kind is None else e)
-        _emit(_dim_line(line, color) if e.level == "D" else paint(line, kind, color) if kind else emphasize(line, color), out)
+        text, resume = _line(line, kind, color, e.level)
+        _emit(text, out, resume)
     return sink
 
 
@@ -215,7 +256,8 @@ def raw_line(line: str, stream=None) -> None:
         m = _EXT_LINE.match(line)
         if m:
             line = m.group(1) + highlight_spells(m.group(2), color, "ext")
-    _emit(_dim_line(line, color) if got and got[1] == "D" else paint(line, kind, color) if kind else emphasize(line, color), out)
+    text, resume = _line(line, kind, color, got[1] if got else "I")
+    _emit(text, out, resume)
 
 
 def header(title: str, rows: list[tuple[str, str]] | None = None, stream=None) -> None:

@@ -106,13 +106,76 @@ def test_backticked_words_are_cyan_on_a_colour_console_and_stay_plain_otherwise(
     assert "`write`" in format_line(e)                       # the log file keeps the backticks
 
 
-def test_a_bare_regulation_bin_is_cyan_but_not_inside_a_path(err, monkeypatch):
+ORANGE = "\x1b[38;5;208m{}\x1b[0m"
+
+
+def test_a_bare_file_name_is_orange(err, monkeypatch):
     monkeypatch.setenv("FORCE_COLOR", "1")
     ui.pretty_sink(stream=err)(ev(msg="regulation.bin restored, byte-identical to the game's own file"))
-    assert err.getvalue().count("\x1b[36mregulation.bin\x1b[0m") == 1
+    assert err.getvalue().count(ORANGE.format("regulation.bin")) == 1
+
+
+def test_the_file_name_at_the_end_of_a_path_is_orange_and_the_folders_are_not(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    ui.pretty_sink(stream=err)(ev(tag="ext", msg="building x on D:\\SteamLibrary\\ELDEN RING\\Game\\regulation.bin and checking"))
+    assert "D:\\SteamLibrary\\ELDEN RING\\Game\\" + ORANGE.format("regulation.bin") + " and checking" in err.getvalue()
     err.truncate(0); err.seek(0)
-    ui.pretty_sink(stream=err)(ev(msg="copied to C:\\x\\regulation.bin and regulation.secured.bin"))
-    assert "\x1b[36m" not in err.getvalue()
+    ui.pretty_sink(stream=err)(ev(msg="folder C:\\Users\\x\\EldenDisk\\vault and C:\\a\\b.v2"))
+    assert "\x1b[38;5;208m" not in err.getvalue()
+
+
+def test_a_clickable_path_keeps_a_clean_url_and_colours_only_the_visible_name(monkeypatch):
+    monkeypatch.setenv("ELDENDISK_LINKS", "1")
+    out = ui.linkify("on D:\\SteamLibrary\\ELDEN RING\\Game\\regulation.bin ok", exists=lambda p: p.endswith("regulation.bin"), color=True)
+    assert "file:///D:/SteamLibrary/ELDEN%20RING/Game/regulation.bin\x1b\\" in out and "\x1b[38;5;208m" not in out.split("\x1b\\")[0]
+    assert "Game\\" + ORANGE.format("regulation.bin") + "\x1b]8;;\x1b\\ ok" in out
+    assert ui.linkify("D:\\g\\regulation.bin", exists=lambda p: True).count("\x1b[38;5;208m") == 0      # no colour asked: unchanged
+
+
+def test_a_warning_stays_yellow_around_an_orange_file_name(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    ui.pretty_sink(stream=err)(ev(level="W", msg="`ER0000.sl2` is odd in D:\\s\\ER0000.sl2 today"))
+    out = err.getvalue()
+    assert "`ER0000.sl2` is odd" in out                      # a warning keeps its backticks, as before
+    assert out.count("\x1b[38;5;208m") == 1 and "\x1b[0m\x1b[33m today\x1b[0m" in out
+
+
+def test_a_debug_line_stays_dim_around_an_orange_file_name(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    ui.raw_sink(err)(ev(level="D", tag="config", msg="regulation: C:\\x\\regulation.bin replaces regulation.bin"))
+    out = err.getvalue()
+    assert out.count("\x1b[38;5;208m") == 2 and out.count("\x1b[0m\x1b[2m") == 2
+
+
+@pytest.mark.parametrize("name", ["regulation.bin", "ER0000.err", "ER0000.err.bak", "ER0000.sl2", "ER0000.sl2.bak", "steam_autocloud.vdf",
+                                  "spells.commit.json", "eldendisk.exe", "eldendisk.log"])
+def test_every_file_name_with_an_extension_is_orange_with_or_without_backticks(err, monkeypatch, name):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    sink = ui.pretty_sink(stream=err)
+    sink(ev(msg="saved %s, then `%s` again." % (name, name)))
+    out = err.getvalue()
+    assert out.count(ORANGE.format(name)) == 2 and "`" not in out and "\x1b[36m" not in out
+
+
+def test_things_that_only_look_like_files_are_left_alone(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    ui.pretty_sink(stream=err)(ev(msg="version 1.7.0 on Python 3.14.5, black_flame_copy.shop.price 1.5 -> 2.5, e.g. ok. file.docx x.bin2"))
+    assert "\x1b[38;5;208m" not in err.getvalue()
+
+
+def test_other_backticked_words_stay_cyan_and_the_log_file_keeps_the_backticks(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    e = ev(msg="`write` allowed, `ER0000.sl2` restored")
+    ui.pretty_sink(stream=err)(e)
+    out = err.getvalue()
+    assert "\x1b[36mwrite\x1b[0m" in out and ORANGE.format("ER0000.sl2") in out
+    assert "`ER0000.sl2`" in format_line(e)
+
+
+def test_the_raw_view_colours_file_names_too(err, monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    ui.raw_sink(err)(ev(msg="restored ER0000.sl2.bak"))
+    assert ORANGE.format("ER0000.sl2.bak") in err.getvalue()
 
 
 def test_header_shows_title_rule_and_aligned_rows(err):
