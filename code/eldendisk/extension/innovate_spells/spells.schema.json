@@ -48,7 +48,7 @@
           "$ref": "#/$defs/buff"
         },
         {
-          "$ref": "#/$defs/clone"
+          "$ref": "#/$defs/template"
         }
       ]
     },
@@ -181,8 +181,8 @@
       },
       "description": "kind buff (the default when `kind` is left out): a heal-over-time buff built from Flame, Grant Me Strength."
     },
-    "clone": {
-      "description": "kind clone: a copy of a game spell's Goods and Magic rows (it keeps the template's chain). What is left out stays the template's. Checked by the tool, not by this schema: `from` must be a player spell with a Goods row, `type` must equal the template's, a `set` key's row id must equal `from`, the field must exist and the value fit it, and id fields and fields that have a friendly name are refused.",
+    "template": {
+      "description": "A spell made from a game spell: kind clone (a copy of its Goods and Magic rows; it keeps the template's chain), enchant (a weapon or shield enchant; its SpEffect rows are copied too) or buff with `from` (the same for a buff). What is left out stays the template's. Checked by the tool, not by this schema: `from` must be a player spell with a Goods row of the right kind, `type` must equal the template's, a Magic or Goods `set` key's row id must equal `from`, a SpEffect key must name one of the copied rows (and a clone has none), the field must exist and the value fit it, and id fields and fields that have a friendly name are refused.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -191,7 +191,11 @@
       ],
       "properties": {
         "kind": {
-          "const": "clone"
+          "enum": [
+            "clone",
+            "enchant",
+            "buff"
+          ]
         },
         "from": {
           "type": "integer",
@@ -268,7 +272,7 @@
         "set": {
           "type": "object",
           "propertyNames": {
-            "pattern": "^(Magic|Goods)\\.[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$"
+            "pattern": "^(Magic|Goods|SpEffect)\\.[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$"
           },
           "additionalProperties": {
             "type": "number"

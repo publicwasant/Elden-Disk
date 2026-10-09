@@ -68,7 +68,7 @@ def test_a_clone_and_a_buff_can_share_one_file():
     assert kinds == ["buff", "clone"]
 
 
-@pytest.mark.parametrize("kind", ["enchant", "projectile", "attack"])
+@pytest.mark.parametrize("kind", ["projectile", "attack"])
 def test_the_kinds_that_are_planned_are_refused_by_name(kind):
     assert any("planned but not built yet" in p for p in problems(design(kind=kind)))
 
@@ -98,11 +98,17 @@ def test_a_bad_clone_is_refused_with_the_path_of_the_problem(change, where):
     assert any(where in p for p in problems(file_of({"copy_of_black_flame": s})))
 
 
-@pytest.mark.parametrize("field", ["from", "set"])
-def test_a_buff_does_not_take_the_fields_of_a_clone(field):
+def test_a_buff_without_from_does_not_take_set():
     s = copy.deepcopy(Z4_SPELL)
-    s[field] = 6050 if field == "from" else {}
-    assert any(".%s: unknown field" % field in p for p in problems(file_of({Z4_ID: s})))
+    s["set"] = {}
+    assert any(".set: unknown field" in p for p in problems(file_of({Z4_ID: s})))
+
+
+def test_a_buff_with_from_is_a_template_spell_and_cannot_mix_with_the_heal_over_time_fields():
+    ok = spec.normalise(file_of({"b": {"kind": "buff", "from": 6050, "fp_cost": 5}}))["spells"][0]
+    assert ok["kind"] == "buff" and ok["from"] == 6050 and "effect" not in ok
+    bad = problems(file_of({"b": {"kind": "buff", "from": 6050, "effect": {}, "cast_motion": "black-flame-blade"}}))
+    assert any(".effect: unknown field" in p for p in bad) and any(".cast_motion: unknown field" in p for p in bad)
 
 
 @pytest.mark.parametrize("key, value, why", [
@@ -184,7 +190,7 @@ def _spell(**kw):
 
 def test_nothing_named_means_both_rows_are_the_templates_rows():
     P, D = _tables()
-    g, m = recipes.clone_rows(P, D, _spell())
+    g, m = recipes.template_rows(P, D, _spell())[:2]
     assert g == bytes(P["goods"].find(6210)[2]) and m == bytes(P["magic"].find(6210)[2])
 
 
@@ -193,7 +199,7 @@ def test_the_named_fields_are_written_and_nothing_else_changes():
     before_g, before_m = bytes(P["goods"].find(6210)[2]), bytes(P["magic"].find(6210)[2])
     sp = _spell(fp_cost=25, stamina_cost=0, requires={"intelligence": 5, "faith": 6, "arcane": 8},
                 set={"Magic.6210.castSfxId": 9, "Goods.6210.sortId": 5})
-    g, m = recipes.clone_rows(P, D, sp)
+    g, m = recipes.template_rows(P, D, sp)[:2]
     assert [D["magic"].get(m, n) for n in ("mp", "stamina", "requirementIntellect", "requirementFaith", "requirementLuck", "castSfxId")] == [25, 0, 5, 6, 8, 9]
     assert D["goods"].get(g, "sortId") == 5
     assert D["magic"].get(m, "refId1") == 10621000 and D["magic"].get(m, "refCategory1") == 1       # still the template's chain
@@ -205,35 +211,35 @@ def test_the_named_fields_are_written_and_nothing_else_changes():
 def test_the_template_in_the_tables_is_not_changed():
     P, D = _tables()
     snap = {k: [(r[0], bytes(r[2])) for r in P[k].rows] for k in P}
-    recipes.clone_rows(P, D, _spell(fp_cost=1, set={"Goods.6210.sortId": 1}))
+    recipes.template_rows(P, D, _spell(fp_cost=1, set={"Goods.6210.sortId": 1}))
     assert snap == {k: [(r[0], bytes(r[2])) for r in P[k].rows] for k in P}
 
 
 def test_a_magic_row_that_does_not_exist_is_refused():
     P, D = _tables()
     with pytest.raises(recipes.RecipeError, match="not a Magic row"):
-        recipes.clone_rows(P, D, _spell(**{"from": 1234}))
+        recipes.template_rows(P, D, _spell(**{"from": 1234}))
 
 
 def test_a_spell_without_a_goods_row_is_refused_as_an_npc_spell():
     P, D = _tables(with_goods=False)
     with pytest.raises(recipes.RecipeError, match="no Goods row"):
-        recipes.clone_rows(P, D, _spell())
+        recipes.template_rows(P, D, _spell())
 
 
 def test_a_goods_row_that_is_not_a_spell_is_refused():
     P, D = _tables(goods_type=0)
     with pytest.raises(recipes.RecipeError, match="not a spell"):
-        recipes.clone_rows(P, D, _spell())
+        recipes.template_rows(P, D, _spell())
 
 
 @pytest.mark.parametrize("goods_type, ok, bad", [(5, "sorcery", "incantation"), (17, "sorcery", "incantation"),
                                                   (16, "incantation", "sorcery"), (18, "incantation", "sorcery")])
 def test_the_type_follows_the_template_and_cannot_be_changed(goods_type, ok, bad):
     P, D = _tables(goods_type=goods_type)
-    recipes.clone_rows(P, D, _spell(type=ok))
+    recipes.template_rows(P, D, _spell(type=ok))
     with pytest.raises(recipes.RecipeError, match="cannot change `type`"):
-        recipes.clone_rows(P, D, _spell(type=bad))
+        recipes.template_rows(P, D, _spell(type=bad))
 
 
 def test_a_clone_adds_goods_magic_and_a_shop_line_only():
@@ -386,7 +392,7 @@ def test_check_clone_is_quiet_on_the_real_build(black_flame, src):
     sp, res = black_flame
     P, D = _file_tables(res.data)
     O, _ = _orig(src)
-    assert recipes.check_clone(P, D, sp[0], O) == []
+    assert recipes.check_template(P, D, sp[0], O) == []
 
 
 @golden
@@ -396,7 +402,7 @@ def test_check_clone_notices_a_changed_byte_in_the_copy(black_flame, src):
     O, _ = _orig(src)
     row = P["magic"].find(recipes.slot_rows(1)["magic"])[2]
     D["magic"].set(row, "castSfxId", D["magic"].get(row, "castSfxId") + 1)
-    bad = recipes.check_clone(P, D, sp[0], O)
+    bad = recipes.check_template(P, D, sp[0], O)
     assert any("castSfxId" in p and p.startswith("G11") for p in bad)
 
 
@@ -407,7 +413,7 @@ def test_check_clone_notices_a_wrong_cost_and_a_wrong_goods_row(black_flame, src
     O, _ = _orig(src)
     D["magic"].set(P["magic"].find(recipes.slot_rows(1)["magic"])[2], "mp", 21)
     D["goods"].set(P["goods"].find(recipes.slot_rows(1)["goods"])[2], "goodsType", 5)
-    bad = recipes.check_clone(P, D, sp[0], O)
+    bad = recipes.check_template(P, D, sp[0], O)
     assert any(p.startswith("G5") and "mp" in p for p in bad) and any("Goods" in p and "goodsType" in p for p in bad)
 
 
@@ -418,10 +424,10 @@ def test_check_clone_notices_a_reused_stock_flag_and_a_missing_shop_line(black_f
     O, _ = _orig(src)
     other = next(r for r in P["shop"].rows if r[0] != recipes.slot_rows(1)["shop_line"])
     D["shop"].set(other[2], "eventFlag_forStock", recipes.slot_rows(1)["shop_flag"])
-    assert any(p.startswith("G12") and "used by shop lines" in p for p in recipes.check_clone(P, D, sp[0], O))
+    assert any(p.startswith("G12") and "used by shop lines" in p for p in recipes.check_template(P, D, sp[0], O))
     nosp = copy.deepcopy(sp[0])
     nosp.pop("shop")
-    assert any("has no shop" in p for p in recipes.check_clone(P, D, nosp, O))
+    assert any("has no shop" in p for p in recipes.check_template(P, D, nosp, O))
 
 
 @golden

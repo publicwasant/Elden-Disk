@@ -5,7 +5,7 @@ import hashlib
 import struct
 from dataclasses import dataclass, field
 
-from . import container, grow, reblock, recipes
+from . import chain as chainmod, container, grow, reblock, recipes
 from .container import Bnd4, Param
 from .defs import TABLE_FILES, Def
 from .reblock import BuildError, Source
@@ -44,15 +44,16 @@ def plan(src: Source, spells: list):
     than the original: the tables grew (grow.py)."""
     for spell in spells:
         kind = spell.get("kind", "buff")
-        if kind not in ("buff", "clone"):
+        if kind not in ("buff", "clone", "enchant"):
             raise BuildError("unsupported spell kind %r" % kind)
-        if kind == "buff" and spell["type"] != "incantation":
+        if kind == "buff" and "from" not in spell and spell["type"] != "incantation":
             raise BuildError("unsupported spell type %r" % spell["type"])
     bnd = Bnd4(src.body)
     D = {k: Def(k) for k in TABLE_FILES}
     P = {k: Param(bnd.get(f).data) for k, f in TABLE_FILES.items()}
     try:
-        jobs, fp = recipes.make_rows(P, D, spells)
+        chain = chainmod.load(bnd, P, D) if any(recipes.needs_chain(s) for s in spells) else None
+        jobs, fp = recipes.make_rows(P, D, spells, chain)
         newbody, _reports = grow.grow(src.body, jobs)
     except recipes.RecipeError as e:
         raise BuildError(str(e))

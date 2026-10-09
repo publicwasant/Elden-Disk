@@ -64,6 +64,10 @@ Measured in the game: a Magic row is read at the cast, a Bullet row when the bul
 
 `extension.json` can now hold a spell that is a copy of a game spell: `{"kind": "clone", "from": 6210, "fp_cost": 5, "requires": {...}, "shop": {...}, "set": {"Magic.6210.slotLength": 1}}`. Only the Goods row and the Magic row of the template are copied (the copy keeps calling the template's Bullet / attack / SpEffect rows), plus the shop line when sold; no new table. `kind` defaults to `buff`, and the canonical form of a buff is unchanged (the Z4 hash and the secured files stay valid). `type` follows the template; `set` takes numbers of the two copied rows; id fields are refused in this version. New gate check `check_clone`. Planned kinds (`enchant`, `projectile`, `attack`) are refused by name. Spec 1.7.0 section 4b. Tests: `test_ext_clone.py` (66). Passed in the game 2026-10-09 (CL1, CL2): bought, memorized and cast like the normal Black Flame at 5 FP; every row equal in `read --param-check`. CL3 (`set`: `Magic.6210.slotLength`) passed 2026-10-10; CL4-CL5 are optional.
 
+## Phase 2.2: `kind: enchant` and `buff` with `from` (2026-10-10)
+
+`{"kind": "enchant", "from": 6250, "set": {"SpEffect.1626000.effectEndurance": 600}}` copies Black Flame Blade **and the SpEffect rows it owns** (the rows that no more than 3 spells of the game reach; generic rows such as 500 and 505 stay shared), points the copies at each other and `set` can change them (`SpEffect.<template row id>.<field>`, link fields refused). `buff` with `from` is the same for a buff spell (6050); `buff` without `from` (the heal-over-time spell) and the Z4 hash are unchanged. A slot has a block of 8 SpEffect ids (`21951000 + (n-1)*8`). `chain.py` reads the Bullet and AtkParam_Pc tables only to count how many spells share each row. Gate `check_template` replaces `check_clone`. Tests: `test_ext_enchant.py` (42). Game test pending (E1, E2 in the manual test plan).
+
 ## Decisions taken while implementing
 
 - **Exactly one item per file** (2a) until table growth is researched.

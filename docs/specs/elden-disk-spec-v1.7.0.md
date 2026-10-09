@@ -95,7 +95,7 @@ A spell in slot 8 or higher has no shop line: it is built without `shop` (an err
 
 ### 4b. `kind`: `buff` (above) and `clone` (Phase 2.1)
 
-`kind` is optional and defaults to `buff`: everything above is a `buff`, a design without `kind` means exactly what it meant before, and the canonical form of a `buff` has no `kind` key (so the secured file, `build_view` and the Z4 hash do not change). `"kind": "buff"` written out is the same design. The kinds `enchant`, `projectile` and `attack` are named in the error message and are not built yet (Phase 2.2-2.4; plan in [phase2-spells-spec-draft.md](../phase2-spells-spec-draft.md)).
+`kind` is optional and defaults to `buff`: everything above is a `buff`, a design without `kind` means exactly what it meant before, and the canonical form of a `buff` has no `kind` key (so the secured file, `build_view` and the Z4 hash do not change). `"kind": "buff"` written out is the same design. The kinds `enchant` (4c) and `buff` with `from` (4c) are built in Phase 2.2; `projectile` and `attack` are named in the error message and are not built yet (Phase 2.3-2.4; plan in [phase2-spells-spec-draft.md](../phase2-spells-spec-draft.md)).
 
 A **`clone`** is a copy of a game spell. The tool copies the template's **Goods row and Magic row** (the Goods row of a spell has the Magic row's id) under the slot's ids, writes the fields the design names, and leaves everything else as the game has it. **The copy keeps pointing at the template's own chain** (Bullet, attack and SpEffect rows), so it behaves like the template; no table other than Goods, Magic and (when sold) ShopLineup grows. The cast animation, icon, sort order and the rest come from the template.
 
@@ -119,7 +119,29 @@ A **`clone`** is a copy of a game spell. The tool copies the template's **Goods 
                      "shop": {"price": 1000, "stock": -1}, "set": {"Magic.6210.slotLength": 1}}
 ```
 
-Rows added: Goods, Magic (ids `2230000 + n - 1`) and the shop line; nothing in SpEffect. The footprint declares exactly these. Gate: `check_clone` (G5, G11, G12) reads the **finished file** and recomputes the two rows from the **original** template, then requires the file's Goods and Magic rows to equal them byte for byte (a difference names the fields), the design's costs and requirements to be in the Magic row, every SpEffect the Magic row calls to exist, and the shop line to pass the same checks as a buff's (merchant range, own stock flag, no stray line).
+Rows added: Goods, Magic (ids `2230000 + n - 1`) and the shop line; nothing in SpEffect. The footprint declares exactly these. Gate: `check_template` (G5, G11, G12) reads the **finished file** and recomputes the two rows from the **original** template, then requires the file's Goods and Magic rows to equal them byte for byte (a difference names the fields), the design's costs and requirements to be in the Magic row, every SpEffect the Magic row calls to exist, and the shop line to pass the same checks as a buff's (merchant range, own stock flag, no stray line).
+
+### 4c. `enchant` and `buff` with `from` (Phase 2.2)
+
+Both are a clone that also **copies the template's own SpEffect rows**, so the effect can be tuned. They differ only in what the template must be:
+
+| Kind | `from` must be |
+|:--|:--|
+| `enchant` | a Magic row with `isEnchant` or `isShieldEnchant` set (a weapon or shield enchant, e.g. `6250` Black Flame Blade, `6740`) whose chain is SpEffect rows only; otherwise the error says what the row is |
+| `buff` with `from` | a spell that only calls SpEffect rows and is not an enchant (e.g. `6050` Flame, Grant Me Strength). A `buff` **without** `from` is the heal-over-time spell of section 4 and is untouched (canonical form, Z4 hash) |
+
+Both take the fields of a clone (`type`, `requires`, `fp_cost`, `stamina_cost`, `shop`, `set`, `name`, `description`).
+
+**The chain.** From the Magic row the tool follows the SpEffect links (`replaceSpEffectId`, `cycleOccurrenceSpEffectId`, `atkOccurrenceSpEffectId`) and finds the SpEffect rows the spell reaches. A row that **more than 3 Magic rows of the game reach** (for example `500`, `505`, which many spells use and the game's scripts know by id) is *generic*: it stays shared and is never copied. The others (at most 4 in the game's 23 such templates) are copied as new rows `21951000 + (n-1)*8 + k`, a block of 8 per slot (`n` = the slot, `k` = the row's place in ascending id order); a template with more than 8 own rows is an error. The builder points the copies at each other (the three link fields) and the Magic copy's `refId` at the copies; nothing else in a copied row changes.
+
+**`set` on SpEffect rows.** `"SpEffect.<template row id>.<field>": number`, with the field names `write --set` uses. The row id must be one of the template's *own* copied rows; for a generic row or a row that is not in the chain the error says so (and lists the copied rows). The value is checked like a Magic value; the link fields (`replaceSpEffectId`, `cycleOccurrenceSpEffectId`, `atkOccurrenceSpEffectId`, `applyIdOnGetSoul`, `accumuOverFireId`, `accumuUnderFireId`) are refused. A `clone` has no copied SpEffect row, so a `SpEffect.` key there is an error that points to these kinds. `Magic.<from>.` and `Goods.<from>.` keys work as in 4b.
+
+```json
+"black_flame_blade_copy": {"kind": "enchant", "from": 6250, "fp_cost": 20, "shop": {"price": 1000, "stock": -1},
+                           "set": {"SpEffect.1626000.effectEndurance": 600}}
+```
+
+Rows added: Goods, Magic, the copied SpEffect rows and the shop line; nothing existing changes. The footprint declares them. Gate: `check_template` also checks every copied SpEffect row: the file's row must equal the *original* template row with only the remapped links and the `set` fields changed (a difference names the fields), it lies in the slot's block, no copy still points at a template-private row, every SpEffect the copies call exists. The `copy` / `share` overrides and the printed plan of the draft come with 2.3.
 
 ## 5. How a file is built
 

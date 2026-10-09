@@ -21,18 +21,21 @@ MAX_SLOTS = 64                # proven in the game (T6): 64 new rows in each of 
 ID_RE = r"[a-z0-9][a-z0-9_-]{0,39}"
 CAST_MOTIONS = {"flame-grant-me-strength": 31, "black-flame-blade": 32}
 VISUALS = ("flame", "flask", "none")   # none: only the cast flash (from Flame! Grant Me Strength), nothing burning on the body afterwards
-KINDS = ("buff", "clone")                        # built today; "buff" is the default so designs from before `kind` stay as they were
-PLANNED_KINDS = ("enchant", "projectile", "attack")     # Phase 2.2-2.4: named so the message is clear, not built yet
+KINDS = ("buff", "clone", "enchant")               # built today; "buff" is the default so designs from before `kind` stay as they were
+PLANNED_KINDS = ("projectile", "attack")           # Phase 2.3-2.4: named so the message is clear, not built yet
 TYPES = ("incantation", "sorcery")
 GOODS_TYPES = {5: "sorcery", 16: "incantation", 17: "sorcery", 18: "incantation"}   # goodsType of a player spell's Goods row
-# `set` (kind clone) writes single numbers of the copied Goods and Magic rows. Fields that name another row are refused (Phase
+# `set` (kinds clone, buff with `from`, enchant) writes single numbers of the copied rows: Goods and Magic always, SpEffect rows
+# for the kinds that copy their SpEffect chain. Fields that name another row are refused (Phase
 # 2.1 clones keep the template's chain; a copy that points elsewhere comes with 2.3/2.4), and so are the fields the spell
 # already has friendly names for, which would silently fight the friendly value.
-SET_TABLES = {"Magic": "magic", "Goods": "goods"}
-SET_KEY_RE = re.compile(r"(Magic|Goods)\.(\d+)\.([A-Za-z_][A-Za-z0-9_]*)")
-FRIENDLY_FIELDS = {"magic": {"fp_cost": "mp", "stamina_cost": "stamina", "intelligence": "requirementIntellect",
+SET_TABLES = {"Magic": "magic", "Goods": "goods", "SpEffect": "sp"}
+SET_KEY_RE = re.compile(r"(Magic|Goods|SpEffect)\.(\d+)\.([A-Za-z_][A-Za-z0-9_]*)")
+FRIENDLY_FIELDS = {"sp": {}, "magic": {"fp_cost": "mp", "stamina_cost": "stamina", "intelligence": "requirementIntellect",
                               "faith": "requirementFaith", "arcane": "requirementLuck"}, "goods": {}}
 ID_FIELDS = {
+    "sp": {"replaceSpEffectId", "cycleOccurrenceSpEffectId", "atkOccurrenceSpEffectId", "applyIdOnGetSoul", "accumuOverFireId",
+           "accumuUnderFireId"},      # the builder points these at the copies itself
     "magic": {"refCategory1", "refCategory2", "refCategory3", "refCategory4", "refCategory5", "refCategory6", "refCategory7",
               "refCategory8", "refCategory9", "refCategory10", "refId1", "refId2", "refId3", "refId4", "refId5", "refId6",
               "refId7", "refId8", "refId9", "refId10", "replaceMagicId", "mtrlItemId", "limitCancelSpEffectId",
@@ -179,12 +182,12 @@ def _buff(c, it, p, n, iid):
     return o
 
 
-def _clone(c, it, p, n, iid):
-    """A copy of a game spell's Goods and Magic rows: the copy keeps pointing at the template's own chain (Bullet, attack,
-    SpEffect rows), so it behaves like the template; cost, requirements, shop and `set` are the spell's own. What is not named
-    stays the template's, so the canonical form holds only what the design says."""
+def _template(c, it, p, n, iid, kind):
+    """A spell made from a game spell: `clone` (copy of the Goods and Magic rows, it keeps calling the template's own chain),
+    `buff` with `from` and `enchant` (the same, and the template's own SpEffect rows are copied too, so they can be tuned with
+    `set`). What is not named stays the template's, so the canonical form holds only what the design says."""
     c.keys(it, p, ["kind", "from"], ["type", "name", "description", "requires", "fp_cost", "stamina_cost", "shop", "set"])
-    o = {"slot": n, "id": iid, "kind": "clone", "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
+    o = {"slot": n, "id": iid, "kind": kind, "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
     src = c.integer(it, "from", p, 1, 2**31 - 1)
     if src is not None:
         o["from"] = src
@@ -193,7 +196,7 @@ def _clone(c, it, p, n, iid):
         if t not in TYPES:
             c.bad(p + ".type", "must be one of: " + ", ".join(TYPES))
         else:
-            o["type"] = t           # checked against the template when the rows are built: a clone cannot change it
+            o["type"] = t           # checked against the template when the rows are built: a copy cannot change it
     o["requires"] = _requires(c, it, p, False)
     for k, hi in (("fp_cost", 999), ("stamina_cost", 999)):
         v = c.integer(it, k, p, 0, hi)
@@ -207,7 +210,8 @@ def _clone(c, it, p, n, iid):
 
 
 def _set(c, raw, path, o):
-    """`set`: {"Magic.<from>.<field>": number, "Goods.<from>.<field>": number} -> the same, values checked against the field."""
+    """`set`: {"Magic.<from>.<field>": number, "Goods.<from>.<field>": number, "SpEffect.<id>.<field>": number} -> the same, values
+    checked against the field. Whether a SpEffect id is one of the copied rows is checked when the rows are built."""
     if not isinstance(raw, dict):
         c.bad(path, "must be an object: \"Magic.<from>.<field>\": number")
         return {}
@@ -216,12 +220,18 @@ def _set(c, raw, path, o):
         kp = "%s[%s]" % (path, key)
         m = SET_KEY_RE.fullmatch(key) if isinstance(key, str) else None
         if not m:
-            c.bad(kp, "a key looks like Magic.<from>.<field> or Goods.<from>.<field> (the row id is the spell's `from`)")
+            c.bad(kp, "a key looks like Magic.<from>.<field>, Goods.<from>.<field> (the row id is the spell's `from`) or SpEffect.<id>.<field>")
             continue
         table, rid, name = SET_TABLES[m.group(1)], int(m.group(2)), m.group(3)
-        if "from" in o and rid != o["from"]:
-            c.bad(kp, "only the copied rows can be set: the row id must be this spell's `from` (%d). Other rows (the template's "
-                      "Bullet, attack and SpEffect chain) are shared with the game's own spell and are not copied in this version" % o["from"])
+        if table == "sp":
+            if o["kind"] == "clone":
+                c.bad(kp, "a clone shares the template's SpEffect rows with the game's own spell and does not copy them: use "
+                          "kind buff (with `from`) or enchant to tune a SpEffect")
+                continue
+        elif "from" in o and rid != o["from"]:
+            c.bad(kp, "Magic and Goods can only be set on the copied rows: the row id must be this spell's `from` (%d). The "
+                      "other rows of the chain are shared with the game's own spell (SpEffect rows are copied by the kinds buff with "
+                      "`from` and enchant: SpEffect.<id>.<field>)" % o["from"])
             continue
         d = Def(table)
         why = d.problem(name, val)
@@ -229,8 +239,8 @@ def _set(c, raw, path, o):
             c.bad(kp, why)
             continue
         if name in ID_FIELDS[table]:
-            c.bad(kp, "%s is an id or type that links rows; it follows the template and is not set here (a copy with its own "
-                      "chain comes with the projectile and attack kinds)" % name)
+            c.bad(kp, "%s is an id or type that links rows; it follows the template (the builder points the copies at each other) "
+                      "and is not set here" % name)
             continue
         friendly = [k for k, f in FRIENDLY_FIELDS[table].items() if f == name]
         if friendly:
@@ -278,12 +288,15 @@ def normalise(data) -> dict:
             continue
         kind = it.get("kind", "buff")
         if kind in PLANNED_KINDS:
-            c.bad(p + ".kind", "%r is planned but not built yet (Phase 2.2-2.4); built kinds: %s" % (kind, ", ".join(KINDS)))
+            c.bad(p + ".kind", "%r is planned but not built yet (Phase 2.3-2.4); built kinds: %s" % (kind, ", ".join(KINDS)))
             continue
         if kind not in KINDS:
             c.bad(p + ".kind", "must be one of: " + ", ".join(KINDS))
             continue
-        o = _clone(c, it, p, n, iid) if kind == "clone" else _buff(c, it, p, n, iid)
+        if kind == "buff" and "from" not in it:
+            o = _buff(c, it, p, n, iid)
+        else:
+            o = _template(c, it, p, n, iid, kind)
         out.append(o)
     if c.problems:
         raise SpecError(c.problems)

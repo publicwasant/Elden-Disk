@@ -13,7 +13,7 @@ import importlib
 import struct
 from dataclasses import dataclass, field
 
-from . import container, preflight, recipes
+from . import chain as chainmod, container, preflight, recipes
 from .build import plan
 from .container import Bnd4, ParamView
 from .defs import TABLE_FILES, Def
@@ -74,13 +74,15 @@ def verify(data: bytes, src: Source, spells: list) -> Verdict:
     except Exception as e:
         v.problems.append("G11: the tables of the file cannot be read (%s)" % e)
         return v
-    base = None
+    base, chain = None, None
     for spell in spells:
-        if spell.get("kind", "buff") == "clone":
-            if base is None:       # the original's tables: the template rows a clone is compared with
+        if recipes.is_template(spell):
+            if base is None:       # the original's tables: the template rows a copy is compared with
                 obnd = Bnd4(src.body)
                 base = {k: container.Param(obnd.get(f).data) for k, f in TABLE_FILES.items()}
-            v.problems += recipes.check_clone(P, D, spell, base)
+            if chain is None and recipes.needs_chain(spell):
+                chain = chainmod.load(obnd, base, D)
+            v.problems += recipes.check_template(P, D, spell, base, chain)
         else:
             v.problems += recipes.check_incantation(P, D, spell)
     csize = struct.unpack(">I", dcx[0x20:0x24])[0]

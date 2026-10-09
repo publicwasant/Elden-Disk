@@ -107,3 +107,11 @@ Where it differs from this draft:
 - **`set` refuses every id-like field** (the draft allowed one whose value is an id that exists in the base file). A pointer is only safe when the whole chain is checked; that comes with the kinds that copy a chain (2.3, 2.4). Also refused: `goodsType` (it follows the template) and the fields that have a friendly name in the same design.
 - `set` can only name the two copied rows (`Magic.<from>.<field>`, `Goods.<from>.<field>`); a key for a chain row says it is shared and not copied. The `copy` / `share` overrides and the printed plan of section 3 come with the first kind that copies a chain (2.3).
 - `requires`, `fp_cost` and `stamina_cost` that are left out stay the template's (nothing is written), so the canonical form of a clone holds only what the design says.
+
+## 10. What 2.2 built (2026-10-10)
+
+`enchant` and `buff` with `from`, decisions 1-6 as approved. The engine copies the template's own SpEffect rows (reached by no more than 3 Magic rows of the game; the others are generic and shared), ids `21951000 + (n-1)*8 + k`, remaps the three SpEffect link fields among the copies and the Magic `refId` that point to them, and `set` takes `SpEffect.<template row id>.<field>`. Where it differs from this draft:
+
+- The reach count is computed from the game's file (`chain.py` reads Bullet and AtkParam_Pc too), not from a hard-coded list.
+- The three link fields followed are `replaceSpEffectId`, `cycleOccurrenceSpEffectId` and `atkOccurrenceSpEffectId`; `applyIdOnGetSoul`, `accumuOverFireId` and `accumuUnderFireId` are refused in `set` but not followed (none of the 23 templates of the game has a value in them).
+- The footprint only adds SpEffect rows; the `copy` / `share` overrides and the printed plan are left to 2.3.
