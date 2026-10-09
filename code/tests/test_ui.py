@@ -280,3 +280,73 @@ def test_emit_links_real_paths_and_a_log_line_stays_plain(clean_env, monkeypatch
     ui._emit(f"x {GAME}", out)
     assert "\x1b]8;;file:///D:/" in out.getvalue()
     assert "\x1b" not in format_line(ev(msg=f"x {GAME}"))            # the log file never gets escapes
+
+
+# ---- spell ids in purple (lines of the `ext` tag) ----
+PURPLE = "\x1b[35m{}\x1b[0m"
+
+
+@pytest.fixture
+def spells(monkeypatch):
+    ui.mark_spell_ids(["reverse_curse_technique", "black_flame_copy"])
+    yield
+    ui.mark_spell_ids([])
+
+
+def colour(monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+
+
+def test_spell_ids_are_purple_in_an_ext_line(spells, monkeypatch):
+    colour(monkeypatch)
+    buf = Stream()
+    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="innovate-spells: building reverse_curse_technique, black_flame_copy on D:\\x"))
+    out = buf.getvalue()
+    assert PURPLE.format("reverse_curse_technique") in out and PURPLE.format("black_flame_copy") in out
+
+
+def test_a_diff_line_colours_only_the_id_part(spells, monkeypatch):
+    colour(monkeypatch)
+    buf = Stream()
+    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="  black_flame_copy.shop.price  1000 -> 2000"))
+    assert PURPLE.format("black_flame_copy") + ".shop.price  1000 -> 2000" in buf.getvalue()
+
+
+def test_other_tags_paths_and_longer_words_are_left_alone(spells, monkeypatch):
+    colour(monkeypatch)
+    buf = Stream()
+    sink = ui.pretty_sink(stream=buf)
+    sink(ev(tag="vault", msg="black_flame_copy"))
+    sink(ev(tag="ext", msg="in D:\\x\\black_flame_copy\\a.json and black_flame_copy2 and my-black_flame_copy"))
+    assert "\x1b[35m" not in buf.getvalue()
+
+
+def test_no_colour_no_change_and_the_log_file_line_stays_plain(spells, monkeypatch):
+    monkeypatch.setenv("NO_COLOR", "1")
+    buf = Stream()
+    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="built black_flame_copy"))
+    assert "\x1b" not in buf.getvalue() and "built black_flame_copy" in buf.getvalue()
+    assert "\x1b" not in format_line(ev(tag="ext", msg="built black_flame_copy"))
+
+
+def test_the_raw_view_colours_the_message_not_the_prefix(spells, monkeypatch):
+    colour(monkeypatch)
+    buf = Stream()
+    ui.raw_sink(stream=buf)(ev(tag="ext", msg="building black_flame_copy"))
+    line = buf.getvalue()
+    assert line.startswith("10-07 23:41:02.123  4242 I ext   : building ") and PURPLE.format("black_flame_copy") in line
+    buf2 = Stream()
+    ui.raw_line("10-07 23:41:02.123  4242 I ext   : built black_flame_copy", buf2)
+    assert PURPLE.format("black_flame_copy") in buf2.getvalue() and buf2.getvalue().startswith("10-07 23:41:02.123  4242 I ext   : built ")
+
+
+def test_an_error_stays_red_and_clearing_the_ids_stops_the_colour(spells, monkeypatch):
+    colour(monkeypatch)
+    buf = Stream()
+    ui.pretty_sink(stream=buf)(ev(level="E", tag="ext", msg="black_flame_copy failed"))
+    assert "\x1b[35m" not in buf.getvalue()
+    ui.mark_spell_ids([])
+    buf = Stream()
+    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="built black_flame_copy"))
+    assert "\x1b[35m" not in buf.getvalue()

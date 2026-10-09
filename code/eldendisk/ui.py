@@ -20,7 +20,7 @@ from .console import printable
 from .logbook import Event, format_line, parse_line
 
 _SYMBOLS = {"ok": ("\u2713", "+"), "info": ("\u00b7", "-"), "warn": ("!", "!"), "error": ("\u2716", "x")}
-_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36"}
+_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36", "spell": "35"}
 RULE = "\u2500"
 
 
@@ -69,6 +69,24 @@ def emphasize(text: str, color: bool) -> str:
         return text
     text = _TICKS.sub(lambda m: paint(m.group(1), "cyan", True), text)
     return _FILE_WORD.sub(lambda m: paint(m.group(0), "cyan", True), text)
+
+
+_SPELL_IDS: re.Pattern | None = None
+
+
+def mark_spell_ids(ids) -> None:
+    """The ids of the spells of the design (`reverse_curse_technique`, ...): on a colour console they are purple in the lines of the
+    `ext` tag, wherever they appear (the list of names, a diff line `id.shop.price  1 -> 2`). The log file keeps plain text.
+    An id inside a path or a longer word is left alone. Called again with the current design; no ids clears it."""
+    global _SPELL_IDS
+    ids = sorted({i for i in ids if i}, key=len, reverse=True)
+    _SPELL_IDS = re.compile(r"(?<![\w\\/.-])(%s)(?![\w\\/-])" % "|".join(re.escape(i) for i in ids)) if ids else None
+
+
+def highlight_spells(text: str, color: bool, tag: str) -> str:
+    if not color or tag != "ext" or _SPELL_IDS is None:
+        return text
+    return _SPELL_IDS.sub(lambda m: paint(m.group(1), "spell", True), text)
 
 
 def symbol(kind: str, encoding: str | None) -> str:
@@ -156,7 +174,7 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
         sym = paint(symbol(kind, getattr(out, "encoding", None)), kind, color)
         stamp = paint(f"{e.when:%H:%M:%S}", "dim", color) + "  " if show_time else ""
         tag = paint(f"{e.tag:<6}", "dim", color)
-        msg = paint(e.msg, kind, color) if kind in ("warn", "error") else emphasize(e.msg, color)
+        msg = paint(e.msg, kind, color) if kind in ("warn", "error") else emphasize(highlight_spells(e.msg, color, e.tag), color)
         _emit(f" {stamp}{sym}  {tag} {msg}", out)
     return sink
 
@@ -173,13 +191,16 @@ def _dim_line(line: str, color: bool) -> str:
     return paint(line, "dim", color)
 
 
+_EXT_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ [VDIWE] ext +: )(.*)$")
+
+
 def raw_sink(stream=None) -> Callable[[Event], None]:
     """`-v`: the log itself, live."""
     def sink(e: Event) -> None:
         out = stream or sys.stderr
         color = use_color(out)
         kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(e.level)
-        line = format_line(e)
+        line = format_line(e._replace(msg=highlight_spells(e.msg, color, e.tag)) if kind is None else e)
         _emit(_dim_line(line, color) if e.level == "D" else paint(line, kind, color) if kind else emphasize(line, color), out)
     return sink
 
@@ -190,6 +211,10 @@ def raw_line(line: str, stream=None) -> None:
     got = parse_line(line)
     kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(got[1]) if got else None
     color = use_color(out)
+    if got and kind is None:       # the message of an `ext` line, after "ext   : "; the prefix (time, pid, tag) is not touched
+        m = _EXT_LINE.match(line)
+        if m:
+            line = m.group(1) + highlight_spells(m.group(2), color, "ext")
     _emit(_dim_line(line, color) if got and got[1] == "D" else paint(line, kind, color) if kind else emphasize(line, color), out)
 
 

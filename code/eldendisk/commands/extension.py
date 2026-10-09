@@ -56,6 +56,7 @@ def prepare_regulation(args, game_dir_file: Path | None, which: str = "all", dry
     ci = extension.open_innovate_spells(getattr(args, "extension_dir", None), spec_file(args))
     book.d("config", f"design: {ci.spec_path} ({describe_resource(ci.spec_path)})")
     spells = ci.items(which)
+    ui.mark_spell_ids(i["id"] for i in spells)
     if not spells:
         book.i("ext", f"innovate-spells: no spells in {ci.spec_path}: nothing to build")
         return Prepared(None, "none")
@@ -118,6 +119,7 @@ def cmd_secure(args) -> int:
     ci = extension.open_innovate_spells(args.extension_dir, spec_file(args))
     try:
         spells = ci.items("all")
+        ui.mark_spell_ids(i["id"] for i in spells)
         rep = ci.secure(spells, game_file(args))
     except service.ExtensionError as exc:
         book.e("ext", str(exc))
