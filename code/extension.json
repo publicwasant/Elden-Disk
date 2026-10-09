@@ -38,6 +38,9 @@
         "shop": {
           "price": 1000,
           "stock": -1
+        },
+        "set": {
+          "Magic.6210.slotLength": 1
         }
       },
       "<id-3>": null,
