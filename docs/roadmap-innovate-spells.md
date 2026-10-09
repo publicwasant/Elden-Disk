@@ -10,7 +10,7 @@ To get there safely, the live **read/write params** tool (Phase 1) becomes the *
 
 Principles that hold throughout:
 - Nothing is called "works" until the user has seen it in the game. Unit tests and the gate only say "nothing we know the game rejects".
-- The gate's envelope (`MAX_CHANGED_BLOCKS`, `MAX_BODY_GROWTH`, `MAX_FRAME_GROWTH`) is raised only after a bigger file has passed in the game. No bypass; a separate test tool builds the bigger file.
+- The gate's envelope (`MAX_CHANGED_BLOCKS` 20 since T7, `MAX_BODY_GROWTH`, `MAX_FRAME_GROWTH`) is raised only after a bigger file has passed in the game. No bypass; a separate test tool builds the bigger file.
 - Existing rows are never changed or removed; spells are new rows.
 - Discuss the design before each large change. The user tests in the game and makes the commits.
 - Every step ends with tests and updated docs (spec, cli-commands, changes, manual test plan).
@@ -22,7 +22,7 @@ Principles that hold throughout:
 - ✓ Slot 1 (`reverse_curse_technique`, a self buff) passed in the real game.
 - ✓ Live read/write for 4 Black Flame SpEffect rows; the reader accepts a table that was grown by an extension (gap between descriptors and data). Since Phase 1: live read/write of any row of six tables, and a check of a built file against the game (below).
 - ✓ Survey of the game's spell kinds from the real Magic table (below).
-- [ ] The T7 test (fifth table, Bullet; encoder fix for repeat-offset states) was built, then reverted by the author before use. A copy is kept by the assistant and can be re-applied.
+- ✓ The T7 test (fifth table, Bullet; encoder fix for repeat-offset states) was built, then reverted by the author before use; re-applied in Phase 2.3 (2026-10-10).
 
 ## What the game's data says about spell kinds
 
@@ -53,7 +53,7 @@ Rows a kind needs (all kinds also need Goods + Magic; Shop is optional):
 
 What limits the number of slots (to be measured, not guessed):
 - a fixed cost per table that grows (its record array is rewritten: Bullet about 6-7 blocks, AtkParam_Pc about 4-5, SpEffect about 4);
-- bytes added per slot; proven in the game: decoded +219 KB, frame +234,768 B, 13 re-encoded blocks; 466 KB failed;
+- bytes added per slot; proven in the game: decoded +219 KB, frame +234,768 B, 20 re-encoded blocks (T7, with a grown Bullet table; T6 had 13); 466 KB failed;
 - the merchant has only 7 free shop lines (slots 8 and above cannot be sold).
 
 ## Phase 1: read/write params as the workbench
@@ -76,7 +76,7 @@ Goal: `extension.json` accepts and builds the five kinds; the number of slots pe
 - ✓ **2.0 Spec.** Design the file: `kind`, the template (`from`), fields per kind, how row ids follow the slot, what a slot above 7 may contain. Approved by the author before code. Draft written 2026-10-09: [phase2-spells-spec-draft.md](phase2-spells-spec-draft.md) (one engine: copy the chain's own rows, then `set`; decisions: `from` = numeric Magic id, slots 8-64 later, names stored only). Approved by the author 2026-10-09 (all six decisions); the one change made while building 2.1 is noted in the draft (section 9).
 - ✓ **2.1 `clone`.** Coded, tested and passed in the game (2026-10-09): copy a game spell's Goods and Magic rows (it keeps the template's chain), change cost, requirements, shop and single numbers with `set`; `kind` defaults to `buff`, so Z4 and the secured files are unchanged; `check_clone` in the gate; 66 new tests. Game, 2026-10-09: a file with slot 1 (buff) and a Black Flame clone built (13 blocks), the game loaded it, and `read --param-check` found every row equal (Goods 2331, Magic 319, ShopLineup 1298). Bought, memorized and cast: the same as the normal Black Flame, at the new cost of 5 FP and with the new requirements (CL1). `set` also passed (CL3, 2026-10-10: `Magic.6210.slotLength` written to the copy). Still open, optional: CL4 (a sorcery in the incantation merchant), CL5 (type refusal). Spec 1.7.0 section 4b.
 - ✓ **2.2 `buff` and `enchant`.** Coded and tested 2026-10-10 (42 new tests); E1 passed in the game 2026-10-10 (E2-E4 optional): `enchant` and `buff` with `from` copy the template's own SpEffect rows (rows reached by more than 3 spells stay shared) into a block of 8 ids per slot, and `set` takes `SpEffect.<id>.<field>`; the heal-over-time `buff` without `from` is unchanged. Enchant needs no other table: it is a Magic row with `isEnchant` / `isShieldEnchant` plus SpEffect rows. Spec 1.7.0 section 4c.
-- [ ] **2.3 `projectile`.** New Bullet rows (fifth table): re-apply the T7 work (encoder fix, Bullet definitions), run T7 in the game, then raise the envelope. A Black Flame whose burn becomes a heal (Magic 6210 -> Bullets 10621000 and 10621050, burn SpEffect 1621000 (to be confirmed: the bullet rows that hold it are 10621001 and 10621051)) is the first target.
+- [ ] **2.3 `projectile`.** New Bullet rows (fifth table): ✓ re-applied the T7 work (encoder fix for repeat-offset states, Bullet definitions, `tools/envelope_test.py`, 2026-10-10); ✓ T7 passed in the game 2026-10-10 (a grown fifth table, 20 re-encoded blocks); ✓ gate `MAX_CHANGED_BLOCKS` 13 -> 20; [ ] the kind itself. A Black Flame whose burn becomes a heal (Magic 6210 -> Bullets 10621000 and 10621050, burn SpEffect 1621000 (to be confirmed: the bullet rows that hold it are 10621001 and 10621051)) is the first target.
 - [ ] **2.4 `attack`.** New AtkParam_Pc rows (sixth table) with its own damage.
 - [ ] **2.5 Capacity experiments.** Five and six tables; sizes between 235 KB and 466 KB; the result is the table "slots per kind" in the spec and the new gate numbers.
 - [ ] **2.6 Slots 8-64.** Decide how a spell without a shop line is obtained (for example a replaced item lot, a starting item, or a different shop); implement the one chosen.

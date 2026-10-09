@@ -68,6 +68,10 @@ Measured in the game: a Magic row is read at the cast, a Bullet row when the bul
 
 `{"kind": "enchant", "from": 6250, "set": {"SpEffect.1626000.effectEndurance": 600}}` copies Black Flame Blade **and the SpEffect rows it owns** (the rows that no more than 3 spells of the game reach; generic rows such as 500 and 505 stay shared), points the copies at each other and `set` can change them (`SpEffect.<template row id>.<field>`, link fields refused). `buff` with `from` is the same for a buff spell (6050); `buff` without `from` (the heal-over-time spell) and the Z4 hash are unchanged. A slot has a block of 8 SpEffect ids (`21951000 + (n-1)*8`). `chain.py` reads the Bullet and AtkParam_Pc tables only to count how many spells share each row. Gate `check_template` replaces `check_clone`. Tests: `test_ext_enchant.py` (42). E1 passed in the game 2026-10-10; E2-E4 are optional (manual test plan).
 
+## Phase 2.3 (started 2026-10-10): the T7 test comes back
+
+Re-applied from the copy kept earlier: the encoder fix for repeat-offset states (`reblock.encode_offsets_flex`, `rewrite_grow` carries the state to the next block; R3 allows that block to differ), `Bullet` as a fifth table in `TABLE_FILES` and `paramdefs.py` (`tools/gen_paramdefs.py` writes it), the recipe's `KEYS` / `NAME_FROM`, and `tools/envelope_test.py` (T7: the design plus 4 unreferenced Black Flame bullet copies; a file beyond the gate's numbers, checked in every other way). T7 passed in the game 2026-10-10 (a grown Bullet table, 20 re-encoded blocks, body +96,176, frame +174,944), so `MAX_CHANGED_BLOCKS` is now 20; the body and frame limits are unchanged. Two golden tests that expected the old limit now say that 16 spells pass and 64 are stopped by the growth (R7).
+
 ## Decisions taken while implementing
 
 - **Exactly one item per file** (2a) until table growth is researched.

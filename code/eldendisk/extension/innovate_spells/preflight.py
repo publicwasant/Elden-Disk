@@ -5,8 +5,9 @@ Rules (each one is a lesson from a rejected or accepted test file in the handboo
  R1 the frame decodes to exactly the intended body;
  R2 no stored/RLE block that the original frame did not have in the same place, and edited blocks are compressed blocks; blocks
     appended at the end (the body is longer) are compressed blocks in front of the original's empty last block;
- R3 blocks whose decoded bytes did not change are byte-identical to the original (the only allowed difference is the
-    literal-size-header form of raw-literal blocks, used to shape the tail);
+ R3 blocks whose decoded bytes did not change are byte-identical to the original (the only allowed differences: the
+    literal-size-header form of raw-literal blocks, used to shape the tail; and a block right after a changed block, re-encoded
+    because that block could not end in the repeat-offset state the original expected -- reblock.rewrite_grow);
  R4 DCX header: sizes correct, other bytes untouched; file length is 16 + a multiple of 16; exactly 2 zero bytes after the frame;
  R5 BND4: same entries, every entry inside the body and none overlapping another, only the four tables differ;
  R6 PARAM tables (read by following each record's own pointer): same row size and strings, every old row byte for byte the same and
@@ -24,7 +25,7 @@ from .reblock import BS, TAIL_ZEROS, Source
 
 # What the game was seen to accept (handbook Part VI; T6 = 64 new rows in each of the four tables). Beyond these the file is
 # untested: the gate stops, and the way forward is a new in-game test that raises the number, never a bypass.
-MAX_CHANGED_BLOCKS = 13      # blocks re-encoded (T6: 13)
+MAX_CHANGED_BLOCKS = 20      # blocks re-encoded (T6: 13; T7, 2026-10-10: 20 with a grown fifth table, Bullet)
 MAX_BODY_GROWTH = 219_000    # decoded bytes added (passed: 219 KB; 466 KB failed whatever the content)
 MAX_FRAME_GROWTH = 235_000   # compressed frame bytes added (T6: +234,768)
 
@@ -116,6 +117,9 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
                 continue                                  # only the literal-size header form differs
             if src.lit_type.get(si) == 3 and (c[0] & 3) == 0:
                 converted += 1                            # treeless literals turned into raw ones (their Huffman tree was replaced)
+                continue
+            if si > 0 and newbody[(i - 1) * BS:i * BS] != src.body[(si - 1) * BS:si * BS]:
+                converted += 1                            # re-encoded because the block before it (changed) ends in another repeat-offset state
                 continue
             bad.append("R3: block %d has the same decoded bytes but different encoded bytes" % i)
             continue

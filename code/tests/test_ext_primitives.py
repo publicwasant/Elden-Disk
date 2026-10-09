@@ -171,4 +171,42 @@ def test_defs_set_get_and_bitfields_do_not_disturb_neighbours():
 
 
 def test_the_definitions_have_the_sizes_of_the_game_rows():
-    assert {k: Def(k).size for k in ("goods", "magic", "sp", "shop")} == {"goods": 176, "magic": 168, "sp": 912, "shop": 52}
+    assert {k: Def(k).size for k in ("goods", "magic", "sp", "shop", "bullet")} == {"goods": 176, "magic": 168, "sp": 912, "shop": 52, "bullet": 272}
+    assert Def("bullet").fields["spEffectId0"][1] == 108 and Def("bullet").fields["atkId_Bullet"][1] == 0
+
+
+# ---- repeat-offset states ----
+def _run(state, codes, seqs):
+    """Decode the offset codes [(ll, ml, ofv)] from a repeat-offset state; -> (offsets, end state). The zstd rules."""
+    st, offs = list(state), []
+    for (ll, _ml, ofv) in codes:
+        if ofv > 3:
+            off = ofv - 3
+            st = [off, st[0], st[1]]
+        else:
+            idx = ofv - 1 + (1 if ll == 0 else 0)
+            off = st[0] if idx == 0 else st[1] if idx == 1 else st[2] if idx == 2 else st[0] - 1
+            if idx == 1:
+                st = [st[1], st[0], st[2]]
+            elif idx == 2:
+                st = [st[2], st[0], st[1]]
+            elif idx == 3:
+                st = [off, st[0], st[1]]
+        offs.append(off)
+    return offs, tuple(st)
+
+
+def test_encode_offsets_flex_is_exact_when_the_wanted_state_is_reachable():
+    seqs = [(5, 4, 24), (0, 4, 24), (3, 5, 64), (2, 6, 111)]
+    codes, end = reblock.encode_offsets_flex(seqs, [24, 64, 111], (111, 64, 24))
+    offs, st = _run([24, 64, 111], codes, seqs)
+    assert end == (111, 64, 24) == st and offs == [24, 24, 64, 111]
+
+
+def test_encode_offsets_flex_ends_in_a_state_it_can_reach_and_says_which():
+    seqs = [(5, 4, 24), (3, 5, 24)]                      # the wanted end (24, 64, 111) needs 64 and 111 to survive: they cannot
+    with pytest.raises(reblock.BuildError):
+        reblock.encode_offsets(seqs, [24, 64, 111], [999, 64, 111])
+    codes, end = reblock.encode_offsets_flex(seqs, [24, 64, 111], [999, 64, 111])
+    offs, st = _run([24, 64, 111], codes, seqs)
+    assert offs == [24, 24] and st == tuple(end) and end != (999, 64, 111)

@@ -9,7 +9,7 @@ from .paramdefs import PARAMDEFS
 _FMT = {"s8": "<b", "u8": "<B", "s16": "<h", "u16": "<H", "s32": "<i", "u32": "<I", "f32": "<f", "b32": "<i"}
 
 # short file name inside the BND4 -> key in PARAMDEFS
-TABLE_FILES = {"goods": "EquipParamGoods", "magic": "Magic", "sp": "SpEffectParam", "shop": "ShopLineupParam"}
+TABLE_FILES = {"goods": "EquipParamGoods", "magic": "Magic", "sp": "SpEffectParam", "shop": "ShopLineupParam", "bullet": "Bullet"}
 
 
 _RANGE = {"s8": (-1 << 7, (1 << 7) - 1), "u8": (0, 255), "s16": (-1 << 15, (1 << 15) - 1), "u16": (0, 65535),

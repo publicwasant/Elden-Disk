@@ -98,6 +98,18 @@ Slot 3 (slot 1 the tested spell, slot 2 the Black Flame clone). `extension innov
 | E3 | `read --param-check` after E1 | every row equal; SpEffect shows the new rows (2 for the blade copy) | [ ] |
 | E4 | `"kind": "enchant", "from": 6050`, then `--add all --dry-run` | error: `from` 6050 is not a weapon or shield enchant, nothing built | [ ] |
 
+## T7. The envelope test (Phase 2.3; beyond the gate on purpose; passed in the game 2026-10-10)
+
+Does the game load a file with a **fifth table that grows** (Bullet, 4.5 MB) and about **20 re-encoded blocks** (the gate allows 13)? Nothing in the file uses the new rows: four unreferenced copies of the Black Flame bullets.
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| T7a | In the `code` folder: `python tools\envelope_test.py --source "<game folder>\regulation.bin" --out regulation.envelope-test.bin` (the source must be the game's own, untouched file; the tool refuses any other) | `written ...`, `re-encoded blocks 20`, body growth about 93,000, frame growth about 171,000, and the only warning is R2 (more than 13 blocks). Passed 2026-10-10: written, 20 blocks, body +96,176, frame +174,944, only R2 | ✓ |
+| T7b | `run --regulation regulation.envelope-test.bin` (vault ON): reach the title screen, load a character, walk around, cast a spell, quit | the game loads like normal (no crash, no stuck loading, no black screen); on quit the vault restores the original. Passed 2026-10-10: Continue, the world loaded, played, exit to desktop | ✓ |
+| T7c | After T7b, `read --param-check` is not meaningful (the file is the experiment); check instead that `vault status` shows the original back in place | original restored, hash equal. Passed 2026-10-10: `vault status` shows no unresolved session, the original regulation.bin restored byte-identical | ✓ |
+
+If the game stops at the title screen or crashes, tell me when (the loading screen, the title, after loading the character): the answer decides whether more blocks or a fifth table is the problem.
+
 ## T. Table move (several items, not built yet)
 
 Written when T1 exists (spec 1.7.0 section 10b): the game must reach the title screen and load a character with the Goods table moved to the end of `regulation.bin`; no item is added.

@@ -248,7 +248,7 @@ def test_a_clone_adds_goods_magic_and_a_shop_line_only():
     jobs, fp = recipes.make_rows(P, D, [_spell(slot=1, shop={"price": 10, "stock": 1})])
     assert sorted(jobs) == ["EquipParamGoods", "Magic", "ShopLineupParam"]
     ids = recipes.slot_rows(1)
-    assert fp.added == {"goods": {ids["goods"]}, "magic": {ids["magic"]}, "sp": set(), "shop": {ids["shop_line"]}}
+    assert fp.added == {"goods": {ids["goods"]}, "magic": {ids["magic"]}, "sp": set(), "shop": {ids["shop_line"]}, "bullet": set()}
     assert not any(fp.removed.values()) and not any(fp.modified.values())
 
 

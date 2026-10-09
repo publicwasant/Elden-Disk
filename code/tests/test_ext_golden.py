@@ -106,7 +106,7 @@ def test_every_row_of_the_game_is_still_there_unchanged(built, src):
     for k in new:
         o, n = {r[0]: bytes(r[2]) for r in old[k].rows}, {r[0]: bytes(r[2]) for r in new[k].rows}
         assert all(n[i] == b for i, b in o.items())
-        assert len(n) - len(o) == {"goods": 1, "magic": 1, "sp": 2, "shop": 1}[k]
+        assert len(n) - len(o) == {"goods": 1, "magic": 1, "sp": 2, "shop": 1, "bullet": 0}[k]
 
 
 def test_the_result_is_a_deterministic_function_of_the_input(base, src, built):
@@ -342,10 +342,28 @@ def test_a_spell_without_poise_or_without_shop_builds_and_adds_only_what_it_need
     assert [new[k].count - old[k].count for k in ("goods", "magic", "sp", "shop")] == [1, 1, 1, 0]
 
 
-def test_too_many_spells_for_what_the_game_was_seen_to_accept_are_stopped_by_the_gate(base, src):
+def test_64_spells_with_poise_build_but_the_gate_stops_them(base, src):
+    """The encoder used to fail here ("repeat-offset state not reachable"); now a block that cannot end in the expected state
+    hands its state to the next one (reblock.rewrite_grow). Growth beyond what the game was seen to accept is still a stop."""
+    spells = _spells(*range(1, 65))
+    for s in spells:
+        if s["slot"] > len(recipes.SHOP_LINES):
+            s.pop("shop", None)
+    res = build.make(src, spells)
+    dcx = container.decrypt(res.data)
+    newbody, fp = build.plan(src, spells)
+    bad, warn, stats = preflight.check(src, dcx, newbody, fp)
+    assert bad == [] and any(w.startswith("R7") for w in warn)      # R2 (blocks) was raised to 20 by T7 and 64 spells stay within it
+    with pytest.raises(build.PreflightError):
+        build.build(base, spells, src)
+
+
+def test_16_spells_pass_since_t7_raised_the_blocks_and_64_are_stopped_by_the_growth(base, src):
+    res = build.build(base, _spells(*range(1, 17)), src)         # 14 blocks: more than 13 (T6), within the 20 of T7
+    assert 13 < res.changed_blocks <= preflight.MAX_CHANGED_BLOCKS
     with pytest.raises(build.PreflightError) as e:
-        build.build(base, _spells(*range(1, 17)), src)
-    assert "R2" in str(e.value) and "warning counts as a stop" in str(e.value)
+        build.build(base, _spells(*range(1, 65)), src)
+    assert "R7" in str(e.value) and "warning counts as a stop" in str(e.value)
 
 
 # ---- the whole flow through the service, with the real build ----
@@ -499,3 +517,26 @@ def test_the_whole_service_flow_with_the_real_build_and_gate(tmp_path, base):
     assert rep.decrypted_sha256 == SLOT1_DECRYPTED_SHA256
     assert ci.decide(spells, sha).use_secured
     assert game.read_bytes() == base
+
+
+# ---- the envelope test tool (T7): beyond the gate on purpose, but checked in every other way ----
+def test_the_envelope_test_tool_builds_a_file_beyond_the_gate_that_an_independent_decoder_reads(tmp_path, base):
+    import importlib.util
+    spec_ = importlib.util.spec_from_file_location("envelope_test", Path(__file__).resolve().parent.parent / "tools" / "envelope_test.py")
+    tool = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(tool)
+    game, out, design = tmp_path / "game.bin", tmp_path / "t7.bin", tmp_path / "extension.json"
+    game.write_bytes(base)
+    design.write_text(json.dumps(_Z4_RAW), encoding="utf-8")
+    assert tool.main(["--source", str(game), "--out", str(out), "--spec", str(design)]) == 0
+    dcx = container.decrypt(out.read_bytes())
+    csize = struct.unpack(">I", dcx[0x20:0x24])[0]
+    zs = pytest.importorskip("zstandard")
+    body = zs.ZstdDecompressor().decompressobj().decompress(dcx[0x4C:0x4C + csize])
+    P, D = _tables(body, True)
+    for new, old in tool.COPIES.items():
+        assert bytes(P["bullet"].find(new)[2]) == bytes(P["bullet"].find(old)[2])
+    assert P["bullet"].count == 15475 + 4 and P["sp"].count == 11354 + 2
+    other = tmp_path / "other.bin"
+    other.write_bytes(base + b"x")
+    assert tool.main(["--source", str(other), "--out", str(tmp_path / "no.bin"), "--spec", str(design)]) == 2 and not (tmp_path / "no.bin").exists()

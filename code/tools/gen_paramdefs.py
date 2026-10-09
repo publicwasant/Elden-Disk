@@ -2,16 +2,16 @@
 
     python tools/gen_paramdefs.py <Paramdex>/ER/Defs
 
-Writes two files: the four tables of innovate-spells and game/paramlayouts.py (six tables, for `read --param`).
+Writes two files: the five tables of innovate-spells and game/paramlayouts.py (six tables, for `read --param`).
 
-Only the facts the package needs are kept: for each of the four tables the row size and, per field, the type, byte offset,
+Only the facts the package needs are kept: for each of the five tables the row size and, per field, the type, byte offset,
 size, bit position / width and array length. Descriptions are not copied. dummy8 padding fields are left out."""
 import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-TABLES = {"goods": "EquipParamGoods", "magic": "MagicParam", "sp": "SpEffect", "shop": "ShopLineupParam"}
+TABLES = {"goods": "EquipParamGoods", "magic": "MagicParam", "sp": "SpEffect", "shop": "ShopLineupParam", "bullet": "BulletParam"}
 SIZES = {"s8": 1, "u8": 1, "dummy8": 1, "s16": 2, "u16": 2, "s32": 4, "u32": 4, "f32": 4, "b32": 4}
 
 

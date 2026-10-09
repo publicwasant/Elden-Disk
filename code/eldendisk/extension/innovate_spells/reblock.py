@@ -162,9 +162,39 @@ def encode_offsets(seqs, rep_start, rep_end):
     return out[::-1]
 
 
-def resegment(info: dict, start: int, newbody: bytes):
+def encode_offsets_flex(seqs, rep_start, rep_end):
+    """Like encode_offsets, but when `rep_end` cannot be reached the block ends in the nearest state it CAN reach.
+    -> ([(ll, ml, ofv)], the state the block really ends in). The caller must then re-encode the next block, which starts from
+    that state instead of the one it was encoded for (the decoded bytes of that block do not change)."""
+    try:
+        return encode_offsets(seqs, rep_start, rep_end), tuple(rep_end)
+    except BuildError:
+        pass
+    layer = {tuple(rep_start): None}
+    hist = []
+    for ll, ml, x in seqs:
+        nxt = {}
+        for st in layer:
+            for ofv, ns in _options(st, x, ll):
+                if ns not in nxt:
+                    nxt[ns] = (st, ofv)
+        hist.append(nxt)
+        layer = nxt
+    # prefer the end state that agrees with the wanted one in most registers (fewest changes for what follows), then the smallest
+    want = tuple(rep_end)
+    st = min(layer, key=lambda s_: (sum(a != b for a, b in zip(s_, want)), s_))
+    end, out = st, []
+    for k in range(len(seqs) - 1, -1, -1):
+        prev, ofv = hist[k][st]
+        out.append((seqs[k][0], seqs[k][1], ofv))
+        st = prev
+    return out[::-1], end
+
+
+def resegment(info: dict, start: int, newbody: bytes, rep_start=None, flex=False):
     """-> (literals, [(ll, ml, ofv)]) for the block at body offset `start`. Old matches that are still valid stay; broken
-    ones keep only their valid runs (>= 3 bytes) or vanish; everything else becomes literals."""
+    ones keep only their valid runs (>= 3 bytes) or vanish; everything else becomes literals. With flex=True the result also
+    says which repeat-offset state the block ends in: (literals, sequences, final state) -- see encode_offsets_flex."""
     olds, pos = [], start
     for ll, ml, _ofv, off, _kind in info["seqs"]:
         pos += ll
@@ -189,7 +219,11 @@ def resegment(info: dict, start: int, newbody: bytes):
             out.append((rs - emitted, re_ - rs, off))
             emitted = re_
     lits += newbody[emitted:end]
-    return bytes(lits), encode_offsets(out, info["rep0"], info["rep1"])
+    rep_start = info["rep0"] if rep_start is None else rep_start
+    if flex:
+        seqs, final = encode_offsets_flex(out, rep_start, info["rep1"])
+        return bytes(lits), seqs, final
+    return bytes(lits), encode_offsets(out, rep_start, info["rep1"])
 
 
 # ---------------------------------------------------------------- frame assembly
@@ -314,8 +348,11 @@ def rewrite_grow(src: Source, newbody: bytes, max_iter: int = 12):
     """Like rewrite(), but newbody may be LONGER than the source body (data appended at the end; nothing is removed).
 
     The old last block is re-encoded (it gets more bytes), the blocks that changed are re-encoded as in rewrite(), and the
-    appended data becomes new blocks of 64 KiB (compressed blocks with raw literals, no sequences). Returns
-    (frame, edited_blocks, converted_blocks, appended_block_count)."""
+    appended data becomes new blocks of 64 KiB (compressed blocks with raw literals, no sequences). When the repeat-offset state
+    the original block ended in cannot be reproduced (too many of its matches are gone), the block ends in the nearest state it can
+    reach and the block after it is re-encoded too (same decoded bytes, new start state), until a block ends in the state the
+    rest of the original frame expects. Returns (frame, edited_blocks, converted_blocks, appended_block_count); a block that
+    was re-encoded only for its state is counted in converted_blocks."""
     old_len = len(src.body)
     old_n = (old_len + BS - 1) // BS                 # blocks that hold data (the game's frame has one more: an empty last block)
     if len(newbody) < old_len:
@@ -323,26 +360,37 @@ def rewrite_grow(src: Source, newbody: bytes, max_iter: int = 12):
     nblocks = (len(newbody) + BS - 1) // BS
     appended = [literal_block(newbody[i * BS:(i + 1) * BS]) for i in range(old_n, nblocks)]
     edit = {i for i in range(old_n) if newbody[i * BS:(i + 1) * BS] != src.body[i * BS:(i + 1) * BS]}
+    forced = set()                                   # blocks re-encoded only because the block before them ends in another state
     for _ in range(max_iter):
-        todo = set(edit)
-        for t in list(edit):
+        reseq = edit | forced
+        todo = set(reseq)
+        for t in list(reseq):
             if src.lit_type.get(t) == 2:
                 j = t + 1
                 while j < old_n and src.lit_type.get(j) == 3:
                     todo.add(j)
                     j += 1
-        res = {}
+        res, carry, grew = {}, None, False
         for i in sorted(todo):
             c = src.content(i)
-            if i in edit:
+            if i in reseq:
                 info = parse_block(c, src.rep_before[i], src.huf_before[i])
-                lits, seqs = resegment(info, i * BS, newbody)
+                start = carry[1] if carry and carry[0] == i else None
+                lits, seqs, final = resegment(info, i * BS, newbody, start, flex=True)
                 res[i] = (lits, fse.encode_sequences(seqs))
+                carry = None
+                if tuple(final) != tuple(info["rep1"]) and i + 1 < old_n:
+                    carry = (i + 1, list(final))
+                    if i + 1 not in reseq:
+                        forced.add(i + 1)
+                        grew = True
             else:
                 d = zstd.Dec()
                 d.huf = src.huf_before[i]
                 lit, q = d.literals(c, 0)
                 res[i] = (lit, bytes(c[q:]))
+        if grew:
+            continue
         frame = _pack(src, res, appended=appended)
         got = zstd.decode_frame(frame)
         if got == newbody:

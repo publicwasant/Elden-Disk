@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from .container import ContainerError, Param
-from .defs import Def
+from .defs import TABLE_FILES, Def
 from .spec import CAST_MOTIONS, GOODS_TYPES, MAX_SLOTS
 from . import chain as chainmod
 
@@ -29,6 +29,9 @@ SHOP_CLONE = 100507
 # effect.visual -> SpEffect.vfxId: flame = the burning body of Flame! Grant Me Strength, flask = Heal's glow, none = no lingering visual
 VISUAL_VFX = {"flame": 1605000, "flask": 5030, "none": -1}
 HEAL_GOODS, HEAL_SP, FLAME_SP, ENDURE_SP, ICON_GOODS = 6421, 1642100, 1605000, 1650, 6424
+
+KEYS = ("goods", "magic", "sp", "shop", "bullet")      # the tables a recipe may add rows to
+NAME_FROM = {"goods": DUMMY, "magic": DUMMY, "sp": DUMMY, "shop": SHOP_DUMMY, "bullet": DUMMY}   # the row whose name pointer new rows share
 
 # --- the rows a slot owns (fixed: slot 1 has the ids of the Z4 spell that was tested in the game) ---
 ITEM_BASE = 2230000          # Goods id == Magic id; above the last real goods id (2220010)
@@ -54,9 +57,9 @@ def slot_rows(slot: int) -> dict:
 
 @dataclass
 class Footprint:
-    removed: dict = field(default_factory=lambda: {k: set() for k in ("goods", "magic", "sp", "shop")})
-    added: dict = field(default_factory=lambda: {k: set() for k in ("goods", "magic", "sp", "shop")})
-    modified: dict = field(default_factory=lambda: {k: set() for k in ("goods", "magic", "sp", "shop")})
+    removed: dict = field(default_factory=lambda: {k: set() for k in KEYS})
+    added: dict = field(default_factory=lambda: {k: set() for k in KEYS})
+    modified: dict = field(default_factory=lambda: {k: set() for k in KEYS})
 
 
 def _row(P: Param, rid: int, what: str):
@@ -176,7 +179,7 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
     """P: key -> Param of the ORIGINAL tables, D: key -> Def (keys goods/magic/sp/shop), chain: chain.Chain of the original (only
     for spells that copy SpEffect rows). -> (jobs for grow.grow, Footprint). Nothing in P is changed."""
     fp = Footprint()
-    rows = {k: [] for k in ("goods", "magic", "sp", "shop")}
+    rows = {k: [] for k in KEYS}
     seen = set()
     for spell in spells:
         if spell["slot"] in seen:
@@ -235,12 +238,9 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
         sh = _shop_row(P, D, spell, ids)
         if sh is not None:
             rows["shop"].append((ids["shop_line"], sh))
-    for key, short, dummy in (("goods", "EquipParamGoods", DUMMY), ("magic", "Magic", DUMMY), ("sp", "SpEffectParam", DUMMY),
-                              ("shop", "ShopLineupParam", SHOP_DUMMY)):
+    for key in KEYS:
         fp.added[key] = {rid for rid, _ in rows[key]}
-    jobs = {short: {"rows": rows[key], "name_from": dummy} for key, short, dummy in (
-        ("goods", "EquipParamGoods", DUMMY), ("magic", "Magic", DUMMY), ("sp", "SpEffectParam", DUMMY),
-        ("shop", "ShopLineupParam", SHOP_DUMMY)) if rows[key]}
+    jobs = {TABLE_FILES[key]: {"rows": rows[key], "name_from": NAME_FROM[key]} for key in KEYS if rows[key]}
     return jobs, fp
 
 
