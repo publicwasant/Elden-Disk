@@ -113,8 +113,16 @@ def test_a_file_grown_by_an_extension_has_a_gap_before_its_data_and_is_still_rea
     assert store(m).resolve(KEY).head == pf.HEAD
 
 
-@pytest.mark.parametrize("gap", [-16, 8, (1 << 20) + 16])
-def test_a_gap_that_is_not_a_whole_number_of_16s_or_too_big_or_negative_is_refused(gap):
+@pytest.mark.parametrize("gap", [184, 168, 56])
+def test_the_gaps_measured_on_the_slot_1_build_are_accepted(gap):
+    """Goods 184 (176 + 8 padding), Magic 168, Shop 56 (52 + 4 padding): found with `read --probe-params` on the real game."""
+    m = small_world(data_start_field=0x40 + 30 * 24 + gap)
+    info, why = store(m)._check_head(pf.HEAD)      # the header only: the fake rows are not moved behind the gap
+    assert info == (30, 0x40 + 30 * 24 + gap), why
+
+
+@pytest.mark.parametrize("gap", [-16, 6, (1 << 20) + 16])
+def test_a_gap_that_is_not_a_whole_number_of_4s_or_too_big_or_negative_is_refused(gap):
     m = small_world(data_start_field=0x40 + 30 * 24 + gap)
     with pytest.raises(P.ParamError, match="does not match"):
         store(m).resolve(KEY)

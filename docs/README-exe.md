@@ -19,7 +19,7 @@ Nothing is written next to the exe. The game folder is left as it was, except fo
 1. **Copy your save folder by hand first** (`%APPDATA%\EldenRing\<SteamID64>`). A manual copy is the one backup the tool cannot get wrong.
 2. Terminal 0: `.\eldendisk.exe run`. It backs the save up, starts the game **offline** and, when the game exits, puts the save back byte for byte. Leave it open. (Several Steam accounts: add `--save-dir "<folder>"` once.)
 3. Terminal 1, once a character is loaded: `.\eldendisk.exe read --live` (every value, redrawn in place), or `read --query runes hp attrs.*`, `read --live-buffs`.
-4. Terminal 2: `.\eldendisk.exe write --set vigor=99 level=150`, `write --refill hp,fp,stamina`. Game params: `write --set params.effects.1621000.effectEndurance=-1` makes the Black Flame burn last until the target dies (`write --reset all` puts the game's own values back; they live in the game's memory, not in the save, and are gone when the game closes).
+4. Terminal 2: `.\eldendisk.exe write --set vigor=99 level=150`, `write --refill hp,fp,stamina`. Game params: `write --set params.effects.1621000.effectEndurance=-1` makes the Black Flame burn last until the target dies (`write --reset all` puts the game's own values back; they live in the game's memory, not in the save, and are gone when the game closes). Any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup can be read and written: `read --param Magic.6230` shows a row, `write --set params.Magic.6230.mp=0` makes Scouring Black Flame cost no FP, `write --reset params.Magic.6230.mp` puts the game's value back. `read --param-check` compares the `regulation.bin` in the game folder with what the game holds, row by row.
 5. Quit the game. Everything `write` changed is rolled back. To **keep** it instead: let the game save (rest at a grace or quit to title), stop `run`, close the game, then `.\eldendisk.exe vault keep --yes`.
 6. Power loss, host killed, console closed: close the game and run `.\eldendisk.exe vault restore`.
 
@@ -31,6 +31,7 @@ For read-only farming where you want to keep what you earn, start the host with 
 - **EasyAntiCheat:** `read` and `write` only work on a game started by `run` (offline, without EAC). A game started from Steam stops them with exit code `3`.
 - `-v` on any command shows the log (`<vault>\eldendisk.log`) live instead of the short view; `run -v` also shows the commands other terminals run.
 - **Params are for offline play only:** changing the game's own tables with anti-cheat active or online can get an account banned. `run` starts the game offline.
+- **A changed row acts on what is created afterwards:** a Magic row is read at the cast, a Bullet row when the bullet is created; a flame already in the world keeps the values it had. A value written stays through Quit to Title and Continue, and is gone when the game process ends.
 - Exit codes: `0` ok · `1` error / not applied · `2` unsupported `eldenring.exe` (or a read-only `params` field named in `write`) · `3` EAC loaded · `4` restore pending · `5` no valid session · `130` interrupted.
 
 ---

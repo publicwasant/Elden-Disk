@@ -30,6 +30,14 @@
           "row_count": "0xA", "data_start": "0x30", "descriptors": "0x40",
           "descriptor_size": "0x18", "descriptor_id": "0x0", "descriptor_data_offset": "0x8"
         },
+        "catalog": {
+          "Goods":       { "rva": "0x3D85F58", "offsets": ["0x160", "0x80", "0x80"] },
+          "Magic":       { "rva": "0x3D85F58", "offsets": ["0x478", "0x80", "0x80"] },
+          "SpEffect":    { "rva": "0x3D85F58", "offsets": ["0x4C0", "0x80", "0x80"] },
+          "Bullet":      { "rva": "0x3D85F58", "offsets": ["0x358", "0x80", "0x80"] },
+          "AtkParam_Pc": { "rva": "0x3D85F58", "offsets": ["0x2C8", "0x80", "0x80"] },
+          "ShopLineup":  { "rva": "0x3D85F58", "offsets": ["0x820", "0x80", "0x80"] }
+        },
         "tables": {
           "effects": {
             "table": "SpEffectParam",

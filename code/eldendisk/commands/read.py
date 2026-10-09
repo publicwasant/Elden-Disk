@@ -5,6 +5,9 @@
     read --export                 write disk-state.json once, then exit
     read ... --flat               print the values as `full.path  value` rows instead of the tree
     read --live                   the same, continuously (with --query / --export: that one, continuously)
+    read --probe-params           where the param files of the other tables are in memory (read-only, once; add --json)
+    read --param REF [REF ...]    any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup: `Magic.6230`, `Bullet.10621000`,
+                                  `Magic.6230.mp*` (a field or a pattern); read-only, once (--flat, --json)
     read --live-buffs             buffs monitor        read --live-animations   animation monitor
                                   (--mapped / --unmapped: only ids that are / are not in chr_state_ids.json)
 
@@ -21,6 +24,10 @@ from .. import ui
 from ..console import require_windows_x64
 from ..game.attach import EXIT_ERROR, EXIT_EAC, AttachError, Target, eac_loaded, locate, open_read
 from ..game.processes import is_window_active, process_started
+from ..game.paramtables import Tables, parse_ref, pick
+from . import paramcheck
+from ..game.params import ParamError, ParamNameError, ParamStore
+from ..game.probe import as_json as probe_json, lines as probe_lines, probe
 from ..game.profile import load_state_ids
 from ..game.values import UnknownName, is_param_name
 from ..logbook import book
@@ -96,6 +103,18 @@ def cmd_read(args) -> int:
     require_windows_x64()
     continuous = _continuous(args)
     timeout = None if continuous else args.timeout
+    refs = []
+    for text in args.param or []:
+        try:
+            refs.append(parse_ref(text))
+        except ParamNameError as exc:      # a wrong name is told before waiting for the game
+            book.e("read", str(exc))
+            return EXIT_ERROR
+    checked = None
+    if args.param_check:                       # a file named on the command line is opened before waiting for the game
+        checked = _open_check_file(args.param_check)
+        if checked is None:
+            return EXIT_ERROR
     try:
         state_ids = load_state_ids(Path(args.state_ids))     # before waiting for the game: a bad file is told at once
     except ValueError as exc:
@@ -108,6 +127,11 @@ def cmd_read(args) -> int:
         return exc.code
     except KeyboardInterrupt:
         return 130
+
+    if args.param_check == "":                 # no file named: the game's own regulation.bin, the one it loaded (a `run` session swaps the build in)
+        checked = _open_check_file(str(target.exe_path.parent / "regulation.bin"), default=True)
+        if checked is None:
+            return EXIT_ERROR
 
     book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
     book.d("config", f"state ids: {args.state_ids} ({describe_resource(args.state_ids)})")
@@ -130,6 +154,12 @@ def cmd_read(args) -> int:
     mem = open_read(target)
     sampler = Sampler(mem, profile, state_ids, target.base)
     try:
+        if args.probe_params:
+            return _probe_params(args, target, mem)
+        if refs:
+            return _read_params(args, target, mem, refs)
+        if checked is not None:
+            return _param_check(args, target, mem, checked)
         if args.live_buffs or args.live_animations:
             return _monitors(args, target, mem, sampler, vault)
         export = _exporter(args, target, vault)
@@ -143,6 +173,86 @@ def cmd_read(args) -> int:
         return 130
     finally:
         mem.close()
+
+
+def _probe_params(args, target: Target, mem) -> int:
+    """`--probe-params`: list the param files reachable from the globals of the known chains. Reads only."""
+    if target.profile.params is None:
+        book.e("read", "this exe version has no params block in offsets.json; nothing to probe from")
+        return EXIT_ERROR
+    result = probe(ParamStore(mem, target.profile, target.base))
+    book.d("read", f"probe: {len(result.hits)} param file(s)")
+    if args.json:
+        ui.out(view.as_json([("probe", probe_json(result))]))
+    else:
+        for line in probe_lines(result):
+            ui.out(line)
+    if not result.hits:
+        book.e("read", "no param file found from the known chains (is a character loaded? try again in the world)")
+        return EXIT_ERROR
+    return 0
+
+
+def _read_params(args, target: Target, mem, refs) -> int:
+    """`--param`: print rows of the six tables as a tree (`--flat`: one `params.<Table>.<id>.<field>  value` row each). Reads only."""
+    if target.profile.params is None:
+        book.e("read", "this exe version has no params block in offsets.json")
+        return EXIT_ERROR
+    try:
+        tables = Tables(mem, target.profile, target.base)
+        selection: list[tuple[str, object]] = []
+        for table, row_id, pattern in refs:
+            row = pick(tables.read_row(table, row_id), pattern)
+            path = f"params.{table}.{row_id}"
+            if all(path != p for p, _ in selection):
+                selection.append((path, row))
+            else:    # the same row asked twice (two patterns): merge the fields
+                dict(selection)[path].update(row)
+    except (ParamError, ParamNameError) as exc:
+        book.e("read", str(exc))
+        return EXIT_ERROR
+    if args.json:
+        ui.out(view.as_json(selection))
+    else:
+        ui.rows(view.rows(selection, flat=args.flat))
+    return 0
+
+
+def _open_check_file(path: str, default: bool = False):
+    """The rows of the regulation.bin at `path`, or None after telling why not."""
+    what = "the game folder's regulation.bin, " if default else ""
+    book.i("read", f"opening {what}{path} (a few seconds)")
+    try:
+        return paramcheck.file_rows(Path(path))
+    except paramcheck.CheckFileError as exc:
+        book.e("read", str(exc))
+        return None
+
+
+def _param_check(args, target: Target, mem, checked) -> int:
+    """`--param-check FILE`: the six tables of the file against the same tables in the game. Reads only; 0 only when all agree."""
+    if target.profile.params is None:
+        book.e("read", "this exe version has no params block in offsets.json")
+        return EXIT_ERROR
+    tables = Tables(mem, target.profile, target.base)
+    diffs = []
+    for table, rows in checked.items():
+        try:
+            diffs.append(paramcheck.compare(table, rows, tables.all_rows(table)))
+        except ParamError as exc:
+            bad = paramcheck.TableDiff(table, len(rows), 0)
+            bad.error = str(exc)
+            diffs.append(bad)
+    if args.json:
+        ui.out(view.as_json([("", paramcheck.as_json(diffs))]))
+    else:
+        for line in paramcheck.lines(diffs):
+            ui.out(line)
+    if all(d.same for d in diffs):
+        book.ok("read", "the file and the game agree on every row of the six tables")
+        return 0
+    book.e("read", "the file and the game differ (a value changed with `write` in this game process shows here too)")
+    return EXIT_ERROR
 
 
 def _exporter(args, target: Target, vault: Path | None) -> ExportWriter:

@@ -12,6 +12,7 @@ from ..game.params import ParamLockedError, ParamNameError
 from ..game.processes import process_started
 from ..vault import VaultError, authorise, resolve_vault
 from ..vault import session as vault_session
+from ..writer.paramedit import SNAPSHOT_NAME, Snapshot
 from ..writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
 
 
@@ -27,7 +28,8 @@ def cmd_write(args) -> int:
         return 0
 
     try:
-        record = vault_session.load(resolve_vault(args.vault))
+        vault_root = resolve_vault(args.vault)
+        record = vault_session.load(vault_root)
     except VaultError as exc:
         book.e("write", str(exc))
         return EXIT_NO_SESSION
@@ -37,8 +39,10 @@ def cmd_write(args) -> int:
         book.e("write", str(exc))
         return exc.code
 
+    snapshot = Snapshot(vault_root / SNAPSHOT_NAME, target.pid, target.started)    # the game's own values, for --reset
+    snapshot.load()
     try:   # what the params names mean needs the profile; a read-only field is refused before the session is looked at
-        policy, notes = plan_params(target.profile.params, policy)
+        policy, notes = plan_params(target.profile.params, policy, snapshot)
     except ParamLockedError as exc:
         book.e("write", f"{exc}; nothing was written")
         return EXIT_UNSUPPORTED
@@ -61,10 +65,14 @@ def cmd_write(args) -> int:
         gate = WriteGate()
         gate.open()   # only after the session, anti-cheat and profile checks above
         writer = MemoryWriter(mem, Layout(mem, target.profile, target.base), policy, gate,
-                              log=lambda m: book.d("write", m))
+                              log=lambda m: book.d("write", m), snapshot=snapshot)
         results = writer.apply_once()
     finally:
         mem.close()
+        try:
+            snapshot.save()
+        except OSError as exc:
+            book.w("write", f"could not save {SNAPSHOT_NAME} ({exc}); --reset of these values will not find the game's own value")
 
     failed = [r.name for r in results if not r.wrote]
     for r in results:

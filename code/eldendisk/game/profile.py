@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from .paramlayouts import LAYOUTS
 
 TIMER_MODES = {"elapsed", "remaining"}
 
@@ -124,6 +126,7 @@ class ParamTable:
 class ParamsProfile:
     layout: ParamFileLayout
     tables: dict[str, ParamTable]
+    catalog: dict[str, ParamChain] = field(default_factory=dict)   # table name (paramlayouts.LAYOUTS) -> chain to its file
 
 
 @dataclass(frozen=True)
@@ -230,6 +233,23 @@ def _number(value, name: str, lo=None, hi=None) -> float | int:
     return value
 
 
+def _parse_catalog(raw) -> dict[str, ParamChain]:
+    """`params.catalog`: one chain per table of paramlayouts.LAYOUTS, found with `read --probe-params`. Absent = none."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise Incomplete("params.catalog must be an object")
+    out: dict[str, ParamChain] = {}
+    for name, c in raw.items():
+        where = f"params.catalog.{name}"
+        if name not in LAYOUTS:
+            raise Incomplete(f"{where}: not a table of the workbench (one of {', '.join(LAYOUTS)})")
+        if not isinstance(c, dict) or not c.get("offsets"):
+            raise Incomplete(f"{where} must be {{rva, offsets}} with at least one offset")
+        out[name] = ParamChain(_num(c.get("rva"), f"{where}.rva"), tuple(_num(o, f"{where}.offsets") for o in c["offsets"]))
+    return out
+
+
 def _parse_params(d: dict) -> ParamsProfile | None:
     """Absent block -> None (params unsupported). A block that is there must be complete and consistent."""
     pr = d.get("params")
@@ -302,7 +322,7 @@ def _parse_params(d: dict) -> ParamsProfile | None:
         tables[key] = ParamTable(key, str(raw.get("table") or key), row_size, tuple(chains), fields, rows)
     if not tables:
         raise Incomplete("params.tables is empty")
-    return ParamsProfile(layout, tables)
+    return ParamsProfile(layout, tables, _parse_catalog(pr.get("catalog")))
 
 
 def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | None]:

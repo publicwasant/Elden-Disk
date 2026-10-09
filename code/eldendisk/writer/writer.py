@@ -26,7 +26,10 @@ from ..game.layout import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout
 from ..game.memory import ACCESS_MASK, ProcessMemory, is_user_ptr
 from ..game.params import (ParamError, ParamNameError, ParamStore, clamp as clamp_param, encode as encode_param,
                            match_names, parse_value)
+from ..game.paramlayouts import LAYOUTS
+from ..game.paramtables import Tables
 from ..game.profile import ParamsProfile
+from .paramedit import CatalogEdit, Snapshot, field_value, is_catalog_name, plan_catalog, restore, unit_size, with_value
 from ..game.values import is_param_name, write_targets
 
 PROCESS_VM_WRITE = 0x0020
@@ -101,10 +104,11 @@ class EditPolicy:
     param_sets: tuple[tuple[str, str], ...] = ()   # (`params...` name or pattern, value as typed), meaning known only
     param_resets: tuple[str, ...] = ()             # with the profile: see plan_params
     param_edits: tuple[ParamEdit, ...] = ()        # what the two above came to (plan_params), what the writer applies
+    catalog_edits: tuple[CatalogEdit, ...] = ()    # the same for the names of the six workbench tables (paramedit.py)
 
     @property
     def empty(self) -> bool:
-        return not (self.sets or self.refill or self.param_sets or self.param_resets or self.param_edits)
+        return not (self.sets or self.refill or self.param_sets or self.param_resets or self.param_edits or self.catalog_edits)
 
 
 def parse_policy(set_args: list[str] | None, refill: str | None, reset: list[str] | None = None) -> EditPolicy:
@@ -161,9 +165,12 @@ def parse_policy(set_args: list[str] | None, refill: str | None, reset: list[str
                       tuple(dict.fromkeys(resets)))
 
 
-def plan_params(spec: ParamsProfile | None, policy: EditPolicy) -> tuple[EditPolicy, list[str]]:
-    """Resolve the `params` names of `policy` against the profile: (policy with `param_edits`, notes for the user).
+def plan_params(spec: ParamsProfile | None, policy: EditPolicy, snapshot: Snapshot | None = None
+                ) -> tuple[EditPolicy, list[str]]:
+    """Resolve the `params` names of `policy` against the profile: (policy with `param_edits` and `catalog_edits`, notes).
 
+    Two kinds of names: `params.effects.…` (the rows the profile lists, with the game's values written in it) and
+    `params.<Table>.<id>.<field>` (any row of the six workbench tables; `--reset` puts back what `snapshot` remembers).
     ParamLockedError (a read-only field named exactly) and ParamNameError (unknown name, bad value, a field set twice
     or both set and reset) mean nothing may be written. Nothing here touches the game.
     """
@@ -171,8 +178,21 @@ def plan_params(spec: ParamsProfile | None, policy: EditPolicy) -> tuple[EditPol
         return policy, []
     if spec is None:
         raise ParamNameError("this game version has no params in offsets.json")
+    keys = set(spec.tables)
+    cat_sets = [(n, r) for n, r in policy.param_sets if is_catalog_name(n, keys)]
+    cat_resets = [n for n in policy.param_resets if n != "all" and is_catalog_name(n, keys)]
+    if "all" in policy.param_resets and snapshot is not None:
+        cat_resets += [f"params.{k}" for k in snapshot.keys()]
+    if (cat_sets or cat_resets) and not spec.catalog:
+        raise ParamNameError("this game version has no params.catalog in offsets.json (run `read --probe-params`)")
+    cat_edits, cat_notes = plan_catalog(cat_sets, cat_resets, snapshot) if (cat_sets or cat_resets) else ([], [])
+    policy = replace(policy, param_sets=tuple(x for x in policy.param_sets if x not in cat_sets),
+                     param_resets=tuple(n for n in policy.param_resets if n not in cat_resets or n == "all"),
+                     catalog_edits=tuple(cat_edits))
+    if not (policy.param_sets or policy.param_resets):
+        return policy, cat_notes
     edits: dict[tuple[str, str, str], ParamEdit] = {}
-    notes: list[str] = []
+    notes: list[str] = list(cat_notes)
 
     def short(hits) -> str:
         names = [f"{row}.{field}" for _t, row, field in hits]
@@ -225,10 +245,11 @@ class WriteResult:
 class MemoryWriter:
     def __init__(self, mem, layout: Layout, policy: EditPolicy, gate: WriteGate, *,
                  hz: float = 4.0, clock: Callable[[], float] = time.monotonic,
-                 log: Callable[[str], None] | None = None):
+                 log: Callable[[str], None] | None = None, snapshot: Snapshot | None = None):
         if not WRITE_HZ_RANGE[0] <= hz <= WRITE_HZ_RANGE[1]:
             raise ValueError(f"write rate must be between {WRITE_HZ_RANGE[0]:g} and {WRITE_HZ_RANGE[1]:g} Hz")
         self.mem, self.layout, self.policy, self.gate = mem, layout, policy, gate
+        self.snapshot = snapshot
         self._period, self._clock, self._log = 1.0 / hz, clock, log or (lambda _m: None)
         self._next = 0.0
         self._last_status: dict[str, str] = {}
@@ -320,6 +341,52 @@ class MemoryWriter:
                             out.append(r)
         if self.policy.param_edits:
             out += self._tick_params()
+        if self.policy.catalog_edits:
+            out += self._tick_catalog()
+        return out
+
+    def _tick_catalog(self) -> list[WriteResult]:
+        """The fields of the six workbench tables: the file and the row are found again for every pass (MW-2), the unit
+        of bytes the field lives in is read, changed in its own bits only, written and read back. The game's own value is
+        remembered before the first change (the snapshot), `--reset` puts it back and forgets it."""
+        out: list[WriteResult] = []
+        if self.snapshot is None:
+            for edit in self.policy.catalog_edits:
+                self._skip(edit.name, "nosnap", "skipped, no snapshot to keep the game's own value in")
+            return out
+        tables = Tables(self.mem, self.layout.profile, self.layout.base)
+        rows: dict[tuple[str, int], int | str] = {}
+        for edit in self.policy.catalog_edits:
+            if (edit.table, edit.row) not in rows:
+                try:
+                    rows[(edit.table, edit.row)] = tables.row_address(edit.table, edit.row)[0]
+                except ParamError as exc:
+                    rows[(edit.table, edit.row)] = str(exc)
+            base = rows[(edit.table, edit.row)]
+            if isinstance(base, str):
+                self._skip(edit.name, f"skip:{base}", f"skipped, {base}")
+                continue
+            addr = base + LAYOUTS[edit.table]["fields"][edit.field][1]
+            cur = self.mem.read(addr, unit_size(edit.table, edit.field))
+            if cur is None:
+                self._skip(edit.name, "unreadable", "skipped, field unreadable")
+                continue
+            if edit.value is None:
+                original = self.snapshot.get(edit.key)
+                if original is None:
+                    self._skip(edit.name, "nosnap", "skipped, nothing remembered for it in this game process")
+                    continue
+                new = restore(edit.table, edit.field, cur, original)
+            else:
+                new = with_value(edit.table, edit.field, cur, edit.value)
+                if new != cur:
+                    self.snapshot.record(edit.key, cur)
+            shown = field_value(edit.table, edit.field, new)
+            r = self._put(edit.name, addr, new, cur, shown, "")
+            if r:
+                out.append(r)
+            if edit.value is None and (r is None or r.wrote):
+                self.snapshot.drop(edit.key)
         return out
 
     def _tick_params(self) -> list[WriteResult]:

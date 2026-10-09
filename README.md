@@ -7,8 +7,8 @@ Five parts with one job each:
 
 - **Host (`run`):** takes a SHA-256 verified snapshot of your save, launches `eldenring.exe` **offline**, waits, and restores the save **byte for byte** when the game exits. It never opens the game's memory and writes no JSON.
 - **Vault (`vault`):** snapshots, the session record, restore and recovery. It is the part that must not fail: a restore that could not finish leaves a record, and the next `run` refuses until `vault restore` has been run.
-- **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree (`--flat`: one `full.path  value` row each); `--export` writes `disk-state.json` once; `--live` keeps going; `--live-buffs` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. Values are addressed by **name** only. Read-only; works with or without `run`.
-- **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST` / `write --reset NAME ...`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...; and the game's own tables: `params.effects.1621000.effectEndurance`). It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
+- **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree (`--flat`: one `full.path  value` row each); `--export` writes `disk-state.json` once; `--live` keeps going; `--live-buffs` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. `--param Magic.6230` shows any row of six of the game's tables (the params workbench), `--probe-params` finds where those tables are in memory, `--param-check [FILE]` compares a `regulation.bin` with the running game row by row. Values are addressed by **name** only. Read-only; works with or without `run`.
+- **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST` / `write --reset NAME ...`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...; and the game's own tables: `params.effects.1621000.effectEndurance`, or any numeric field of any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup: `params.Magic.6230.mp`). `--reset` puts the game's own value back. It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
 - **Extension (`extension`):** builds things for the game outside the game. The first one, `innovate-spells`, turns `extension.json` into a `regulation.bin` with your own incantation (design → built → secured, judged by a gate). With the vault ON, `run` swaps it in for one session and the vault puts the game's own file back with the save.
 - **Zero configuration files:** `--save-dir` and `--vault` are remembered in the Windows Registry (`HKCU\Software\EldenDisk`). The vault lives in `%LOCALAPPDATA%\EldenDisk\vault` by default, never next to the exe, so a rebuild cannot delete it.
 
@@ -17,7 +17,7 @@ Five parts with one job each:
 >
 > **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
 >
-> **Real-game status (author, 1.17.1):** used on the real game: `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors, `write` of game params (`effectEndurance = -1` makes all four Black Flame rows burn without end), and (2026-10-09) the **other world**: a `regulation.bin` built by the tool (`extension innovate-spells`, gate passed, second decoder agreed on Python 3.14) swapped in by `run`, an own incantation sold, cast and healing, a boss beaten with infinite Black Flame, save and `regulation.bin` restored byte-identical; `extension innovate-spells --secure` ran and wrote the secured copy. **Not tried in the game yet:** the poise part of the item (manual plan SW10), `run` using the secured copy (SC3-SC10), the other `write` params fields (`motionInterval`, `changeHpRate`, `changeHpPoint`), `--reset` and the title screen (manual plan 7A), and the Steam Cloud sync on exit (T10). Everything else is verified by unit tests with fake Windows and memory layers (829 tests; 24 golden tests need the game's original `regulation.bin`). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
+> **Real-game status (author, 1.17.1):** used on the real game: `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors, `write` of game params (`effectEndurance = -1` makes all four Black Flame rows burn without end), the params workbench (2026-10-09: `read --param`, `read --probe-params`, `read --param-check`, and `write --set params.<Table>.<id>.<field>` with `--reset` on six tables: a spell's FP cost and a bullet's life changed in the game and put back; a Black Flame that heals instead of burning; the slot-1 build equal to the game on every row of the six tables), and (2026-10-09) the **other world**: a `regulation.bin` built by the tool (`extension innovate-spells`, gate passed, second decoder agreed on Python 3.14) swapped in by `run`, an own incantation sold, cast and healing, a boss beaten with infinite Black Flame, save and `regulation.bin` restored byte-identical; `extension innovate-spells --secure` ran and wrote the secured copy. **Not tried in the game yet:** the poise part of the item (manual plan SW10), `run` using the secured copy (SC3-SC10), `motionInterval` on its own, and the Steam Cloud sync on exit (T10). Everything else is verified by unit tests with fake Windows and memory layers (about 1,000 tests; the 49 golden tests need the game's original `regulation.bin`). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
 
 ---
 
@@ -111,8 +111,8 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 | Command | Role | Description |
 |:---|:---|:---|
 | `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. With the vault ON it swaps a `regulation.bin` in for the session: the secured copy when `extension.json` is unchanged, otherwise a new build that the gate must pass (or `--regulation FILE`). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
-| `read [--query NAME [NAME ...]] [--export] [--live] [--live-buffs] [--live-animations]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-buffs` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
-| `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables); `--reset` puts the game's own params back; exit `5` without a valid session |
+| `read [--query NAME [NAME ...]] [--export] [--live] [--live-buffs] [--live-animations] [--param TABLE.ID ...] [--probe-params] [--param-check [FILE]]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-buffs` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--param` any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup (a tree, `--flat` for one path per value); `--probe-params` where those tables are in memory; `--param-check [FILE]` a `regulation.bin` (default: the one in the game folder) against the game, row by row; `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
+| `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables, any numeric field of any row of six tables); `--reset` puts the game's own params back (it remembers the first value of a field in this game process); exit `5` without a valid session |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
 | `extension --list` \| `extension innovate-spells --add all\|ID\|--secure` | **Extension** | Build things for the game outside the game. `innovate-spells` turns `extension.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
@@ -122,7 +122,7 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 
 Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `animations` (now `read --live-buffs` / `--live-animations`), JSON output of `run` (now `read --export`), the verbs `read effects|animations|export`, `write set|refill` (now flags) and `--once` (a read without `--live` is already one shot). Values are addressed by name only; there are no memory addresses or scans.
 
-**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md)
+**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md) · [params workbench (Phase 1)](docs/phase1-params-workbench.md) · [roadmap: innovate spells, all kinds](docs/roadmap-innovate-spells.md)
 
 ---
 
@@ -212,6 +212,24 @@ eldendisk.exe write --reset all                                                 
 
 How the table was found and what was and was not tested: [docs/experiments/params/sp-effect-params](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md).
 
+### Any row of six tables (the params workbench, 2026-10-09)
+
+Besides the four Black Flame rows above, `read` and `write` reach any row of **Goods** (`EquipParamGoods`), **Magic**, **SpEffect**, **Bullet**, **AtkParam_Pc** and **ShopLineup**, with the field names of Paramdex. Offline, inside a `run` session, like every `write`.
+
+```commandline
+eldendisk.exe read --param Magic.6230                       # the whole row as a tree
+eldendisk.exe read --param Magic.6230.mp* Bullet.10621001 --flat      # fields by pattern, one params.<Table>.<id>.<field> path per value
+eldendisk.exe write --set params.Magic.6230.mp=0            # Scouring Black Flame costs 0 FP
+eldendisk.exe write --set params.Bullet.10625002.life=12    # Black Flame Ritual's flame lasts 12 s (-1: never ends)
+eldendisk.exe write --reset params.Magic.6230.mp            # the game's own value back (also: a row, a pattern, all)
+eldendisk.exe read --param-check                            # the regulation.bin in the game folder against the game, row by row
+```
+
+- A value is checked against the field's type and bit width (an error, not a clamp). A field that holds the id of another row gets a note: an id that matches nothing can crash the game.
+- `--reset` puts back the value the game had **before the first change in this game process** (kept in `params-snapshot.json` in the vault folder, tied to the game's pid and start time; a new game process starts with nothing to put back).
+- **What the game reads when** (measured): a **Magic** row at the cast (cost, flags), a **Bullet** row when the bullet is created (`life` is its lifetime in seconds). A value written stays through Quit to Title and Continue and is gone when the game process ends. A change acts on what is created afterwards: a flame already in the world keeps the values it was born with, so `--reset` changes the next cast, not the one burning.
+- `read --param-check` found the slot-1 build equal to the game on every row of all six tables (Goods 2,330, Magic 318, SpEffect 11,356, Bullet 15,475, AtkParam_Pc 11,017, ShopLineup 1,297 rows): the game does not change the param data when it loads the file, and the rows an extension added are in the game exactly as built. A value changed with `write` shows as a difference too.
+- Plan and results: [docs/phase1-params-workbench.md](docs/phase1-params-workbench.md); where it leads (spells of every kind): [docs/roadmap-innovate-spells.md](docs/roadmap-innovate-spells.md).
 ---
 
 ## 📦 Building Standalone Executable & E2E Dev Pipeline
@@ -266,7 +284,7 @@ The 1.6.2 file was one flat list with a `sources` field; `python code/tools/conv
 ## 🧪 Testing & Quality Assurance
 
 ```commandline
-# Run unit test suite (829 tests; the 24 golden ones need ELDENDISK_REGULATION_ORIG=<the game's original regulation.bin> and take about 3 min)
+# Run unit test suite (about 1,000 tests; the 49 golden ones need ELDENDISK_REGULATION_ORIG=<the game's original regulation.bin> and take a few minutes)
 python -m pytest
 
 # Run soak stability check (V-06)

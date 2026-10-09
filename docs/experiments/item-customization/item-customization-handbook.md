@@ -9,6 +9,8 @@
 > **Companion material:** `tools/` (every script needed to reproduce the build, next to this file) and `../../memory-read-101.md` (how Elden-Disk reads the live game, which is how we *observed* the result)
 
 > **Update 2026-10-09.** The final item (Z4: Flame-style cast, 34,590 runes, stock 1, Int 45 / Fai 15 / Arc 10, FP 80, 2.0 s poise buff) worked in the real game, and **Elden-Disk now builds this file itself** (`extension innovate-spells`, spec 1.7.0): same bytes as `tools/make_item.py --name Z4` (decrypted SHA-256 `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`), swapped in by `run`, put back byte-identical by the vault. The Y1/Y2 "pending" lines below are superseded by Z4. The poise part is not yet confirmed in the game. For more than one item see 17.1 (measurements added) and spec 1.7.0 section 10b.
+>
+> **Update 2026-10-09 (later).** Slot 1 of the back-growth build (appended rows in Goods, Magic, SpEffect and ShopLineup) passed in the game, and Elden-Disk can now *look at and change the tables of the running game*: `read --param Magic.6230` shows any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup by field name, `write --set params.Magic.6230.mp=0` changes a field live (and `--reset` puts the game's own value back), `read --param-check` compares a built `regulation.bin` with the game row by row (the slot-1 build was equal on every row of all six tables). This is the "observe" half of the method in this book without Cheat Engine, and the test bench for the next kinds of spell (clone, buff, enchant, projectile, attack): Magic is read at the cast, Bullet when the bullet is created, and a changed row acts only on what is created afterwards. See [phase1-params-workbench.md](../../phase1-params-workbench.md) and [roadmap-innovate-spells.md](../../roadmap-innovate-spells.md).
 
 ---
 
@@ -844,6 +846,7 @@ Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame G
 | 5 | Visual variants and colour | borrow ids; compare | low |
 | 6 | Custom image | texture archive | high |
 | 7 | Generalise `make_item.py` into a recipe/config format for many items | done for one item: Elden-Disk `spells.design.json` (spec 1.7.0); several items wait for step 3 | low |
+| 8 | Spells of every kind (clone, buff, enchant, projectile, attack) in up to 64 slots | Phase 1 (live read/write of six tables, check against the build) is done; Phase 2 is planned in [roadmap-innovate-spells.md](../../roadmap-innovate-spells.md) | medium |
 
 ---
 

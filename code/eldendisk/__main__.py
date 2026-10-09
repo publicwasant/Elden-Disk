@@ -75,6 +75,16 @@ def build_parser() -> argparse.ArgumentParser:
     rd.add_argument("--export", action="store_true", help="write disk-state.json once and exit")
     rd.add_argument("--live", action="store_true",
                     help="do not stop: keep showing (with --export: keep writing; with --query: those values)")
+    rd.add_argument("--probe-params", action="store_true",
+                    help="list where the param files of the other tables are in memory (read-only, once; with --json too)")
+    rd.add_argument("--param", metavar="TABLE.ID[.FIELD]", nargs="+",
+                    help="rows of the game's tables, once: Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup, e.g. "
+                         "Magic.6230  Bullet.10621000  Magic.6230.mp*  (all fields, or a field / pattern; a tree, --flat for one path per "
+                         "value, --json)")
+    rd.add_argument("--param-check", metavar="FILE", nargs="?", const="", default=None,
+                    help="compare the rows of the six tables in a regulation.bin with the running game, row by row; no FILE: the "
+                         "regulation.bin in the game's folder (what the game loaded; `run` puts the build there); exit code 0 only when "
+                         "they agree (add --json for every difference)")
     rd.add_argument("--live-buffs", action="store_true", help="buffs monitor: one row per buff id, kept current")
     rd.add_argument("--live-animations", action="store_true", help="animation monitor: one row per animation id (for chr_state_ids.json)")
     rd.add_argument("--mapped", action="store_true",
@@ -106,10 +116,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="set values once, e.g. --set vigor=99 level=150 (names: level, runes, attributes, hp, fp, stamina; "
                         "full or short; a group pattern such as attrs.* works). Game params: --set "
                         "params.effects.1621000.effectEndurance=-1 (Black Flame; a pattern such as "
-                        "\"params.effects.*.effectEndurance\" sets every row; typed in full)")
+                        "\"params.effects.*.effectEndurance\" sets every row; typed in full) or any row of the six tables: "
+                        "params.Magic.6230.mp=10 (Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup)")
     w.add_argument("--reset", nargs="+", action="extend", default=[], metavar="NAME",
                    help="put the game's own values back: params.effects.1621000.effectEndurance (one field), "
-                        "params.effects.1621000 (one row), or all")
+                        "params.effects.1621000 (one row), params.Magic.6230.mp (a field changed in this game process), "
+                        "params.Magic.6230 (a row), or all")
     w.add_argument("--refill", metavar="LIST", help="refill current hp, fp, stamina to their maximum once, e.g. hp,fp,stamina")
     add_vault_option(w)
     w.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
@@ -191,6 +203,13 @@ def main(argv=None) -> int:
         if args.timeout <= 0:
             ap.error("--timeout must be positive")
         monitor = args.live_buffs or args.live_animations
+        if args.probe_params and (args.export or args.query is not None or args.live or monitor or args.flat or args.param or args.param_check is not None):
+            ap.error("--probe-params stands alone (only --json goes with it)")
+        if args.param and (args.export or args.query is not None or args.live or monitor):
+            ap.error("--param stands alone (only --flat or --json go with it)")
+        if args.param_check is not None and (args.export or args.query is not None or args.live or monitor or args.flat or args.param
+                                 or args.probe_params):
+            ap.error("--param-check stands alone (only --json goes with it)")
         if args.export and args.query is not None:
             ap.error("--export and --query cannot be combined")
         if monitor and (args.export or args.query is not None or args.live):
@@ -203,8 +222,8 @@ def main(argv=None) -> int:
             ap.error("--flat is for the printed values (read, --query, --live), not --export, --json or the monitors")
         if args.json and (args.live or args.export or monitor):
             ap.error("--json is for the one-shot print and --query only")
-    if args.cmd == "write" and not args.set and not args.refill:
-        ap.error("nothing to do: give --set NAME=VALUE and/or --refill LIST")
+    if args.cmd == "write" and not args.set and not args.refill and not args.reset:
+        ap.error("nothing to do: give --set NAME=VALUE, --refill LIST and/or --reset NAME")
     if args.cmd == "extension" and not args.list and not args.ext_name:
         ap.error("give --list or an extension name (innovate-spells)")
     if args.cmd == "extension" and args.ext_name == "innovate-spells" and args.list:

@@ -57,6 +57,24 @@ Do these after SW2 passed (the item works in the game).
 
 A failed gate on a real build cannot be provoked from the design (the recipe always writes a valid file); the unit and golden tests cover it.
 
+## PW. The params workbench (`read --param`, `write --set params.<Table>...`, `--param-check`; done 2026-10-09)
+
+Game offline, started by `run` (vault ON), a character loaded. Details: [phase1-params-workbench.md](phase1-params-workbench.md).
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| PW1 | `read --probe-params` | the six tables found, each with a chain for `offsets.json` | ✓ |
+| PW2 | `read --param Magic.6230 Bullet.10621001 SpEffect.1621000.change*` (tree), then `--flat` | rows by field name; `--flat` gives `params.<Table>.<id>.<field>  value` | ✓ |
+| PW3 | `write --set params.Magic.6230.mp=10`; `read --param Magic.6230.mp --flat`; `write --reset params.Magic.6230.mp`; `read` again (one game process, no restart) | 10, then 21 (the game's own value) | ✓ |
+| PW4 | `write --set params.Magic.6230.mp=0`; cast Scouring Black Flame and another spell | the Black Flame costs no FP, the other spell its normal FP | ✓ |
+| PW5 | After PW4: Quit Game, Title Screen, Continue, Enter World; cast again | still free: the written value survives a character load (a restart of the game process clears it) | ✓ |
+| PW6 | `write --set params.Bullet.10621000.life=0.2`; cast Black Flame; then `life=10` | 0.2: the fireball vanishes before the target; 10: it arrives as usual; `write --reset all` puts 1.5 back | ✓ |
+| PW7 | `write --set params.Bullet.10625002.life=12` (and `-1`); cast Black Flame Ritual; `write --reset ...` | the flame around the caster lasts much longer (-1: never ends, even after resting at a grace); the reset changes only the next cast | ✓ |
+| PW8 | `write --set params.effects.1626001.changeHpRate=-10` with `effectEndurance=-1` on the burn; hit an enemy | the target is healed instead of burnt and cannot be killed | ✓ |
+| PW9 | `read --param-check` (the build is in the game folder) with no `write` made, or after `write --reset all` | every row of the six tables equal (Goods 2330, Magic 318, SpEffect 11356, Bullet 15475, AtkParam_Pc 11017, ShopLineup 1297); exit 0 | ✓ |
+| PW10 | `write --set params.Magic.6230.mp=5`, then `read --param-check` | exit 1, one difference named: `Magic.6230  mp: file 21, game 5` | [ ] |
+| PW11 | `write --set params.Magic.6230.refId1=999` | accepted with a note that the field looks like the id of another row; do not cast it | [ ] |
+
 ## T. Table move (several items, not built yet)
 
 Written when T1 exists (spec 1.7.0 section 10b): the game must reach the title screen and load a character with the Goods table moved to the end of `regulation.bin`; no item is added.

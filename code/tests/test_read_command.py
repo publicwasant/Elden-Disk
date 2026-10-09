@@ -56,7 +56,7 @@ def rig(tmp_path, monkeypatch):
     def args(**kw):
         d = dict(query=None, export=False, live=False, live_buffs=False, live_animations=False, json=False,
                  timeout=1.0, offsets="x", state_ids="y", vault=str(tmp_path / "vault"), hz=60.0, quiet=False,
-                 mapped=False, unmapped=False, flat=False, no_idle=True, out=str(tmp_path / "out"), export_interval=0.0, timer_interval=0.0, verbose=False)
+                 mapped=False, unmapped=False, flat=False, probe_params=False, param=None, param_check=None, no_idle=True, out=str(tmp_path / "out"), export_interval=0.0, timer_interval=0.0, verbose=False)
         return argparse.Namespace(**{**d, **kw})
 
     return tmp_path, mem, target, box, args

@@ -1,0 +1,96 @@
+# Roadmap: innovate spells (all spell kinds) and the params workbench
+
+_Status: planned. Last updated 2026-10-09. Update the checkboxes as work is done; do not delete finished items._
+
+## Core purpose
+
+Make `extension.json` able to **describe and build every kind of spell the game has**, in up to **64 slots**, as a `regulation.bin` that the game accepts. The number of slots each kind allows is not assumed: it is **measured in the game**.
+
+To get there safely, the live **read/write params** tool (Phase 1) becomes the **workbench** that tests ideas in the running game first, without building a file. The **extension** (Phase 2) then bakes what worked into `regulation.bin`.
+
+Principles that hold throughout:
+- Nothing is called "works" until the user has seen it in the game. Unit tests and the gate only say "nothing we know the game rejects".
+- The gate's envelope (`MAX_CHANGED_BLOCKS`, `MAX_BODY_GROWTH`, `MAX_FRAME_GROWTH`) is raised only after a bigger file has passed in the game. No bypass; a separate test tool builds the bigger file.
+- Existing rows are never changed or removed; spells are new rows.
+- Discuss the design before each large change. The user tests in the game and makes the commits.
+- Every step ends with tests and updated docs (spec, cli-commands, changes, manual test plan).
+
+## Where we are (baseline)
+
+- ✓ Spells built as new rows appended to Goods, Magic, SpEffect, ShopLineup (`grow.py`), all slots the same way.
+- ✓ Gate (R1-R7, G5, G11-G16) judging the file read back from disk.
+- ✓ Slot 1 (`reverse_curse_technique`, a self buff) passed in the real game.
+- ✓ Live read/write for 4 Black Flame SpEffect rows; the reader accepts a table that was grown by an extension (gap between descriptors and data). Since Phase 1: live read/write of any row of six tables, and a check of a built file against the game (below).
+- ✓ Survey of the game's spell kinds from the real Magic table (below).
+- [ ] The T7 test (fifth table, Bullet; encoder fix for repeat-offset states) was built, then reverted by the author before use. A copy is kept by the assistant and can be re-applied.
+
+## What the game's data says about spell kinds
+
+Magic table of 1.17.1: 317 rows; 217 are player spells (127 incantations, 90 sorceries), the rest belong to NPCs and bosses (usable as templates).
+
+| Kind | What the Magic row calls (`refCategory1`) | Player spells | Examples |
+|:--|:--|:-:|:--|
+| projectile / area | Bullet (1) | 172 | Flame Sling, Glintstone Pebble, Lightning Spear, mists, beams, breaths |
+| direct attack | Attack row (0) | 19 | Dragonclaw, Dragonmaw, Scarlet Aeonia, Gavel of Haima |
+| buff | SpEffect (2) | 15 | Flame Grant Me Strength, Fortification, Starlight, Unseen Form |
+| weapon enchant | SpEffect (2) + `isEnchant` | 9 | Black Flame Blade, Electrify Armament, Scholar's Armament |
+| shield enchant | SpEffect (2) + `isShieldEnchant` | 2 | Immutable Shield, Scholar's Shield |
+
+Also true in the data:
+- The cast motion (`refType`, 135 values over 217 spells) is an animation plus a script in the game's own files. It cannot be changed from the regulation; a spell can only pick one that exists, and the motion decides which of the ref slots (`refId1-4`) it fires.
+- `goodsType` of the Goods row follows attack vs support: 5 attack sorcery, 17 support sorcery, 16 attack incantation, 18 support incantation (inferred, not yet tested).
+- Heals (Heal, Great Heal, ...) are Bullet spells that apply a SpEffect; they share one cast motion (34).
+
+Rows a kind needs (all kinds also need Goods + Magic; Shop is optional):
+
+| Kind | Extra tables | Bytes per new row (with 24 B record) |
+|:--|:--|:--|
+| buff | SpEffect | 936 |
+| enchant | SpEffect (to be checked) | 936 |
+| clone | none | 0 |
+| projectile | Bullet (+ SpEffect for another on-hit effect) | 296 per bullet, a spell uses 2-4 |
+| attack | AtkParam_Pc + Bullet | 480 per attack |
+
+What limits the number of slots (to be measured, not guessed):
+- a fixed cost per table that grows (its record array is rewritten: Bullet about 6-7 blocks, AtkParam_Pc about 4-5, SpEffect about 4);
+- bytes added per slot; proven in the game: decoded +219 KB, frame +234,768 B, 13 re-encoded blocks; 466 KB failed;
+- the merchant has only 7 free shop lines (slots 8 and above cannot be sold).
+
+## Phase 1: read/write params as the workbench
+
+Goal: read and write the rows and fields a spell uses, in the running game, for the tables Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup; and check a built `regulation.bin` against the game.
+
+- ✓ **1.0 Study.** Done: see [phase1-params-workbench.md](phase1-params-workbench.md) (facts, open questions A-C, design, decisions for the author). Whether the other tables can be found without a Cheat Engine measurement is decided by the probe in 1.2a.
+- ✓ **1.1 Quick experiment** (2026-10-09, passed in the game). `changeHpRate` set to -1 (with `effectEndurance` -1 and `changeHpPoint` 10 at the same time) on the Black Flame rows: the bullet hits and damages, then the burn **raises** the target's health until it is full. A negative `changeHpRate` heals even with `isHpBurnEffect` set. Second run (same day): `changeHpRate` -10 on the burn and `effectEndurance` -1 (never ends): the target's health jumps up again and again, strongly, and it cannot be killed. So the value is probably a percent of max health per tick (`motionInterval` 0.1 s; the original 0.1 is a small percent per tick, as Black Flame burns by max health), and -1 for the duration means the effect never ends. Still to measure: the exact unit, and the strength and duration that give a useful heal (step 2.3).
+- ✓ **1.2a Probe.** `read --probe-params`: read-only, lists where the other tables are in memory (answers question A). First run in the game (2026-10-09): 191 param files reachable from the global of chain Z, all with the same tail `+0x80 -> +0x80`, one entry every 0x48 bytes. **Found: BulletParam at selector 0x358 and AtkParam_Pc at 0x2C8** (chains `0x3D85F58 -> 0x358 -> 0x80 -> 0x80` and `... -> 0x2C8 -> ...`). Goods, Magic and ShopLineup were not recognised because the reader refused their gap (the slot-1 build has gaps of 184, 168 and 56 bytes, not a multiple of 16); the rule is now a multiple of 4 and the probe has to be run again. Second run: all six tables found (Goods `0x160`, Magic `0x478`, Shop `0x820`, Bullet `0x358`, AtkParam_Pc `0x2C8`, SpEffect `0x4C0`; chains in phase1-params-workbench.md).
+- ✓ **1.2b Generic read.** Any row of the six tables, any field by name (field layouts from `paramdefs.py`). Matches the original file field for field. Coded and tested (`read --param`, `params.catalog` in `offsets.json`, `game/paramlayouts.py`, golden test against the real file); run in the game 2026-10-09: Magic 6230, Bullet 10621001, SpEffect 1621000 and the extension's own Magic row 2230000 all read correctly.
+- ✓ **1.3 Generic write.** Numeric fields only; the first read of a value keeps the game's own value for `--reset` (no hand-written defaults); offline and vault rules as today. `write --set params.<Table>.<id>.<field>`, `--reset` from `params-snapshot.json`. Passed in the game 2026-10-09: `Magic.6230.mp` 21 → 10 → reset → 21, each confirmed by `read`. Question B, first answers (2026-10-09): see 1.3b.
+- ✓ **1.3b Which table the game reads live** (2026-10-09, passed in the game). **Magic** is read when the spell is cast: `Magic.6230.mp=0` makes Scouring Black Flame cost 0 FP, other spells cost the normal FP, and the value is still in force after Quit Game → Title Screen → Continue → Enter World (the tables are not reloaded on a character load; a restart of the game process does reset them). **Bullet** is read when the bullet is spawned: `Bullet.10621000.life` 1.5 → 0.2 makes the fireball vanish after 0.2 s before it reaches the target, `life=10` lets it arrive as before; so `life` is the bullet's lifetime in seconds. `write --reset all` put `life` back to 1.5 from the snapshot. Black Flame Ritual (Magic 6240, flame bullet 10625002, life 4.0): `life=12` keeps the flame around the caster much longer; `life=-1` never ends, not even after resting at a grace. A bullet that already exists keeps the life it was born with: `write --reset` (back to 4.0) changed only the next cast, the old flame stayed until Quit to Title → Continue. So a changed row acts on what is created afterwards, never on what is already in the world. Not measured yet: Goods in the menu, and a SpEffect that is already on a target.
+- ✓ **1.4 Check against the build** (`read --param-check`). Compare the rows of a built `regulation.bin` with the same rows in the running game; report differences. Coded and tested (`commands/paramcheck.py`, `Tables.all_rows`; the file side opens the container with the extension's own code and matches rows by id, byte for byte, then names the fields that differ); Passed in the game 2026-10-09: the slot-1 build (`extension/innovate-spells/regulation.bin`) against the game started with it: Goods 2330, Magic 318, SpEffect 11356, Bullet 15475, AtkParam_Pc 11017, ShopLineup 1297 rows, every row equal. So the game does not change the param data when it loads the file, and the rows the extension added are in the game exactly as built.
+- [ ] Tests (fake memory layer) and docs for each step.
+
+## Phase 2: extension innovate spells, all kinds
+
+Goal: `extension.json` accepts and builds the five kinds; the number of slots per kind is known from the game.
+
+- [ ] **2.0 Spec.** Design the file: `kind`, the template (`from`), fields per kind, how row ids follow the slot, what a slot above 7 may contain. Approved by the author before code.
+- [ ] **2.1 `clone`.** Copy a game spell's Magic row (Goods type from the template), change cost, requirements, shop. No new table. Test in the game: the bullet comes out.
+- [ ] **2.2 `buff` and `enchant`.** `buff` moves under the new spec; weapon and shield enchant (Magic flags + SpEffect). Find out whether enchant needs another table.
+- [ ] **2.3 `projectile`.** New Bullet rows (fifth table): re-apply the T7 work (encoder fix, Bullet definitions), run T7 in the game, then raise the envelope. A Black Flame whose burn becomes a heal (Magic 6210 -> Bullets 10621000 and 10621050, burn SpEffect 1621000 (to be confirmed: the bullet rows that hold it are 10621001 and 10621051)) is the first target.
+- [ ] **2.4 `attack`.** New AtkParam_Pc rows (sixth table) with its own damage.
+- [ ] **2.5 Capacity experiments.** Five and six tables; sizes between 235 KB and 466 KB; the result is the table "slots per kind" in the spec and the new gate numbers.
+- [ ] **2.6 Slots 8-64.** Decide how a spell without a shop line is obtained (for example a replaced item lot, a starting item, or a different shop); implement the one chosen.
+- [ ] Tests, docs, golden hash anchors for each kind; manual test plan entries.
+
+## Open decisions
+
+- [ ] How `from` names a template: a numeric Magic id, or a short spell name (names come from Paramdex, whose licence has not been checked).
+- [ ] How slots 8-64 are obtained in the game (2.6).
+- [ ] Names, descriptions and icons need the game's text and archive files; still out of scope.
+
+## Risks
+
+- The other tables may need a Cheat Engine measurement each (Phase 1).
+- Live edits only take effect where the game reads the row (Bullet at spawn, Magic at cast); some tables may be cached.
+- A cast motion may fire ref slots in a way that does not match a new spell's rows; found only by trying.
+- The envelope may be lower than hoped for five or six tables; the answer is a smaller number of slots, not a gate bypass.

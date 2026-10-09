@@ -119,9 +119,10 @@ class ParamStore:
             return None, f"row count {count} is not plausible"
         expected = lay.descriptors + count * lay.descriptor_size
         # The game's own file has its data right after the descriptors (gap 0). A file that an extension grew in place (rows
-        # appended in the space in front of the old data) has a gap, a multiple of 16, holding the new rows.
+        # appended in the space in front of the old data) has a gap holding the new rows plus the padding that keeps the old data 8-aligned (measured on the
+        # slot-1 build: Goods 184, Magic 168, Shop 56, SpEffect 1824), so the gap is a multiple of 4.
         gap = data_start - expected
-        if gap < 0 or gap % 16 or gap > MAX_GAP:
+        if gap < 0 or gap % 4 or gap > MAX_GAP:
             return None, f"data start {data_start} does not match {count} rows (expected {expected})"
         return (count, data_start), ""
 

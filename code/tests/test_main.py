@@ -223,6 +223,8 @@ def test_write_commands_parse(monkeypatch):
     assert seen["set"] == ["hp=1", "attrs.*=50"] and seen["refill"] == "hp,fp"
     with pytest.raises(SystemExit):
         cli.main(["write"])                   # nothing to do
+    assert cli.main(["write", "--reset", "params.Magic.6230.mp"]) == 0       # a reset alone is something to do
+    assert seen["reset"] == ["params.Magic.6230.mp"] and seen["set"] == []
     with pytest.raises(SystemExit):
         cli.main(["write", "--set"])          # --set needs at least one NAME=VALUE
     for old in (["write", "set", "level=1"], ["write", "refill", "hp"]):
