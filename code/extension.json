@@ -43,7 +43,18 @@
           "Magic.6210.slotLength": 1
         }
       },
-      "<id-3>": null,
+      "black_flame_blade_copy": {
+        "kind": "enchant",
+        "from": 6250,
+        "fp_cost": 5,
+        "shop": {
+          "price": 1000,
+          "stock": -1
+        },
+        "set": {
+          "SpEffect.1626000.effectEndurance": 600
+        }
+      },
       "<id-4>": null,
       "<id-5>": null,
       "<id-6>": null,

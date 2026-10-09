@@ -87,13 +87,13 @@ Put the spell in slot 2 of `extension.json` (slot 1 stays the tested spell; slot
 | CL4 | Exploratory: slot 3 `{"kind": "clone", "from": 4000, "fp_cost": 3, "shop": {"price": 1000}}` (Glintstone Pebble, a sorcery) | does the incantation merchant list a sorcery, and can it be memorized and cast? Either answer is a finding; write it in the roadmap | [ ] |
 | CL5 | `"type": "sorcery"` on the Black Flame clone, then `--add all --dry-run` | error: `` `from` 6210 is an incantation: a clone cannot change `type` ``, nothing is built | [ ] |
 
-## E. `kind: enchant` and `buff` with `from` (Phase 2.2; coded 2026-10-10, game test pending)
+## E. `kind: enchant` and `buff` with `from` (Phase 2.2; E1 passed in the game 2026-10-10; E2-E4 open)
 
 Slot 3 (slot 1 the tested spell, slot 2 the Black Flame clone). `extension innovate-spells --add all --dry-run` must pass the gate before `run`.
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
-| E1 | Slot 3: `"black_flame_blade_copy": {"kind": "enchant", "from": 6250, "fp_cost": 5, "shop": {"price": 1000, "stock": -1}, "set": {"SpEffect.1626000.effectEndurance": 600}}`; `run`; buy, memorize, cast with a weapon | the weapon burns with the Black Flame Blade effect for about 10 minutes (the original 7 s); the real Black Flame Blade still lasts 7 s | [ ] |
+| E1 | Slot 3: `"black_flame_blade_copy": {"kind": "enchant", "from": 6250, "fp_cost": 5, "shop": {"price": 1000, "stock": -1}, "set": {"SpEffect.1626000.effectEndurance": 600}}`; `run`; buy, memorize, cast with a weapon | the weapon burns with the Black Flame Blade effect for about 10 minutes (the original 7 s); the real Black Flame Blade still lasts 7 s. Passed in the game 2026-10-10: the copy is in the merchant's list (5 FP, Fai 17, slots used 1), can be bought, memorized and cast | ✓ |
 | E2 | Add slot 4 `{"kind": "enchant", "from": 6740, "fp_cost": 5, "shop": {"price": 1000, "stock": -1}}` and slot 5 `{"kind": "buff", "from": 6050, "fp_cost": 5, "shop": {...}}`; `run` | the shield enchant copy and the Flame, Grant Me Strength copy are bought, memorized and cast like the originals | [ ] |
 | E3 | `read --param-check` after E1 | every row equal; SpEffect shows the new rows (2 for the blade copy) | [ ] |
 | E4 | `"kind": "enchant", "from": 6050`, then `--add all --dry-run` | error: `from` 6050 is not a weapon or shield enchant, nothing built | [ ] |
