@@ -27,7 +27,19 @@
           "stock": 1
         }
       },
-      "<id-2>": null,
+      "black_flame_copy": {
+        "kind": "clone",
+        "from": 6210,
+        "fp_cost": 5,
+        "requires": {
+          "intelligence": 0,
+          "faith": 0
+        },
+        "shop": {
+          "price": 1000,
+          "stock": -1
+        }
+      },
       "<id-3>": null,
       "<id-4>": null,
       "<id-5>": null,

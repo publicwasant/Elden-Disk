@@ -93,6 +93,34 @@ Every spell is built as **new rows appended to the four tables** (section 10b); 
 
 A spell in slot 8 or higher has no shop line: it is built without `shop` (an error if it has one), and how to obtain it in the game is open. `shop` is optional in every slot. The poise buff is a row of its own (a copy of Endure's `1650` with the damage reduction stripped), no longer an overwrite of SpEffect `102006` as in the Z4 file that was tested.
 
+### 4b. `kind`: `buff` (above) and `clone` (Phase 2.1)
+
+`kind` is optional and defaults to `buff`: everything above is a `buff`, a design without `kind` means exactly what it meant before, and the canonical form of a `buff` has no `kind` key (so the secured file, `build_view` and the Z4 hash do not change). `"kind": "buff"` written out is the same design. The kinds `enchant`, `projectile` and `attack` are named in the error message and are not built yet (Phase 2.2-2.4; plan in [phase2-spells-spec-draft.md](../phase2-spells-spec-draft.md)).
+
+A **`clone`** is a copy of a game spell. The tool copies the template's **Goods row and Magic row** (the Goods row of a spell has the Magic row's id) under the slot's ids, writes the fields the design names, and leaves everything else as the game has it. **The copy keeps pointing at the template's own chain** (Bullet, attack and SpEffect rows), so it behaves like the template; no table other than Goods, Magic and (when sold) ShopLineup grows. The cast animation, icon, sort order and the rest come from the template.
+
+| Field | Meaning |
+|:--|:--|
+| `kind` | `clone` (required) |
+| `from` | the template: a numeric Magic id of a spell a player can cast, e.g. `6210` (Black Flame). Required. An id with no Magic row, with no Goods row (spells of NPCs and bosses have none) or whose Goods row is not a spell (`goodsType` not 5, 16, 17 or 18) is an error |
+| `type` | optional `incantation` or `sorcery`; it must equal the template's (the cast motion and the catalyst follow it): a clone cannot change it. Left out: the template's |
+| `requires` | optional; only the keys given are written (`intelligence`, `faith`, `arcane`, 0-99); the others stay the template's. `{}` or left out: all the template's |
+| `fp_cost`, `stamina_cost` | optional 0-999; left out: the template's |
+| `shop` | as in section 4 (slots 1-7 only) |
+| `set` | optional: `"Magic.<from>.<field>": number` or `"Goods.<from>.<field>": number`, the names `write --set params...` uses; see below |
+| `name`, `description` | stored only |
+
+`cast_motion`, `effect` and `poise_while_casting_seconds` belong to `buff` and are unknown fields in a clone, as `from` and `set` are in a buff.
+
+**`set`.** Each key names the template's row id (`Magic.6210.slotLength`, `Goods.6210.sortId`); the row id must be this spell's `from`, because those are the rows that are copied (a key for a row of the chain, such as `Bullet.10621000.life`, is an error that says it is shared with the game's own spell and is not copied in this version). The field must exist and the value must fit its type or bit width (an error, not a clamp; a whole-number field refuses 2.5; a float32 field takes any finite number). Refused: fields that link rows (`refCategory1-10`, `refId1-10`, `replaceMagicId`, `mtrlItemId`, `limitCancelSpEffectId`, `createLimitGroupId` and the Goods fields that name another row, and `goodsType`), because a copy with a chain of its own comes with the projectile and attack kinds (2.3-2.4); and the fields that have a friendly name in the same design (`mp`, `stamina`, `requirementIntellect`, `requirementFaith`, `requirementLuck`: use `fp_cost`, `stamina_cost`, `requires`). *Deviation from the draft:* the draft allowed an id-like field when the value is an id that exists in the base file; 2.1 refuses id-like fields altogether (a pointer to another row is only safe when the builder checks the whole chain).
+
+```json
+"black_flame_copy": {"kind": "clone", "from": 6210, "fp_cost": 5, "requires": {"intelligence": 0, "faith": 0},
+                     "shop": {"price": 1000, "stock": -1}, "set": {"Magic.6210.slotLength": 1}}
+```
+
+Rows added: Goods, Magic (ids `2230000 + n - 1`) and the shop line; nothing in SpEffect. The footprint declares exactly these. Gate: `check_clone` (G5, G11, G12) reads the **finished file** and recomputes the two rows from the **original** template, then requires the file's Goods and Magic rows to equal them byte for byte (a difference names the fields), the design's costs and requirements to be in the Magic row, every SpEffect the Magic row calls to exist, and the shop line to pass the same checks as a buff's (merchant range, own stock flag, no stray line).
+
 ## 5. How a file is built
 
 1. validate the spec (an invalid spec stops here; the existing build is untouched);
@@ -190,4 +218,4 @@ Measured with this recipe (spells with shop and poise, passing the gate): 1 spel
 
 ## 11. Tests
 
-`code/tests/test_ext_spec.py` (validation, schema agreement), `test_ext_primitives.py` (AES vectors, sequence coding, frame rewriting against `zstandard`, containers, field definitions), `test_ext_service.py` (the decision matrix: first run, unchanged, changed price with its diff, only a name changed, secured file missing or edited, recipe version, other base, damaged record, failed gate, `--secure`, half-done secure; deciding never builds), `test_ext_gate.py` (the optional second decoder), `test_extension_command.py` (CLI, `--secure`, `--list`, what `run` builds, swaps and says), `test_ext_grow.py` (growth on synthetic archives: eviction, overlaps, order of tables, refusals), `test_ext_golden.py` (needs `ELDENDISK_REGULATION_ORIG`: the slot-1 hash, the rows against the Z4 rows, other slots, ids, the 16-spell stop, preflight and gate negatives, the whole flow with the real build); `test_regulation.py`, `test_run_command.py` and `test_host.py` adapted to a caller-named file.
+`code/tests/test_ext_spec.py` (validation, schema agreement), `test_ext_primitives.py` (AES vectors, sequence coding, frame rewriting against `zstandard`, containers, field definitions), `test_ext_service.py` (the decision matrix: first run, unchanged, changed price with its diff, only a name changed, secured file missing or edited, recipe version, other base, damaged record, failed gate, `--secure`, half-done secure; deciding never builds), `test_ext_gate.py` (the optional second decoder), `test_extension_command.py` (CLI, `--secure`, `--list`, what `run` builds, swaps and says), `test_ext_grow.py` (growth on synthetic archives: eviction, overlaps, order of tables, refusals), `test_ext_clone.py` (the `clone` kind: design validation and schema agreement, the recipe on small synthetic tables, and with `ELDENDISK_REGULATION_ORIG` clones of real spells through the gate), `test_ext_golden.py` (needs `ELDENDISK_REGULATION_ORIG`: the slot-1 hash, the rows against the Z4 rows, other slots, ids, the 16-spell stop, preflight and gate negatives, the whole flow with the real build); `test_regulation.py`, `test_run_command.py` and `test_host.py` adapted to a caller-named file.

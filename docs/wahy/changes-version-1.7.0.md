@@ -58,6 +58,10 @@ Measured in the game: a Magic row is read at the cast, a Bullet row when the bul
 - `vault status` no longer lists a file to swap.
 - Version `1.7.0`.
 
+## Phase 2.1: `kind: clone` (2026-10-09)
+
+`extension.json` can now hold a spell that is a copy of a game spell: `{"kind": "clone", "from": 6210, "fp_cost": 5, "requires": {...}, "shop": {...}, "set": {"Magic.6210.slotLength": 1}}`. Only the Goods row and the Magic row of the template are copied (the copy keeps calling the template's Bullet / attack / SpEffect rows), plus the shop line when sold; no new table. `kind` defaults to `buff`, and the canonical form of a buff is unchanged (the Z4 hash and the secured files stay valid). `type` follows the template; `set` takes numbers of the two copied rows; id fields are refused in this version. New gate check `check_clone`. Planned kinds (`enchant`, `projectile`, `attack`) are refused by name. Spec 1.7.0 section 4b. Tests: `test_ext_clone.py` (66). Passed in the game 2026-10-09 (CL1, CL2): bought, memorized and cast like the normal Black Flame at 5 FP; every row equal in `read --param-check`. CL3-CL5 are optional.
+
 ## Decisions taken while implementing
 
 - **Exactly one item per file** (2a) until table growth is researched.

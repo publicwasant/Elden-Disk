@@ -3,7 +3,8 @@
 Every spell, whatever its slot, becomes NEW rows appended to the four tables (grow.py): a Goods row (the inventory item), a Magic
 row (the spell), a SpEffect row (the heal over time), a second SpEffect row when the spell gives poise while casting, and a
 ShopLineup row when it is sold. Each row is a copy of a real row of the game with the fields of the spec written over it.
-Nothing existing is changed or removed. The ids of the rows are fixed by the slot (`slot_rows`), so a spell keeps its ids as long
+A `clone` spell is only a Goods row, a Magic row (copies of the template spell's rows, which keep pointing at the template's
+own chain) and, when sold, a ShopLineup row. Nothing existing is changed or removed. The ids of the rows are fixed by the slot (`slot_rows`), so a spell keeps its ids as long
 as it stays in its slot. Everything a recipe adds is declared in a Footprint, which the preflight checks against the result."""
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from dataclasses import dataclass, field
 
 from .container import ContainerError, Param
 from .defs import Def
-from .spec import CAST_MOTIONS, MAX_SLOTS
+from .spec import CAST_MOTIONS, GOODS_TYPES, MAX_SLOTS
 
 
 class RecipeError(Exception):
@@ -60,6 +61,50 @@ def _row(P: Param, rid: int, what: str):
     return r
 
 
+def _shop_row(P: dict, D: dict, spell: dict, ids: dict):
+    """The ShopLineup row of a spell that is sold (a line of the merchant's group), or None when it has no `shop`."""
+    shop = spell.get("shop")
+    if shop is None:
+        return None
+    if ids["shop_line"] is None:
+        raise RecipeError("slot %d has no shop line (the merchant's group has %d free lines, for slots 1-%d): "
+                          "remove its `shop`" % (spell["slot"], len(SHOP_LINES), len(SHOP_LINES)))
+    data = bytearray(_row(P["shop"], SHOP_CLONE, "shop")[2])
+    for n, v in dict(equipId=ids["goods"], value=shop["price"], sellQuantity=shop["stock"],
+                     eventFlag_forStock=ids["shop_flag"], eventFlag_forRelease=0, equipType=3).items():
+        D["shop"].set(data, n, v)
+    return bytes(data)
+
+
+def clone_rows(P: dict, D: dict, spell: dict):
+    """-> (Goods bytes, Magic bytes) of a `clone` spell: the template's two rows (the Goods row has the Magic row's id), with
+    only the fields the design names written over them. P: the ORIGINAL tables (the template is a row of the game)."""
+    src, who = spell["from"], "%s (slot %d)" % (spell["id"], spell["slot"])
+    magic, goods = P["magic"].find(src), P["goods"].find(src)
+    if magic is None:
+        raise RecipeError("%s: `from` %d is not a Magic row of this game" % (who, src))
+    if goods is None:
+        raise RecipeError("%s: `from` %d has no Goods row (the spells of NPCs and bosses have none): pick a spell a player can cast"
+                          % (who, src))
+    gtype = D["goods"].get(goods[2], "goodsType")
+    if gtype not in GOODS_TYPES:
+        raise RecipeError("%s: Goods %d is not a spell (goodsType %d)" % (who, src, gtype))
+    if spell.get("type", GOODS_TYPES[gtype]) != GOODS_TYPES[gtype]:
+        raise RecipeError("%s: `from` %d is %s %s: a clone cannot change `type` (the cast motion and the catalyst follow it)"
+                          % (who, src, "an" if GOODS_TYPES[gtype] == "incantation" else "a", GOODS_TYPES[gtype]))
+    g, m = bytearray(goods[2]), bytearray(magic[2])
+    r = spell.get("requires", {})
+    friendly = {"mp": spell.get("fp_cost"), "stamina": spell.get("stamina_cost"), "requirementIntellect": r.get("intelligence"),
+                "requirementFaith": r.get("faith"), "requirementLuck": r.get("arcane")}      # Arcane is stored in requirementLuck
+    for name, v in friendly.items():
+        if v is not None:
+            D["magic"].set(m, name, v)
+    for key, v in spell.get("set", {}).items():
+        table, _rid, name = key.split(".", 2)
+        D["magic" if table == "Magic" else "goods"].set(m if table == "Magic" else g, name, v)
+    return bytes(g), bytes(m)
+
+
 def make_rows(P: dict, D: dict, spells: list):
     """P: key -> Param of the ORIGINAL tables, D: key -> Def (keys goods/magic/sp/shop).
     -> (jobs for grow.grow, Footprint). Nothing in P is changed."""
@@ -71,6 +116,14 @@ def make_rows(P: dict, D: dict, spells: list):
             raise RecipeError("slot %d is used by two spells" % spell["slot"])
         seen.add(spell["slot"])
         ids = slot_rows(spell["slot"])
+        if spell.get("kind", "buff") == "clone":
+            g, m = clone_rows(P, D, spell)
+            rows["goods"].append((ids["goods"], g))
+            rows["magic"].append((ids["magic"], m))
+            sh = _shop_row(P, D, spell, ids)
+            if sh is not None:
+                rows["shop"].append((ids["shop_line"], sh))
+            continue
         e, r = spell["effect"], spell["requires"]
         poise = spell.get("poise_while_casting_seconds")
         # SpEffect: heal-over-time buff, start from Heal's own SpEffect, then override. NEGATIVE changeHpPoint heals.
@@ -111,16 +164,9 @@ def make_rows(P: dict, D: dict, spells: list):
             D["goods"].set(data, n, v)
         rows["goods"].append((ids["goods"], bytes(data)))
         # Shop: a line of the merchant's group (only the slots that have one).
-        shop = spell.get("shop")
-        if shop is not None:
-            if ids["shop_line"] is None:
-                raise RecipeError("slot %d has no shop line (the merchant's group has %d free lines, for slots 1-%d): "
-                                  "remove its `shop`" % (spell["slot"], len(SHOP_LINES), len(SHOP_LINES)))
-            data = bytearray(_row(P["shop"], SHOP_CLONE, "shop")[2])
-            for n, v in dict(equipId=ids["goods"], value=shop["price"], sellQuantity=shop["stock"],
-                             eventFlag_forStock=ids["shop_flag"], eventFlag_forRelease=0, equipType=3).items():
-                D["shop"].set(data, n, v)
-            rows["shop"].append((ids["shop_line"], bytes(data)))
+        sh = _shop_row(P, D, spell, ids)
+        if sh is not None:
+            rows["shop"].append((ids["shop_line"], sh))
     for key, short, dummy in (("goods", "EquipParamGoods", DUMMY), ("magic", "Magic", DUMMY), ("sp", "SpEffectParam", DUMMY),
                               ("shop", "ShopLineupParam", SHOP_DUMMY)):
         fp.added[key] = {rid for rid, _ in rows[key]}
@@ -137,6 +183,30 @@ def _same(a, b) -> bool:
     if isinstance(b, int) and not isinstance(b, bool):
         return float(a) == float(b)
     return abs(float(a) - float(b)) <= 1e-6 * max(1.0, abs(float(b)))
+
+
+def _check_shop(P, D, spell, ids, who, row, need, bad):
+    """The shop line of a spell (both kinds): its fields, its own stock flag, the merchant's range; no line when there is no `shop`."""
+    shop = spell.get("shop")
+    line = ids["shop_line"]
+    if shop is not None:
+        if line is None:
+            bad.append("G12: %s has a shop but its slot has no shop line" % who)
+        else:
+            srow = row("shop", line, "shop line")
+            if srow is not None:
+                lname = "shop line %d" % line
+                need("shop", srow, "equipId", ids["goods"], lname, "G12")
+                need("shop", srow, "value", shop["price"], lname, "G12")
+                need("shop", srow, "sellQuantity", shop["stock"], lname, "G12")
+                need("shop", srow, "eventFlag_forStock", ids["shop_flag"], lname, "G12")
+                users = [x[0] for x in P["shop"].rows if D["shop"].get(x[2], "eventFlag_forStock") == ids["shop_flag"]]
+                if users != [line]:
+                    bad.append("G12: %s: stock flag %d is used by shop lines %s; it must belong to line %d only" % (who, ids["shop_flag"], users, line))
+            if not SHOP_RANGE[0] <= line <= SHOP_RANGE[1]:
+                bad.append("G12: %s: shop line %d is outside the merchant's range %d-%d" % (who, line, *SHOP_RANGE))
+    elif line is not None and P["shop"].find(line) is not None:
+        bad.append("G12: %s has no shop but its shop line %d exists in the file" % (who, line))
 
 
 def check_incantation(P: dict, D: dict, spell: dict) -> list:
@@ -189,26 +259,59 @@ def check_incantation(P: dict, D: dict, spell: dict) -> list:
         for name, want in (("staminaRecoverChangeSpeed", e["stamina_regen_speed"]), ("effectEndurance", e["duration_seconds"]),
                            ("motionInterval", e["tick_seconds"]), ("vfxId", VISUAL_VFX[e["visual"]])):
             need("sp", sp, name, want, sname, "G5")
-    shop = spell.get("shop")
-    line = ids["shop_line"]
-    if shop is not None:
-        if line is None:
-            bad.append("G12: %s has a shop but its slot has no shop line" % who)
-        else:
-            srow = row("shop", line, "shop line")
-            if srow is not None:
-                lname = "shop line %d" % line
-                need("shop", srow, "equipId", ids["goods"], lname, "G12")
-                need("shop", srow, "value", shop["price"], lname, "G12")
-                need("shop", srow, "sellQuantity", shop["stock"], lname, "G12")
-                need("shop", srow, "eventFlag_forStock", ids["shop_flag"], lname, "G12")
-                users = [x[0] for x in P["shop"].rows if D["shop"].get(x[2], "eventFlag_forStock") == ids["shop_flag"]]
-                if users != [line]:
-                    bad.append("G12: %s: stock flag %d is used by shop lines %s; it must belong to line %d only" % (who, ids["shop_flag"], users, line))
-            if not SHOP_RANGE[0] <= line <= SHOP_RANGE[1]:
-                bad.append("G12: %s: shop line %d is outside the merchant's range %d-%d" % (who, line, *SHOP_RANGE))
-    elif line is not None and P["shop"].find(line) is not None:
-        bad.append("G12: %s has no shop but its shop line %d exists in the file" % (who, line))
+    _check_shop(P, D, spell, ids, who, row, need, bad)
     if goods is None and magic is not None:
         bad.append("G11: %s: Magic %d exists but its Goods row does not" % (who, ids["magic"]))
+    return bad
+
+
+def _differing_fields(d: Def, a: bytes, b: bytes) -> list:
+    names = [n for n in d.order if d.fields[n][5] == 1 and d.fields[n][0] in ("s8", "u8", "s16", "u16", "s32", "u32", "f32")
+             and d.get(a, n) != d.get(b, n)]
+    return names or ["(bytes outside any named field)"]
+
+
+def check_clone(P: dict, D: dict, spell: dict, B: dict) -> list:
+    """The same kind of reading as check_incantation, for a `clone`: the Goods and Magic rows of the FINISHED file must equal the
+    template's rows in the ORIGINAL (B) with only the fields the design names changed, those fields must hold the design's
+    values, a chain the copy points at must still resolve, and the shop line must be right. -> list of problems."""
+    bad = []
+    ids = slot_rows(spell["slot"])
+    who = "%s (slot %d)" % (spell["id"], spell["slot"])
+
+    def row(key, rid, what):
+        r = P[key].find(rid)
+        if r is None:
+            bad.append("G11: %s: %s row %d is missing" % (who, what, rid))
+            return None
+        return r[2]
+
+    def need(key, data, name, want, what, code="G11"):
+        got = D[key].get(data, name)
+        if not _same(got, want):
+            bad.append("%s: %s: %s.%s is %s, the spec says %s" % (code, who, what, name, got, want))
+
+    goods, magic = row("goods", ids["goods"], "goods"), row("magic", ids["magic"], "magic")
+    try:
+        want_g, want_m = clone_rows(B, D, spell)
+    except RecipeError as e:
+        bad.append("G11: %s" % e)
+        return bad
+    for key, name, got, want in (("goods", "Goods %d" % ids["goods"], goods, want_g), ("magic", "Magic %d" % ids["magic"], magic, want_m)):
+        if got is not None and bytes(got) != want:
+            bad.append("G11: %s: %s is not the template's row %d with only the design's fields changed (differs in: %s)"
+                       % (who, name, spell["from"], ", ".join(_differing_fields(D[key], bytes(got), want))))
+    if magic is not None:
+        mname, r = "Magic %d" % ids["magic"], spell.get("requires", {})
+        for name, want in (("mp", spell.get("fp_cost")), ("stamina", spell.get("stamina_cost")),
+                           ("requirementIntellect", r.get("intelligence")), ("requirementFaith", r.get("faith")),
+                           ("requirementLuck", r.get("arcane"))):
+            if want is not None:
+                need("magic", magic, name, want, mname, "G5")
+        for i in range(1, 11):       # a SpEffect the copy calls must exist (Bullet and attack rows are not in the tables read here)
+            if D["magic"].get(magic, "refCategory%d" % i) == 2:
+                rid = D["magic"].get(magic, "refId%d" % i)
+                if rid >= 0 and P["sp"].find(rid) is None:
+                    bad.append("G11: %s: %s.refId%d points at SpEffect %d, which is not in the file" % (who, mname, i, rid))
+    _check_shop(P, D, spell, ids, who, row, need, bad)
     return bad

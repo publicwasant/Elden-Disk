@@ -43,7 +43,10 @@ def plan(src: Source, spells: list):
     """Apply the recipes to the original -> (the new decoded body, the Footprint of rows the recipes added). The body is LONGER
     than the original: the tables grew (grow.py)."""
     for spell in spells:
-        if spell["type"] != "incantation":
+        kind = spell.get("kind", "buff")
+        if kind not in ("buff", "clone"):
+            raise BuildError("unsupported spell kind %r" % kind)
+        if kind == "buff" and spell["type"] != "incantation":
             raise BuildError("unsupported spell type %r" % spell["type"])
     bnd = Bnd4(src.body)
     D = {k: Def(k) for k in TABLE_FILES}

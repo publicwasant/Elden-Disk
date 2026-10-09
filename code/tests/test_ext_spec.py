@@ -20,7 +20,7 @@ def mutated(fn):
 
 def test_the_shipped_design_is_valid_whatever_the_user_made_of_it():
     n = spec.normalise(json.loads((CODE / "extension.json").read_text(encoding="utf-8")))
-    assert n["spells"] and all(i["effect"]["visual"] in spec.VISUALS for i in n["spells"])
+    assert n["spells"] and all(i["effect"]["visual"] in spec.VISUALS for i in n["spells"] if i.get("kind", "buff") == "buff")
 
 
 def test_the_z4_example_is_valid_and_normalises_to_itself_plus_defaults():

@@ -75,6 +75,18 @@ Game offline, started by `run` (vault ON), a character loaded. Details: [phase1-
 | PW10 | `write --set params.Magic.6230.mp=5`, then `read --param-check` | exit 1, one difference named: `Magic.6230  mp: file 21, game 5` | [ ] |
 | PW11 | `write --set params.Magic.6230.refId1=999` | accepted with a note that the field looks like the id of another row; do not cast it | [ ] |
 
+## CL. `kind: clone` (Phase 2.1; CL1 and CL2 passed in the game 2026-10-09; CL3-CL5 open)
+
+Put the spell in slot 2 of `extension.json` (slot 1 stays the tested spell; slot 2 sells on shop line 100509). `extension innovate-spells --add all --dry-run` must pass the gate before `run`.
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| CL1 | Slot 2: `"black_flame_copy": {"kind": "clone", "from": 6210, "fp_cost": 5, "requires": {"intelligence": 0, "faith": 0}, "shop": {"price": 1000, "stock": -1}}`; `run`; buy it; memorize; cast | a second incantation in the merchant's list (named `?GoodsName?` like slot 1); it casts Black Flame (fireball and burn) and costs 5 FP; the real Black Flame is unchanged. 2026-10-09: the build (13 blocks, gate passed, second decoder agrees) loaded and the world opened; Passed in the game 2026-10-09: the new entry is in the merchant's list (price 1000, `?GoodsName?`, FP cost 5, slots used 1, requirements Int 0 / Fai 0 / Arc 0), it can be bought and memorized, and the cast is the same as the normal Black Flame | ✓ |
+| CL2 | After CL1, `read --param-check` (before any `write`) | every row equal; Goods and Magic show 2 new rows each (2331 / 319 rows with slots 1 and 2; passed 2026-10-09: Goods 2331, Magic 319, SpEffect 11356, Bullet 15475, AtkParam_Pc 11017, ShopLineup 1298, all equal) | ✓ |
+| CL3 | Add `"set": {"Magic.6210.slotLength": 1}` to the clone and `run` | the memory slots the copy takes change from the original's number to 1 (menu); the original is unchanged | [ ] |
+| CL4 | Exploratory: slot 3 `{"kind": "clone", "from": 4000, "fp_cost": 3, "shop": {"price": 1000}}` (Glintstone Pebble, a sorcery) | does the incantation merchant list a sorcery, and can it be memorized and cast? Either answer is a finding; write it in the roadmap | [ ] |
+| CL5 | `"type": "sorcery"` on the Black Flame clone, then `--add all --dry-run` | error: `` `from` 6210 is an incantation: a clone cannot change `type` ``, nothing is built | [ ] |
+
 ## T. Table move (several items, not built yet)
 
 Written when T1 exists (spec 1.7.0 section 10b): the game must reach the title screen and load a character with the Goods table moved to the end of `regulation.bin`; no item is added.

@@ -13,12 +13,34 @@ from __future__ import annotations
 import json
 import re
 
+from .defs import Def
+
 FORMAT = 1                    # the canonical form (what `normalise` returns and the commit record stores)
 SECTION = "innovate_spells"   # the key of this extension in extension.json
 MAX_SLOTS = 64                # proven in the game (T6): 64 new rows in each of Goods, Magic, ShopLineup and SpEffect
 ID_RE = r"[a-z0-9][a-z0-9_-]{0,39}"
 CAST_MOTIONS = {"flame-grant-me-strength": 31, "black-flame-blade": 32}
 VISUALS = ("flame", "flask", "none")   # none: only the cast flash (from Flame! Grant Me Strength), nothing burning on the body afterwards
+KINDS = ("buff", "clone")                        # built today; "buff" is the default so designs from before `kind` stay as they were
+PLANNED_KINDS = ("enchant", "projectile", "attack")     # Phase 2.2-2.4: named so the message is clear, not built yet
+TYPES = ("incantation", "sorcery")
+GOODS_TYPES = {5: "sorcery", 16: "incantation", 17: "sorcery", 18: "incantation"}   # goodsType of a player spell's Goods row
+# `set` (kind clone) writes single numbers of the copied Goods and Magic rows. Fields that name another row are refused (Phase
+# 2.1 clones keep the template's chain; a copy that points elsewhere comes with 2.3/2.4), and so are the fields the spell
+# already has friendly names for, which would silently fight the friendly value.
+SET_TABLES = {"Magic": "magic", "Goods": "goods"}
+SET_KEY_RE = re.compile(r"(Magic|Goods)\.(\d+)\.([A-Za-z_][A-Za-z0-9_]*)")
+FRIENDLY_FIELDS = {"magic": {"fp_cost": "mp", "stamina_cost": "stamina", "intelligence": "requirementIntellect",
+                              "faith": "requirementFaith", "arcane": "requirementLuck"}, "goods": {}}
+ID_FIELDS = {
+    "magic": {"refCategory1", "refCategory2", "refCategory3", "refCategory4", "refCategory5", "refCategory6", "refCategory7",
+              "refCategory8", "refCategory9", "refCategory10", "refId1", "refId2", "refId3", "refId4", "refId5", "refId6",
+              "refId7", "refId8", "refId9", "refId10", "replaceMagicId", "mtrlItemId", "limitCancelSpEffectId",
+              "createLimitGroupId"},
+    "goods": {"refId_default", "refId_1", "replaceItemId", "appearanceReplaceItemId", "refVirtualWepId", "vagrantItemLotId",
+              "vagrantBonusEneDropItemLotId", "vagrantItemEneDropItemLotId", "reinforceGoodsId", "reinforceMaterialId",
+              "goodsType"},      # goodsType decides attack/support and sorcery/incantation: it follows the template
+}
 LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "text", "flame_color", "model"}
 
 
@@ -87,6 +109,141 @@ def empty_text(maximum: int = MAX_SLOTS) -> str:
     return '{\n  "%s": {\n    "maximum": %d,\n    "slots": {\n%s\n    }\n  }\n}\n' % (SECTION, maximum, slots)
 
 
+def _requires(c, it, p, full):
+    """`requires`: all three keys with 0 as default (buff), or only the keys given (clone: the rest stays the template's)."""
+    req = it.get("requires", {} if not full else None)
+    r = {"intelligence": 0, "faith": 0, "arcane": 0}
+    if not isinstance(req, dict):
+        c.bad(p + ".requires", "must be an object")
+        return r if full else {}
+    c.keys(req, p + ".requires", [], list(r))
+    got = {k: c.integer(req, k, p + ".requires", 0, 99, 0) for k in r if k in req}
+    return {**r, **got} if full else got
+
+
+def _shop(c, it, p):
+    """`shop`: optional; a spell without a shop line is built but cannot be bought (slots above 7 have no line)."""
+    shop = it["shop"]
+    s = {"price": 0, "stock": 1}
+    if not isinstance(shop, dict):
+        c.bad(p + ".shop", "must be an object")
+    else:
+        c.keys(shop, p + ".shop", ["price"], ["stock"])
+        s["price"] = c.integer(shop, "price", p + ".shop", 1, 99999999, 1)
+        s["stock"] = c.integer(shop, "stock", p + ".shop", -1, 99, 1)
+        if s["stock"] == 0:
+            c.bad(p + ".shop.stock", "must be -1 (unlimited) or 1 to 99")
+    return s
+
+
+def _buff(c, it, p, n, iid):
+    """A heal-over-time buff built from Flame, Grant Me Strength (the canonical form has no `kind`: it is the default)."""
+    c.keys(it, p, ["type", "requires", "fp_cost"],
+           ["kind", "name", "description", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop"])
+    if it.get("type") != "incantation":
+        c.bad(p + ".type", 'only "incantation" is supported')
+    o = {"slot": n, "id": iid, "type": "incantation",
+         "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
+    o["requires"] = _requires(c, it, p, True)
+    o["fp_cost"] = c.integer(it, "fp_cost", p, 0, 999, 0)
+    o["stamina_cost"] = c.integer(it, "stamina_cost", p, 0, 999, 0)
+    cm = it.get("cast_motion", "flame-grant-me-strength")
+    if cm not in CAST_MOTIONS:
+        c.bad(p + ".cast_motion", "must be one of: " + ", ".join(sorted(CAST_MOTIONS)))
+        cm = "flame-grant-me-strength"
+    o["cast_motion"] = cm
+    eff = it.get("effect", {})
+    e = {"heal_hp_per_tick": 60, "restore_fp_per_tick": 4, "stamina_regen_speed": 100, "tick_seconds": 0.5,
+         "duration_seconds": 15.0, "visual": "flame"}
+    if not isinstance(eff, dict):
+        c.bad(p + ".effect", "must be an object")
+    else:
+        c.keys(eff, p + ".effect", [], list(e))
+        e["heal_hp_per_tick"] = c.integer(eff, "heal_hp_per_tick", p + ".effect", 0, 9999, 60)
+        e["restore_fp_per_tick"] = c.integer(eff, "restore_fp_per_tick", p + ".effect", 0, 999, 4)
+        e["stamina_regen_speed"] = c.integer(eff, "stamina_regen_speed", p + ".effect", 0, 9999, 100)
+        e["tick_seconds"] = c.real(eff, "tick_seconds", p + ".effect", 0.1, 60, 0.5)
+        e["duration_seconds"] = c.real(eff, "duration_seconds", p + ".effect", 0.5, 600, 15.0)
+        v = eff.get("visual", "flame")      # left out: flame. An explicit null means "nothing on the body", same as "none"
+        if "visual" in eff and v is None:
+            v = "none"
+        if v not in VISUALS:
+            c.bad(p + ".effect.visual", "must be one of: " + ", ".join(VISUALS))
+            v = "flame"
+        e["visual"] = v
+    o["effect"] = e
+    if "poise_while_casting_seconds" in it:
+        o["poise_while_casting_seconds"] = c.real(it, "poise_while_casting_seconds", p, 0.1, 10, 2.0)
+    if "shop" in it:
+        o["shop"] = _shop(c, it, p)
+    return o
+
+
+def _clone(c, it, p, n, iid):
+    """A copy of a game spell's Goods and Magic rows: the copy keeps pointing at the template's own chain (Bullet, attack,
+    SpEffect rows), so it behaves like the template; cost, requirements, shop and `set` are the spell's own. What is not named
+    stays the template's, so the canonical form holds only what the design says."""
+    c.keys(it, p, ["kind", "from"], ["type", "name", "description", "requires", "fp_cost", "stamina_cost", "shop", "set"])
+    o = {"slot": n, "id": iid, "kind": "clone", "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
+    src = c.integer(it, "from", p, 1, 2**31 - 1)
+    if src is not None:
+        o["from"] = src
+    if "type" in it:
+        t = it["type"]
+        if t not in TYPES:
+            c.bad(p + ".type", "must be one of: " + ", ".join(TYPES))
+        else:
+            o["type"] = t           # checked against the template when the rows are built: a clone cannot change it
+    o["requires"] = _requires(c, it, p, False)
+    for k, hi in (("fp_cost", 999), ("stamina_cost", 999)):
+        v = c.integer(it, k, p, 0, hi)
+        if v is not None:
+            o[k] = v
+    if "shop" in it:
+        o["shop"] = _shop(c, it, p)
+    if "set" in it:
+        o["set"] = _set(c, it["set"], p + ".set", o)
+    return o
+
+
+def _set(c, raw, path, o):
+    """`set`: {"Magic.<from>.<field>": number, "Goods.<from>.<field>": number} -> the same, values checked against the field."""
+    if not isinstance(raw, dict):
+        c.bad(path, "must be an object: \"Magic.<from>.<field>\": number")
+        return {}
+    out = {}
+    for key, val in raw.items():
+        kp = "%s[%s]" % (path, key)
+        m = SET_KEY_RE.fullmatch(key) if isinstance(key, str) else None
+        if not m:
+            c.bad(kp, "a key looks like Magic.<from>.<field> or Goods.<from>.<field> (the row id is the spell's `from`)")
+            continue
+        table, rid, name = SET_TABLES[m.group(1)], int(m.group(2)), m.group(3)
+        if "from" in o and rid != o["from"]:
+            c.bad(kp, "only the copied rows can be set: the row id must be this spell's `from` (%d). Other rows (the template's "
+                      "Bullet, attack and SpEffect chain) are shared with the game's own spell and are not copied in this version" % o["from"])
+            continue
+        d = Def(table)
+        why = d.problem(name, val)
+        if why:
+            c.bad(kp, why)
+            continue
+        if name in ID_FIELDS[table]:
+            c.bad(kp, "%s is an id or type that links rows; it follows the template and is not set here (a copy with its own "
+                      "chain comes with the projectile and attack kinds)" % name)
+            continue
+        friendly = [k for k, f in FRIENDLY_FIELDS[table].items() if f == name]
+        if friendly:
+            c.bad(kp, "%s already has a friendly field (%s): use that" % (name, "requires." + friendly[0] if friendly[0] in ("intelligence", "faith", "arcane") else friendly[0]))
+            continue
+        if d.fields[name][0] == "f32":
+            val = float(val)
+        elif isinstance(val, float):
+            val = int(val)
+        out[key] = val
+    return out
+
+
 def normalise(data) -> dict:
     """Validate and fill in defaults -> the canonical form {"format", "maximum", "spells": [{"slot", "id", ...}]}, filled slots
     only, in slot order. Raises SpecError listing every problem found."""
@@ -119,62 +276,14 @@ def normalise(data) -> dict:
         if not isinstance(it, dict):
             c.bad(p, "must be an object (or null for an empty slot)")
             continue
-        c.keys(it, p, ["type", "requires", "fp_cost"],
-               ["name", "description", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop"])
-        if it.get("type") != "incantation":
-            c.bad(p + ".type", 'only "incantation" is supported')
-        o = {"slot": n, "id": iid, "type": "incantation",
-             "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
-        req = it.get("requires")
-        r = {"intelligence": 0, "faith": 0, "arcane": 0}
-        if not isinstance(req, dict):
-            c.bad(p + ".requires", "must be an object")
-        else:
-            c.keys(req, p + ".requires", [], list(r))
-            for k in r:
-                r[k] = c.integer(req, k, p + ".requires", 0, 99, 0)
-        o["requires"] = r
-        o["fp_cost"] = c.integer(it, "fp_cost", p, 0, 999, 0)
-        o["stamina_cost"] = c.integer(it, "stamina_cost", p, 0, 999, 0)
-        cm = it.get("cast_motion", "flame-grant-me-strength")
-        if cm not in CAST_MOTIONS:
-            c.bad(p + ".cast_motion", "must be one of: " + ", ".join(sorted(CAST_MOTIONS)))
-            cm = "flame-grant-me-strength"
-        o["cast_motion"] = cm
-        eff = it.get("effect", {})
-        e = {"heal_hp_per_tick": 60, "restore_fp_per_tick": 4, "stamina_regen_speed": 100, "tick_seconds": 0.5,
-             "duration_seconds": 15.0, "visual": "flame"}
-        if not isinstance(eff, dict):
-            c.bad(p + ".effect", "must be an object")
-        else:
-            c.keys(eff, p + ".effect", [], list(e))
-            e["heal_hp_per_tick"] = c.integer(eff, "heal_hp_per_tick", p + ".effect", 0, 9999, 60)
-            e["restore_fp_per_tick"] = c.integer(eff, "restore_fp_per_tick", p + ".effect", 0, 999, 4)
-            e["stamina_regen_speed"] = c.integer(eff, "stamina_regen_speed", p + ".effect", 0, 9999, 100)
-            e["tick_seconds"] = c.real(eff, "tick_seconds", p + ".effect", 0.1, 60, 0.5)
-            e["duration_seconds"] = c.real(eff, "duration_seconds", p + ".effect", 0.5, 600, 15.0)
-            v = eff.get("visual", "flame")      # left out: flame. An explicit null means "nothing on the body", same as "none"
-            if "visual" in eff and v is None:
-                v = "none"
-            if v not in VISUALS:
-                c.bad(p + ".effect.visual", "must be one of: " + ", ".join(VISUALS))
-                v = "flame"
-            e["visual"] = v
-        o["effect"] = e
-        if "poise_while_casting_seconds" in it:
-            o["poise_while_casting_seconds"] = c.real(it, "poise_while_casting_seconds", p, 0.1, 10, 2.0)
-        if "shop" in it:       # optional: a spell without a shop line is built but cannot be bought (slots above 7 have no line)
-            shop = it["shop"]
-            s = {"price": 0, "stock": 1}
-            if not isinstance(shop, dict):
-                c.bad(p + ".shop", "must be an object")
-            else:
-                c.keys(shop, p + ".shop", ["price"], ["stock"])
-                s["price"] = c.integer(shop, "price", p + ".shop", 1, 99999999, 1)
-                s["stock"] = c.integer(shop, "stock", p + ".shop", -1, 99, 1)
-                if s["stock"] == 0:
-                    c.bad(p + ".shop.stock", "must be -1 (unlimited) or 1 to 99")
-            o["shop"] = s
+        kind = it.get("kind", "buff")
+        if kind in PLANNED_KINDS:
+            c.bad(p + ".kind", "%r is planned but not built yet (Phase 2.2-2.4); built kinds: %s" % (kind, ", ".join(KINDS)))
+            continue
+        if kind not in KINDS:
+            c.bad(p + ".kind", "must be one of: " + ", ".join(KINDS))
+            continue
+        o = _clone(c, it, p, n, iid) if kind == "clone" else _buff(c, it, p, n, iid)
         out.append(o)
     if c.problems:
         raise SpecError(c.problems)

@@ -73,8 +73,8 @@ Goal: read and write the rows and fields a spell uses, in the running game, for 
 
 Goal: `extension.json` accepts and builds the five kinds; the number of slots per kind is known from the game.
 
-- [ ] **2.0 Spec.** Design the file: `kind`, the template (`from`), fields per kind, how row ids follow the slot, what a slot above 7 may contain. Approved by the author before code.
-- [ ] **2.1 `clone`.** Copy a game spell's Magic row (Goods type from the template), change cost, requirements, shop. No new table. Test in the game: the bullet comes out.
+- ✓ **2.0 Spec.** Design the file: `kind`, the template (`from`), fields per kind, how row ids follow the slot, what a slot above 7 may contain. Approved by the author before code. Draft written 2026-10-09: [phase2-spells-spec-draft.md](phase2-spells-spec-draft.md) (one engine: copy the chain's own rows, then `set`; decisions: `from` = numeric Magic id, slots 8-64 later, names stored only). Approved by the author 2026-10-09 (all six decisions); the one change made while building 2.1 is noted in the draft (section 9).
+- ✓ **2.1 `clone`.** Coded, tested and passed in the game (2026-10-09): copy a game spell's Goods and Magic rows (it keeps the template's chain), change cost, requirements, shop and single numbers with `set`; `kind` defaults to `buff`, so Z4 and the secured files are unchanged; `check_clone` in the gate; 66 new tests. Game, 2026-10-09: a file with slot 1 (buff) and a Black Flame clone built (13 blocks), the game loaded it, and `read --param-check` found every row equal (Goods 2331, Magic 319, ShopLineup 1298). Bought, memorized and cast: the same as the normal Black Flame, at the new cost of 5 FP and with the new requirements (CL1). Still open, optional: CL3 (`set`), CL4 (a sorcery in the incantation merchant), CL5 (type refusal). Spec 1.7.0 section 4b.
 - [ ] **2.2 `buff` and `enchant`.** `buff` moves under the new spec; weapon and shield enchant (Magic flags + SpEffect). Find out whether enchant needs another table.
 - [ ] **2.3 `projectile`.** New Bullet rows (fifth table): re-apply the T7 work (encoder fix, Bullet definitions), run T7 in the game, then raise the envelope. A Black Flame whose burn becomes a heal (Magic 6210 -> Bullets 10621000 and 10621050, burn SpEffect 1621000 (to be confirmed: the bullet rows that hold it are 10621001 and 10621051)) is the first target.
 - [ ] **2.4 `attack`.** New AtkParam_Pc rows (sixth table) with its own damage.
@@ -84,13 +84,13 @@ Goal: `extension.json` accepts and builds the five kinds; the number of slots pe
 
 ## Open decisions
 
-- [ ] How `from` names a template: a numeric Magic id, or a short spell name (names come from Paramdex, whose licence has not been checked).
+- ✓ How `from` names a template: a numeric Magic id (author, 2026-10-09; a short name would need Paramdex, whose licence has not been checked).
 - [ ] How slots 8-64 are obtained in the game (2.6).
 - [ ] Names, descriptions and icons need the game's text and archive files; still out of scope.
 
 ## Risks
 
-- The other tables may need a Cheat Engine measurement each (Phase 1).
-- Live edits only take effect where the game reads the row (Bullet at spawn, Magic at cast); some tables may be cached.
+- ✓ (Phase 1) The other tables did not need a Cheat Engine measurement: `read --probe-params` found them all from the known global.
+- Live edits only take effect where the game reads the row: measured Magic at the cast, Bullet at spawn, and a changed row acts on what is created afterwards; Goods in the menu and SpEffect on a target are not measured.
 - A cast motion may fire ref slots in a way that does not match a new spell's rows; found only by trying.
 - The envelope may be lower than hoped for five or six tables; the answer is a smaller number of slots, not a gate bypass.

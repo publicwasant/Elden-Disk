@@ -74,8 +74,15 @@ def verify(data: bytes, src: Source, spells: list) -> Verdict:
     except Exception as e:
         v.problems.append("G11: the tables of the file cannot be read (%s)" % e)
         return v
+    base = None
     for spell in spells:
-        v.problems += recipes.check_incantation(P, D, spell)
+        if spell.get("kind", "buff") == "clone":
+            if base is None:       # the original's tables: the template rows a clone is compared with
+                obnd = Bnd4(src.body)
+                base = {k: container.Param(obnd.get(f).data) for k, f in TABLE_FILES.items()}
+            v.problems += recipes.check_clone(P, D, spell, base)
+        else:
+            v.problems += recipes.check_incantation(P, D, spell)
     csize = struct.unpack(">I", dcx[0x20:0x24])[0]
     state, other = second_decode(dcx[0x4C:0x4C + csize])
     if state == "unavailable":
