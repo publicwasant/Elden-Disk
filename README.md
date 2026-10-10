@@ -116,13 +116,12 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
 | `extension --list` \| `extension innovate-items spells --add all\|ID\|--secure` | **Extension** | Build things for the game outside the game. `innovate-items spells` turns `extension.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
-| `build` | Tool | Standalone `./build/dist/eldendisk/eldendisk.exe` plus a `README.md` next to it (quick start + the exe command reference) |
 
 **Exit codes:** `0` ok · `1` error / not applied · `2` unsupported exe, or a read-only `params` field named in `write` · `3` EAC · `4` restore pending · `5` no valid session · `130` interrupted.
 
 Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `animations` (now `read --live-buffs` / `--live-animations`), JSON output of `run` (now `read --export`), the verbs `read effects|animations|export`, `write set|refill` (now flags) and `--once` (a read without `--live` is already one shot). Values are addressed by name only; there are no memory addresses or scans.
 
-**Full references:** [docs/cli-commands-exe.md](docs/cli-commands-exe.md) (executable) · [docs/cli-commands.md](docs/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md) · [params workbench (Phase 1)](docs/phase1-params-workbench.md) · [roadmap: innovate spells, all kinds](docs/roadmap-innovate-spells.md)
+**Full references:** [docs/guilde/cli-commands-exe.md](docs/guilde/cli-commands-exe.md) (executable) · [docs/guilde/cli-commands.md](docs/guilde/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/experiments/extensional/innovate-items/spell/docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-tests/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-tests/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md) · [params workbench (Phase 1)](docs/experiments/extensional/innovate-items/spell/docs/phase1-params-workbench.md) · [roadmap: innovate spells, all kinds](docs/experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md)
 
 ---
 
@@ -145,7 +144,7 @@ next run, design unchanged: regulation.secured.bin is swapped, nothing is built
                 bin\regulation.bin     the game's own file, kept to put it back
 ```
 
-- **The design is `code/extension.json`** (section `innovate_items.spells`: 64 slots; the JSON schema is `spells.schema.json` in the `innovate_items.spells` package). You edit it; `build -c -em` embeds it in the exe (like `offsets.json`). An `extension.json` next to the exe, or `--spec FILE`, wins.
+- **The design is `code/extension.json`** (section `innovate_items.spells`: 64 slots; the JSON schema is `spells.schema.json` in the `innovate_items.spells` package). You edit it; the dev pipeline's build embeds it in the exe (like `offsets.json`). An `extension.json` next to the exe, or `--spec FILE`, wins.
 - **Design → built → secured.** `run` builds when there is no secured copy or the design changed (about 20 s) and prints why, with a field-by-field diff. When it worked in the game, close the game and run `extension innovate-items spells --secure`; after that `run` swaps the secured copy without building. Changing only `name` / `description` does not count as a change. Delete `spells.commit.json` to force a build.
 - **Always on the game's own file.** The game's `regulation.bin` is checked against the known 1.17.1 original on every path; a modified file is refused with a `vault restore` hint.
 - **Depends on the vault, like `write`.** No `--extension-on` flag: with `--vault-off` nothing is built or swapped. `extension --list` and `extension innovate-items spells --add all` build without starting the game.
@@ -229,26 +228,21 @@ eldendisk.exe read --param-check                            # the regulation.bin
 - `--reset` puts back the value the game had **before the first change in this game process** (kept in `params-snapshot.json` in the vault folder, tied to the game's pid and start time; a new game process starts with nothing to put back).
 - **What the game reads when** (measured): a **Magic** row at the cast (cost, flags), a **Bullet** row when the bullet is created (`life` is its lifetime in seconds). A value written stays through Quit to Title and Continue and is gone when the game process ends. A change acts on what is created afterwards: a flame already in the world keeps the values it was born with, so `--reset` changes the next cast, not the one burning.
 - `read --param-check` found the slot-1 build equal to the game on every row of all six tables (Goods 2,330, Magic 318, SpEffect 11,356, Bullet 15,475, AtkParam_Pc 11,017, ShopLineup 1,297 rows): the game does not change the param data when it loads the file, and the rows an extension added are in the game exactly as built. A value changed with `write` shows as a difference too.
-- Plan and results: [docs/phase1-params-workbench.md](docs/phase1-params-workbench.md); where it leads (spells of every kind): [docs/roadmap-innovate-spells.md](docs/roadmap-innovate-spells.md).
+- Plan and results: [docs/…/spell/docs/phase1-params-workbench.md](docs/experiments/extensional/innovate-items/spell/docs/phase1-params-workbench.md); where it leads (spells of every kind): [docs/…/spell/docs/roadmap-innovate-spells.md](docs/experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md).
 ---
 
 ## 📦 Building Standalone Executable & E2E Dev Pipeline
 
 ```commandline
-# Build standalone executable with embedded configs
-python -m eldendisk build -c -em
+# The E2E pipeline: all tests -> clean build of ./build/dist/eldendisk.exe (the .json configs embedded) -> a status report
+# (where the exe is, size, SHA-256, version, embedded files, time of each step). It ends there; it does not start the game.
+python code/tools/dev_pipeline.py
 
-# Run E2E pipeline (pre-check tests + build with embedded configs + launch; `run -v` swaps the secured copy or builds, with the gate)
-python code/tools/dev_pipeline.py --dry-run
+# Options: --skip-tests, --no-embed (copy the .json files next to the exe), --engine nuitka, --icon ICO
+python code/tools/dev_pipeline.py --skip-tests
 
-# Options the pipeline does not know go to `run`: ends in `eldendisk.exe run -v --vault-off`
-python code/tools/dev_pipeline.py --vault-off
-
-# Extension options go to `run` too (a failed gate or build stops `run` before the game starts)
-python code/tools/dev_pipeline.py --spec my-design.json
-
-# Try a ready regulation.bin in the game (the vault swaps it in and puts the original back)
-python code/tools/dev_pipeline.py --regulation t1/regulation.T1-goods-moved.bin
+# Then start it yourself (it can sit anywhere; everything it produces goes to %LOCALAPPDATA%\EldenDisk)
+.\build\dist\eldendisk.exe run -v
 ```
 
 ---

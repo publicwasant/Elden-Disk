@@ -1,6 +1,6 @@
-# Standalone Executable CLI Commands Reference (`eldendisk.exe`)
+# Python CLI Commands Reference (`python -m eldendisk`)
 
-Complete reference for the command line of **EldenDisk** (`eldendisk.exe <command> [options]`). Tool names: **Elden-Disk** / `eldendisk` / Elden-Disk Memory I/O (Read/Write) Tools.
+Complete reference for the command line of **EldenDisk** (`python -m eldendisk <command> [options]`). Tool names: **Elden-Disk** / `eldendisk` / Elden-Disk Memory I/O (Read/Write) Tools.
 
 ---
 
@@ -14,9 +14,9 @@ Complete reference for the command line of **EldenDisk** (`eldendisk.exe <comman
 | **Writer** | `write ...` | edit values in the running game | read + write, **only inside a session** |
 
 ```commandline
-Terminal 0:  eldendisk.exe run
-Terminal 1:  eldendisk.exe read --live
-Terminal 2:  eldendisk.exe write --set vigor=99
+Terminal 0:  python -m eldendisk run
+Terminal 1:  python -m eldendisk read --live
+Terminal 2:  python -m eldendisk write --set vigor=99
 ```
 
 > [!IMPORTANT]
@@ -33,7 +33,7 @@ Terminal 2:  eldendisk.exe write --set vigor=99
 ## 1. `run` (host)
 
 ```commandline
-eldendisk.exe run [options]
+python -m eldendisk run [options]
 ```
 
 Preflight → snapshot (SHA-256 verified) → session record → launch offline → wait for the game → restore → verify → clean up. `run` prints its events only; it does not read the game and writes no JSON (use `read --export`).
@@ -64,9 +64,9 @@ Preflight → snapshot (SHA-256 verified) → session record → launch offline 
 - `--vault DIR` (where the vault lives) and `--vault-off` (no protection) are unrelated.
 
 ```commandline
-eldendisk.exe run --vault-off -v
-eldendisk.exe read --live --query runes        (other terminal)
-eldendisk.exe read --live-buffs               (other terminal)
+python -m eldendisk run --vault-off -v
+python -m eldendisk read --live --query runes        (other terminal)
+python -m eldendisk read --live-buffs               (other terminal)
 ```
 
 **Vault location.** Resolved the same way by every command: `--vault` → the path remembered by an earlier `run --vault X` → `%LOCALAPPDATA%\EldenDisk\vault`. It is deliberately not next to the exe (a rebuild deletes `build/`). If the remembered folder is unavailable (drive missing) the command stops with an error instead of creating a fresh, empty vault.
@@ -96,7 +96,7 @@ With `-v` the banner and these lines are replaced by the log itself (see "Log an
 ## 2. `read` (reader)
 
 ```commandline
-eldendisk.exe read [--query NAME [NAME ...]] [--flat] [--export] [--live] [--live-buffs] [--live-animations] [--probe-params] [--param TABLE.ID ...] [--param-check [FILE]] [options]
+python -m eldendisk read [--query NAME [NAME ...]] [--flat] [--export] [--live] [--live-buffs] [--live-animations] [--probe-params] [--param TABLE.ID ...] [--param-check [FILE]] [options]
 ```
 
 Read-only: it never opens a write handle. Works with or without `run` (a game started from Steam's Play button has EasyAntiCheat, which hides the game from `read`: exit `3`, start it with `run`). Stops with exit `3` if EasyAntiCheat is or becomes loaded.
@@ -124,7 +124,7 @@ Read-only: it never opens a write handle. Works with or without `run` (a game st
 **`--flat`** switches every printed view (`read`, `--query`, with or without `--live`) from the tree to one `full.path  value` row per value, no headings: easy to read across groups and to filter (`read --flat | findstr vigor`). It combines with `--query` and `--live` (redrawn and highlighted the same way); it is refused with `--export`, `--json` and the two monitors, which have their own layouts.
 
 ```commandline
-eldendisk.exe read --query character.runes.* attrs.vigor --flat --live
+python -m eldendisk read --query character.runes.* attrs.vigor --flat --live
  character.runes.total       40,402,709
  character.runes.baseline    40,401,505
  character.runes.delta       +1,204
@@ -132,21 +132,21 @@ eldendisk.exe read --query character.runes.* attrs.vigor --flat --live
 ```
 
 ```commandline
-eldendisk.exe read --query runes
+python -m eldendisk read --query runes
  character
    runes
      total     40,402,709
      baseline  40,401,505
      delta     +1,204
-eldendisk.exe read --query hp.max
+python -m eldendisk read --query hp.max
  character.vitals.hit_point.maximum  1,460
-eldendisk.exe read --query attrs.*
+python -m eldendisk read --query attrs.*
  character
    attributes
      vigor  80
      mind   60
      ...
-eldendisk.exe read --query character.runes.* character.buffs.* --live
+python -m eldendisk read --query character.runes.* character.buffs.* --live
  character
    runes
      total     40,402,709
@@ -155,7 +155,7 @@ eldendisk.exe read --query character.runes.* character.buffs.* --live
      311100
        name        Gold Scarab
        categories  TALISMANS
-eldendisk.exe read --query vigr
+python -m eldendisk read --query vigr
  ✖  read   unknown name 'vigr'; did you mean character.attributes.vigor, ...
 ```
 
@@ -180,7 +180,7 @@ A terminal that cannot move the cursor (IDE run window, pipe, `TERM=dumb`) gets 
 | `--hz N` | `60` (1-120) | live | Reads per second. 60 matches the game's frame lock; up to 120 samples every frame. |
 | `-q`, `--quiet` | off | `--live-buffs` | Hide short-lived internal buffs (0 ≤ duration < 1 s). |
 | `--mapped` / `--unmapped` | off | `--live-buffs`, `--live-animations` | Show only ids that are / are not in `chr_state_ids.json`. |
-| `--out DIR` | `<tool>/output` | `--export` | Directory of `disk-state.json`. |
+| `--out DIR` | `%LOCALAPPDATA%\EldenDisk\output` | `--export` | Directory of `disk-state.json`. |
 | `--no-idle` | off | `--export --live` | Keep reading while the game window is unfocused. |
 | `--export-interval SEC` | `0.5` | `--export --live` | Minimum seconds between file writes. |
 | `--timer-interval SEC` | `2` | `--export --live` | Seconds between writes that only change a buff countdown; `0` = never. |
@@ -216,7 +216,7 @@ A terminal that cannot move the cursor (IDE run window, pipe, `TERM=dumb`) gets 
 ## 3. `write` (writer)
 
 ```commandline
-eldendisk.exe write [--vault DIR] [--offsets FILE] [-v] --set NAME=VALUE [NAME=VALUE ...] [--refill LIST] [--reset NAME [NAME ...]]
+python -m eldendisk write [--vault DIR] [--offsets FILE] [-v] --set NAME=VALUE [NAME=VALUE ...] [--refill LIST] [--reset NAME [NAME ...]]
 ```
 
 Applies edits **once**, reads them back, closes and exits. Run it again to re-apply. `--set` may be repeated; `--vault`, `--offsets` and `-v` can come before or after. Prints one `✓ write  NAME = VALUE` line per applied edit (or `values already match`), no `-v` needed.
@@ -259,22 +259,22 @@ Params exist only in the game's memory: they are gone when the game closes. A bu
 Values the game or the tool computes cannot be set, and the error says why: `hp.max` / `fp.base` ... (the game recomputes them from your stats; set the attribute), `runes.delta` / `runes.baseline` (computed by the tool), buffs, animations and `systems.*`. Bare group names (`attributes`, `vitals`) are refused as groups.
 
 ```commandline
-eldendisk.exe write --set vigor=90 hit_point=1 --refill fp
+python -m eldendisk write --set vigor=90 hit_point=1 --refill fp
  ✓  write  vigor = 90
  ✓  write  hp = 1
  ✓  write  fp = 350
-eldendisk.exe write --set params.effects.1621000.effectEndurance=-1
+python -m eldendisk write --set params.effects.1621000.effectEndurance=-1
  ✓  write  params.effects.1621000.effectEndurance = -1.0
-eldendisk.exe write --set "params.effects.*.effectEndurance=-1"
+python -m eldendisk write --set "params.effects.*.effectEndurance=-1"
  ·  write  params.effects.*.effectEndurance matches 4 values: 1621000.effectEndurance, 1623000.effectEndurance, 1625000.effectEndurance, 1626001.effectEndurance
  ✓  write  params.effects.1621000.effectEndurance = -1.0
  ...
-eldendisk.exe write --set params.effects.1621000.vfxId=0
+python -m eldendisk write --set params.effects.1621000.vfxId=0
  ✖  write  params.effects.1621000.vfxId is locked (read-only); nothing was written
-eldendisk.exe write --reset all
+python -m eldendisk write --reset all
  ✓  write  params.effects.1621000.effectEndurance = 2.0
  ...
-eldendisk.exe write --set hp.max=9999
+python -m eldendisk write --set hp.max=9999
  ✖  write  'hp.max' cannot be set: computed by the game from your stats (set the attribute, or use hp/fp/stamina for the current value)
 ```
 
@@ -283,7 +283,7 @@ eldendisk.exe write --set hp.max=9999
 ## 4. `vault` (save vault tools)
 
 ```commandline
-eldendisk.exe vault [--vault DIR] status | list | verify | restore | keep | prune
+python -m eldendisk vault [--vault DIR] status | list | verify | restore | keep | prune
 ```
 
 | Subcommand | Description |
@@ -296,7 +296,7 @@ eldendisk.exe vault [--vault DIR] status | list | verify | restore | keep | prun
 | `prune --keep N` | Delete older snapshots (refused while a restore is owed). |
 
 ```commandline
-eldendisk.exe vault status
+python -m eldendisk vault status
  ✖  session RESTORE_PENDING: the live save is NOT trusted until it is restored
      since      2026-10-06T12:00:00+07:00
      snapshot   %LOCALAPPDATA%\EldenDisk\vault\20261006-120000
@@ -307,15 +307,15 @@ eldendisk.exe vault status
 
 A record from 1.6.0 / 1.6.1 (`PENDING_RESTORE.json`) is read as `RESTORE_PENDING`.
 
-**The other world (1.6.4, files from 1.7.0).** A `regulation.bin` named by `run` (the secured copy or the build from `extension.json` when the vault is ON, or `--regulation FILE`) replaces the game's for a `run` with the vault ON; the game's own file is kept in each snapshot (`bin\regulation.bin`) and put back, with the save, by the same restore (`run`, `vault restore`; `vault keep` puts it back first). `--vault-off` ignores it (warning). The vault no longer looks in `<vault>\regulation\` (1.6.4): a file there is reported once and not used. `vault status` shows, for an owed session, that a different file is in the game folder; `vault verify` and `vault list` check `bin\`. A restore that cannot put the file back leaves `RESTORE_PENDING` (exit `4`). Specs: [1.7.0](specs/elden-disk-spec-v1.7.0.md), [1.6.4](specs/elden-disk-spec-v1.6.4.md).
+**The other world (1.6.4, files from 1.7.0).** A `regulation.bin` named by `run` (the secured copy or the build from `extension.json` when the vault is ON, or `--regulation FILE`) replaces the game's for a `run` with the vault ON; the game's own file is kept in each snapshot (`bin\regulation.bin`) and put back, with the save, by the same restore (`run`, `vault restore`; `vault keep` puts it back first). `--vault-off` ignores it (warning). The vault no longer looks in `<vault>\regulation\` (1.6.4): a file there is reported once and not used. `vault status` shows, for an owed session, that a different file is in the game folder; `vault verify` and `vault list` check `bin\`. A restore that cannot put the file back leaves `RESTORE_PENDING` (exit `4`). Specs: [1.7.0](../specs/elden-disk-spec-v1.7.0.md), [1.6.4](../specs/elden-disk-spec-v1.6.4.md).
 
 ---
 
 ## 4b. `extension` (build things for the game outside the game)
 
 ```commandline
-eldendisk.exe extension --list
-eldendisk.exe extension innovate-items spells [--add all|ID | --secure] [--dry-run] [--spec FILE] [--source FILE] [--game-dir DIR] [--extension-dir DIR] [--vault DIR]
+python -m eldendisk extension --list
+python -m eldendisk extension innovate-items spells [--add all|ID | --secure] [--dry-run] [--spec FILE] [--source FILE] [--game-dir DIR] [--extension-dir DIR] [--vault DIR]
 ```
 
 `extension` is a main command like `read`, `write` and `vault`. Because an extension changes game files, it depends on the vault's permission like `write` does: with the vault ON (the default) `run` also runs the extension; with `--vault-off` it does not. There is no flag to turn it on.
@@ -329,34 +329,38 @@ A file goes **design → built → secured**. `extension.json` is what you edit.
 | `--add all` / `--add ID` | Build the spells of the design into `<ext>\innovate-items\spells\regulation.bin` (about 20 s) and run the gate; always builds. Every slot is built as new rows appended to the tables; a spell in slot 8 or higher cannot have a `shop` (the merchant has 7 free lines). Beyond about 8-15 spells the gate stops (not yet tested in the game). A design with no filled slot builds nothing. |
 | `--dry-run` | With `--add`: build and run the gate in memory, write nothing. |
 | `--secure` | Game closed. Runs the gate on `regulation.bin` against the current design and the game's file, then keeps it as `regulation.secured.bin` and writes `spells.commit.json`. Stands alone (not with `--add` / `--dry-run`). There is no `--force`: delete `spells.commit.json` to make the next `run` build. |
-| `--spec FILE` | The design. Default: `extension.json` next to the exe, else the copy embedded by `build -c -em`, else `code/extension.json`. Also accepted by `extension --list` and `run`. |
+| `--spec FILE` | The design. Default: `extension.json` next to the exe, else the copy embedded in the exe when it was built, else `code/extension.json`. Also accepted by `extension --list` and `run`. |
 | `--source FILE` / `--game-dir DIR` | The game's original `regulation.bin` to build on (default: the one in the auto-detected game folder). It is checked against the known original on every path. |
 | `--extension-dir DIR` | Where the files go (default: `<vault>\extension`). |
 | `--vault DIR` | Which vault's `extension` folder is used (default: the one remembered in the Registry, else `%LOCALAPPDATA%\EldenDisk\vault`). |
 
-**`extension.json`** is the design of the extensions; the section `innovate_items.spells` is `{"maximum": 64, "slots": {...}}`: 64 slots in order, a filled slot is a spell whose key is its id (for example the tested `reverse_curse_technique`, slot 1), an empty slot is `null`. A slot's place in the list fixes its rows in the game, so keep every slot and do not reorder them. `shop` is optional. A spell has a `kind`: `buff` (the default, the fields below) or `clone` (a copy of a game spell: `"kind": "clone", "from": <Magic id, e.g. 6210>`, optional `type`, `requires`, `fp_cost`, `stamina_cost`, `shop`, and `set`: `{"Magic.<from>.<field>": number, "Goods.<from>.<field>": number}`; what is left out stays the template's; spec 1.7.0 section 4b) or `enchant` / `buff` with `from` (the same fields, and the template's own SpEffect rows are copied too, so `set` also takes `"SpEffect.<row id of the template>.<field>": number`, for example `{"kind": "enchant", "from": 6250, "set": {"SpEffect.1626000.effectEndurance": 600}}`; a row the game's other spells share is not copied and cannot be set; spec section 4c) or `projectile` (for a spell that throws Bullets, e.g. `{"kind": "projectile", "from": 6210, "set": {"SpEffect.1621000.effectEndurance": 30, "Bullet.10621000.life": 6}}`: its Bullet and AtkParam_Pc (attack) rows are copied too, `Bullet.<id>.<field>` and `AtkParam_Pc.<id>.<field>` (the damage: `atkPhys`, `atkMag`, `atkFire`...) can be set; spec section 4d) or `attack` (for a spell that makes a direct attack and throws nothing, e.g. `{"kind": "attack", "from": 4440, "set": {"AtkParam_Pc.44400.atkMag": 1800}}`: its AtkParam_Pc rows and the SpEffect rows below them are copied; spec section 4e). A buff has: `requires` (`intelligence`, `faith`, `arcane`), `fp_cost`, `stamina_cost`, `cast_motion` (`flame-grant-me-strength` or `black-flame-blade`), `effect` (heal over time), `poise_while_casting_seconds`, `shop` (`price`, `stock`), plus `name` and `description` (stored only; they do not count as a change). A spell made from a game spell that uses more own rows than its slot's block holds is refused with the numbers. Unknown fields are errors; colour, icon and text need files inside the game's archives and are refused. Every problem is listed with its path. The source tree has a JSON schema for editors.
+**`extension.json`** is the design of the extensions; the section `innovate_items.spells` is `{"maximum": 64, "slots": {...}}`: 64 slots in order, a filled slot is a spell whose key is its id (for example the tested `reverse_curse_technique`, slot 1, in `code/extension.json`), an empty slot is `null`. A slot's place in the list fixes its rows in the game, so keep every slot and do not reorder them. `shop` is optional. A spell has a `kind`: `buff` (the default, the fields below) or `clone` (a copy of a game spell: `"kind": "clone", "from": <Magic id, e.g. 6210>`, optional `type`, `requires`, `fp_cost`, `stamina_cost`, `shop`, and `set`: `{"Magic.<from>.<field>": number, "Goods.<from>.<field>": number}`; what is left out stays the template's; spec 1.7.0 section 4b) or `enchant` / `buff` with `from` (the same fields, and the template's own SpEffect rows are copied too, so `set` also takes `"SpEffect.<row id of the template>.<field>": number`, for example `{"kind": "enchant", "from": 6250, "set": {"SpEffect.1626000.effectEndurance": 600}}`; a row the game's other spells share is not copied and cannot be set; spec section 4c) or `projectile` (for a spell that throws Bullets, e.g. `{"kind": "projectile", "from": 6210, "set": {"SpEffect.1621000.effectEndurance": 30, "Bullet.10621000.life": 6}}`: its Bullet and AtkParam_Pc (attack) rows are copied too, `Bullet.<id>.<field>` and `AtkParam_Pc.<id>.<field>` (the damage: `atkPhys`, `atkMag`, `atkFire`...) can be set; spec section 4d) or `attack` (for a spell that makes a direct attack and throws nothing, e.g. `{"kind": "attack", "from": 4440, "set": {"AtkParam_Pc.44400.atkMag": 1800}}`: its AtkParam_Pc rows and the SpEffect rows below them are copied; spec section 4e). A buff has: `requires` (`intelligence`, `faith`, `arcane`), `fp_cost`, `stamina_cost`, `cast_motion` (`flame-grant-me-strength` or `black-flame-blade`), `effect` (heal over time), `poise_while_casting_seconds`, `shop` (`price`, `stock`), plus `name` and `description` (stored only; they do not count as a change). A spell made from a game spell that uses more own rows than its slot's block holds is refused with the numbers. Unknown fields are errors; colour, icon and text need files inside the game's archives and are refused. Every problem is listed with its path. `code/eldendisk/extension/innovate_items/spells/spells.schema.json` is the JSON schema for editors.
 
 **`run` uses the secured copy** only when the design equals the secured one, the secured file has the recorded hash, the game's file is the recorded base, and the recipes are the same version. Otherwise it prints why it builds and a field-by-field diff (`reverse_curse_technique.shop.price  34590 -> 40000`). After a session that built, it hints to run `--secure`.
 
-**In `run`:** `run --vault-on` shows either `using …regulation.secured.bin (no build)` or `building because …` with the diff, then `built, gate passed`, then the host lines (PREFLIGHT, SNAPSHOTTING, READY); the vault swaps the file in and puts the game's own back. A failed gate: `GATE FAILED … nothing was swapped`, exit 1, the game is not started. A vault that still owes a restore: no build. Spec: [elden-disk-spec-v1.7.0](specs/elden-disk-spec-v1.7.0.md).
+**In `run`:** `run --vault-on` shows either `using …regulation.secured.bin (no build)` or `building because …` with the diff, then `built, gate passed`, then the host lines (PREFLIGHT, SNAPSHOTTING, READY); the vault swaps the file in and puts the game's own back. A failed gate: `GATE FAILED … nothing was swapped`, exit 1, the game is not started. A vault that still owes a restore: no build. Spec: [elden-disk-spec-v1.7.0](../specs/elden-disk-spec-v1.7.0.md).
 
 Exit codes: `0` ok, `1` error, `2` usage.
 
 ---
 
-## 5. `hash` and `build`
+## 5. `hash` (and how the exe is built)
 
 ```commandline
-eldendisk.exe hash [--game-dir DIR]
+python -m eldendisk hash [--game-dir DIR]
 ```
 
 Prints the SHA-256 of `eldenring.exe`, the profile key in `offsets.json` (alone on stdout).
 
+### Building `eldendisk.exe` (not a command)
+
+The exe is built by the developer pipeline, not by the exe itself (an `eldendisk.exe build` would be a strange thing to hand to a user):
+
 ```commandline
-eldendisk.exe build [-e pyinstaller|nuitka] [-c] [-em] [-i ICON]
+python code/tools/dev_pipeline.py [--skip-tests] [--no-embed] [--engine pyinstaller|nuitka] [--icon ICO]
 ```
 
-Builds `./build/dist/eldendisk/eldendisk.exe` (no version in the path); progress and the result are log events. `-c` cleans `./build` first (refused with exit `4` while a vault under `./build` still owes a restore; the vault is never kept there by default), `-em` embeds `offsets.json` and `chr_state_ids.json`. It also writes `./build/dist/eldendisk/README.md` next to the exe: the intro `docs/README-exe.md` followed by this reference (`docs/cli-commands-exe.md` is the only source of the commands); without a `docs/` folder the build only warns.
+It runs the tests (a failure stops it), builds `./build/dist/eldendisk.exe` (no version in the path) and prints where the exe is, its size and SHA-256, the version, what was embedded, how long the tests and the build took, and how to start it. It does not start the game. The build always starts clean (`./build` is removed first; refused while a vault under `./build` still owes a restore) and embeds `offsets.json`, `chr_state_ids.json` and `extension.json` in the exe; `--no-embed` copies them next to the exe instead. It also writes `./build/dist/README.md` next to the exe: the intro `docs/guilde/README-exe.md` followed by the exe reference (`docs/guilde/cli-commands-exe.md` is the only source of the commands); without them the build only warns. Everything the exe produces goes to `%LOCALAPPDATA%\EldenDisk`, so it can be copied anywhere.
 
 ---
 
@@ -366,7 +370,7 @@ Every command logs **every event** to `<vault>/eldendisk.log` (the folder of `va
 
 ```text
 10-07 12:00:00.123  4242 D client: version 1.7.0
-10-07 12:00:00.123  4242 D client: run: eldendisk.exe run -v
+10-07 12:00:00.123  4242 D client: run: python -m eldendisk run -v
 10-07 12:00:00.981  4242 I vault : snapshot 20261006-120000, 2 files verified
 10-07 12:00:09.411  4242 I game  : running, pid 8812; `read` allowed, `write` allowed
 10-07 12:31:42.007  4242 W host  : Ctrl+C: the game keeps running; the save is restored when it exits (press again to postpone the restore)
@@ -374,15 +378,15 @@ Every command logs **every event** to `<vault>/eldendisk.log` (the folder of `va
 
 Format `MM-DD HH:MM:SS.mmm  PID L tag : message`; levels `V` verbose, `D` debug, `I` info, `W` warning, `E` error; one line per event. The file rotates at 2 MiB (`eldendisk.log`, `.1`, `.2`) and logging never stops a command: if the file cannot be written the command carries on.
 
-**Console, no flag needed.** `run`, `read`, `write`, `vault`, `build` print concise lines: a symbol (`✓` done, `·` info, `!` warning, `✖` error), the source tag and a short message; `run` and `read` add a banner and the time. Events go to **stderr**, the result of a query (`vault status`, `vault list`, `hash`) to **stdout**, so `hash` and `read --query ... --json` stay pipeable. Warnings and errors are coloured on a terminal, and the ids of the spells of the design (`reverse_curse_technique`, ...) are purple in the `ext` lines, and every file name with an extension (`regulation.bin`, `ER0000.sl2`, `ER0000.sl2.bak`, `ER0000.err`, `steam_autocloud.vdf`, `*.json`, `*.exe`, ...) is orange, also the name at the end of a path (the folders stay plain, the clickable link is not touched) (`NO_COLOR=1` turns colour off, `FORCE_COLOR=1` forces it, e.g. in an IDE run window). Consoles whose code page cannot show `✓` / `✖` get `+` / `x`. **Clickable paths:** a Windows path that exists (a file or a folder, spaces allowed) is printed as a hyperlink (OSC 8), so Ctrl+click opens it, in terminals that understand it: Windows Terminal, VS Code, and others that set `WT_SESSION`, `TERM_PROGRAM=vscode`, `VTE_VERSION`. Not in pipes, files, the log, or IDE run windows by themselves. `ELDENDISK_LINKS=1` forces it on, `ELDENDISK_LINKS=0` off.
+**Console, no flag needed.** `run`, `read`, `write`, `vault` print concise lines: a symbol (`✓` done, `·` info, `!` warning, `✖` error), the source tag and a short message; `run` and `read` add a banner and the time. Events go to **stderr**, the result of a query (`vault status`, `vault list`, `hash`) to **stdout**, so `hash` and `read --query ... --json` stay pipeable. Warnings and errors are coloured on a terminal, and the ids of the spells of the design (`reverse_curse_technique`, ...) are purple in the `ext` lines, and every file name with an extension (`regulation.bin`, `ER0000.sl2`, `ER0000.sl2.bak`, `ER0000.err`, `steam_autocloud.vdf`, `*.json`, `*.exe`, ...) is orange, also the name at the end of a path (the folders stay plain, the clickable link is not touched) (`NO_COLOR=1` turns colour off, `FORCE_COLOR=1` forces it, e.g. in an IDE run window). Consoles whose code page cannot show `✓` / `✖` get `+` / `x`. **Clickable paths:** a Windows path that exists (a file or a folder, spaces allowed) is printed as a hyperlink (OSC 8), so Ctrl+click opens it, in terminals that understand it: Windows Terminal, VS Code, and others that set `WT_SESSION`, `TERM_PROGRAM=vscode`, `VTE_VERSION`. Not in pipes, files, the log, or IDE run windows by themselves. `ELDENDISK_LINKS=1` forces it on, `ELDENDISK_LINKS=0` off.
 
 **`-v`, `--verbose`** (every command, also after the subcommand: `write --set level=150 -v`) forgets the concise view and shows the log itself, live: the very lines of `eldendisk.log`, debug included, nothing else.
 
-**Every terminal is in the log.** Each command, in any terminal, writes `D client : version 1.7.0` and then `D client : run: <the command as you typed it>` (`eldendisk.exe run -v`; on the `-v` console the command is highlighted, the file has no colour) when it starts and `D client : exit N` when it ends. `run -v` also follows the file and prints the lines of **other** terminals as they are written (from the moment `run -v` starts, own lines are not repeated, rotation is followed), so one window shows `read`, `write` and `vault` commands next to the host's events. The format is the same as above; several processes may write the file at once, and if a rotation cannot rename the file (another process holds it, Windows) logging simply carries on.
+**Every terminal is in the log.** Each command, in any terminal, writes `D client : version 1.7.0` and then `D client : run: <the command as you typed it>` (`python -m eldendisk run -v`; on the `-v` console the command is highlighted, the file has no colour) when it starts and `D client : exit N` when it ends. `run -v` also follows the file and prints the lines of **other** terminals as they are written (from the moment `run -v` starts, own lines are not repeated, rotation is followed), so one window shows `read`, `write` and `vault` commands next to the host's events. The format is the same as above; several processes may write the file at once, and if a rotation cannot rename the file (another process holds it, Windows) logging simply carries on.
 
 ```text
 10-07 13:53:07.306 14004 D client: version 1.7.0
-10-07 13:53:07.306 14004 D client: run: eldendisk.exe write --set level=150
+10-07 13:53:07.306 14004 D client: run: python -m eldendisk write --set level=150
 10-07 13:53:07.501 14004 D client: exit 0
 ```
 
@@ -392,37 +396,37 @@ Format `MM-DD HH:MM:SS.mmm  PID L tag : message`; levels `V` verbose, `D` debug,
 
 ```commandline
 # first run, several Steam accounts: pass the save folder once (remembered afterwards)
-eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>" -v
+python -m eldendisk run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>" -v
 
 # every value once / one value / a group
-eldendisk.exe read
-eldendisk.exe read --query runes
-eldendisk.exe read --query attrs.*
+python -m eldendisk read
+python -m eldendisk read --query runes
+python -m eldendisk read --query attrs.*
 
 # follow a value while playing
-eldendisk.exe read --query runes --live
+python -m eldendisk read --query runes --live
 
 # find buff and animation IDs while playing
-eldendisk.exe read --live-buffs -q
-eldendisk.exe read --live-animations
+python -m eldendisk read --live-buffs -q
+python -m eldendisk read --live-animations
 
 # one JSON document and exit; or keep it fresh for another program (written at most every second)
-eldendisk.exe read --export
-eldendisk.exe read --export --live --export-interval 1
+python -m eldendisk read --export
+python -m eldendisk read --export --live --export-interval 1
 
 # edit while playing
-eldendisk.exe write --set level=150 runes=999999999
-eldendisk.exe write --set attrs.*=50 --refill hp,fp,stamina
+python -m eldendisk write --set level=150 runes=999999999
+python -m eldendisk write --set attrs.*=50 --refill hp,fp,stamina
 
 # game params (offline only; gone when the game closes): Black Flame burns until the target dies
-eldendisk.exe read --query params.effects.1621000
-eldendisk.exe write --set "params.effects.*.effectEndurance=-1"
-eldendisk.exe write --reset all
+python -m eldendisk read --query params.effects.1621000
+python -m eldendisk write --set "params.effects.*.effectEndurance=-1"
+python -m eldendisk write --reset all
 
 # keep the edits permanently: write, let the game save (grace / quit to title), stop the host, close the game, then
-eldendisk.exe vault keep --yes
+python -m eldendisk vault keep --yes
 
 # after a crash, power loss or a closed console: close the game, then
-eldendisk.exe vault status
-eldendisk.exe vault restore
+python -m eldendisk vault status
+python -m eldendisk vault restore
 ```

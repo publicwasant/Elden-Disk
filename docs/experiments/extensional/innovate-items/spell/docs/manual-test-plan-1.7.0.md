@@ -1,11 +1,11 @@
 # Manual test plan 1.7.0 (real game, Windows): extensions and `innovate-items spells`
 
-Only what is new in 1.7.0. The swap itself is [manual-test-plan-1.6.4.md](manual-test-plan-1.6.4.md) (RG/RH checks still apply, with the file now coming from the extension). Tick `[ ]` as you go and write what you saw next to anything unexpected.
+Only what is new in 1.7.0. The swap itself is [manual-test-plan-1.6.4.md](../../../../../manual-tests/manual-test-plan-1.6.4.md) (RG/RH checks still apply, with the file now coming from the extension). Tick `[ ]` as you go and write what you saw next to anything unexpected.
 
 > [!IMPORTANT]
 > **Before anything:** copy the save folder (`%APPDATA%\EldenRing\<SteamID64>`) **and** the game's own `regulation.bin` (`...\ELDEN RING\Game\regulation.bin`) somewhere safe; `vault status` must say no unresolved session. Offline only.
 
-`<ext>` = `<vault>\extension`. The design is `code\extension.json` in the source (the Z4 item); `build -c -em` embeds it in the exe. With the vault ON, `run` swaps `regulation.secured.bin` when the design is unchanged and secured; otherwise it builds (about 20-30 s) and the gate must pass before the host starts.
+`<ext>` = `<vault>\extension`. The design is `code\extension.json` in the source (the Z4 item); the dev pipeline (`code\tools\dev_pipeline.py`) embeds it in the exe. With the vault ON, `run` swaps `regulation.secured.bin` when the design is unchanged and secured; otherwise it builds (about 20-30 s) and the gate must pass before the host starts.
 
 ## EX. The build (`extension innovate-items spells`, the same build `run` does)
 
@@ -27,7 +27,7 @@ Spec for the Z4 file: `price 34590, stock 1`, Int 45 / Fai 15 / Arc 10, FP 80, B
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
-| SW1 | Nothing secured yet. `run --vault-on` (or `python code\tools\dev_pipeline.py --vault-on`) | the log shows `building because no secured build yet`, then `building … (about 20 s)`, then `built, gate passed`, then the host lines (PREFLIGHT, vault ON, SNAPSHOTTING, backup, READY); banner row `regulation  <ext>\innovate-items\spells\regulation.bin (new build, gate passed) replaces the game's regulation.bin …`; the game starts | [x] 2026-10-09 |
+| SW1 | Nothing secured yet. `run --vault-on` | the log shows `building because no secured build yet`, then `building … (about 20 s)`, then `built, gate passed`, then the host lines (PREFLIGHT, vault ON, SNAPSHOTTING, backup, READY); banner row `regulation  <ext>\innovate-items\spells\regulation.bin (new build, gate passed) replaces the game's regulation.bin …`; the game starts | [x] 2026-10-09 |
 | SW2 | Load a character, buy and cast the incantation | **the same behaviour as the Z4 file tested before**: sold at the merchant line, requirements 45/15/10, FP 80, Black Flame Blade cast, heals over time, flame visuals; the cast flinches but is not cancelled | [x] 2026-10-09 |
 | SW3 | Quit the game | `✓ vault save restored, byte-identical`, `✓ … regulation.bin restored, byte-identical`; `Get-FileHash Game\regulation.bin` equals your copy | [x] 2026-10-09 |
 | SW4 | Kill the host while the game runs (as RH1 of 1.6.4); quit the game; `vault restore` | the original `regulation.bin` is back, hash equal to your copy | [ ] |

@@ -53,7 +53,7 @@ Key Goals:
 
 ### 3. Documentation
 
-#### [NEW] [cli-commands-exe.md](file:///D:/StudioProjects/Elden-Disk/docs/cli-commands-exe.md)
+#### [NEW] [cli-commands-exe.md](file:///D:/StudioProjects/Elden-Disk/docs/guilde/cli-commands-exe.md)
 - Write CLI reference for standalone executable (`eldendisk.exe`).
 
 #### [MODIFY] [README.md](file:///D:/StudioProjects/Elden-Disk/README.md)

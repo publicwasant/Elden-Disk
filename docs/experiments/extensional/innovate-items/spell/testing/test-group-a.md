@@ -2,7 +2,7 @@
 
 ## Group A. kind: attack and the attack rows of a projectile (Phase 2.4; coded and tested, not run in the game yet)
 
-_(Manual Test Reference: [manual-test-plan-1.7.0](docs/manual-test-plan-1.7.0.md#a-kind-attack-and-the-attack-rows-of-a-projectile-phase-24-coded-and-tested-not-run-in-the-game-yet))_
+_(Manual Test Reference: [manual-test-plan-1.7.0](../docs/manual-test-plan-1.7.0.md#a-kind-attack-and-the-attack-rows-of-a-projectile-phase-24-coded-and-tested-not-run-in-the-game-yet))_
 
 **Before start: completing rebuild .exe tools first**:
 
@@ -34,8 +34,8 @@ python -m .\code\tools\dev-pipline.py --vault-on
     "shop": {
       "price": 1000,
       "stock": -1
-      }
     }
+  }
 }
 ```
 
@@ -70,12 +70,16 @@ python -m .\code\tools\dev-pipline.py --vault-on
     "shop": {
       "price": 1000,
       "stock": -1
-      }
     },
     "set": {
-      "Bullet.10621000.life": 0.3,
-      "SpEffect.1621000.changeHpRate": -0.05
+      "AtkParam_Pc.44400.atkMag": 1800, 
+      "AtkParam_Pc.44401.atkMag": 1800, 
+      "AtkParam_Pc.44405.atkMag": 1800, 
+      "AtkParam_Pc.44406.atkMag": 1800, 
+      "AtkParam_Pc.44407.atkMag": 1840, 
+      "AtkParam_Pc.44408.atkMag": 1840
     }
+  }
 }
 ```
 
@@ -100,12 +104,16 @@ python -m .\code\tools\dev-pipline.py --vault-on
     "shop": {
       "price": 1000,
       "stock": -1
-      }
     },
     "set": {
-      "Bullet.10621000.life": 0.3,
-      "SpEffect.1621000.changeHpRate": -0.05
+      "AtkParam_Pc.44400.atkMag": 1800, 
+      "AtkParam_Pc.44401.atkMag": 1800, 
+      "AtkParam_Pc.44405.atkMag": 1800, 
+      "AtkParam_Pc.44406.atkMag": 1800, 
+      "AtkParam_Pc.44407.atkMag": 1840, 
+      "AtkParam_Pc.44408.atkMag": 1840
     }
+  }
 }
 ```
 
@@ -126,12 +134,16 @@ python -m .\code\tools\dev-pipline.py --vault-on
     "shop": {
       "price": 1000,
       "stock": -1
-      }
     },
     "set": {
-      "Bullet.10621000.life": 0.3,
-      "SpEffect.1621000.changeHpRate": -0.05
+      "AtkParam_Pc.44400.atkMag": 1800, 
+      "AtkParam_Pc.44401.atkMag": 1800, 
+      "AtkParam_Pc.44405.atkMag": 1800, 
+      "AtkParam_Pc.44406.atkMag": 1800, 
+      "AtkParam_Pc.44407.atkMag": 1840, 
+      "AtkParam_Pc.44408.atkMag": 1840
     }
+  }
 }
 ```
 

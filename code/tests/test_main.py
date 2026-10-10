@@ -1,4 +1,4 @@
-"""CLI-level tests: config resolution, throttled writes, build command, flags, logger and launcher helpers."""
+"""CLI-level tests: config resolution, throttled writes, flags, logger and launcher helpers."""
 import argparse
 import json
 import sys
@@ -9,7 +9,6 @@ import pytest
 
 import eldendisk.__main__ as cli
 from eldendisk import paths
-from eldendisk.commands import build as build_cmd
 from eldendisk.game import attach, memory as memory_reader, processes
 from eldendisk.host import launcher
 from eldendisk.reader.export import JsonLogger, doc_signature
@@ -75,78 +74,6 @@ def test_source_run_resolves_project_files():
     assert paths.runtime_dirs() == (None, None)
     assert paths.get_resource_path("offsets.json").name == "offsets.json"
     assert paths.describe_resource(paths.get_resource_path("offsets.json")) == "source"
-
-
-# ---------- build ----------
-@pytest.fixture
-def project(tmp_path, monkeypatch):
-    code = tmp_path / "code"
-    (code / "eldendisk").mkdir(parents=True)
-    (code / "offsets.json").write_text("{}")
-    (code / "chr_state_ids.json").write_text("{}")
-    (code / "eldendisk" / "__main__.py").write_text("")
-    (code / "extension.json").write_text('{"innovate_items": {"spells": {"maximum": 1, "slots": {"<id-1>": null}}}}')
-    monkeypatch.setattr(build_cmd, "HERE", code)
-    return tmp_path
-
-
-def _args(**kw):
-    base = dict(engine="pyinstaller", clean=False, embed_configs=False, icon=None)
-    base.update(kw)
-    return argparse.Namespace(**base)
-
-
-def _run_build(monkeypatch, args, rc=0):
-    calls = []
-
-    def fake_run(cmd, check=False):
-        calls.append(cmd)
-        return argparse.Namespace(returncode=rc)
-
-    monkeypatch.setattr("subprocess.run", fake_run)
-    return build_cmd.cmd_build(args), calls
-
-
-def test_pyinstaller_embed_adds_configs_not_schema(project, monkeypatch):
-    rc, calls = _run_build(monkeypatch, _args(embed_configs=True))
-    cmd = calls[0]
-    assert rc == 0 and "PyInstaller" in cmd and "--onefile" in cmd
-    adds = [c for c in cmd if c.startswith("--add-data=")]
-    assert len(adds) == 3 and not any("schema" in a for a in adds) and any(a.endswith("extension.json;.") or a.endswith("extension.json:.") for a in adds)
-    assert not (project / "build" / "dist" / "eldendisk" / "offsets.json").exists()  # embedded: nothing copied
-
-
-def test_nuitka_embed_includes_data_files(project, monkeypatch):
-    rc, calls = _run_build(monkeypatch, _args(engine="nuitka", embed_configs=True))
-    inc = [c for c in calls[0] if c.startswith("--include-data-files=")]
-    assert rc == 0 and len(inc) == 3 and inc[0].endswith("=offsets.json") and inc[-1].endswith("=extension.json")
-    assert "--output-filename=eldendisk.exe" in calls[0]
-
-
-@pytest.mark.parametrize("engine", ["pyinstaller", "nuitka"])
-def test_non_embedded_build_copies_editable_configs_for_both_engines(project, monkeypatch, engine):
-    rc, calls = _run_build(monkeypatch, _args(engine=engine))
-    out = project / "build" / "dist" / "eldendisk"
-    assert rc == 0 and (out / "offsets.json").exists() and (out / "chr_state_ids.json").exists()
-    assert not any(c.startswith(("--add-data=", "--include-data-files=")) for c in calls[0])
-
-
-def test_failed_build_returns_1_and_copies_nothing(project, monkeypatch):
-    rc, _ = _run_build(monkeypatch, _args(), rc=2)
-    assert rc == 1 and not (project / "build" / "dist" / "eldendisk" / "offsets.json").exists()
-
-
-def test_clean_removes_old_artifacts(project, monkeypatch):
-    stale = project / "build" / "work" / "stale.txt"
-    stale.parent.mkdir(parents=True); stale.write_text("x")
-    _run_build(monkeypatch, _args(clean=True))
-    assert not stale.exists()
-
-
-def test_unknown_engine_and_missing_icon(project, monkeypatch, capsys):
-    assert cli.cmd_build(_args(engine="cx_freeze")) == 1
-    _rc, calls = _run_build(monkeypatch, _args(icon="nope.ico"))
-    assert not any(c.startswith("--icon=") for c in calls[0]) and "icon file not found" in capsys.readouterr().err
 
 
 # ---------- argparse surface ----------
@@ -348,26 +275,11 @@ def test_script_mode_runs_without_relative_import_errors(tmp_path):
     assert r.returncode == 0 and "eldendisk" in r.stdout, r.stderr
 
 
-def test_clean_build_refuses_to_destroy_an_unresolved_session(project, monkeypatch):
-    v = project / "build" / "dist" / "x" / "backup" / "vault"
-    v.mkdir(parents=True)
-    (v / "session.json").write_text("{}")
-    rc, calls = _run_build(monkeypatch, _args(clean=True))
-    assert rc == 4 and not calls and (v / "session.json").exists()
-
-
-def test_clean_build_with_a_resolved_vault_still_cleans(project, monkeypatch):
-    v = project / "build" / "dist" / "x" / "backup" / "vault"
-    (v / "20261006-000000").mkdir(parents=True)
-    rc, _ = _run_build(monkeypatch, _args(clean=True))
-    assert rc == 0 and not v.exists()
-
-
 def test_every_help_page_renders(capsys):
     """argparse %-formats help strings: a bare % (e.g. %LOCALAPPDATA%) crashes `-h`."""
     pages = [[], ["run"], ["read"], ["write"], ["vault"], ["vault", "restore"],
              ["vault", "keep"], ["vault", "list"], ["vault", "verify"], ["vault", "prune"], ["vault", "status"],
-             ["hash"], ["build"]]
+             ["hash"]]
     for page in pages:
         with pytest.raises(SystemExit) as exc:
             cli.main([*page, "-h"])
@@ -388,38 +300,13 @@ def test_vault_on_and_off_are_per_run_flags(monkeypatch):
     assert e.value.code == 2
 
 
-# ---------- README next to the exe ----------
-def _docs(project, intro="# Elden-Disk {version}\n\nQuick start\n\n# Command reference\n",
-          reference="# Reference title\n\nComplete reference.\n\n## 1. `run`\n"):
-    (project / "docs").mkdir()
-    (project / "docs" / "README-exe.md").write_text(intro, encoding="utf-8")
-    (project / "docs" / "cli-commands-exe.md").write_text(reference, encoding="utf-8")
+# ---------- where the files go ----------
+def test_the_default_export_folder_is_under_the_eldendisk_data_folder(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert paths.default_out_dir() == str(tmp_path / "EldenDisk" / "output")
+    assert paths.app_data_dir() == tmp_path / "EldenDisk"
 
 
-def test_build_writes_a_readme_next_to_the_exe(project, monkeypatch):
-    _docs(project)
-    rc, _ = _run_build(monkeypatch, _args(embed_configs=True))
-    text = (project / "build" / "dist" / "eldendisk" / "README.md").read_text(encoding="utf-8")
-    assert rc == 0
-    assert text.startswith(f"# Elden-Disk {cli.__version__}\n") and "{version}" not in text
-    assert "# Command reference\n\nComplete reference." in text       # the reference follows, without its own title
-    assert "Reference title" not in text and "## 1. `run`" in text and text.endswith("\n")
-
-
-def test_build_without_docs_still_succeeds_and_warns(project, monkeypatch, capsys):
-    rc, _ = _run_build(monkeypatch, _args(embed_configs=True))
-    assert rc == 0 and not (project / "build" / "dist" / "eldendisk" / "README.md").exists()
-    assert "no README.md" in capsys.readouterr().err
-
-
-def test_a_failed_build_writes_no_readme(project, monkeypatch):
-    _docs(project)
-    rc, _ = _run_build(monkeypatch, _args(), rc=2)
-    assert rc == 1 and not (project / "build" / "dist" / "eldendisk" / "README.md").exists()
-
-
-def test_the_real_docs_make_a_readme(monkeypatch):
-    root = Path(__file__).resolve().parents[2]
-    text = build_cmd.exe_readme({"project_root": root})
-    assert text and "# Command reference" in text and "## 1. `run` (host)" in text and "{version}" not in text
-    assert "Standalone Executable CLI Commands Reference" not in text    # the reference's own title is replaced
+def test_the_exe_has_no_build_command():
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["build"])

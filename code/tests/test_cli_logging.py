@@ -70,7 +70,7 @@ def test_v_is_accepted_on_the_group_on_the_verb_and_on_every_command(env, capsys
         assert " D client" in capsys.readouterr().err, argv
     parser = cli.build_parser()
     for argv in (["run", "-v"], ["read", "--live-buffs", "-v"], ["write", "-v", "--refill", "hp"], ["write", "--refill", "hp", "-v"],
-                 ["hash", "-v"], ["build", "-v"]):
+                 ["hash", "-v"]):
         assert parser.parse_args(argv).verbose is True, argv
     assert parser.parse_args(["vault", "status"]).verbose is False
 

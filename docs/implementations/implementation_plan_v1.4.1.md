@@ -83,10 +83,10 @@ Key Goals:
 #### [MODIFY] [README.md](file:///D:/StudioProjects/Elden-Disk/README.md)
 - Update documentation and examples for version 1.4.1.
 
-#### [MODIFY] [docs/cli-commands.md](file:///D:/StudioProjects/Elden-Disk/docs/cli-commands.md)
+#### [MODIFY] [docs/cli-commands.md](file:///D:/StudioProjects/Elden-Disk/docs/guilde/cli-commands.md)
 - Document the `animations` command and updated schema.
 
-#### [MODIFY] [docs/adding-a-profile.md](file:///D:/StudioProjects/Elden-Disk/docs/adding-a-profile.md)
+#### [MODIFY] [docs/adding-a-profile.md](file:///D:/StudioProjects/Elden-Disk/docs/handbook/adding-a-profile.md)
 - Update configuration references to `chr_state_ids.json`.
 
 ---

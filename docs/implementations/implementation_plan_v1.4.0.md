@@ -87,10 +87,10 @@ Key Goals:
 #### [MODIFY] [README.md](file:///D:/StudioProjects/Elden-Disk/README.md)
 - Update schema examples and documentation references to version 1.4.0.
 
-#### [MODIFY] [docs/cli-commands.md](file:///D:/StudioProjects/Elden-Disk/docs/cli-commands.md)
+#### [MODIFY] [docs/cli-commands.md](file:///D:/StudioProjects/Elden-Disk/docs/guilde/cli-commands.md)
 - Update schema and output examples for version 1.4.0.
 
-#### [MODIFY] [docs/adding-a-profile.md](file:///D:/StudioProjects/Elden-Disk/docs/adding-a-profile.md)
+#### [MODIFY] [docs/adding-a-profile.md](file:///D:/StudioProjects/Elden-Disk/docs/handbook/adding-a-profile.md)
 - Update references to `runes` object structure and animation module offsets.
 
 ---

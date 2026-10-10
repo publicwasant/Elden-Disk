@@ -1,6 +1,7 @@
 """Where the tool lives and where its files go: runtime folders (script / PyInstaller / Nuitka), config lookup, defaults."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -60,6 +61,13 @@ def describe_resource(path: Path | str) -> str:
     return "external" if external is not None else "source"
 
 
+def app_data_dir() -> Path:
+    """`%LOCALAPPDATA%\\EldenDisk`: everything the tool produces lives here (the vault, the extensions' files, the exports), so the
+    exe can sit anywhere and a rebuild of it deletes nothing."""
+    base = os.environ.get("LOCALAPPDATA")
+    return (Path(base) if base else Path.home() / "AppData" / "Local") / "EldenDisk"
+
+
 def default_out_dir() -> str:
-    external_dir, _ = runtime_dirs()
-    return str((external_dir or HERE) / "output")
+    """Where `read --export` writes disk-state.json: `%LOCALAPPDATA%\\EldenDisk\\output`."""
+    return str(app_data_dir() / "output")

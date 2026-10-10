@@ -87,10 +87,10 @@ Key Goals:
 - Update CLI command examples (`eldendisk.exe run -v`, etc.).
 - Update schema description and example JSON snippet.
 
-#### [MODIFY] [docs/cli-commands.md](file:///D:/StudioProjects/Elden-Disk/docs/cli-commands.md)
+#### [MODIFY] [docs/cli-commands.md](file:///D:/StudioProjects/Elden-Disk/docs/guilde/cli-commands.md)
 - Update command references and flags for version 1.3.0.
 
-#### [MODIFY] [docs/adding-a-profile.md](file:///D:/StudioProjects/Elden-Disk/docs/adding-a-profile.md)
+#### [MODIFY] [docs/adding-a-profile.md](file:///D:/StudioProjects/Elden-Disk/docs/handbook/adding-a-profile.md)
 - Update package references from `elden_telemetry` to `eldendisk`.
 
 ---

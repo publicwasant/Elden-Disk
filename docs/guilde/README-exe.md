@@ -7,12 +7,12 @@ Offline save guard and live memory reader / writer for **Elden Ring 1.17.1** (Wi
 | File | What it is |
 |:---|:---|
 | `eldendisk.exe` | the tool; run it from a terminal (`.\eldendisk.exe <command>`) |
-| `README.md` | this file (written by `eldendisk.exe build`) |
+| `README.md` | this file (written when the exe is built) |
 | `offsets.json`, `chr_state_ids.json` | only when the build did not embed them: the memory profile of the game and the buff / animation names; edit them here |
 
 The other world never touches the real one: whatever you do in a `run` session, the vault puts the save and the game's own `regulation.bin` back byte-identical when the game closes.
 
-Nothing is written next to the exe. The game folder is left as it was, except for one thing you ask for: with the vault ON, `run` swaps a `regulation.bin` in for the session and puts the game's own file back, checked by hash, when the game closes. That file is the secured copy (`extension innovate-items spells --secure`, after you tried it) when the `extension.json` embedded in the exe is unchanged, otherwise a new build (about 20 s) that the gate must pass (`extension innovate-items spells --add all` builds without the game). The files live in `<vault>\extension\innovate-items\spells\`. The vault (snapshots, session record, `eldendisk.log`) lives in `%LOCALAPPDATA%\EldenDisk\vault`, and `--save-dir` / `--vault` are remembered in the Registry (`HKCU\Software\EldenDisk`).
+Nothing is written next to the exe: everything the tool produces lives in `%LOCALAPPDATA%\EldenDisk` (the vault in `vault\`, the files of the extensions in `vault\extension\`, the exports of `read --export` in `output\`), so the exe can be anywhere and replacing it loses nothing. The game folder is left as it was, except for one thing you ask for: with the vault ON, `run` swaps a `regulation.bin` in for the session and puts the game's own file back, checked by hash, when the game closes. That file is the secured copy (`extension innovate-items spells --secure`, after you tried it) when the `extension.json` embedded in the exe is unchanged, otherwise a new build (about 20 s) that the gate must pass (`extension innovate-items spells --add all` builds without the game). The files live in `<vault>\extension\innovate-items\spells\`. The vault (snapshots, session record, `eldendisk.log`) lives in `%LOCALAPPDATA%\EldenDisk\vault`, and `--save-dir` / `--vault` are remembered in the Registry (`HKCU\Software\EldenDisk`).
 
 ## Quick start
 

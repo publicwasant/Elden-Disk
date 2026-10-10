@@ -56,7 +56,7 @@ PS D:\StudioProjects\Elden-Disk\code> python -m eldendisk build -c --engine pyin
 
 Since users will interact with `eldendisk.exe` instead of the Python module (`python -m eldendisk`), we need a dedicated reference document for the standalone version.
 
-Create a new file named `cli-commands-exe.md` mirroring the existing **[cli-commands.md](../cli-commands.md)**, but updating the execution context.[cite: 7]
+Create a new file named `cli-commands-exe.md` mirroring the existing **[cli-commands.md](../guilde/cli-commands.md)**, but updating the execution context.[cite: 7]
 
 *   **Command Syntax:** Update `python -m eldendisk <command> [options]` to `eldendisk.exe <command> [options]`.[cite: 7]
 *   **Commands:** Include all existing commands: `run`, `effects`, `animations`, and `hash`.[cite: 7]

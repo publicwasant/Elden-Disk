@@ -1,4 +1,4 @@
-"""CLI: eldendisk run | read | write | vault | extension | build | hash
+"""CLI: eldendisk run | read | write | vault | extension | hash
 
   run    host: back up the save, launch the game offline, restore the save when it exits (leave this open)
   read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
@@ -19,9 +19,9 @@ if __package__ is None or __package__ == "":   # run as a script (frozen exe, `p
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from eldendisk import __version__  # noqa: E402
-from eldendisk.commands.build import cmd_build, cmd_hash  # noqa: E402
 from eldendisk.commands.common import add_vault_option, add_verbose  # noqa: E402
 from eldendisk.commands.extension import cmd_extension  # noqa: E402
+from eldendisk.commands.hash import cmd_hash  # noqa: E402
 from eldendisk.commands.read import cmd_read  # noqa: E402
 from eldendisk.commands.run import cmd_run  # noqa: E402
 from eldendisk.commands.vault import cmd_vault  # noqa: E402
@@ -186,16 +186,6 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     add_verbose(h)
     h.set_defaults(fn=cmd_hash)
-
-    b = sub.add_parser("build", help="build standalone eldendisk.exe using PyInstaller or Nuitka")
-    b.add_argument("-e", "--engine", choices=["pyinstaller", "nuitka"], default="pyinstaller",
-                   help="build engine to use (default: pyinstaller)")
-    b.add_argument("-c", "--clean", action="store_true", help="clean build cache directories before compiling")
-    b.add_argument("-em", "--embed-configs", action="store_true",
-                   help="embed offsets.json and chr_state_ids.json directly into the executable")
-    b.add_argument("-i", "--icon", help="path to icon file (.ico)")
-    add_verbose(b)
-    b.set_defaults(fn=cmd_build)
     return ap
 
 

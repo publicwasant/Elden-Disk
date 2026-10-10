@@ -100,7 +100,7 @@ Bytes per added row (record 24 B + row): Goods 200, Magic 192, ShopLineup 76, Sp
 
 ## 9. What 2.1 built (2026-10-09)
 
-`kind: clone` as in section 3, with the approved decisions 1-6, in the smallest form: the Goods and Magic rows of the template are copied under the slot's ids and the Magic copy keeps pointing at the template's own chain, so no Bullet, AtkParam_Pc or SpEffect row is added and the ids of section 4 for those tables are not used yet. Spec: [specs/elden-disk-spec-v1.7.0.md](specs/elden-disk-spec-v1.7.0.md) section 4b.
+`kind: clone` as in section 3, with the approved decisions 1-6, in the smallest form: the Goods and Magic rows of the template are copied under the slot's ids and the Magic copy keeps pointing at the template's own chain, so no Bullet, AtkParam_Pc or SpEffect row is added and the ids of section 4 for those tables are not used yet. Spec: [specs/elden-disk-spec-v1.7.0.md](../../../../../specs/elden-disk-spec-v1.7.0.md) section 4b.
 
 Where it differs from this draft:
 

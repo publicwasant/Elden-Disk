@@ -1,7 +1,7 @@
 """Where the vault lives. Resolution order for every command: `--vault` > the path remembered in the Registry >
 `%LOCALAPPDATA%\\EldenDisk\\vault`.
 
-The default is deliberately NOT next to the exe: the exe sits in `build/dist`, which a rebuild deletes, and a vault holds
+The default is deliberately NOT next to the exe: the exe sits in `build/dist` while it is developed, and a rebuild deletes that folder, and a vault holds
 the only clean copy of the save. `run --vault X` remembers X (same Registry key as `--save-dir`), so `read`, `write` and
 `vault` find the very same vault without repeating the flag.
 """

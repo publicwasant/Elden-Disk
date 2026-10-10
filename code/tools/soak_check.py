@@ -1,4 +1,4 @@
-"""V-06 helper: watch output/disk-state.json and report anything wrong. Stdlib only.
+"""V-06 helper: watch %LOCALAPPDATA%\\EldenDisk\\output\\disk-state.json and report anything wrong. Stdlib only.
 
     python tools/soak_check.py [path] [--interval 0.1]
 
@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 from collections import Counter
@@ -154,9 +155,12 @@ def _loop(path, interval, end, stats, out, st_):
             last_hash, last_change = cur_hash, mono
 
 
+DEFAULT_PATH = (Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "EldenDisk" / "output" / "disk-state.json")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("path", nargs="?", default=str(Path(__file__).resolve().parent.parent / "output" / "disk-state.json"))
+    ap.add_argument("path", nargs="?", default=str(DEFAULT_PATH))
     ap.add_argument("--interval", type=float, default=0.1)
     args = ap.parse_args()
     print(f"watching {args.path}  (Ctrl+C for summary)")
