@@ -28,10 +28,63 @@
             "stock": 1
           }
         },
-        "<id-2>": null,
-        "<id-3>": null,
-        "<id-4>": null,
-        "<id-5>": null,
+        "black_flame_copy": {
+          "kind": "clone",
+          "from": 6210,
+          "fp_cost": 5,
+          "requires": {
+            "intelligence": 0,
+            "faith": 0
+          },
+          "shop": {
+            "price": 1000,
+            "stock": -1
+          },
+          "set": {
+            "Magic.6210.slotLength": 1
+          }
+        },
+        "black_flame_blade_copy": {
+          "kind": "enchant",
+          "from": 6250,
+          "fp_cost": 5,
+          "shop": {
+            "price": 1000,
+            "stock": -1
+          },
+          "set": {
+            "SpEffect.1626000.effectEndurance": 600
+          }
+        },
+        "black_flame_long_burn": {
+          "kind": "projectile",
+          "from": 6210,
+          "fp_cost": 5,
+          "shop": {
+            "price": 9999,
+            "stock": -1
+          },
+          "set": {
+            "SpEffect.1621000.effectEndurance": 30
+          }
+        },
+        "strike_copy": {
+          "kind": "projectile",
+          "from": 4440,
+          "fp_cost": 4,
+          "shop": {
+            "price": 1000,
+            "stock": -1
+          },
+          "set": {
+            "AtkParam_Pc.44400.atkMag": 1800,
+            "AtkParam_Pc.44401.atkMag": 1800,
+            "AtkParam_Pc.44405.atkMag": 1800,
+            "AtkParam_Pc.44406.atkMag": 1800,
+            "AtkParam_Pc.44407.atkMag": 1840,
+            "AtkParam_Pc.44408.atkMag": 1840
+          }
+        },
         "<id-6>": null,
         "<id-7>": null,
         "<id-8>": null,

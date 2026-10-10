@@ -66,6 +66,51 @@ def test_the_status_says_where_the_exe_is_how_big_and_how_long(project, monkeypa
                                                           tests_s=None, build_s=1.0, total_s=1.0))
 
 
+def _built(project):
+    exe = project / "build" / "dist" / "eldendisk.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"MZ" * 8)
+    (exe.parent / "README.md").write_text("x")
+    return exe
+
+
+def _status(project, **kw):
+    layout = dev_pipeline.build_layout()
+    return "\n".join(dev_pipeline.status_lines(layout=layout, engine="pyinstaller", embed=True, configs=[], tests_s=1.0,
+                                               build_s=2.0, total_s=3.0, **kw))
+
+
+def test_the_status_is_plain_text_unless_colour_or_links_are_asked_for(project):
+    _built(project)
+    assert "\x1b" not in _status(project)
+
+
+def test_the_status_has_the_console_colours_and_clickable_paths(project, monkeypatch):
+    exe = _built(project)
+    linked = []
+    # ui.linkify only knows Windows paths (it is tested in test_ui); here it is checked that the status hands it the three paths
+    monkeypatch.setattr(dev_pipeline.ui, "linkify", lambda text, color=False, **kw: linked.append((text, color)) or f"<link>{text}</link>")
+    text = _status(project, color=True, links=True)
+    assert [t.split(" (")[0] for t, c in linked if c] == [str(exe), str(exe.parent / "README.md"), str(dev_pipeline.app_data_dir())]
+    assert text.count("<link>") == 3
+    assert "\x1b[36m" in text and "\x1b[2m" in text                      # the start command is cyan, labels and sha256 dim
+    only_colour = _status(project, color=True)
+    assert "<link>" not in only_colour and "\x1b[38;5;208meldendisk.exe" in only_colour    # the file name at the end of the path is orange
+
+
+def test_log_words_are_tinted_like_the_console(monkeypatch, capsys):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    dev_pipeline.log("SUCCESS: tests passed.")
+    dev_pipeline.log("ERROR: boom")
+    dev_pipeline.log("Step 1/2: Running the tests")
+    out = capsys.readouterr().out
+    assert "\x1b[32mSUCCESS\x1b[0m: tests passed." in out and "\x1b[31mERROR\x1b[0m: boom" in out and "\x1b[1mStep 1/2\x1b[0m" in out
+    monkeypatch.setenv("NO_COLOR", "1")
+    dev_pipeline.log("SUCCESS: x")
+    assert capsys.readouterr().out == "[E2E Pipeline] SUCCESS: x\n"
+
+
 def test_the_build_always_cleans_and_embeds_unless_told_not_to(monkeypatch, tmp_path):
     got = []
     monkeypatch.setattr(dev_pipeline, "run_precheck", lambda: True)

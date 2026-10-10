@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import shutil
 import subprocess
 import sys
@@ -30,7 +31,8 @@ else:
     CODE_DIR = ROOT_DIR
 
 sys.path.insert(0, str(CODE_DIR))
-from eldendisk import __version__
+from eldendisk import __version__, ui
+from eldendisk.paths import app_data_dir
 from eldendisk.vault.session import LEGACY_MARKER_NAME, SESSION_NAME
 
 ENGINES = ("pyinstaller", "nuitka")
@@ -38,8 +40,25 @@ EXE_NAME = "eldendisk.exe"
 REL_EXE = "./build/dist/eldendisk.exe"
 
 
+_TINT = re.compile(r"^(SUCCESS|ERROR|WARNING)\b|^(Step \d+/\d+)\b|^(Done)\b")
+_TINT_KIND = {"SUCCESS": "ok", "ERROR": "error", "WARNING": "warn", "Done": "ok"}
+
+
+def _tint(msg: str, color: bool) -> str:
+    """The same colours as the tool's console: SUCCESS green, ERROR red, WARNING yellow, `Step n/2` and `Done` bold."""
+    if not color:
+        return msg
+    m = _TINT.match(msg)
+    if not m:
+        return msg
+    word = m.group(0)
+    kind = _TINT_KIND.get(word, "bold")
+    return ui.paint(word, kind, True) + msg[len(word):]
+
+
 def log(msg: str) -> None:
-    print(f"[E2E Pipeline] {msg}", flush=True)
+    color = ui.use_color(sys.stdout)
+    print(f"{ui.paint('[E2E Pipeline]', 'dim', color)} {_tint(msg, color)}", flush=True)
 
 
 def run_precheck() -> bool:
@@ -191,9 +210,18 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _path_text(text: str, color: bool, links: bool) -> str:
+    """A path in the status: clickable (OSC 8) when the terminal supports it, its file name orange on a colour console."""
+    if links:
+        return ui.linkify(text, color=color)
+    return ui.paint_tails(text) if color else text
+
+
 def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path], tests_s: float | None, build_s: float,
-                 total_s: float) -> list[str]:
-    """What the pipeline prints at the end (pure apart from reading the finished exe, so a test can check it)."""
+                 total_s: float, color: bool = False, links: bool = False) -> list[str]:
+    """What the pipeline prints at the end (pure apart from reading the finished exe, so a test can check it).
+    `color` / `links`: the look of the tool's console (dim labels, orange file names, clickable paths, cyan start command); both
+    off gives plain text."""
     dist = layout["dist_dir"]
     exe = dist / EXE_NAME
     size = exe.stat().st_size
@@ -208,11 +236,20 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
         ("tests", "skipped" if tests_s is None else _fmt_seconds(tests_s)),
         ("build", _fmt_seconds(build_s)),
         ("total", _fmt_seconds(total_s)),
-        ("data", "%LOCALAPPDATA%\\EldenDisk (the vault, the extensions' files and the exports; the exe can be copied anywhere)"),
+        ("data", f"{app_data_dir()} (the vault, the extensions' files and the exports; the exe can be copied anywhere)"),
         ("start it", f"{REL_EXE.replace('/', chr(92))} run -v"),
     ]
     width = max(len(k) for k, _ in rows)
-    return [f"  {k.ljust(width)}  {v}" for k, v in rows]
+
+    def value(key: str, v: str) -> str:
+        if key in ("exe", "readme", "data"):
+            return _path_text(v, color, links)
+        if key == "sha256":
+            return ui.paint(v, "dim", color)
+        if key == "start it":
+            return ui.paint(v, "cyan", color)
+        return v
+    return [f"  {ui.paint(k.ljust(width), 'dim', color)}  {value(k, v)}" for k, v in rows]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -241,8 +278,9 @@ def main(argv: list[str] | None = None) -> int:
 
     layout = build_layout()
     log("Done:")
+    color, links = ui.use_color(sys.stdout), ui.use_links(sys.stdout)
     for line in status_lines(layout=layout, engine=args.engine, embed=not args.no_embed, configs=config_files(layout),
-                             tests_s=tests_s, build_s=build_s, total_s=time.monotonic() - started):
+                             tests_s=tests_s, build_s=build_s, total_s=time.monotonic() - started, color=color, links=links):
         print(line, flush=True)
     return 0
 

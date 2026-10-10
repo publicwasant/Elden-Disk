@@ -110,21 +110,21 @@ Slot 4 (slots 1-3: the tested spell, the Black Flame clone, the Black Flame Blad
 | P4 | Change P1's set to `{"SpEffect.1621000.changeHpRate": -0.05}` and hit a damaged enemy | the burn heals instead of damaging (check the enemy's health bar); the direct hit damage is still dealt | [ ] |
 | P5 | `"kind": "projectile", "from": 6250` (an enchant) then `--add all --dry-run` | error: `from` 6250 calls SpEffect and no Bullet row, nothing built | [ ] |
 
-## A. `kind: attack` and the attack rows of a projectile (Phase 2.4; coded and tested, not run in the game yet)
+## A. `kind: attack` and the attack rows of a projectile (Phase 2.4; passed in the game 2026-10-11)
 
 Needs the exe or `python -m eldendisk` rebuilt from the new code. Since 2.4, **slot 4 (P1's Black Flame projectile) also copies its two AtkParam_Pc rows**, so the file of the design re-encodes 26 blocks (the gate's limit since T9): `extension innovate-items spells --add all --dry-run` must say `gate passed (26 blocks re-encoded)`. Slot 5 below is one more spell, so the limit may be reached (checked on the build here: the design with slot 5 as in A1 and as in A4 passes the gate with 26 blocks); if the gate stops it (R2/R7 say the numbers), tell me the numbers.
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
-| A0 | Repeat P1 with the new code (slot 4 unchanged), `run`, cast the copy of Black Flame | works like P1: the fireball flies and hits like the original, burns for 30 s | [ ] |
-| A1 | Slot 5 (the `"<id-5>": null` line of `extension.json` becomes this entry): `"strike_copy": {"kind": "attack", "from": 4440, "fp_cost": 4, "shop": {"price": 1000, "stock": -1}}` (4440 is a sorcery that makes a direct attack with six AtkParam_Pc rows); `--add all --dry-run`, then `run`; buy, memorize, cast | the gate passes; the copy casts and hurts like the original 4440 (same hits, same damage) | [ ] |
-| A2 | After A1, `read --param-check` | every row equal; AtkParam_Pc shows 6 + 2 = 8 new rows (slot 4: 2, slot 5: 6), Goods and Magic one more each | [ ] |
-| A3 | `read --param AtkParam_Pc.710000032.atkMag` (the first copy of slot 5; the original `AtkParam_Pc.44400.atkMag` is 180) | the copy reads 180, the original 180 | [ ] |
-| A4 | Add to slot 5: `"set": {"AtkParam_Pc.44400.atkMag": 1800, "AtkParam_Pc.44401.atkMag": 1800, "AtkParam_Pc.44405.atkMag": 1800, "AtkParam_Pc.44406.atkMag": 1800, "AtkParam_Pc.44407.atkMag": 1840, "AtkParam_Pc.44408.atkMag": 1840}`; `run`; cast the copy and the original on the same enemy | the copy hits about ten times as hard; the original 4440 is unchanged (`read --param AtkParam_Pc.44400.atkMag` still 180) | [ ] |
-| A5 | `"kind": "attack", "from": 6210` (Black Flame throws a Bullet) then `--add all --dry-run` | error: kind attack needs a spell that makes a direct attack and throws nothing; nothing built | [ ] |
-| A6 | `"kind": "projectile", "from": 4440` then `--add all --dry-run` | error: `from` 4440 calls AtkParam_Pc and no Bullet row ... a direct attack is kind attack | [ ] |
+| A0 | Repeat P1 with the new code (slot 4 unchanged), `run`, cast the copy of Black Flame | works like P1: the fireball flies and hits like the original, burns for 30 s. Passed 2026-10-11: `--add all --dry-run` said `gate passed (26 blocks re-encoded)`; the copy of Black Flame was bought, memorized and cast as before | ✓ |
+| A1 | Slot 5 (the `"<id-5>": null` line of `extension.json` becomes this entry): `"strike_copy": {"kind": "attack", "from": 4440, "fp_cost": 4, "shop": {"price": 1000, "stock": -1}}` (4440 is a sorcery that makes a direct attack with six AtkParam_Pc rows); `--add all --dry-run`, then `run`; buy, memorize, cast | the gate passes; the copy casts and hurts like the original 4440 (same hits, same damage). Passed 2026-10-11: the design with slot 5 built (26 blocks, gate passed), 5 new items in the merchant's list, the copy of 4440 was bought, memorized and cast like the original | ✓ |
+| A2 | After A1, `read --param-check` | every row equal; AtkParam_Pc shows 6 + 2 = 8 new rows (slot 4: 2, slot 5: 6), Goods and Magic one more each. Passed 2026-10-11: Goods 2334, Magic 322, SpEffect 11360, Bullet 15479, AtkParam_Pc 11025 (+8), ShopLineup 1301, all equal | ✓ |
+| A3 | `read --param AtkParam_Pc.710000032.atkMag` (the first copy of slot 5; the original `AtkParam_Pc.44400.atkMag` is 180) | the copy reads 180, the original 180. Passed 2026-10-11: the copy read 180 | ✓ |
+| A4 | Add to slot 5: `"set": {"AtkParam_Pc.44400.atkMag": 1800, "AtkParam_Pc.44401.atkMag": 1800, "AtkParam_Pc.44405.atkMag": 1800, "AtkParam_Pc.44406.atkMag": 1800, "AtkParam_Pc.44407.atkMag": 1840, "AtkParam_Pc.44408.atkMag": 1840}`; `run`; cast the copy and the original on the same enemy | the copy hits about ten times as hard; the original 4440 is unchanged (`read --param AtkParam_Pc.44400.atkMag` still 180). Passed 2026-10-11: the copy read 1800 and hit far harder than the original | ✓ |
+| A5 | `"kind": "attack", "from": 6210` (Black Flame throws a Bullet) then `--add all --dry-run` | error: kind attack needs a spell that makes a direct attack and throws nothing; nothing built. Passed 2026-10-11: `from` 6210 calls Bullet: kind attack needs a spell that makes a direct attack ...; nothing built | ✓ |
+| A6 | `"kind": "projectile", "from": 4440` then `--add all --dry-run` | error: `from` 4440 calls AtkParam_Pc and no Bullet row ... a direct attack is kind attack. Passed 2026-10-11: `from` 4440 calls AtkParam_Pc and no Bullet row: kind projectile needs a spell that throws or creates a Bullet ...; nothing built | ✓ |
 
-If A1 stops at the title screen with "Failed to save game", say so with the screenshot: that is the layout of the grown table (T9 passed with the same layout, so it would be something the recipe does differently).
+(No failure.) If A1 had stopped at the title screen with "Failed to save game", say so with the screenshot: that is the layout of the grown table (T9 passed with the same layout, so it would be something the recipe does differently).
 
 ## T7. The envelope test (Phase 2.3; beyond the gate on purpose; passed in the game 2026-10-10)
 

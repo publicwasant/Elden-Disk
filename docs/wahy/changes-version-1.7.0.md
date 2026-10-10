@@ -1,7 +1,7 @@
 > [!NOTE]
 > **Version:** `1.7.0`  
 > **Status:** IMPLEMENTED (unit and golden tests; a tool-built file ran in the real game; the params workbench was tried in the game 2026-10-09 (manual plan PW); the secured path and poise are not yet tried, see spec 1.7.0 section 10)  
-> **Last Updated:** _2026-10-09_
+> **Last Updated:** _2026-10-11_
 
 **Summary:** **Extensions.** New main command `extension`; its first extension `innovate-items spells` builds a `regulation.bin` with your own incantation from a JSON file (`extension.json`, embedded in the exe), offline, inside the tool. A file goes design → built (gate passed) → secured (`--secure`, after you tried it). With the vault ON, `run` swaps the secured copy without building while the design is unchanged; otherwise it builds, the gate judges the file, and the vault swaps it in. The vault now swaps the file it is given instead of looking in its own folder.
 
@@ -89,7 +89,7 @@ What it changes for the spells:
 - Tests: `test_ext_projectile.py` (58, golden included), `test_ext_grow.py` (+6), `test_param_tables.py` (+2).
 - The live reader (`read --param`, `read --param-check`, `write`) accepts a row of a table grown at its end: in the old data counted back from the strings, or behind the strings.
 - A build with a projectile or an attack now re-encodes up to 26 blocks (the design with Black Flame as a projectile: 26): the gate is at its limit; one more spell in the file may need a larger tested limit.
-- In-game tests A1-A3 and the repeat of P1 are in the manual test plan; not run yet.
+- In the game (2026-10-11, manual plan A0-A6, all passed): the exe built by `dev_pipeline.py`, five slots, gate passed with 26 blocks; the Black Flame copy (with its own Atk rows) and the `attack` copy of 4440 were bought, memorized and cast; `read --param-check` found every row equal (AtkParam_Pc 11025); a `set` of `atkMag` 1800 on the copy made it hit about ten times as hard and left the original at 180; `attack` from 6210 and `projectile` from 4440 stop with an error and build nothing.
 
 ## Decisions taken while implementing
 

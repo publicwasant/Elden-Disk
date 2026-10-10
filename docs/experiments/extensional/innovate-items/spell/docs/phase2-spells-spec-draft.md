@@ -133,4 +133,4 @@ Where it differs from this draft:
 - The gate is now 26 blocks, 219,000 bytes of body and 243,000 of frame (T9). A design with one projectile and its Atk copies is at the limit of the 26 blocks.
 - `attack` needs a Magic row that makes a direct attack (an AtkParam_Pc ref and no Bullet ref): 4430, 4440, 4450, 7080, 7510 in the game. Generic rows (e.g. 79980, 79990) stay shared.
 - `PLANNED_KINDS` is empty: all five kinds exist.
-- In the game: A0-A6 of the manual plan are open.
+- In the game: A0-A6 of the manual plan all passed 2026-10-11 (5 slots, 26 blocks, every row equal, the `set` on a copy raised its damage tenfold and left the original at 180).
