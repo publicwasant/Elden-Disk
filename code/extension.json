@@ -37,8 +37,8 @@
             "faith": 0
           },
           "shop": {
-            "price": 1000,
-            "stock": -1
+            "price": 2222,
+            "stock": 2
           },
           "set": {
             "Magic.6210.slotLength": 1
@@ -49,8 +49,8 @@
           "from": 6250,
           "fp_cost": 5,
           "shop": {
-            "price": 1000,
-            "stock": -1
+            "price": 3333,
+            "stock": 3
           },
           "set": {
             "SpEffect.1626000.effectEndurance": 600
@@ -61,8 +61,8 @@
           "from": 6210,
           "fp_cost": 5,
           "shop": {
-            "price": 9999,
-            "stock": -1
+            "price": 4444,
+            "stock": 4
           },
           "set": {
             "SpEffect.1621000.effectEndurance": 30
@@ -73,8 +73,8 @@
           "from": 4440,
           "fp_cost": 4,
           "shop": {
-            "price": 1000,
-            "stock": -1
+            "price": 5555,
+            "stock": 5
           },
           "set": {
             "AtkParam_Pc.44400.atkMag": 1800,

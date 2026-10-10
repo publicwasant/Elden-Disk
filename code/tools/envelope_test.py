@@ -40,6 +40,8 @@ def main(argv=None) -> int:
     ap.add_argument("--source", required=True, help="the game's own regulation.bin (1.17.1)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--spec", default=str(Path(__file__).resolve().parent.parent / "extension.json"))
+    ap.add_argument("--no-copies", action="store_true",
+                    help="do not add the 8 unreferenced rows: the file is exactly the design (T10: a design too big for the gate, from capacity.py --write-design)")
     a = ap.parse_args(argv)
     base = Path(a.source).read_bytes()
     if hashlib.sha256(base).hexdigest() != bases.BASES[bases.CURRENT_BASE]:
@@ -53,23 +55,26 @@ def main(argv=None) -> int:
     chain = chainmod.load(bnd, P, D) if any(recipes.needs_chain(x) for x in spells) else None
     jobs, fp = recipes.make_rows(P, D, spells, chain)
     rows = []
-    for new, old in COPIES.items():
+    copies, atk_copies = ({}, {}) if a.no_copies else (COPIES, ATK_COPIES)
+    for new, old in copies.items():
         r = P["bullet"].find(old)
         if r is None:
             print("Bullet row %d is missing: not the 1.17.1 file" % old, file=sys.stderr)
             return 2
         rows.append((new, bytes(r[2])))
-    jobs["Bullet"] = {"rows": jobs.get("Bullet", {"rows": []})["rows"] + rows, "name_from": recipes.NAME_FROM["bullet"]}     # after the design's own rows, if any
-    fp.added["bullet"] |= set(COPIES)
+    if rows:
+        jobs["Bullet"] = {"rows": jobs.get("Bullet", {"rows": []})["rows"] + rows, "name_from": recipes.NAME_FROM["bullet"]}     # after the design's own rows, if any
+    fp.added["bullet"] |= set(copies)
     arows = []
-    for new, old in ATK_COPIES.items():
+    for new, old in atk_copies.items():
         r = P["atk"].find(old)
         if r is None:
             print("AtkParam_Pc row %d is missing: not the 1.17.1 file" % old, file=sys.stderr)
             return 2
         arows.append((new, bytes(r[2])))
-    jobs["AtkParam_Pc"] = {"rows": jobs.get("AtkParam_Pc", {"rows": []})["rows"] + arows, "name_from": recipes.NAME_FROM["atk"], "mode": "end"}
-    fp.added["atk"] |= set(ATK_COPIES)
+    if arows:
+        jobs["AtkParam_Pc"] = {"rows": jobs.get("AtkParam_Pc", {"rows": []})["rows"] + arows, "name_from": recipes.NAME_FROM["atk"], "mode": "end"}
+    fp.added["atk"] |= set(atk_copies)
     newbody, _ = grow.grow(src.body, jobs)
     frame, *_ = reblock.rewrite_grow(src, newbody)
     h = bytearray(src.header)
@@ -83,11 +88,11 @@ def main(argv=None) -> int:
         V = {k: ParamView(nb.get(f).data, D[k].size) for k, f in TABLE_FILES.items()}
         for s in spells:
             problems += recipes.check_template(V, D, s, P, chain) if recipes.is_template(s) else recipes.check_incantation(V, D, s)
-        for new, old in COPIES.items():
+        for new, old in copies.items():
             got, want = V["bullet"].find(new), V["bullet"].find(old)
             if got is None or want is None or bytes(got[2]) != bytes(want[2]):
                 problems.append("T7: bullet copy %d is not a byte-for-byte copy of %d" % (new, old))
-        for new, old in ATK_COPIES.items():
+        for new, old in atk_copies.items():
             got, want = V["atk"].find(new), V["atk"].find(old)
             if got is None or want is None or bytes(got[2]) != bytes(want[2]):
                 problems.append("T8: attack copy %d is not a byte-for-byte copy of %d" % (new, old))
@@ -99,7 +104,7 @@ def main(argv=None) -> int:
     print("written %s" % a.out)
     print("  sha256 %s" % hashlib.sha256(data).hexdigest())
     print("  decrypted sha256 %s" % hashlib.sha256(dcx).hexdigest())
-    print("  re-encoded blocks %d (gate limit %d, tested in the game: 26 in T9)" % (stats["changed_blocks"], preflight.MAX_CHANGED_BLOCKS))
+    print("  re-encoded blocks %d (gate limit %d, tested in the game: 27 in T10)" % (stats["changed_blocks"], preflight.MAX_CHANGED_BLOCKS))
     print("  body growth %d (gate limit %d)" % (stats["body_growth"], preflight.MAX_BODY_GROWTH))
     print("  frame growth %d (gate limit %d)" % (stats["frame_growth"], preflight.MAX_FRAME_GROWTH))
     print("  envelope warnings: %s" % ("; ".join(warn) or "none"))

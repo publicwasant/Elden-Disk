@@ -25,9 +25,9 @@ from .reblock import BS, TAIL_ZEROS, Source
 
 # What the game was seen to accept (handbook Part VI; T6 = 64 new rows in each of the four tables). Beyond these the file is
 # untested: the gate stops, and the way forward is a new in-game test that raises the number, never a bypass.
-MAX_CHANGED_BLOCKS = 26      # blocks re-encoded (T6: 13; T7, 2026-10-10: 20 with a grown fifth table, Bullet; T9, 2026-10-10: 26 with a sixth, AtkParam_Pc)
+MAX_CHANGED_BLOCKS = 27      # blocks re-encoded (T6: 13; T7, 2026-10-10: 20 with a grown fifth table, Bullet; T9, 2026-10-10: 26 with a sixth, AtkParam_Pc; T10, 2026-10-11: 27, a 20-slot design)
 MAX_BODY_GROWTH = 219_000    # decoded bytes added (passed: 219 KB; 466 KB failed whatever the content)
-MAX_FRAME_GROWTH = 243_000   # compressed frame bytes added (T6: +234,768; T9: +242,464)
+MAX_FRAME_GROWTH = 292_000   # compressed frame bytes added (T6: +234,768; T9: +242,464; T10: +291,040)
 
 
 def _raw_lit_split(c: bytes):

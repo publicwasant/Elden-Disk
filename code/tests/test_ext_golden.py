@@ -541,3 +541,19 @@ def test_the_envelope_test_tool_builds_a_file_beyond_the_gate_that_an_independen
     other = tmp_path / "other.bin"
     other.write_bytes(base + b"x")
     assert tool.main(["--source", str(other), "--out", str(tmp_path / "no.bin"), "--spec", str(design)]) == 2 and not (tmp_path / "no.bin").exists()
+
+
+def test_the_envelope_test_tool_with_no_copies_builds_exactly_the_design(tmp_path, base):
+    import importlib.util
+    spec_ = importlib.util.spec_from_file_location("envelope_test", Path(__file__).resolve().parent.parent / "tools" / "envelope_test.py")
+    tool = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(tool)
+    game, out, design = tmp_path / "game.bin", tmp_path / "t10.bin", tmp_path / "extension.json"
+    game.write_bytes(base)
+    design.write_text(json.dumps(_Z4_RAW), encoding="utf-8")
+    assert tool.main(["--source", str(game), "--out", str(out), "--spec", str(design), "--no-copies"]) == 0
+    dcx = container.decrypt(out.read_bytes())
+    csize = struct.unpack(">I", dcx[0x20:0x24])[0]
+    zs = pytest.importorskip("zstandard")
+    P, D = _tables(zs.ZstdDecompressor().decompressobj().decompress(dcx[0x4C:0x4C + csize]), True)
+    assert P["bullet"].count == 15475 and P["atk"].count == 11017 and P["sp"].count == 11354 + 2      # no unreferenced Bullet / Atk rows

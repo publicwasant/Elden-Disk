@@ -156,7 +156,7 @@ For a spell that throws or creates a Bullet (185 of the game's player spells: Bl
                           "set": {"SpEffect.1621000.effectEndurance": 30, "Bullet.10621000.life": 6}}
 ```
 
-Rows added: Goods, Magic, the copied Bullet, AtkParam_Pc and SpEffect rows and the shop line. Gate: `check_template` also checks every copied Bullet and AtkParam_Pc row against the original template row (only the remapped links and the `set` fields may differ), the slot's block, that no copy still points at a template row that was copied, and that every Bullet, AtkParam_Pc and SpEffect the copies call exists. The limits of the file are the gate's (26 re-encoded blocks and 243,000 frame bytes since T9).
+Rows added: Goods, Magic, the copied Bullet, AtkParam_Pc and SpEffect rows and the shop line. Gate: `check_template` also checks every copied Bullet and AtkParam_Pc row against the original template row (only the remapped links and the `set` fields may differ), the slot's block, that no copy still points at a template row that was copied, and that every Bullet, AtkParam_Pc and SpEffect the copies call exists. The limits of the file are the gate's (27 re-encoded blocks and 292,000 frame bytes since T10; 26 and 243,000 from T9).
 
 ### 4e. `attack` (Phase 2.4; passed in the game 2026-10-11)
 
@@ -256,7 +256,7 @@ Measured on the 1.17.1 original (decoded body 54,111,776 bytes = 826 blocks of 6
 
 Inserting rows in place would shift everything behind a table (about 400 blocks re-encoded). Instead `grow.py` grows a table **backwards**: the table is moved forward by *X* bytes (a multiple of 16) into the space of the entries directly in front of it, and those entries are first copied to the end of the body (BND4 offsets repointed; the old copies are left as dead space). The record array is rebuilt (old pointers + *X*, new rows placed right after the records, new rows share the name pointer of the table's dummy row); the old rows and strings are not touched. Tables are processed in file order, so a later table may evict an earlier one that has already grown.
 
-What the game was seen to accept (handbook Part VI, test T6: 64 new inert rows in each of the four tables): decoded growth up to 219 KB, compressed frame growth up to +234,768 bytes, 13 re-encoded blocks (T6; 20 with a grown fifth table in T7), BND4 entries out of file order, appended blocks (literal and match-coded). 466 KB of growth failed. The gate (R7) holds these as limits: `MAX_BODY_GROWTH` 219,000, `MAX_FRAME_GROWTH` 243,000, `MAX_CHANGED_BLOCKS` 26 (the last two since T9); a warning counts as a stop; the numbers go up only after an in-game pass of a bigger file.
+What the game was seen to accept (handbook Part VI, test T6: 64 new inert rows in each of the four tables): decoded growth up to 219 KB, compressed frame growth up to +234,768 bytes, 13 re-encoded blocks (T6; 20 with a grown fifth table in T7), BND4 entries out of file order, appended blocks (literal and match-coded). 466 KB of growth failed. The gate (R7) holds these as limits: `MAX_BODY_GROWTH` 219,000, `MAX_FRAME_GROWTH` 292,000, `MAX_CHANGED_BLOCKS` 27 (the last two since T10; T9: 243,000 and 26); a warning counts as a stop; the numbers go up only after an in-game pass of a bigger file.
 
 Measured with this recipe (spells with shop and poise, passing the gate): 1 spell 13 blocks / +65,504 bytes; 2, 7 and 8 spells 13 blocks; **16 spells already re-encode 14 blocks** (the gate stopped them while the limit was 13; since T7 the limit is 20 and they pass). So more than about 8-15 spells need a new in-game test with a bigger file (T7), then new limits. The encoder limit that 64 spells with a poise buff could not be encoded (`rewrite_grow`: the repeat-offset state is not reachable) is fixed (Phase 2.3): a block that cannot end in the state the original expected ends in the nearest state it can reach, and the block after it is re-encoded too (same decoded bytes, new start state); the gate still stops such a file because it is beyond the tested growth.
 
@@ -265,7 +265,38 @@ Measured with this recipe (spells with shop and poise, passing the gate): 1 spel
 - **T7 (`tools/envelope_test.py`, Phase 2.3):** the design's spells plus 4 **unreferenced copies of the Black Flame bullets** (Bullet rows 10623000, 10623001, 10623050, 10623051 under the ids 500000000-500000003): a fifth table that grows (Bullet, 15,475 rows, 4.5 MB), about 20 re-encoded blocks (the gate's limit is 13), body growth about +93 KB, frame growth about +171 KB. The tool applies every check of the gate except the envelope numbers, which it prints; it writes the file only when everything else passes. Nothing points at the copies: the game must only load the file. **Passed in the game 2026-10-10** (T7a-T7c: the world loaded, played, left; the vault restored the original; the file had 20 re-encoded blocks, body +96,176, frame +174,944). Result: the gate's `MAX_CHANGED_BLOCKS` went from 13 to **20** (the body and frame limits stay: T7 stayed below the earlier T6 numbers). `kind: projectile` (new Bullet rows) comes next.
 - **T8 (Phase 2.4, did not pass 2026-10-10):** T7 plus 4 unreferenced AtkParam_Pc rows (ids 710002000-710002003): 25 blocks, body +6,266,672, frame +6,387,296, because the entry in front of AtkParam_Pc is AtkParam_Npc (6.17 MB), which back-growth must move. The game stopped at the title screen ("Failed to save game. Save data is corrupted."); the normal build loaded right after. AtkParam_Pc therefore cannot be grown with the current method; the gate keeps its numbers (20 blocks, 219,000, 235,000).
 - **T9 (Phase 2.4, passed 2026-10-10):** the same rows with AtkParam_Pc grown at its END (`grow._grow_end`): the records grow into the front of the row data, the first rows of the data (5 for the 4 new rows) are copied behind the strings, the new rows take the hole that is left, the 28 KB entry behind the table moves to the end of the body. Body +124,560, frame +242,464, 26 re-encoded blocks; the game loaded and played normally. The gate went from 20 blocks / 235,000 to 26 blocks / 243,000 (the body limit stays 219,000: 124,560 was tested).
+- **T10 (Phase 2.5, passed 2026-10-11):** exactly a 20-slot design (2 `projectile` + 2 `attack` + 16 `buff`, every slot with its own numbers, shop prices 1001-1007 for slots 1-7; no unreferenced rows): 27 re-encoded blocks, body +159,712, frame +291,040. The game loaded, Continue worked and the merchant's list was complete. The gate went to 27 blocks / 292,000 (the body limit stays 219,000).
 - **Plan:** (1) ✓ slot 1 alone in the game (appended rows, real spell data): passed 2026-10-09, and `read --param-check` found every row of the six tables equal to the build (Goods 2,330, Magic 318, SpEffect 11,356, Bullet 15,475, AtkParam_Pc 11,017, ShopLineup 1,297 rows); (2) add slots one at a time, the next with another effect; (3) T7 to raise the limits for more than about 8 spells; (4) decide how slots 8-64 are obtained (no shop line). The steps after slot 1 are in [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md) (Phase 1 done, Phase 2 spells of every kind) and [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/docs/phase1-params-workbench.md).
+
+
+### Capacity (Phase 2.5; measured offline with `tools/capacity.py`)
+
+| Design (slots) | Re-encoded blocks | Body growth | Frame growth | Gate before T10 (26 / 219,000 / 243,000) |
+|:--|:-:|:-:|:-:|:--|
+| 64 `clone` | 7 | 57,552 | 109,328 | ok |
+| 32 `buff` or `enchant` | 14 | 118,000 | 213,280 | ok |
+| 64 `buff` or `enchant` | 15 | 217,136 | 399,712 | stop: frame |
+| 20 `buff` | 14 | 103,616 | 174,576 | ok |
+| 1 `attack` | 19 | 93,888 | 160,704 | ok |
+| 8 `attack` + 12 `buff` | 20 | 116,496 | 212,064 | ok |
+| 16 `attack` | 24 | 884,496 | 982,640 | stop: body (a table has to move) |
+| 1 `projectile` | 26 | 121,600 | 232,800 | ok |
+| 8 `projectile` | 26 | 124,560 | 233,920 | ok (7 slots: frame 255,984, stop) |
+| 16 `projectile` | 26 | 132,160 | 271,216 | stop: frame |
+| 32 `projectile` | 27 | 955,632 | 1,133,744 | stop: blocks, body, frame |
+| 1 of each of the five kinds | 26 | 124,560 | 212,304 | ok |
+| 2 `projectile` + 2 `attack` + 16 `buff` | 27 | 159,712 | 291,040 | stop: blocks, frame |
+| 4 `projectile` + 4 `attack` + 12 `buff` | 27 | 144,208 | 286,816 | stop: blocks, frame |
+| 2 `projectile` + 2 `attack` + 8 `enchant` + 8 `clone` | 27 | 133,504 | 254,368 | stop: blocks, frame |
+| 6 `projectile` + 6 `attack` + 8 `buff` | 27 | 140,960 | 252,848 | stop: blocks, frame |
+
+What the numbers say (offline; the gate's verdict, not the game's):
+- **A design with no `projectile` fits 20 slots easily** (20 `buff`: 14 blocks, frame 174,576; 8 `attack` + 12 `buff`: 20 blocks, 212,064). `clone` alone fits 64.
+- **One `projectile` is enough to make the design heavy**: its Bullet and AtkParam_Pc tables bring it to 26 blocks with one slot, and every further buff, enchant or clone pushes the design to **27 blocks and a frame of 250,000-291,000** with 20 slots. That is beyond the gate (26 / 243,000) and beyond what the game has been seen to accept. This is what the T10 test below is for.
+- **16 or more `attack` or `projectile` slots of one kind** make a table move (body about +900,000), the same thing that failed in T8; that needs another way of growing, and is not needed for 16-20 slots in total.
+- The compressed frame depends on the number of new bytes, not on their values (20 slots with their own numbers each: 291,040, the same as 20 identical ones), and it is not smooth: 7 `projectile` slots give 255,984, 8 give 233,920. So the number of slots per kind is a range, not a formula.
+- **T10 passed (2026-10-11): the gate is now 27 blocks / 292,000 frame.** In the table, every row that said "stop: blocks, frame" with 27 blocks and a frame up to 291,040 passes now (all four 20-slot mixes; 7 and 16 `projectile` slots too: 255,984 and 271,216), and so does any mix of up to 20 slots with up to 8 `projectile` slots that was measured. Still stopped: 64 `buff` / `enchant` (frame 399,712), and 16 or more slots of one `attack` / `projectile` kind (a table moves). `python tools\capacity.py` measures any other design.
+- The shop has 7 free lines: slots 8 and above cannot be sold (Phase 2.6).
 
 ## 11. Tests
 
