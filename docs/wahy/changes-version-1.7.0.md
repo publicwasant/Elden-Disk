@@ -97,7 +97,7 @@ Target set by the author: 16-20 slots in all (not 64 of every kind). `tools/capa
 
 ## Phase 2 closed (2026-10-11)
 
-Phase 1 and Phase 2 (2.0-2.5) are closed by the author with **7 slots available** (slots 1-7, the ones with a shop line). Slots 8-64 stay in the design (`maximum` 64) and in the code, and are built, but cannot be bought; step 2.6 (how to obtain them) is struck out of the roadmap as deferred, not removed. Not run in the game, optional: P3-P5, E2-E4, CL4-CL5.
+Phase 1 and Phase 2 (2.0-2.5) are closed by the author with **7 slots available** (slots 1-7, the ones with a shop line). The shipped `code/extension.json` now has 20 slots (`maximum` 20, the slots 6-20 empty; the format still allows up to 64): slots 8-20 are built but cannot be bought; step 2.6 (how to obtain slots 8 and above) is struck out of the roadmap as deferred, not removed. Not run in the game, optional: P3-P5, E2-E4, CL4-CL5.
 
 ## Decisions taken while implementing
 

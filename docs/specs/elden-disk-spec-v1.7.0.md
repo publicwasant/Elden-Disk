@@ -296,7 +296,7 @@ What the numbers say (offline; the gate's verdict, not the game's):
 - **16 or more `attack` or `projectile` slots of one kind** make a table move (body about +900,000), the same thing that failed in T8; that needs another way of growing, and is not needed for 16-20 slots in total.
 - The compressed frame depends on the number of new bytes, not on their values (20 slots with their own numbers each: 291,040, the same as 20 identical ones), and it is not smooth: 7 `projectile` slots give 255,984, 8 give 233,920. So the number of slots per kind is a range, not a formula.
 - **T10 passed (2026-10-11): the gate is now 27 blocks / 292,000 frame.** In the table, every row that said "stop: blocks, frame" with 27 blocks and a frame up to 291,040 passes now (all four 20-slot mixes; 7 and 16 `projectile` slots too: 255,984 and 271,216), and so does any mix of up to 20 slots with up to 8 `projectile` slots that was measured. Still stopped: 64 `buff` / `enchant` (frame 399,712), and 16 or more slots of one `attack` / `projectile` kind (a table moves). `python tools\capacity.py` measures any other design.
-- **7 slots are available.** The merchant has 7 free shop lines, so slots 8 and above stay in the design and are built, but cannot be bought; how to obtain them (Phase 2.6) is deferred by the author (2026-10-11), not removed. Phase 2 is closed with this limit.
+- **7 slots are available.** The merchant has 7 free shop lines, so slots 8 and above stay in the design (the file in the repository has 20 slots, `maximum` 20; the format allows up to 64) and are built, but cannot be bought; how to obtain them (Phase 2.6) is deferred by the author (2026-10-11), not removed. Phase 2 is closed with this limit.
 
 ## 11. Tests
 

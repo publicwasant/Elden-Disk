@@ -1,7 +1,7 @@
 {
   "innovate_items": {
     "spells": {
-      "maximum": 64,
+      "maximum": 20,
       "slots": {
         "reverse_curse_technique": {
           "type": "incantation",
@@ -99,51 +99,7 @@
         "<id-17>": null,
         "<id-18>": null,
         "<id-19>": null,
-        "<id-20>": null,
-        "<id-21>": null,
-        "<id-22>": null,
-        "<id-23>": null,
-        "<id-24>": null,
-        "<id-25>": null,
-        "<id-26>": null,
-        "<id-27>": null,
-        "<id-28>": null,
-        "<id-29>": null,
-        "<id-30>": null,
-        "<id-31>": null,
-        "<id-32>": null,
-        "<id-33>": null,
-        "<id-34>": null,
-        "<id-35>": null,
-        "<id-36>": null,
-        "<id-37>": null,
-        "<id-38>": null,
-        "<id-39>": null,
-        "<id-40>": null,
-        "<id-41>": null,
-        "<id-42>": null,
-        "<id-43>": null,
-        "<id-44>": null,
-        "<id-45>": null,
-        "<id-46>": null,
-        "<id-47>": null,
-        "<id-48>": null,
-        "<id-49>": null,
-        "<id-50>": null,
-        "<id-51>": null,
-        "<id-52>": null,
-        "<id-53>": null,
-        "<id-54>": null,
-        "<id-55>": null,
-        "<id-56>": null,
-        "<id-57>": null,
-        "<id-58>": null,
-        "<id-59>": null,
-        "<id-60>": null,
-        "<id-61>": null,
-        "<id-62>": null,
-        "<id-63>": null,
-        "<id-64>": null
+        "<id-20>": null
       }
     }
   }
