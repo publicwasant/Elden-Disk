@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "extension.json, section innovate_items.spells (Level 2a)",
+  "type": "object",
+  "required": [
+    "innovate_items"
+  ],
+  "properties": {
+    "innovate_items": {
+      "type": "object",
+      "required": [
+        "spells"
+      ],
+      "properties": {
+        "spells": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maximum",
+            "slots"
+          ],
+          "properties": {
+            "maximum": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            },
+            "slots": {
+              "description": "One key per slot, in order: the slot number fixes the game rows. A filled slot's key is the spell id; an empty slot is null (any key). The number of slots must equal maximum (checked by the tool, not by this schema).",
+              "type": "object",
+              "patternProperties": {
+                "^[a-z0-9][a-z0-9_-]{0,39}$": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/$defs/spell"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "spell": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/buff"
+        },
+        {
+          "$ref": "#/$defs/template"
+        }
+      ]
+    },
+    "buff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "requires",
+        "fp_cost"
+      ],
+      "properties": {
+        "type": {
+          "const": "incantation"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "intelligence": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            },
+            "faith": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            },
+            "arcane": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            }
+          }
+        },
+        "fp_cost": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "stamina_cost": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "cast_motion": {
+          "enum": [
+            "flame-grant-me-strength",
+            "black-flame-blade"
+          ]
+        },
+        "effect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "heal_hp_per_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9999
+            },
+            "restore_fp_per_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999
+            },
+            "stamina_regen_speed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9999
+            },
+            "tick_seconds": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 60
+            },
+            "duration_seconds": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 600
+            },
+            "visual": {
+              "enum": [
+                "flame",
+                "flask",
+                "none",
+                null
+              ]
+            }
+          }
+        },
+        "poise_while_casting_seconds": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10
+        },
+        "shop": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "price"
+          ],
+          "properties": {
+            "price": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99999999
+            },
+            "stock": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 99,
+              "not": {
+                "const": 0
+              }
+            }
+          }
+        },
+        "kind": {
+          "const": "buff"
+        }
+      },
+      "description": "kind buff (the default when `kind` is left out): a heal-over-time buff built from Flame, Grant Me Strength."
+    },
+    "template": {
+      "description": "A spell made from a game spell: kind clone (a copy of its Goods and Magic rows; it keeps the template's chain), enchant (a weapon or shield enchant; its SpEffect rows are copied too), projectile (the same for a spell that throws Bullets: its Bullet and AtkParam_Pc rows are copied too), attack (a spell that makes a direct attack: its AtkParam_Pc rows are copied too) or buff with `from` (the same for a buff). What is left out stays the template's. Checked by the tool, not by this schema: `from` must be a player spell with a Goods row of the right kind, `type` must equal the template's, a Magic or Goods `set` key's row id must equal `from`, a SpEffect, Bullet or AtkParam_Pc key must name one of the copied rows (a clone has none; Bullet is for projectile only, AtkParam_Pc for projectile and attack), the field must exist and the value fit it, and id fields and fields that have a friendly name are refused.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "from"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "clone",
+            "enchant",
+            "projectile",
+            "attack",
+            "buff"
+          ]
+        },
+        "from": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "enum": [
+            "incantation",
+            "sorcery"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "intelligence": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            },
+            "faith": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            },
+            "arcane": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            }
+          }
+        },
+        "fp_cost": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "stamina_cost": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "shop": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "price"
+          ],
+          "properties": {
+            "price": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99999999
+            },
+            "stock": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 99,
+              "not": {
+                "const": 0
+              }
+            }
+          }
+        },
+        "set": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^(Magic|Goods|SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  }
+}

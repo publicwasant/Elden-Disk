@@ -85,7 +85,7 @@ def project(tmp_path, monkeypatch):
     (code / "offsets.json").write_text("{}")
     (code / "chr_state_ids.json").write_text("{}")
     (code / "eldendisk" / "__main__.py").write_text("")
-    (code / "extension.json").write_text('{"innovate_spells": {"maximum": 1, "slots": {"<id-1>": null}}}')
+    (code / "extension.json").write_text('{"innovate_items": {"spells": {"maximum": 1, "slots": {"<id-1>": null}}}}')
     monkeypatch.setattr(build_cmd, "HERE", code)
     return tmp_path
 

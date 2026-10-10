@@ -11,8 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_spells import bases, build, chain as chainmod, container, gate, recipes, spec
-from eldendisk.extension.innovate_spells.defs import TABLE_FILES, Def
+from eldendisk.extension.innovate_items import bases, container
+from eldendisk.extension.innovate_items.spells import build, chain as chainmod, gate, recipes, spec
+from eldendisk.extension.innovate_items.defs import TABLE_FILES, Def
 from tests.ext_helpers import param_blob
 from tests.z4 import ID as Z4_ID, SPELL as Z4_SPELL, file_of
 
@@ -148,7 +149,7 @@ def test_an_enchant_copies_its_own_rows_into_the_slots_block_and_leaves_the_gene
     P, D, C = _tables()
     b = recipes.template_rows(P, D, _spell(), C)
     base = recipes.slot_rows(2)["sp_copy_base"]
-    assert b.own == {"sp": {1000: base, 1001: base + 1}, "bullet": {}} and [i for i, _ in b.sp] == [base, base + 1]
+    assert b.own == {"sp": {1000: base, 1001: base + 1}, "bullet": {}, "atk": {}} and [i for i, _ in b.sp] == [base, base + 1]
     assert D["magic"].get(b.magic, "refId1") == base and D["magic"].get(b.magic, "refCategory1") == 2
     first, second = (D["sp"].get(b.sp[0][1], "cycleOccurrenceSpEffectId"), D["sp"].get(b.sp[1][1], "atkOccurrenceSpEffectId"))
     assert first == base + 1 and second == 500            # the link between the copies is remapped, the generic row is not copied
@@ -272,7 +273,7 @@ def _orig(src):
 
 def _file_tables(data):
     import struct
-    from eldendisk.extension.innovate_spells import zstd
+    from eldendisk.extension.innovate_items import zstd
     dcx = container.decrypt(data)
     body = zstd.decode_frame(dcx[0x4C:0x4C + struct.unpack(">I", dcx[0x20:0x24])[0]])
     bnd = container.Bnd4(body)

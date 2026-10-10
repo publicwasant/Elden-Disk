@@ -148,8 +148,9 @@ class ParamView:
     says. Needed for a table that has grown (grow.py: the new rows sit right after the records, the old rows stay where they
     were), and fine for an untouched one. Read only. `rows` and `find` look like Param's, so checks can use either.
 
-    The layout is checked, not trusted: records sorted by unique id, every row inside the data area and inside the file, no two
-    rows overlapping, every name pointer inside the file."""
+    The layout is checked, not trusted: records sorted by unique id, every row inside the file and not across the start of the
+    strings, no two rows overlapping, every name pointer inside the file. A row may lie BEHIND the strings (a table that grew at
+    its end, grow.py `_grow_end`: the rows that made room for the records were copied there)."""
 
     def __init__(self, blob: bytes, row_size: int):
         self.size, self.row_size = len(blob), row_size
@@ -171,7 +172,7 @@ class ParamView:
             if prev is not None and rid <= prev:
                 raise ContainerError("records are not sorted by unique id (at id %d)" % rid)
             prev = rid
-            if doff < first_row or doff + row_size > self.strings_off:
+            if doff < first_row or doff + row_size > len(blob) or (doff < self.strings_off < doff + row_size):
                 raise ContainerError("row %d points outside the data area" % rid)
             if noff >= len(blob):
                 raise ContainerError("row %d: the name pointer lies outside the file" % rid)

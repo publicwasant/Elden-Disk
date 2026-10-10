@@ -3,7 +3,7 @@
 > **Status:** IMPLEMENTED (unit and golden tests; a tool-built file ran in the real game; the secured path (`--secure`) and poise are not yet tried, see section 10)  
 > **Last Updated:** _2026-10-09_
 
-# Elden-Disk spec 1.7.0: extensions and `innovate-spells` (design → secured)
+# Elden-Disk spec 1.7.0: extensions and `innovate-items spells` (design → secured)
 
 Reads on top of [spec 1.6.4](elden-disk-spec-v1.6.4.md) (the `regulation.bin` swap). Only what changes is written here. The research behind the build (why a frame is rewritten block by block, what the game rejected) is the [item-customization handbook](../experiments/item-customization/item-customization-handbook.md), Part VI.
 
@@ -15,11 +15,11 @@ Reads on top of [spec 1.6.4](elden-disk-spec-v1.6.4.md) (the `regulation.bin` sw
 
 ```
 extension.json (embedded in the exe) --run: build on the game's own regulation.bin + gate--> regulation.bin --vault swaps--> the game (one session; the vault puts the game's file back)
-                                       --extension innovate-spells --secure (game closed)--> regulation.secured.bin + spells.commit.json
+                                       --extension innovate-items spells --secure (game closed)--> regulation.secured.bin + spells.commit.json
 next run, design unchanged: regulation.secured.bin is swapped; nothing is built, nothing is re-checked (about 20 s saved)
 ```
 
-`extension` is a main feature like `read`, `write` and `vault`: a place for features that **build things for the game outside the game**. `innovate-spells` is the first. Because an extension touches game files, it **depends on the vault's permission**, like `write` needs the vault ON: with the vault ON (the default) `run` also runs the extension build; with the vault OFF it does not. There is no `--extension-on` flag. The vault is unchanged in purpose: it backs up, swaps the file it is given, and puts the original back.
+`extension` is a main feature like `read`, `write` and `vault`: a place for features that **build things for the game outside the game**. `innovate-items spells` is the first. Because an extension touches game files, it **depends on the vault's permission**, like `write` needs the vault ON: with the vault ON (the default) `run` also runs the extension build; with the vault OFF it does not. There is no `--extension-on` flag. The vault is unchanged in purpose: it backs up, swaps the file it is given, and puts the original back.
 
 The base is **always the game's own file**, checked against the known original on **every** path (also when the secured file is used); a modified file is never modified again.
 
@@ -28,9 +28,9 @@ Innovate levels (the author's words): **L1** `write --set` (memory, live); **L2*
 ## 2. Layout
 
 ```
-code/extension.json    the design of the extensions (you edit it); the section `innovate_spells` holds the spells
-code/eldendisk/extension/innovate_spells/spells.schema.json   JSON schema of the design (for editors; dev tests check it agrees with the validator)
-%LOCALAPPDATA%\EldenDisk\extension\innovate-spells\          (--extension-dir overrides the folder)
+code/extension.json    the design of the extensions (you edit it); the section `innovate_items.spells` holds the spells
+code/eldendisk/extension/innovate_items/spells/spells.schema.json   JSON schema of the design (for editors; dev tests check it agrees with the validator)
+<vault>\extension\innovate-items\spells\          (--extension-dir replaces <vault>\extension; the vault is --vault, else the Registry, else the default)
     regulation.bin           the latest build (gate passed, not yet confirmed)
     regulation.secured.bin   a copy of the build you confirmed with --secure
     spells.commit.json       the commit: the design snapshot, the rows each spell took, hashes of the secured file and of the base, recipe version (format 2)
@@ -38,7 +38,7 @@ code/eldendisk/extension/innovate_spells/spells.schema.json   JSON schema of the
 
 No base copy and no manifest are kept. `build -c -em` embeds `extension.json` in the exe like `offsets.json`; the design is found as `--spec FILE`, else `extension.json` next to the exe, else the embedded copy, else the package in the source tree (`paths.get_resource_path`). Without `-em`, the file is copied next to the exe, where you can edit it without rebuilding the exe.
 
-Code: `code/eldendisk/extension/` (registry) and `extension/innovate_spells/` (aes, zstd, fse, reblock, container, defs, paramdefs, bases, spec, recipes, preflight, **gate**, build, service). Standard library only. The package imports nothing else of the tool (`test_architecture.py`).
+Code: `code/eldendisk/extension/` (registry) and `extension/innovate_items/` (the engine: aes, zstd, fse, reblock, container, defs, paramdefs, bases, grow, preflight) and `extension/innovate_items/spells/` (spells: spec, chain, recipes, build, **gate**, service, `spells.schema.json`). Standard library only. The package imports nothing else of the tool (`test_architecture.py`).
 
 ## 3. Commands
 
@@ -49,10 +49,10 @@ Code: `code/eldendisk/extension/` (registry) and `extension/innovate_spells/` (a
 | `run --regulation FILE` | swaps that file instead (an experiment; vault ON only) |
 | `run --spec FILE`, `--extension-dir DIR` | the design; the folder of the files |
 | `extension --list` | the design (path, where it comes from, number of items), the secured state, the design-vs-secured diff, the last build |
-| `extension innovate-spells` | where the files are |
-| `extension innovate-spells --add all` (or `--add <id>`) | builds like `run` does (always; never uses the secured file), without starting the game |
+| `extension innovate-items spells` | where the files are |
+| `extension innovate-items spells --add all` (or `--add <id>`) | builds like `run` does (always; never uses the secured file), without starting the game |
 | &nbsp;&nbsp;`--dry-run` | build and run the gate in memory; write nothing |
-| `extension innovate-spells --secure` | **game closed.** Runs the gate on `regulation.bin` against the current design and the game's file; copies it to `regulation.secured.bin`, then writes `spells.commit.json` (last). Stands alone (not with `--add` / `--dry-run`) |
+| `extension innovate-items spells --secure` | **game closed.** Runs the gate on `regulation.bin` against the current design and the game's file; copies it to `regulation.secured.bin`, then writes `spells.commit.json` (last). Stands alone (not with `--add` / `--dry-run`) |
 | &nbsp;&nbsp;`--source FILE`, `--game-dir DIR` | the game's original `regulation.bin` (default: the one in the auto-detected game folder) |
 | &nbsp;&nbsp;`--spec FILE`, `--extension-dir DIR` | as above |
 
@@ -62,13 +62,13 @@ A design with no filled slot is valid: nothing to build, exit `0`, `run` swaps n
 
 Exit codes: `0` ok; `1` error (invalid design, unknown base, gate failed); `2` usage.
 
-## 4. The design (`extension.json`, section `innovate_spells`)
+## 4. The design (`extension.json`, section `innovate_items.spells`)
 
 ```json
-{"innovate_spells": {"maximum": 64, "slots": {"reverse_curse_technique": {...the spell...}, "<id-2>": null, "<id-3>": null, ...}}}
+{"innovate_items.spells": {"maximum": 64, "slots": {"reverse_curse_technique": {...the spell...}, "<id-2>": null, "<id-3>": null, ...}}}
 ```
 
-`maximum` is the number of slots (1-64; 64 is what the game accepted in test T6: 64 new rows in each of Goods, Magic, ShopLineup and SpEffect). `slots` has exactly `maximum` keys, in order. A **filled slot** is a spell and its key is the spell's id; an **empty slot** is `null` (any key, `<id-N>` by convention) and is not built. **The slot number (its place in the list, from 1) fixes the rows the spell takes in the game**, so moving a spell to another slot is a change of the build, and the file must keep every slot (use `null`, never delete a line). A key that appears twice in one object is an error (JSON would silently keep the second). Other sections of `extension.json` belong to other extensions and are ignored. Unknown fields are errors; every problem is listed with its path (`$.innovate_spells.slots[reverse_curse_technique].requires.faith: must be a whole number from 0 to 99`). `name` and `description` are **stored only**; `colour`, `icon_file`, `text` and similar are refused ("Level 3").
+`maximum` is the number of slots (1-64; 64 is what the game accepted in test T6: 64 new rows in each of Goods, Magic, ShopLineup and SpEffect). `slots` has exactly `maximum` keys, in order. A **filled slot** is a spell and its key is the spell's id; an **empty slot** is `null` (any key, `<id-N>` by convention) and is not built. **The slot number (its place in the list, from 1) fixes the rows the spell takes in the game**, so moving a spell to another slot is a change of the build, and the file must keep every slot (use `null`, never delete a line). A key that appears twice in one object is an error (JSON would silently keep the second). Other sections of `extension.json` belong to other extensions and are ignored. Unknown fields are errors; every problem is listed with its path (`$.innovate_items.spells.slots[reverse_curse_technique].requires.faith: must be a whole number from 0 to 99`). `name` and `description` are **stored only**; `colour`, `icon_file`, `text` and similar are refused ("Level 3").
 
 | Field | Meaning (Z4 value) |
 |:--|:--|
@@ -143,20 +143,31 @@ Both take the fields of a clone (`type`, `requires`, `fp_cost`, `stamina_cost`, 
 
 Rows added: Goods, Magic, the copied SpEffect rows and the shop line; nothing existing changes. The footprint declares them. Gate: `check_template` also checks every copied SpEffect row: the file's row must equal the *original* template row with only the remapped links and the `set` fields changed (a difference names the fields), it lies in the slot's block, no copy still points at a template-private row, every SpEffect the copies call exists. The `copy` / `share` overrides and the printed plan of the draft come with 2.3.
 
-### 4d. `projectile` (Phase 2.3)
+### 4d. `projectile` (Phase 2.3; its attack rows since Phase 2.4)
 
-For a spell that throws or creates a Bullet (185 of the game's player spells: Black Flame, Glintstone Pebble, Lightning Spear, mists, beams...). It is an `enchant` that also copies **Bullet rows**: `from` must be a Magic row that calls at least one Bullet (`refCategory` 1); it may also call SpEffect rows (copied) and attack rows (shared, see below). A spell that calls no Bullet is an error that names the right kind (`buff`/`enchant` for an effect, `clone` for an attack). `buff` and `enchant` refuse a template that calls a Bullet and say to use `projectile`.
+For a spell that throws or creates a Bullet (185 of the game's player spells: Black Flame, Glintstone Pebble, Lightning Spear, mists, beams...). It is an `enchant` that also copies **Bullet rows**: `from` must be a Magic row that calls at least one Bullet (`refCategory` 1); it may also call SpEffect rows and attack rows (both copied). A spell that calls no Bullet is an error that names the right kind (`buff`/`enchant` for an effect, `attack` for a direct attack). `buff` and `enchant` refuse a template that calls a Bullet and say to use `projectile`.
 
-**The chain.** `chain.copy_set` walks from the Magic row through the template's *own* Bullet and SpEffect rows (reached by no more than 3 Magic rows of the game) and copies them; the walk stops at a generic row (it stays shared) and at every **AtkParam_Pc** row. Black Flame (6210) copies Bullets 10621000, 10621001, 10621050, 10621051 and SpEffect 1621000 (the burn); the attack rows 62101 and 62106 and the generic 79980 / 79990 stay the game's. New ids: Bullet `500000000 + (n-1)*16 + k` (a block of 16 per slot; the range T7 loaded in the game), SpEffect as in 4c (block of 8). More own rows than a block (23 of the 185 templates) is an error that says so. The builder remaps `HitBulletID`, `intervalCreateBulletId` (to copied Bullets), `spEffectIDForShooter` and `spEffectId0-4` (to copied SpEffects) and the Magic `refId` of both tables; `atkId_Bullet` is never changed.
+**The chain.** `chain.copy_set` walks from the Magic row through the template's *own* Bullet, AtkParam_Pc and SpEffect rows (reached by no more than 3 Magic rows of the game) and copies them; the walk stops at a generic row (it stays shared). Black Flame (6210) copies Bullets 10621000, 10621001, 10621050, 10621051, AtkParam_Pc 62101 and 62106 and SpEffect 1621000 (the burn); the generic 79980 / 79990 (reached by 17 and 20 spells) stay the game's. New ids: Bullet `500000000 + (n-1)*16 + k` (a block of 16 per slot; the range T7 loaded in the game), AtkParam_Pc `710000000 + (n-1)*8 + k` (a block of 8, above the game's last id 701,320,361), SpEffect as in 4c (block of 8). More own rows than a block (23 of the 185 templates) is an error that says so. The builder remaps `HitBulletID`, `intervalCreateBulletId` (to copied Bullets), `atkId_Bullet` (to a copied AtkParam_Pc), `spEffectIDForShooter` and `spEffectId0-4` (to copied SpEffects) and the Magic `refId` of the three tables; the AtkParam_Pc copies have their `spEffectId0-4` remapped.
 
-**`set`.** As in 4c plus `"Bullet.<template row id>.<field>": number` (`life`, `dist`, `initVellocity`, `hitRadius`, ...): the row id must be one of the copied Bullets, the link fields (`HitBulletID`, `intervalCreateBulletId`, `atkId_Bullet`, `spEffectIDForShooter`, `spEffectId0-4`) are refused. A `Bullet` key is an error in every other kind. The damage the Bullet does comes from the AtkParam_Pc row it calls, which is **not copied in this phase**: changing it needs the sixth table (Phase 2.4).
+**`set`.** As in 4c plus `"Bullet.<template row id>.<field>": number` (`life`, `dist`, `initVellocity`, `hitRadius`, ...) and `"AtkParam_Pc.<template row id>.<field>": number` (`atkPhys`, `atkMag`, `atkFire`, `atkThun`, `atkDark`, ...: the damage of the Bullet): the row id must be one of the copied rows, the link fields (Bullet: `HitBulletID`, `intervalCreateBulletId`, `atkId_Bullet`, `spEffectIDForShooter`, `spEffectId0-4`; AtkParam_Pc: `spEffectId0-4`) are refused. A `Bullet` key is an error in every other kind; an `AtkParam_Pc` key is allowed for `projectile` and `attack`.
 
 ```json
 "black_flame_long_burn": {"kind": "projectile", "from": 6210, "fp_cost": 20, "shop": {"price": 1000, "stock": -1},
                           "set": {"SpEffect.1621000.effectEndurance": 30, "Bullet.10621000.life": 6}}
 ```
 
-Rows added: Goods, Magic, the copied Bullet and SpEffect rows and the shop line. Gate: `check_template` also checks every copied Bullet row against the original template row (only the remapped links and the `set` fields may differ), the slot's block, that no copy still points at a template row that was copied, and that every Bullet and SpEffect the copies call exists. The limits of the file are the gate's (20 re-encoded blocks since T7).
+Rows added: Goods, Magic, the copied Bullet, AtkParam_Pc and SpEffect rows and the shop line. Gate: `check_template` also checks every copied Bullet and AtkParam_Pc row against the original template row (only the remapped links and the `set` fields may differ), the slot's block, that no copy still points at a template row that was copied, and that every Bullet, AtkParam_Pc and SpEffect the copies call exists. The limits of the file are the gate's (26 re-encoded blocks and 243,000 frame bytes since T9).
+
+### 4e. `attack` (Phase 2.4)
+
+For a spell that makes a direct attack: its Magic row calls an AtkParam_Pc row (`refCategory` 0) and throws nothing. 5 player spells of the game: 4430, 4440, 4450 (sorceries), 7080, 7510 (incantations); the other 5 direct-attack Magic rows belong to NPCs and have no Goods row. It copies the template's own AtkParam_Pc rows and the SpEffect rows below them (`copy_set`, as in 4d; ids and blocks as in 4d), the Magic copy calls the copies, nothing is copied for a Bullet because there is none. `from` that calls a Bullet is an error that says to use `projectile`; one that only applies an effect says `buff` or `enchant`. `set`: `Magic`, `Goods`, `SpEffect.<id>.<field>` and `AtkParam_Pc.<id>.<field>` as above, no `Bullet` key.
+
+```json
+"strike_copy": {"kind": "attack", "from": 4440, "fp_cost": 4,
+               "set": {"AtkParam_Pc.44400.atkMag": 1800, "AtkParam_Pc.44401.atkMag": 1800}}
+```
+
+**The sixth table.** AtkParam_Pc cannot grow backwards like the other five (the 6.17 MB table `AtkParam_Npc` lies in front of it: T8, body +6.27 MB, the game stopped at the title screen). It grows at its END (`grow._grow_end`, T9 passed): the records grow into the front of the row data, the first rows of the data (as many as the new rows plus one per 19 of them: 5 rows for the 4 new rows of T9) are copied behind the strings and their records point there, the new rows take the hole that is left, the 28 KB entry behind the table moves to the end of the body. `data_start` becomes the end of the records; `strings_off` and the name pointers do not change. A reader of the file must follow each record's own offset (`ParamView` does; the live reader of `read --param` accepts the three places a row can be).
 
 ## 5. How a file is built
 
@@ -253,6 +264,7 @@ Measured with this recipe (spells with shop and poise, passing the gate): 1 spel
 - Names and descriptions need the text archives (not the regulation); a new spell shows with the name of the dummy row.
 - **T7 (`tools/envelope_test.py`, Phase 2.3):** the design's spells plus 4 **unreferenced copies of the Black Flame bullets** (Bullet rows 10623000, 10623001, 10623050, 10623051 under the ids 500000000-500000003): a fifth table that grows (Bullet, 15,475 rows, 4.5 MB), about 20 re-encoded blocks (the gate's limit is 13), body growth about +93 KB, frame growth about +171 KB. The tool applies every check of the gate except the envelope numbers, which it prints; it writes the file only when everything else passes. Nothing points at the copies: the game must only load the file. **Passed in the game 2026-10-10** (T7a-T7c: the world loaded, played, left; the vault restored the original; the file had 20 re-encoded blocks, body +96,176, frame +174,944). Result: the gate's `MAX_CHANGED_BLOCKS` went from 13 to **20** (the body and frame limits stay: T7 stayed below the earlier T6 numbers). `kind: projectile` (new Bullet rows) comes next.
 - **T8 (Phase 2.4, did not pass 2026-10-10):** T7 plus 4 unreferenced AtkParam_Pc rows (ids 710002000-710002003): 25 blocks, body +6,266,672, frame +6,387,296, because the entry in front of AtkParam_Pc is AtkParam_Npc (6.17 MB), which back-growth must move. The game stopped at the title screen ("Failed to save game. Save data is corrupted."); the normal build loaded right after. AtkParam_Pc therefore cannot be grown with the current method; the gate keeps its numbers (20 blocks, 219,000, 235,000).
+- **T9 (Phase 2.4, passed 2026-10-10):** the same rows with AtkParam_Pc grown at its END (`grow._grow_end`): the records grow into the front of the row data, the first rows of the data (5 for the 4 new rows) are copied behind the strings, the new rows take the hole that is left, the 28 KB entry behind the table moves to the end of the body. Body +124,560, frame +242,464, 26 re-encoded blocks; the game loaded and played normally. The gate went from 20 blocks / 235,000 to 26 blocks / 243,000 (the body limit stays 219,000: 124,560 was tested).
 - **Plan:** (1) ✓ slot 1 alone in the game (appended rows, real spell data): passed 2026-10-09, and `read --param-check` found every row of the six tables equal to the build (Goods 2,330, Magic 318, SpEffect 11,356, Bullet 15,475, AtkParam_Pc 11,017, ShopLineup 1,297 rows); (2) add slots one at a time, the next with another effect; (3) T7 to raise the limits for more than about 8 spells; (4) decide how slots 8-64 are obtained (no shop line). The steps after slot 1 are in [roadmap-innovate-spells.md](../roadmap-innovate-spells.md) (Phase 1 done, Phase 2 spells of every kind) and [phase1-params-workbench.md](../phase1-params-workbench.md).
 
 ## 11. Tests

@@ -165,4 +165,4 @@ def test_run_hints_at_secure_only_after_a_session_that_ran_a_new_build(tmp_path,
     assert run_cmd.cmd_run(args) == 0
     out = capsys.readouterr()
     book.close()
-    assert ("extension innovate-spells --secure" in out.out + out.err) is hint
+    assert ("extension innovate-items spells --secure" in out.out + out.err) is hint

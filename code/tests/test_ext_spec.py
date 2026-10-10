@@ -1,14 +1,14 @@
-"""extension.json (innovate_spells): strict validation, canonical form, and agreement with the JSON schema."""
+"""extension.json (innovate_items.spells): strict validation, canonical form, and agreement with the JSON schema."""
 import copy
 import json
 from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_spells import spec
+from eldendisk.extension.innovate_items.spells import spec
 
 PKG = Path(spec.__file__).parent
-CODE = PKG.parents[2]
+CODE = PKG.parents[3]
 from tests.z4 import ID, SPELL, Z4, file_of, spell_of
 
 
@@ -91,11 +91,11 @@ def test_all_problems_are_listed_not_just_the_first():
 
 
 def test_wrong_shapes_are_refused():
-    for bad in ({}, {"innovate_spells": []}, {"innovate_spells": {"maximum": 64}}, {"innovate_spells": {"slots": {}}},
-                {"innovate_spells": {"maximum": 65, "slots": {}}}, {"innovate_spells": {"maximum": 0, "slots": {}}},
-                {"innovate_spells": {"maximum": True, "slots": {}}},
-                {"innovate_spells": {"maximum": 2, "slots": {"<id-1>": None, "<id-2>": None}, "surprise": 1}},
-                {"innovate_spells": {"maximum": 2, "slots": []}}):
+    for bad in ({}, {"innovate_items": {"spells": []}}, {"innovate_items": []}, {"innovate_items": {"spells": {"maximum": 64}}}, {"innovate_items": {"spells": {"slots": {}}}},
+                {"innovate_items": {"spells": {"maximum": 65, "slots": {}}}}, {"innovate_items": {"spells": {"maximum": 0, "slots": {}}}},
+                {"innovate_items": {"spells": {"maximum": True, "slots": {}}}},
+                {"innovate_items": {"spells": {"maximum": 2, "slots": {"<id-1>": None, "<id-2>": None}, "surprise": 1}}},
+                {"innovate_items": {"spells": {"maximum": 2, "slots": []}}}):
         with pytest.raises(spec.SpecError):
             spec.normalise(bad)
     with pytest.raises(spec.SpecError):
@@ -115,13 +115,13 @@ def test_slots_are_numbered_by_position_and_empty_slots_are_skipped():
     n = spec.normalise(d)
     assert [(s["slot"], s["id"]) for s in n["spells"]] == [(2, "first"), (4, "second")] and n["maximum"] == 5
     assert spec.normalise(spec.as_file(n)) == n
-    assert list(spec.as_file(n)["innovate_spells"]["slots"]) == ["<id-1>", "first", "<id-3>", "second", "<id-5>"]
+    assert list(spec.as_file(n)["innovate_items"]["spells"]["slots"]) == ["<id-1>", "first", "<id-3>", "second", "<id-5>"]
 
 
 def test_the_slot_count_must_equal_maximum():
     for count in (3, 5):
         d = file_of({ID: copy.deepcopy(SPELL)}, maximum=count)
-        d["innovate_spells"]["maximum"] = 4
+        d["innovate_items"]["spells"]["maximum"] = 4
         with pytest.raises(spec.SpecError) as e:
             spec.normalise(d)
         assert any("maximum is 4" in p for p in e.value.problems)
@@ -191,7 +191,7 @@ def test_the_schema_and_the_validator_agree():
         lambda i: i["shop"].update(stock=-1), lambda i: i["shop"].update(price=99999999),
         lambda i: i.update(poise_while_casting_seconds=0.1))]
     cases += [file_of({"Bad Id": copy.deepcopy(SPELL)}), file_of({"Bad Id": None}), file_of({ID: None}), file_of({}, maximum=64),
-              {"innovate_spells": {"maximum": 65, "slots": {}}}, {}]
+              {"innovate_items": {"spells": {"maximum": 65, "slots": {}}}}, {}]
     for d in cases:
         ok_schema = jsonschema.Draft202012Validator(schema).is_valid(d)
         try:

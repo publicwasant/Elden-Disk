@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_spells import bases, build, chain as chainmod, container, gate, recipes, spec
-from eldendisk.extension.innovate_spells.defs import TABLE_FILES, Def
+from eldendisk.extension.innovate_items import bases, container, preflight
+from eldendisk.extension.innovate_items.spells import build, chain as chainmod, gate, recipes, spec
+from eldendisk.extension.innovate_items.defs import TABLE_FILES, Def
 from tests.ext_helpers import param_blob
 from tests.z4 import ID as Z4_ID, SPELL as Z4_SPELL, file_of
 
@@ -66,16 +67,16 @@ def test_bad_bullet_values_are_refused(key, value, why):
     assert any(why in p for p in problems(design(set={key: value})))
 
 
-def test_attack_is_still_planned_and_projectile_is_built():
-    assert "projectile" in spec.KINDS and spec.PLANNED_KINDS == ("attack",)
-    assert any("planned but not built yet" in p for p in problems(design(kind="attack")))
+def test_projectile_and_attack_are_built():
+    assert "projectile" in spec.KINDS and "attack" in spec.KINDS and spec.PLANNED_KINDS == ()
+    assert spec.normalise(design(kind="attack"))["spells"][0]["kind"] == "attack"
 
 
 def test_the_schema_and_the_validator_agree_on_projectiles():
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((PKG / "spells.schema.json").read_text(encoding="utf-8"))
     cases = [design(), design(fp_cost=9, shop={"price": 10}), design(set={"Bullet.10621000.life": 5}),
-             design(set={"Bullet.10621000.life": "5"}), design(set={"Bullets.1.life": 5}), design(kind="attack"),
+             design(set={"Bullet.10621000.life": "5"}), design(set={"Bullets.1.life": 5}), design(kind="attack"), design(kind="attack", set={"AtkParam_Pc.62101.atkPhys": 5}),
              design(effect={}), design(**{"from": 0}), file_of({"p": {"kind": "projectile"}})]
     for d in cases:
         ok_schema = jsonschema.Draft202012Validator(schema).is_valid(d)
@@ -92,7 +93,9 @@ def test_the_offsets_the_chain_reader_uses_are_the_fields_the_builder_remaps():
     assert d.size == chainmod.BULLET["size"]
     assert [d.fields[n][1] for t, n in chainmod.BULLET_LINKS if t == "bullet"] == list(chainmod.BULLET["bullet"])
     assert sorted(d.fields[n][1] for t, n in chainmod.BULLET_LINKS if t == "sp") == sorted(chainmod.BULLET["sp"])
-    assert d.fields["atkId_Bullet"][1] == chainmod.BULLET["atk"][0]
+    assert d.fields["atkId_Bullet"][1] == chainmod.BULLET["atk"][0] and ("atk", "atkId_Bullet") in chainmod.BULLET_LINKS
+    a = Def("atk")
+    assert a.size == chainmod.ATK["size"] and [a.fields[n][1] for t, n in chainmod.ATK_PAIRS] == list(chainmod.ATK["sp"])
     assert [Def("sp").fields[n][0] for n in chainmod.SP_LINKS] == ["s32"] * 3
 
 
@@ -124,7 +127,8 @@ def _tables(chain_len=2, refs=None):
          "sp": container.Param(param_blob([(1000, _row(D, "sp", effectEndurance=7.0))], D["sp"].size)),
          "shop": container.Param(param_blob([(recipes.SHOP_CLONE, bytes(D["shop"].size))], D["shop"].size)),
          "bullet": container.Param(param_blob(sorted(dict(bullets).items()), D["bullet"].size))}
-    atk = container.Param(param_blob([(62101, bytes(chainmod.ATK["size"]))], chainmod.ATK["size"]))
+    atk = container.Param(param_blob([(62101, _row(D, "atk", spEffectId0=-1)), (62199, _row(D, "atk", spEffectId0=1000))], chainmod.ATK["size"]))
+    P["atk"] = atk
     return P, D, chainmod.Chain(P, D, P["bullet"], atk)
 
 
@@ -134,7 +138,7 @@ def _spell(**kw):
 
 def test_the_copy_set_takes_own_rows_and_stops_at_generic_ones():
     _P, _D, C = _tables()
-    assert C.copy_set(6210) == {"bullet": {100, 101, 200}, "sp": {1000}}
+    assert C.copy_set(6210) == {"atk": {62101}, "bullet": {100, 101, 200}, "sp": {1000}}
     assert C.reach("bullet", 7777) == 6 and C.reach("bullet", 100) == 1
 
 
@@ -142,15 +146,16 @@ def test_a_projectile_copies_its_bullets_and_effects_into_the_slots_blocks_and_r
     P, D, C = _tables()
     b = recipes.template_rows(P, D, _spell(), C)
     ids = recipes.slot_rows(2)
-    bb, sb = ids["bullet_copy_base"], ids["sp_copy_base"]
-    assert b.own["bullet"] == {100: bb, 101: bb + 1, 200: bb + 2} and b.own["sp"] == {1000: sb}
+    bb, sb, ab = ids["bullet_copy_base"], ids["sp_copy_base"], ids["atk_copy_base"]
+    assert b.own["bullet"] == {100: bb, 101: bb + 1, 200: bb + 2} and b.own["sp"] == {1000: sb} and b.own["atk"] == {62101: ab}
+    assert [i for i, _ in b.atk] == [ab]
     assert [i for i, _ in b.bullet] == [bb, bb + 1, bb + 2] and [i for i, _ in b.sp] == [sb]
     assert [D["magic"].get(b.magic, "refId%d" % n) for n in (1, 2)] == [bb, bb + 2]
     rows = dict(b.bullet)
     assert D["bullet"].get(rows[bb], "HitBulletID") == bb + 1                          # copy -> copy
     assert D["bullet"].get(rows[bb + 1], "spEffectId0") == sb                           # copy -> copied SpEffect
     assert D["bullet"].get(rows[bb + 2], "HitBulletID") == 7777                         # a generic Bullet stays the game's
-    assert D["bullet"].get(rows[bb], "atkId_Bullet") == 62101 and D["bullet"].get(rows[bb + 1], "atkId_Bullet") == 62101   # attack rows are shared
+    assert D["bullet"].get(rows[bb], "atkId_Bullet") == ab and D["bullet"].get(rows[bb + 1], "atkId_Bullet") == ab         # copy -> copied attack row
 
 
 def test_the_copies_equal_the_templates_except_the_remapped_links_and_the_set_fields():
@@ -158,7 +163,7 @@ def test_the_copies_equal_the_templates_except_the_remapped_links_and_the_set_fi
     b = recipes.template_rows(P, D, _spell(set={"Bullet.100.life": 30.0, "SpEffect.1000.effectEndurance": 600.0}), C)
     old, new = bytes(P["bullet"].find(100)[2]), dict(b.bullet)[recipes.slot_rows(2)["bullet_copy_base"]]
     diff = sorted(n for n in D["bullet"].order if D["bullet"].fields[n][5] == 1 and D["bullet"].get(old, n) != D["bullet"].get(new, n))
-    assert diff == ["HitBulletID", "life"]
+    assert diff == ["HitBulletID", "atkId_Bullet", "life"]
     assert D["sp"].get(b.sp[0][1], "effectEndurance") == 600.0
 
 
@@ -180,14 +185,14 @@ def test_the_kinds_check_what_the_template_calls():
     with pytest.raises(recipes.RecipeError, match="no Bullet row"):
         recipes.template_rows(P, D, _spell(), C)
     P, D, C = _tables(refs=[(0, 62101)])
-    with pytest.raises(recipes.RecipeError, match="calls attack and no Bullet row.*kind clone"):
+    with pytest.raises(recipes.RecipeError, match="calls AtkParam_Pc and no Bullet row.*kind attack"):
         recipes.template_rows(P, D, _spell(), C)
 
 
-def test_attack_rows_called_next_to_a_bullet_stay_shared():
+def test_an_attack_row_called_next_to_a_bullet_is_copied_too_and_the_magic_row_calls_the_copy():
     P, D, C = _tables(refs=[(1, 100), (0, 62101)])
     b = recipes.template_rows(P, D, _spell(), C)
-    assert D["magic"].get(b.magic, "refCategory2") == 0 and D["magic"].get(b.magic, "refId2") == 62101
+    assert D["magic"].get(b.magic, "refCategory2") == 0 and D["magic"].get(b.magic, "refId2") == recipes.slot_rows(2)["atk_copy_base"]
 
 
 def test_a_chain_longer_than_the_slots_block_is_refused():
@@ -212,8 +217,10 @@ def test_a_projectile_adds_goods_magic_bullet_speffect_and_shop_rows_only():
     P, D, C = _tables()
     jobs, fp = recipes.make_rows(P, D, [_spell(slot=1, shop={"price": 10, "stock": 1})], C)
     ids = recipes.slot_rows(1)
-    assert sorted(jobs) == ["Bullet", "EquipParamGoods", "Magic", "ShopLineupParam", "SpEffectParam"]
+    assert sorted(jobs) == ["AtkParam_Pc", "Bullet", "EquipParamGoods", "Magic", "ShopLineupParam", "SpEffectParam"]
+    assert jobs["AtkParam_Pc"]["mode"] == "end" and "mode" not in jobs["Bullet"]
     assert fp.added["bullet"] == {ids["bullet_copy_base"] + k for k in range(3)} and fp.added["sp"] == {ids["sp_copy_base"]}
+    assert fp.added["atk"] == {ids["atk_copy_base"]}
     assert not any(fp.removed.values()) and not any(fp.modified.values())
 
 
@@ -246,7 +253,7 @@ def _orig(src):
 
 
 def _file_tables(data):
-    from eldendisk.extension.innovate_spells import zstd
+    from eldendisk.extension.innovate_items import zstd
     dcx = container.decrypt(data)
     body = zstd.decode_frame(dcx[0x4C:0x4C + struct.unpack(">I", dcx[0x20:0x24])[0]])
     bnd = container.Bnd4(body)
@@ -269,7 +276,7 @@ def heal(base, src):
 def test_the_chain_of_black_flame(src):
     P, D, C = _orig(src)
     assert C.refs(6210) == [(1, "bullet", 10621000), (2, "bullet", 10621050)]
-    assert C.copy_set(6210) == {"bullet": {10621000, 10621001, 10621050, 10621051}, "sp": {1621000}}
+    assert C.copy_set(6210) == {"atk": {62101, 62106}, "bullet": {10621000, 10621001, 10621050, 10621051}, "sp": {1621000}}
     assert C.reach("atk", 79980) > recipes.SHARED_ABOVE and C.reach("atk", 62101) == 1
     assert D["bullet"].get(P["bullet"].find(10621001)[2], "spEffectId0") == 1621000
 
@@ -277,7 +284,7 @@ def test_the_chain_of_black_flame(src):
 @golden
 def test_a_projectile_of_black_flame_builds_and_passes_the_gate(heal, src):
     sp, res = heal
-    assert gate.verify(res.data, src, sp).ok and res.changed_blocks <= 20
+    assert gate.verify(res.data, src, sp).ok and res.changed_blocks <= preflight.MAX_CHANGED_BLOCKS
 
 
 @golden
@@ -294,15 +301,18 @@ def test_the_copies_of_black_flame_point_at_each_other_and_the_burn_heals(heal, 
     assert D["sp"].get(get("sp", sb), "changeHpRate") == pytest.approx(-0.1)
     assert D["sp"].get(O["sp"].find(1621000)[2], "changeHpRate") == pytest.approx(0.1)          # the game's burn is untouched
     assert D["bullet"].get(get("bullet", bb), "life") == 6.0
-    # the attack rows are the game's: 62101 and 62106 are called by the copies, and the generic 79980 / 79990 too
-    assert D["bullet"].get(get("bullet", bb + 1), "atkId_Bullet") == 62101 and D["bullet"].get(get("bullet", bb), "atkId_Bullet") == 79980
+    # the attack rows 62101 and 62106 are copied too; the generic 79980 / 79990 stay the game's
+    ab = ids["atk_copy_base"]
+    assert [D["bullet"].get(get("bullet", bb + k), "atkId_Bullet") for k in (0, 1)] == [79980, ab]
+    assert sorted(i for i in [ab, ab + 1]) == [r[0] for r in P["atk"].rows if ab <= r[0] < ab + recipes.COPY_ATK_BLOCK]
+    assert bytes(get("atk", ab)) == bytes(O["atk"].find(62101)[2]) and bytes(get("atk", ab + 1)) == bytes(O["atk"].find(62106)[2])
 
 
 @golden
 def test_nothing_that_exists_is_changed_and_the_rows_added_are_exactly_the_footprint(heal, src):
     P, _ = _file_tables(heal[1].data)
     O, _OD, _C = _orig(src)
-    for k, extra in (("goods", 1), ("magic", 1), ("shop", 1), ("sp", 1), ("bullet", 4)):
+    for k, extra in (("goods", 1), ("magic", 1), ("shop", 1), ("sp", 1), ("bullet", 4), ("atk", 2)):
         old = {r[0]: bytes(r[2]) for r in O[k].rows}
         new = {r[0]: bytes(r[2]) for r in P[k].rows}
         assert all(new[i] == b for i, b in old.items()) and len(new) - len(old) == extra
@@ -315,6 +325,8 @@ def test_no_bullet_id_of_the_game_lies_in_the_slot_blocks(src):
     assert [r[0] for r in P["bullet"].rows if lo <= r[0] < hi] == []
     lo, hi = recipes.COPY_SP_BASE, recipes.slot_rows(64)["sp_copy_base"] + recipes.COPY_SP_BLOCK
     assert [r[0] for r in P["sp"].rows if lo <= r[0] < hi] == []
+    lo, hi = recipes.COPY_ATK_BASE, recipes.slot_rows(64)["atk_copy_base"] + recipes.COPY_ATK_BLOCK
+    assert [r[0] for r in P["atk"].rows if lo <= r[0] < hi] == []
 
 
 @golden
@@ -332,7 +344,7 @@ def test_every_projectile_template_of_the_game_builds_or_says_it_is_too_big(src)
             big += 1
             continue
         built += 1
-        assert len(b.bullet) <= recipes.COPY_BULLET_BLOCK and len(b.sp) <= recipes.COPY_SP_BLOCK
+        assert len(b.bullet) <= recipes.COPY_BULLET_BLOCK and len(b.sp) <= recipes.COPY_SP_BLOCK and len(b.atk) <= recipes.COPY_ATK_BLOCK
     assert built >= 150 and 0 < big <= 40
 
 
@@ -341,7 +353,7 @@ def test_a_projectile_next_to_an_enchant_and_the_heal_over_time_spell_builds_and
     sp = spec.normalise(file_of({Z4_ID: copy.deepcopy(Z4_SPELL), "enchant": {"kind": "enchant", "from": 6250},
                                  "proj": {**BF, "fp_cost": 7}}))["spells"]
     res = build.build(base, sp, src)
-    assert gate.verify(res.data, src, sp).ok and res.changed_blocks <= 20
+    assert gate.verify(res.data, src, sp).ok and res.changed_blocks <= preflight.MAX_CHANGED_BLOCKS
     P, _ = _file_tables(res.data)
     assert P["bullet"].find(recipes.slot_rows(3)["bullet_copy_base"]) is not None and P["bullet"].find(recipes.slot_rows(2)["bullet_copy_base"]) is None
 
@@ -383,3 +395,173 @@ def test_the_whole_gate_stops_a_flipped_byte_in_a_projectile_file(heal, src):
     bad = bytearray(res.data)
     bad[len(bad) // 2] ^= 1
     assert not gate.verify(bytes(bad), src, sp).ok
+
+
+# ---------------------------------------------------------------- AtkParam_Pc: kind attack, `set` keys, the slot's block
+def test_atk_keys_belong_to_the_kinds_projectile_and_attack_only():
+    assert spec.normalise(design(kind="attack", set={"AtkParam_Pc.62101.atkPhys": 5}))
+    assert spec.normalise(design(set={"AtkParam_Pc.62101.atkPhys": 5}))
+    assert any("only the kinds projectile and attack copy AtkParam_Pc rows" in p for p in problems(design(kind="buff", set={"AtkParam_Pc.62101.atkPhys": 5})))
+    assert any("only the kinds projectile and attack copy AtkParam_Pc rows" in p for p in problems(design(kind="enchant", set={"AtkParam_Pc.62101.atkPhys": 5})))
+    assert any("does not copy them" in p for p in problems(design(kind="clone", set={"AtkParam_Pc.62101.atkPhys": 5})))
+    assert any("only kind projectile copies Bullet rows" in p for p in problems(design(kind="attack", set={"Bullet.1.life": 5})))
+    assert spec.normalise(design(kind="attack", set={"SpEffect.1621000.effectEndurance": 5}))
+
+
+@pytest.mark.parametrize("key, value, why", [
+    ("AtkParam_Pc.62101.nope", 1, "no field 'nope'"),
+    ("AtkParam_Pc.62101.atkPhys", "7", "needs a number"),
+    ("AtkParam_Pc.62101.spEffectId0", 5, "links rows"),
+    ("AtkParam_Pc.62101.spEffectId4", 5, "links rows"),
+])
+def test_bad_atk_values_are_refused(key, value, why):
+    assert any(why in p for p in problems(design(set={key: value})))
+
+
+def test_a_projectile_copies_the_attack_rows_through_the_bullets_and_the_effects_below_them():
+    P, D, C = _tables(refs=[(1, 100)])
+    ab, sb = recipes.slot_rows(2)["atk_copy_base"], recipes.slot_rows(2)["sp_copy_base"]
+    assert C.copy_set(6210)["atk"] == {62101}
+    b = recipes.template_rows(P, D, _spell(set={"AtkParam_Pc.62101.atkPhys": 777}), C)
+    assert [i for i, _ in b.atk] == [ab] and D["atk"].get(b.atk[0][1], "atkPhys") == 777
+    assert D["atk"].get(b.atk[0][1], "spEffectId0") == -1 and b.own["atk"] == {62101: ab}
+
+
+def test_kind_attack_copies_a_direct_attack_and_what_it_applies():
+    P, D, C = _tables(refs=[(0, 62199), (2, 1000)])
+    ab, sb = recipes.slot_rows(3)["atk_copy_base"], recipes.slot_rows(3)["sp_copy_base"]
+    b = recipes.template_rows(P, D, _spell(slot=3, kind="attack", set={"AtkParam_Pc.62199.atkPhys": 50, "SpEffect.1000.effectEndurance": 9.0}), C)
+    assert b.own == {"sp": {1000: sb}, "bullet": {}, "atk": {62199: ab}} and b.bullet == []
+    assert [D["magic"].get(b.magic, "%s%d" % (f, n)) for n in (1, 2) for f in ("refCategory", "refId")] == [0, ab, 2, sb]
+    assert D["atk"].get(b.atk[0][1], "spEffectId0") == sb and D["atk"].get(b.atk[0][1], "atkPhys") == 50        # copy -> copied SpEffect
+    assert D["sp"].get(b.sp[0][1], "effectEndurance") == 9.0
+
+
+def test_kind_attack_refuses_what_throws_or_only_applies_an_effect():
+    P, D, C = _tables(refs=[(0, 62199), (1, 100)])
+    with pytest.raises(recipes.RecipeError, match="kind attack needs a spell that makes a direct attack.*throws nothing"):
+        recipes.template_rows(P, D, _spell(kind="attack"), C)
+    P, D, C = _tables(refs=[(2, 1000)])
+    with pytest.raises(recipes.RecipeError, match="kind attack needs a spell that makes a direct attack"):
+        recipes.template_rows(P, D, _spell(kind="attack"), C)
+    P, D, C = _tables(refs=[(0, 62199)])
+    with pytest.raises(recipes.RecipeError, match="not only SpEffect rows.*kind attack"):
+        recipes.template_rows(P, D, _spell(kind="buff"), C)
+    with pytest.raises(recipes.RecipeError, match="\\(use kind attack\\)"):
+        recipes.template_rows(P, D, _spell(kind="enchant"), C)
+
+
+def test_a_set_on_a_foreign_attack_row_says_why():
+    P, D, C = _tables(refs=[(0, 62199)])
+    with pytest.raises(recipes.RecipeError, match="AtkParam_Pc 62101 is not part of the chain of 6210"):
+        recipes.template_rows(P, D, _spell(kind="attack", set={"AtkParam_Pc.62101.atkPhys": 1}), C)
+
+
+def test_more_own_attack_rows_than_the_block_holds_are_refused():
+    P, D, C = _tables(refs=[(0, 62199)])
+    D2 = D["atk"]
+    rows = [(70000 + i, bytes(chainmod.ATK["size"])) for i in range(recipes.COPY_ATK_BLOCK + 1)]
+    magic = bytearray(P["magic"].find(6210)[2])
+    for n, (rid, _) in enumerate(rows[:10], 1):
+        D["magic"].set(magic, "refCategory%d" % n, 0)
+        D["magic"].set(magic, "refId%d" % n, rid)
+    P["magic"].find(6210)[2][:] = magic
+    P["atk"] = container.Param(param_blob(sorted(rows), chainmod.ATK["size"]))
+    C = chainmod.Chain(P, D, P["bullet"], P["atk"])
+    with pytest.raises(recipes.RecipeError, match="9 AtkParam_Pc rows of its own; a slot has room for 8"):
+        recipes.template_rows(P, D, _spell(kind="attack"), C)
+
+
+def test_atk_blocks_of_the_slots_do_not_overlap_and_lie_above_the_games_ids():
+    seen = set()
+    for n in range(1, 65):
+        base = recipes.slot_rows(n)["atk_copy_base"]
+        block = set(range(base, base + recipes.COPY_ATK_BLOCK))
+        assert not block & seen
+        seen |= block
+    assert min(seen) == 710000000 and max(seen) < 710002000                    # T9 put its test rows at 710002000-710002003
+
+
+def test_a_clone_and_a_buff_do_not_grow_the_atk_table():
+    P, D, C = _tables()
+    for kind, refs in (("clone", [(1, 100)]), ("buff", [(2, 1000)])):
+        P, D, C = _tables(refs=refs)
+        jobs, fp = recipes.make_rows(P, D, [_spell(kind=kind)], C)
+        assert "AtkParam_Pc" not in jobs and not fp.added["atk"]
+
+
+# ---------------------------------------------------------------- golden: kind attack and the Atk copies of a projectile
+DIRECT_ATTACKS = (4430, 4440, 4450, 7080, 7510)           # the player spells of the game whose Magic row calls an AtkParam_Pc and throws nothing
+
+
+@golden
+def test_every_direct_attack_spell_of_the_game_builds_as_kind_attack(src):
+    P, D, C = _orig(src)
+    found = []
+    for r in P["magic"].rows:
+        g = P["goods"].find(r[0])
+        tables = {t for _n, t, _i in C.refs(r[0])}
+        if g is None or D["goods"].get(g[2], "goodsType") not in recipes.GOODS_TYPES or "atk" not in tables or "bullet" in tables:
+            continue
+        found.append(r[0])
+        b = recipes.template_rows(P, D, {"slot": 3, "id": "x", "kind": "attack", "from": r[0], "requires": {}}, C)
+        assert b.atk and not b.bullet and len(b.atk) <= recipes.COPY_ATK_BLOCK
+    assert tuple(found) == DIRECT_ATTACKS
+
+
+@pytest.fixture(scope="module")
+def strike(base, src):
+    sp = _spells({"kind": "attack", "from": 4430, "fp_cost": 15, "shop": {"price": 500, "stock": -1}})
+    return sp, build.build(base, sp, src)
+
+
+@golden
+def test_an_attack_builds_passes_the_gate_and_calls_its_own_attack_rows(strike, src):
+    sp, res = strike
+    assert gate.verify(res.data, src, sp).ok and res.changed_blocks <= preflight.MAX_CHANGED_BLOCKS
+    P, D = _file_tables(res.data)
+    O, _OD, C = _orig(src)
+    ids = recipes.slot_rows(1)
+    m = P["magic"].find(ids["magic"])[2]
+    n = [i for i, t, _rid in C.refs(4430) if t == "atk"]
+    assert len(n) == 6 and all(D["magic"].get(m, "refId%d" % i) >= recipes.COPY_ATK_BASE for i in n)
+    assert len([r for r in P["atk"].rows if recipes.COPY_ATK_BASE <= r[0] < recipes.COPY_ATK_BASE + 8]) == 6
+    old = {r[0]: bytes(r[2]) for r in O["atk"].rows}
+    assert all(bytes(r[2]) == old[r[0]] for r in P["atk"].rows if r[0] in old)          # no attack row of the game changed
+
+
+@golden
+def test_a_set_on_an_attack_row_reaches_only_the_copy(base, src):
+    P, D, C = _orig(src)
+    first = sorted(C.copy_set(4430)["atk"])[0]
+    sp = _spells({"kind": "attack", "from": 4430, "set": {"AtkParam_Pc.%d.atkPhys" % first: 321}})
+    res = build.build(base, sp, src)
+    F, FD = _file_tables(res.data)
+    copy_id = recipes.slot_rows(1)["atk_copy_base"]
+    assert FD["atk"].get(F["atk"].find(copy_id)[2], "atkPhys") == 321
+    assert FD["atk"].get(F["atk"].find(first)[2], "atkPhys") == D["atk"].get(P["atk"].find(first)[2], "atkPhys") != 321
+
+
+@golden
+def test_the_gate_notices_a_changed_attack_copy_or_a_magic_row_that_calls_the_template(strike, src):
+    sp, res = strike
+    P, D = _file_tables(res.data)
+    O, _OD, C = _orig(src)
+    ids = recipes.slot_rows(1)
+    row = P["atk"].find(ids["atk_copy_base"])[2]
+    D["atk"].set(row, "atkPhys", D["atk"].get(row, "atkPhys") + 1)
+    assert any("AtkParam_Pc %d" % ids["atk_copy_base"] in p and "atkPhys" in p for p in recipes.check_template(P, D, sp[0], O, C))
+    D["atk"].set(row, "atkPhys", D["atk"].get(row, "atkPhys") - 1)
+    m = P["magic"].find(ids["magic"])[2]
+    i = [k for k, t, _rid in C.refs(4430) if t == "atk"][0]
+    D["magic"].set(m, "refId%d" % i, sorted(C.copy_set(4430)["atk"])[0])
+    assert any("still calls the template's AtkParam_Pc" in p for p in recipes.check_template(P, D, sp[0], O, C))
+
+
+@golden
+def test_a_projectile_and_an_attack_in_one_file_pass_the_gate(base, src):
+    sp = _spells({**BF, "fp_cost": 7}, {"kind": "attack", "from": 4440, "fp_cost": 9})
+    res = build.build(base, sp, src)
+    assert gate.verify(res.data, src, sp).ok
+    P, _ = _file_tables(res.data)
+    assert len([r for r in P["atk"].rows if recipes.COPY_ATK_BASE <= r[0] < recipes.COPY_ATK_BASE + 16]) == 2 + 6

@@ -6,8 +6,8 @@ import struct
 
 import pytest
 
-from eldendisk.extension.innovate_spells import container, grow
-from eldendisk.extension.innovate_spells.container import Bnd4, ContainerError, ParamView
+from eldendisk.extension.innovate_items import container, grow
+from eldendisk.extension.innovate_items.container import Bnd4, ContainerError, ParamView
 from tests import ext_helpers as H
 
 RS = 16
@@ -177,3 +177,77 @@ def test_param_view_refuses_a_file_that_is_too_short_or_has_strings_outside():
         ParamView(b"short", RS)
     with pytest.raises(ContainerError):
         ParamView(_tamper(table(1000, 6), lambda b: struct.pack_into("<I", b, 0, 10 ** 6)), RS)
+
+
+# ---------------- growth at the END of the table (AtkParam_Pc: the entry in front of it is too big to move) ----------------
+def _end(body, ids, name_from=1010, short="Alpha"):
+    return grow.grow(body, {short: {"rows": new_rows(ids), "name_from": name_from, "mode": "end"}})
+
+
+def test_a_table_grown_at_its_end_keeps_every_row_and_moves_only_the_first_ones():
+    body, entries = archive(n_rows=40)
+    out, rep = _end(body, [1015, 999, 2000])
+    assert rep[0]["mode"] == "end" and rep[0]["relocated"] >= 3 and not (set(rep[0]["evicted"]) - {"Z"})
+    old, view = ParamView(entry_named(body, "Alpha").data, RS), ParamView(entry_named(out, "Alpha").data, RS)
+    assert view.ids() == sorted(old.ids() + [1015, 999, 2000]) and view.count == old.count + 3
+    for rid in old.ids():                                                      # same bytes for every old row
+        assert view.find(rid)[2] == old.find(rid)[2]
+    assert all(view.find(i)[2] == row(i, 0xEE) for i in (1015, 999, 2000))
+    new, was = view.offsets(), old.offsets()
+    moved = [i for i in old.ids() if new[i][0] != was[i][0]]
+    assert moved == old.ids()[:len(moved)] and len(moved) == rep[0]["relocated"]      # only a prefix of the rows moved
+    assert all(new[i][0] >= old.strings_off + len(old.tail) for i in moved)           # ... and they lie behind the old strings
+    assert all(new[i][1] == was[i][1] for i in old.ids())                              # no name pointer changed
+    assert view.strings_off == old.strings_off and view.tail[:len(old.tail)] == old.tail
+    assert view.head[0x30:0x38] == struct.pack("<Q", 0x40 + 24 * view.count) and view.head[0x10:0x18] == old.head[0x10:0x18]
+    name_off = old.find(1010)[1]
+    assert all(view.find(i)[1] == name_off for i in (1015, 999, 2000))
+
+
+def test_a_table_grown_at_its_end_leaves_the_other_entries_intact_and_inside_the_body():
+    body, entries = archive(n_rows=40)
+    out, rep = _end(body, range(3000, 3010))
+    for name, data in entries:
+        if "Alpha" not in name:
+            assert entry_named(out, name.rsplit("\\", 1)[-1][:-6]).data == data, name
+    ents = sorted((struct.unpack_from("<I", out, 0x40 + i * Bnd4(out).fhs + 0x18)[0], struct.unpack_from("<Q", out, 0x40 + i * Bnd4(out).fhs + 8)[0])
+                  for i in range(len(Bnd4(out).entries)))
+    assert all(a + s <= b for (a, s), (b, _) in zip(ents, ents[1:])) and ents[-1][0] + ents[-1][1] <= len(out)
+
+
+def test_growth_at_the_end_is_deterministic_and_the_front_rows_are_the_only_bytes_that_change_in_the_table():
+    body, _ = archive(n_rows=40)
+    assert _end(body, [1015, 999])[0] == _end(body, [1015, 999])[0]
+    out, rep = _end(body, [1015, 999])
+    a, b = entry_named(body, "Alpha"), entry_named(out, "Alpha")
+    first_kept = ParamView(a.data, RS).offsets()
+    keep_from = min(d for i, (d, _) in ParamView(b.data, RS).offsets().items() if i in first_kept and d == first_kept[i][0])
+    assert a.data[keep_from:] == b.data[keep_from:len(a.data)]                  # everything from the first unmoved row on is untouched
+
+
+def test_growth_at_the_end_refuses_what_the_front_version_refuses():
+    body, _ = archive(n_rows=40)
+    with pytest.raises(grow.GrowError):
+        _end(body, [1010])                                                      # id in use
+    with pytest.raises(grow.GrowError):
+        _end(body, [5], name_from=424242)                                       # name source missing
+    with pytest.raises(grow.GrowError):
+        grow.grow(body, {"Alpha": {"rows": [(7, b"short")], "name_from": 1010, "mode": "end"}})     # wrong row size
+
+
+def test_a_table_at_the_very_end_of_the_body_grows_into_the_end_of_it():
+    entries = [("N:\\x\\F0.param", filler(64)), ("N:\\x\\Alpha.param", table(1000, 40))]
+    body = H.bnd4_blob(entries)
+    out, rep = _end(body, [1015, 999])
+    assert not rep[0]["evicted"] and ParamView(entry_named(out, "Alpha").data, RS).count == 42
+
+
+def test_param_view_accepts_a_row_behind_the_strings_but_not_across_their_start():
+    blob = table(1000, 6)
+    b = bytearray(blob + bytes(RS))
+    strings_off = struct.unpack_from("<I", b, 0)[0]
+    struct.pack_into("<Q", b, 0x40 + 8, len(blob) + 0)                 # the first row now lies behind the strings, in the added bytes
+    assert ParamView(bytes(b), RS).find(1000) is not None
+    struct.pack_into("<Q", b, 0x40 + 8, strings_off - 4)               # across the start of the strings
+    with pytest.raises(ContainerError):
+        ParamView(bytes(b), RS)

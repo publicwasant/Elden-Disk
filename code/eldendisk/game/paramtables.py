@@ -19,6 +19,7 @@ from .probe import row_size_of
 ROOT = "params"
 SAMPLE_ROWS = 512
 READ_CHUNK = 1 << 20      # bytes per read of a whole table
+MAX_BEHIND = 4 << 20      # how far behind the strings a row of a table grown at its end may lie
 UNIT_FORMATS = _FMT = {"s8": "<b", "u8": "<B", "s16": "<h", "u16": "<H", "s32": "<i", "u32": "<I", "f32": "<f", "b32": "<i"}
 
 # what a person may type for a table: the workbench name, the game's own name, the Paramdex name (any letter case)
@@ -115,14 +116,23 @@ class Tables:
                              "wrong table or another game version")
         return head, count, data_start, raw
 
-    def _check_offset(self, table: str, row_id: int, off: int, count: int, data_start: int) -> None:
-        """The descriptor of a row must point to a row-sized slot in the gap (a row an extension added) or in the old data."""
+    def _check_offset(self, table: str, row_id: int, off: int, count: int, data_start: int, head: int = 0) -> None:
+        """The descriptor of a row must point to a row-sized slot in the gap (a row an extension added), in the old data, or, for a
+        table an extension grew at its END (AtkParam_Pc: the descriptors grew into the front of the data, the first rows were copied
+        behind the strings), in the old data counted back from the strings or in the rows behind the strings."""
         lay, size = self.store.spec.layout, LAYOUTS[table]["size"]
         first = lay.descriptors + count * lay.descriptor_size
         in_gap = first <= off and off + size <= data_start
         in_data = off >= data_start and (off - data_start) % size == 0 and off + size <= data_start + count * size
-        if not (in_gap or in_data):
+        strings = self._strings_off(head) if head and not (in_gap or in_data) else 0
+        in_old = strings > first and first <= off and off + size <= strings and (strings - off) % size == 0
+        behind = strings > first and strings <= off <= strings + MAX_BEHIND and off % 4 == 0
+        if not (in_gap or in_data or in_old or behind):
             raise ParamError(f"{table}: row {row_id} points outside the data (offset {off})")
+
+    def _strings_off(self, head: int) -> int:
+        raw = self.mem.read(head, 4)
+        return struct.unpack("<I", raw)[0] if raw else 0
 
     def row_address(self, table: str, row_id: int) -> tuple[int, bytes]:
         """(address of the row, its bytes)."""
@@ -136,7 +146,7 @@ class Tables:
                 break
         if off is None:
             raise ParamError(f"{table}: row {row_id} is not in the file")
-        self._check_offset(table, row_id, off, count, data_start)
+        self._check_offset(table, row_id, off, count, data_start, head)
         data = self.mem.read(head + off, size)
         if data is None:
             raise ParamError(f"{table}: row {row_id} is unreadable")
@@ -151,7 +161,7 @@ class Tables:
             base = i * lay.descriptor_size
             rid = struct.unpack_from("<I", raw, base + lay.descriptor_id)[0]
             off = struct.unpack_from("<Q", raw, base + lay.descriptor_data_offset)[0]
-            self._check_offset(table, rid, off, count, data_start)
+            self._check_offset(table, rid, off, count, data_start, head)
             offs[rid] = off
         if not offs:
             return {}

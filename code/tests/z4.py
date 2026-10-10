@@ -24,11 +24,11 @@ def file_of(slots: dict, maximum: int = 64) -> dict:
     while len(slots) < maximum:
         n += 1
         slots["<id-%d>" % n] = None
-    return {"innovate_spells": {"maximum": maximum, "slots": slots}}
+    return {"innovate_items": {"spells": {"maximum": maximum, "slots": slots}}}
 
 
 def spell_of(d: dict, which: str = ID) -> dict:
-    return d["innovate_spells"]["slots"][which]
+    return d["innovate_items"]["spells"]["slots"][which]
 
 
 Z4 = file_of({ID: SPELL})

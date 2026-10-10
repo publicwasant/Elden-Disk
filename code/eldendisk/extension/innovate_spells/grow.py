@@ -46,6 +46,7 @@ def grow(body: bytes, jobs: dict):
         if len(index.get(short, [])) != 1:
             raise GrowError("%s.param: %d matches in the archive" % (short, len(index.get(short, []))))
     targets = {index[s][0]: s for s in jobs}
+    end_mode = {i for i, s in targets.items() if jobs[s].get("mode") == "end"}      # these grow at their END (grow_end below), not backwards
 
     def hpos(i):
         return 0x40 + i * fhs
@@ -68,6 +69,8 @@ def grow(body: bytes, jobs: dict):
     reports, done, free = [], set(), []       # free: [start, end) of space our own growth left behind (stale copies, nothing points there)
     for ti in sorted(targets, key=lambda i: entry(i)[0]):                  # in file order
         short = targets[ti]
+        if ti in end_mode:
+            continue
         rows = list(jobs[short]["rows"])
         if not rows:
             continue
@@ -147,4 +150,94 @@ def grow(body: bytes, jobs: dict):
         reports.append({"table": short, "rows": K, "shift": X, "evicted": [_short(bnd.entries[j].name) for j in evicted],
                         "start": NS})
         done.add(ti)
+    for ti in sorted(end_mode, key=lambda i: entry(i)[0]):
+        reports.append(_grow_end(nb, bnd, ti, targets[ti], jobs[targets[ti]], entry, hpos))
     return bytes(nb), reports
+
+
+def _grow_end(nb: bytearray, bnd, ti: int, short: str, job: dict, entry, hpos) -> dict:
+    """Grow the table at index `ti` at its END (used where the entry in front of the table is too big to move: AtkParam_Pc, behind
+    which lies a 6 MB table, while the entry behind it is 28 KB).
+
+      before:  [ T: head | N records | N rows (old) | strings ] [ next entries ... ]
+      after:   [ T: head | N+K records | K new rows | rest of the hole | old rows m.. | strings | pad | the first m old rows ] [ ... ]
+
+    The records grow by 24*K bytes into the front of the row data; the first m rows (the ones that lay there) are copied behind the
+    strings and their records point at the copies; the K new rows go into the hole that is left. Every other row and the strings
+    stay where they are, byte for byte. The entries that lie behind the table and are in the way are copied to the end of the body
+    (as the front version does with the ones in front). Header: row count; `data_start` (0x30) = end of the records; `strings_off`
+    and the type-name pointer are unchanged. Only the new, relocated rows and the records are written."""
+    rows = sorted(job["rows"])
+    t_off, t_size = entry(ti)
+    blob = bytes(nb[t_off:t_off + t_size])
+    strings_off, count, data_start = struct.unpack_from("<I", blob, 0)[0], struct.unpack_from("<H", blob, 0x0A)[0], struct.unpack_from("<Q", blob, 0x30)[0]
+    if count == 0 or (strings_off - data_start) % count or data_start != 0x40 + REC * count:
+        raise GrowError("%s is not in the original layout (it has been grown already?)" % short)
+    rs = (strings_off - data_start) // count
+    recs = [struct.unpack_from("<iIQQ", blob, 0x40 + REC * i) for i in range(count)]
+    if any(r[1] != 0 or r[2] != data_start + i * rs for i, r in enumerate(recs)):
+        raise GrowError("%s is not in the original layout (it has been grown already?)" % short)
+    ids = [rid for rid, _ in rows]
+    clash = sorted(set(ids) & {r[0] for r in recs})
+    if len(set(ids)) != len(ids) or clash:
+        raise GrowError("%s: a new id appears twice or is already used by a row of the game (%s)" % (short, clash[:1]))
+    if any(len(rd) != rs for _, rd in rows):
+        raise GrowError("%s: a new row is not %d bytes long" % (short, rs))
+    name_row = [r for r in recs if r[0] == job["name_from"]]
+    if not name_row:
+        raise GrowError("%s: row %s (the name source) is missing" % (short, job["name_from"]))
+    K, n2 = len(rows), count + len(rows)
+    rec_end = 0x40 + REC * n2
+    m = -(-(rec_end + K * rs - data_start) // rs)                    # rows of the front of the data that make room for the records and the new rows
+    if m > count:
+        raise GrowError("%s: too small to grow at its end" % short)
+    tail_at = (t_size + 15) // 16 * 16                                # the relocated rows go here (relative to the table)
+    new_size = tail_at + m * rs
+    # --- room behind the table: evict the entries that are in the way
+    end_abs = t_off + t_size
+    limit = None
+    evicted = []
+    while True:
+        later = [(entry(i)[0], i) for i in range(len(bnd.entries)) if entry(i)[0] >= end_abs and i != ti and i not in evicted]
+        nxt = min(later)[0] if later else None
+        if nxt is not None and t_off + new_size <= nxt:
+            break
+        if nxt is None:
+            break                                                       # nothing behind it at all: the table may grow into the end of the body
+        j = min(later)[1]
+        if nxt - end_abs >= 16 and not evicted:
+            pass                                                        # a hole of ours behind the table is fine
+        evicted.append(j)
+        end_abs = entry(j)[0] + entry(j)[1]
+    if len(nb) < t_off + new_size:                                      # the grown table may reach past the old end of the body: the copies go behind it
+        nb += b"\0" * (t_off + new_size - len(nb))
+    nb += b"\0" * ((-len(nb)) % 16)
+    for j in evicted:                                                   # copy first, overwrite after
+        o, s_ = entry(j)
+        at = len(nb)
+        nb += nb[o:o + s_]
+        nb += b"\0" * ((-len(nb)) % 16)
+        struct.pack_into("<I", nb, hpos(j) + 0x18, at)
+    # --- the records, the new rows
+    new_at = rec_end
+    allrecs = []
+    for i, (rid, pad, doff, noff) in enumerate(recs):
+        allrecs.append((rid, doff if i >= m else tail_at + i * rs, noff))
+    for q, (rid, _) in enumerate(rows):
+        allrecs.append((rid, new_at + q * rs, name_row[0][3]))
+    allrecs.sort(key=lambda r: r[0])
+    old_front = blob[data_start:data_start + m * rs]                    # the first m rows, copied before their place is overwritten
+    region = bytearray()
+    for rid, doff, noff in allrecs:
+        region += struct.pack("<iIQQ", rid, 0, doff, noff)
+    for _, rd in rows:
+        region += rd
+    region += b"\0" * (data_start + m * rs - rec_end - K * rs)
+    nb[t_off + 0x40:t_off + data_start + m * rs] = bytes(region)
+    nb[t_off + t_size:t_off + tail_at] = b"\0" * (tail_at - t_size)
+    nb[t_off + tail_at:t_off + new_size] = old_front
+    struct.pack_into("<H", nb, t_off + 0x0A, n2)
+    struct.pack_into("<Q", nb, t_off + 0x30, rec_end)
+    struct.pack_into("<Q", nb, hpos(ti) + 8, new_size)
+    struct.pack_into("<Q", nb, hpos(ti) + 0x10, new_size)
+    return {"table": short, "rows": K, "mode": "end", "relocated": m, "evicted": [_short(bnd.entries[j].name) for j in evicted], "start": t_off}

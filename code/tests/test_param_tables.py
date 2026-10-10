@@ -137,6 +137,67 @@ def test_a_row_an_extension_added_is_found_in_the_gap():
     assert t.read_row("Magic", 2230000)["mp"] == 90 and t.read_row("Magic", 4000)["mp"] == 10
 
 
+def put_end_grown(mem, table, old_rows, new_rows, relocate, index=0):
+    """Fake file of a table an extension grew at its END (grow.py _grow_end): the descriptors grew into the front of the data, the
+    `relocate` first old rows were copied behind the strings, the new rows follow the descriptors, `data_start` = end of the
+    descriptors, the strings stay where they were."""
+    size = LAYOUTS[table]["size"]
+    old_ids, new_ids = sorted(old_rows), sorted(new_rows)
+    ids = sorted(old_ids + new_ids)
+    d0 = 0x40 + len(old_ids) * 24
+    strings = d0 + len(old_ids) * size
+    first = 0x40 + len(ids) * 24
+    assert first + len(new_ids) * size <= d0 + relocate * size
+    head = 0x350000000 + index * 0x4000000
+    header = bytearray(0x40)
+    struct.pack_into("<I", header, 0, strings)
+    struct.pack_into("<H", header, 0xA, len(ids))
+    struct.pack_into("<Q", header, 0x30, first)
+    mem.put(head, bytes(header))
+    where = {}
+    for i, rid in enumerate(old_ids):
+        where[rid] = strings + 16 + i * size if i < relocate else d0 + i * size
+    for q, rid in enumerate(new_ids):
+        where[rid] = first + q * size
+    for rid, off in where.items():
+        mem.put(head + off, old_rows[rid] if rid in old_rows else new_rows[rid])
+    mem.put(head + 0x40, b"".join(struct.pack("<IIQQ", rid, 0, where[rid], 0) for rid in ids))
+    chain = pf.params_profile().params.catalog[table]
+    obj = mem.read(BASE + chain.rva, 8)
+    if obj is None:
+        mem.put(BASE + chain.rva, struct.pack("<Q", OBJ))
+    cells = 0x340000000 + index * 0x10000
+    mem.put(OBJ + chain.offsets[0], struct.pack("<Q", cells))
+    mem.put(cells + chain.offsets[1], struct.pack("<Q", cells + 0x1000))
+    mem.put(cells + 0x1000 + chain.offsets[2], struct.pack("<Q", head))
+    return head
+
+
+def test_a_table_grown_at_its_end_is_read_in_all_three_places_a_row_can_be():
+    m = pf.Pages()
+    old = {1000 + i: encode("AtkParam_Pc", atkPhys=i) for i in range(20)}
+    new = {710000000: encode("AtkParam_Pc", atkPhys=777), 710000001: encode("AtkParam_Pc", atkPhys=778)}
+    put_end_grown(m, "AtkParam_Pc", old, new, relocate=3)
+    t = tables(m)
+    assert t.read_row("AtkParam_Pc", 1000)["atkPhys"] == 0           # copied behind the strings
+    assert t.read_row("AtkParam_Pc", 1010)["atkPhys"] == 10          # still in the old data, counted back from the strings
+    assert t.read_row("AtkParam_Pc", 710000001)["atkPhys"] == 778    # new, right after the descriptors
+    assert {r: decode["atkPhys"] for r, decode in ((i, PT.decode_row("AtkParam_Pc", b)) for i, b in t.all_rows("AtkParam_Pc").items())} == \
+        {**{k: i for i, k in enumerate(sorted(old))}, 710000000: 777, 710000001: 778}
+
+
+def test_a_row_far_behind_the_strings_or_in_front_of_the_data_is_still_refused():
+    m = pf.Pages()
+    old = {1000 + i: encode("AtkParam_Pc") for i in range(20)}
+    head = put_end_grown(m, "AtkParam_Pc", old, {710000000: encode("AtkParam_Pc")}, relocate=2)
+    m.put(head + 0x40 + 8, struct.pack("<Q", 0x10))
+    with pytest.raises(ParamError, match="outside the data"):
+        tables(m).read_row("AtkParam_Pc", 1000)
+    m.put(head + 0x40 + 8, struct.pack("<Q", 64 << 20))
+    with pytest.raises(ParamError, match="outside the data"):
+        tables(m).read_row("AtkParam_Pc", 1000)
+
+
 def test_every_table_is_reached_through_its_own_chain():
     m = pf.Pages()
     for i, table in enumerate(LAYOUTS):
@@ -215,8 +276,8 @@ def test_a_catalog_with_an_unknown_table_is_refused(tmp_path):
     assert prof is None and "Nothing" in why
 
 
-def test_the_layouts_agree_with_the_ones_innovate_spells_uses():
-    from eldendisk.extension.innovate_spells.paramdefs import PARAMDEFS
+def test_the_layouts_agree_with_the_ones_innovate_items_uses():
+    from eldendisk.extension.innovate_items.paramdefs import PARAMDEFS
     for ext, ours in {"goods": "Goods", "magic": "Magic", "sp": "SpEffect", "shop": "ShopLineup"}.items():
         assert PARAMDEFS[ext]["size"] == LAYOUTS[ours]["size"]
         assert PARAMDEFS[ext]["fields"] == LAYOUTS[ours]["fields"]
@@ -229,8 +290,8 @@ ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 @pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
 def test_every_row_of_the_real_tables_decodes_and_black_flame_is_where_the_survey_found_it():
     import struct as st
-    from eldendisk.extension.innovate_spells import bases, container, zstd
-    from eldendisk.extension.innovate_spells.container import Bnd4
+    from eldendisk.extension.innovate_items import bases, container, zstd
+    from eldendisk.extension.innovate_items.container import Bnd4
     data = Path(ORIG).read_bytes()
     assert hashlib.sha256(data).hexdigest() == bases.BASES[bases.CURRENT_BASE]
     dcx = container.decrypt(data)

@@ -57,7 +57,7 @@ Slot key = the spell's id, a slot is still `null` when empty, the slot number st
 - `shop` is as in 1.7.0 (slots 1-7 only until the slots above 7 are decided).
 - `set` writes any single number of a **copied** row. The key is `<Table>.<template row id>.<field>`, the same name the workbench uses (`write --set params.Bullet.10621000.life=3`), so what was tried in the game is pasted into the design. The value is checked like `write` checks it (field exists, type and bit width, no clamp). A field that holds another row's id is refused unless the value is an id that exists in the base file; the builder sets the ids between the copies itself. A key that names a row that is not copied (a shared row) is an error that says so.
 - Legacy fields of `buff` (`cast_motion`, `effect`, `poise_while_casting_seconds`) keep their meaning and cannot be combined with `set` on the rows they build.
-- A **plan** is printed before a build (`extension innovate-spells --add all --dry-run` already builds in memory; it will list, per spell, every row of the chain marked *copied* or *shared (reached by N spells)*, the new ids and the bytes added). A row reached by more than 3 Magic rows is shared by default; `"copy": ["AtkParam_Pc.79990"]` or `"share": ["Bullet.10625003"]` overrides one row.
+- A **plan** is printed before a build (`extension innovate-items spells --add all --dry-run` already builds in memory; it will list, per spell, every row of the chain marked *copied* or *shared (reached by N spells)*, the new ids and the bytes added). A row reached by more than 3 Magic rows is shared by default; `"copy": ["AtkParam_Pc.79990"]` or `"share": ["Bullet.10625003"]` overrides one row.
 
 ## 4. Ids owned by a slot (slot *n*, 1..64)
 
@@ -124,3 +124,13 @@ Where it differs from this draft:
 - The attack rows (AtkParam_Pc) are **not** copied (that is 2.4): the copies keep calling the game's, so the damage of a projectile does not change yet; its range, life, speed and what it applies on hit do.
 - The walk that decides which rows are copied (`chain.copy_set`) goes only through *own* Bullet and SpEffect rows and stops at generic rows and attack rows, so a row that only a shared row calls is not copied.
 - T7 passed in the game first, so the gate allows 20 re-encoded blocks.
+
+## 12. What 2.4 built (2026-10-10)
+
+`attack`, and the Atk copies for `projectile`. AtkParam_Pc is the sixth table the engine copies: a block of 8 ids per slot (`710000000 + (n-1)*8`), the copies are remapped (`atkId_Bullet` in the Bullet copies, `refId` in the Magic copy, `spEffectId0-4` in the Atk copies) and `set` takes `AtkParam_Pc.<template row id>.<field>` for the kinds `projectile` and `attack`. Where it differs from this draft:
+
+- **The table grows at its end.** The first way (the same as for the other tables: the new records and rows are written in front of the table) evicts `AtkParam_Npc`, 6.17 MB, in front of AtkParam_Pc; the body grew by 6.27 MB and the game refused the save (T8, failed). The second way (`mode: "end"`, T9, passed): the records grow into the front of the row data, the first few rows are moved behind the strings, the new rows take the hole, and the table behind it (28 KB) is moved to the end of the body. Four new rows relocate 5 old rows; the body grew by 124,560 bytes and 26 blocks changed.
+- The gate is now 26 blocks, 219,000 bytes of body and 243,000 of frame (T9). A design with one projectile and its Atk copies is at the limit of the 26 blocks.
+- `attack` needs a Magic row that makes a direct attack (an AtkParam_Pc ref and no Bullet ref): 4430, 4440, 4450, 7080, 7510 in the game. Generic rows (e.g. 79980, 79990) stay shared.
+- `PLANNED_KINDS` is empty: all five kinds exist.
+- In the game: A0-A6 of the manual plan are open.

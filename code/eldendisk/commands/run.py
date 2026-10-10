@@ -14,7 +14,7 @@ from ..paths import describe_resource
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, session_log
 from .extension import prepare_regulation
-from ..extension.innovate_spells.service import ExtensionError, GateFailed
+from ..extension.innovate_items.spells.service import ExtensionError, GateFailed
 
 
 STEAM_EXE = "steam.exe"
@@ -63,7 +63,7 @@ def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
     if vault.read_session() is not None:
         book.d("ext", "the vault owes a restore from an earlier session: not building; the session will say what to do")
         return None, "none"
-    prep = prepare_regulation(args, game_dir / "regulation.bin", allow_secured=True)
+    prep = prepare_regulation(args, game_dir / "regulation.bin", allow_secured=True, vault_dir=vault.root)
     return prep.path, prep.mode
 
 
@@ -132,5 +132,5 @@ def cmd_run(args) -> int:
         auto_prune(vault, args.keep)
         if mode == "built":
             book.i("ext", "this regulation.bin was built just now. If it worked in the game, keep it for next time: "
-                                "eldendisk extension innovate-spells --secure   (game closed)")
+                                "eldendisk extension innovate-items spells --secure   (game closed)")
     return rc

@@ -44,7 +44,7 @@ def plan(src: Source, spells: list):
     than the original: the tables grew (grow.py)."""
     for spell in spells:
         kind = spell.get("kind", "buff")
-        if kind not in ("buff", "clone", "enchant", "projectile"):
+        if kind not in ("attack", "buff", "clone", "enchant", "projectile"):
             raise BuildError("unsupported spell kind %r" % kind)
         if kind == "buff" and "from" not in spell and spell["type"] != "incantation":
             raise BuildError("unsupported spell type %r" % spell["type"])

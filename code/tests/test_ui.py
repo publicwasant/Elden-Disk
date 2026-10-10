@@ -364,7 +364,7 @@ def colour(monkeypatch):
 def test_spell_ids_are_purple_in_an_ext_line(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="innovate-spells: building reverse_curse_technique, black_flame_copy on D:\\x"))
+    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="innovate-items spells: building reverse_curse_technique, black_flame_copy on D:\\x"))
     out = buf.getvalue()
     assert PURPLE.format("reverse_curse_technique") in out and PURPLE.format("black_flame_copy") in out
 

@@ -25,9 +25,9 @@ from .reblock import BS, TAIL_ZEROS, Source
 
 # What the game was seen to accept (handbook Part VI; T6 = 64 new rows in each of the four tables). Beyond these the file is
 # untested: the gate stops, and the way forward is a new in-game test that raises the number, never a bypass.
-MAX_CHANGED_BLOCKS = 20      # blocks re-encoded (T6: 13; T7, 2026-10-10: 20 with a grown fifth table, Bullet)
+MAX_CHANGED_BLOCKS = 26      # blocks re-encoded (T6: 13; T7, 2026-10-10: 20 with a grown fifth table, Bullet; T9, 2026-10-10: 26 with a sixth, AtkParam_Pc)
 MAX_BODY_GROWTH = 219_000    # decoded bytes added (passed: 219 KB; 466 KB failed whatever the content)
-MAX_FRAME_GROWTH = 235_000   # compressed frame bytes added (T6: +234,768)
+MAX_FRAME_GROWTH = 243_000   # compressed frame bytes added (T6: +234,768; T9: +242,464)
 
 
 def _raw_lit_split(c: bytes):
@@ -172,10 +172,12 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
             continue
         shift = a.strings_off - b.strings_off
         mask = lambda h: bytes(h[4:0x0A]) + bytes(h[0x0C:0x10]) + bytes(h[0x18:0x30]) + bytes(h[0x38:0x40])    # not: strings_off, count, type-name ptr, data_start
-        if mask(a.head) != mask(b.head) or a.tail != b.tail:
+        at_end = shift == 0 and a.count > b.count            # grew at its END (grow.py `_grow_end`): nothing moves but the first rows
+        if mask(a.head) != mask(b.head) or (a.tail[:len(b.tail)] != b.tail if at_end else a.tail != b.tail):
             bad.append("R6: table %s changed its header or strings" % key)
             continue
-        if struct.unpack_from("<Q", a.head, 0x10)[0] != a.strings_off or struct.unpack_from("<Q", a.head, 0x30)[0] != b.data_start + shift:
+        want_start = 0x40 + 24 * a.count if at_end else b.data_start + shift
+        if struct.unpack_from("<Q", a.head, 0x10)[0] != a.strings_off or struct.unpack_from("<Q", a.head, 0x30)[0] != want_start:
             bad.append("R6: table %s: the header pointers are not the original ones moved by %d" % (key, shift))
         oa, ob_ = a.offsets(), b.offsets()
         ra, rb = {r[0]: bytes(r[2]) for r in a.rows}, {r[0]: bytes(r[2]) for r in b.rows}
@@ -186,7 +188,13 @@ def check(src: Source, new_dcx: bytes, newbody: bytes, footprint):
                 key, sorted(removed), sorted(added), sorted(modified), sorted(footprint.removed[key]),
                 sorted(footprint.added[key]), sorted(footprint.modified[key])))
         moved = [i for i in rb if i in oa and oa[i] != (ob_[i][0] + shift, ob_[i][1] + shift)]
-        if moved:
+        if at_end:
+            # the rows that made room for the records: the FIRST rows of the data, copied behind the old strings; all others stay
+            first_kept = min((ob_[i][0] for i in rb if i not in moved), default=None)
+            behind = b.strings_off + len(b.tail)
+            if any(ob_[i][0] >= first_kept or oa[i][0] < behind or oa[i][1] != ob_[i][1] for i in moved):
+                bad.append("R6: table %s: a row that moved is not one of the first rows, or was not copied behind the strings" % key)
+        elif moved:
             bad.append("R6: table %s: row %d is not where it should be (every old row moves by exactly %d)" % (key, moved[0], shift))
         if a.count != b.count + len(added):
             bad.append("R6: table %s: %d rows, expected %d" % (key, a.count, b.count + len(added)))

@@ -20,8 +20,9 @@ SP_LINKS = ("cycleOccurrenceSpEffectId", "atkOccurrenceSpEffectId", "replaceSpEf
 # the fields that call another row, by name, as (table called, field): what the builder remaps in a copy (the offsets above are checked
 # against these names in the tests)
 SP_PAIRS = tuple(("sp", n) for n in SP_LINKS)
-BULLET_LINKS = (("bullet", "HitBulletID"), ("bullet", "intervalCreateBulletId"), ("sp", "spEffectIDForShooter"),
+BULLET_LINKS = (("bullet", "HitBulletID"), ("bullet", "intervalCreateBulletId"), ("atk", "atkId_Bullet"), ("sp", "spEffectIDForShooter"),
                 ("sp", "spEffectId0"), ("sp", "spEffectId1"), ("sp", "spEffectId2"), ("sp", "spEffectId3"), ("sp", "spEffectId4"))
+ATK_PAIRS = tuple(("sp", "spEffectId%d" % n) for n in range(5))
 CATEGORY = {0: "atk", 1: "bullet", 2: "sp"}
 TABLES = ("atk", "bullet", "sp")
 
@@ -77,10 +78,10 @@ class Chain:
         return got
 
     def copy_set(self, magic_id: int, shared_above: int = 3) -> dict:
-        """{'bullet': set, 'sp': set}: the rows a copy of this spell takes along: the spell's own Bullet and SpEffect rows (reached by
-        no more than `shared_above` Magic rows of the game) that the spell reaches through such rows. The walk stops at a generic row and
-        at every AtkParam_Pc row (attack rows are not copied yet): what hangs below them is called by the game's rows, not by the copy."""
-        got = {"bullet": set(), "sp": set()}
+        """{'atk': set, 'bullet': set, 'sp': set}: the rows a copy of this spell takes along: the spell's own AtkParam_Pc, Bullet and
+        SpEffect rows (reached by no more than `shared_above` Magic rows of the game) that the spell reaches through such rows. The walk
+        stops at a generic row (it stays shared): what hangs below it is called by the game's rows, not by the copy."""
+        got = {"atk": set(), "bullet": set(), "sp": set()}
         own = lambda t, i: t in got and self.reach(t, i) <= shared_above
         stack = [(t, i) for _n, t, i in self.refs(magic_id) if own(t, i)]
         while stack:

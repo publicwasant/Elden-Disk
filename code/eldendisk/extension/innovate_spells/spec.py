@@ -21,18 +21,18 @@ MAX_SLOTS = 64                # proven in the game (T6): 64 new rows in each of 
 ID_RE = r"[a-z0-9][a-z0-9_-]{0,39}"
 CAST_MOTIONS = {"flame-grant-me-strength": 31, "black-flame-blade": 32}
 VISUALS = ("flame", "flask", "none")   # none: only the cast flash (from Flame! Grant Me Strength), nothing burning on the body afterwards
-KINDS = ("buff", "clone", "enchant", "projectile")               # built today; "buff" is the default so designs from before `kind` stay as they were
-PLANNED_KINDS = ("attack",)                         # Phase 2.4: named so the message is clear, not built yet
+KINDS = ("attack", "buff", "clone", "enchant", "projectile")               # built today; "buff" is the default so designs from before `kind` stay as they were
+PLANNED_KINDS = ()                                 # kinds named in the design but not built yet (none since Phase 2.4)
 TYPES = ("incantation", "sorcery")
 GOODS_TYPES = {5: "sorcery", 16: "incantation", 17: "sorcery", 18: "incantation"}   # goodsType of a player spell's Goods row
 # `set` (kinds clone, buff with `from`, enchant) writes single numbers of the copied rows: Goods and Magic always, SpEffect rows
 # for the kinds that copy their SpEffect chain. Fields that name another row are refused (Phase
 # 2.1 clones keep the template's chain; a copy that points elsewhere comes with 2.3/2.4), and so are the fields the spell
 # already has friendly names for, which would silently fight the friendly value.
-SET_TABLES = {"Magic": "magic", "Goods": "goods", "SpEffect": "sp", "Bullet": "bullet"}
-SET_KEY_RE = re.compile(r"(Magic|Goods|SpEffect|Bullet)\.(\d+)\.([A-Za-z_][A-Za-z0-9_]*)")
+SET_TABLES = {"Magic": "magic", "Goods": "goods", "SpEffect": "sp", "Bullet": "bullet", "AtkParam_Pc": "atk"}
+SET_KEY_RE = re.compile(r"(Magic|Goods|SpEffect|Bullet|AtkParam_Pc)\.(\d+)\.([A-Za-z_][A-Za-z0-9_]*)")
 FRIENDLY_FIELDS = {"sp": {}, "magic": {"fp_cost": "mp", "stamina_cost": "stamina", "intelligence": "requirementIntellect",
-                              "faith": "requirementFaith", "arcane": "requirementLuck"}, "goods": {}, "bullet": {}}
+                              "faith": "requirementFaith", "arcane": "requirementLuck"}, "goods": {}, "bullet": {}, "atk": {}}
 ID_FIELDS = {
     "sp": {"replaceSpEffectId", "cycleOccurrenceSpEffectId", "atkOccurrenceSpEffectId", "applyIdOnGetSoul", "accumuOverFireId",
            "accumuUnderFireId"},      # the builder points these at the copies itself
@@ -42,6 +42,7 @@ ID_FIELDS = {
               "createLimitGroupId"},
     "bullet": {"atkId_Bullet", "HitBulletID", "intervalCreateBulletId", "spEffectIDForShooter", "spEffectId0", "spEffectId1",
                "spEffectId2", "spEffectId3", "spEffectId4"},
+    "atk": {"spEffectId0", "spEffectId1", "spEffectId2", "spEffectId3", "spEffectId4"},
     "goods": {"refId_default", "refId_1", "replaceItemId", "appearanceReplaceItemId", "refVirtualWepId", "vagrantItemLotId",
               "vagrantBonusEneDropItemLotId", "vagrantItemEneDropItemLotId", "reinforceGoodsId", "reinforceMaterialId",
               "goodsType"},      # goodsType decides attack/support and sorcery/incantation: it follows the template
@@ -222,17 +223,21 @@ def _set(c, raw, path, o):
         kp = "%s[%s]" % (path, key)
         m = SET_KEY_RE.fullmatch(key) if isinstance(key, str) else None
         if not m:
-            c.bad(kp, "a key looks like Magic.<from>.<field>, Goods.<from>.<field> (the row id is the spell's `from`), SpEffect.<id>.<field> or Bullet.<id>.<field>")
+            c.bad(kp, "a key looks like Magic.<from>.<field>, Goods.<from>.<field> (the row id is the spell's `from`), SpEffect.<id>.<field>, Bullet.<id>.<field> or AtkParam_Pc.<id>.<field>")
             continue
         table, rid, name = SET_TABLES[m.group(1)], int(m.group(2)), m.group(3)
-        if table in ("sp", "bullet"):
-            name_ = {"sp": "SpEffect", "bullet": "Bullet"}[table]
+        if table in ("sp", "bullet", "atk"):
+            name_ = {"sp": "SpEffect", "bullet": "Bullet", "atk": "AtkParam_Pc"}[table]
             if o["kind"] == "clone":
                 c.bad(kp, "a clone shares the template's %s rows with the game's own spell and does not copy them: use "
-                          "kind buff (with `from`), enchant or projectile to tune a SpEffect, kind projectile for a Bullet" % name_)
+                          "kind buff (with `from`), enchant, projectile or attack to tune a SpEffect, kind projectile for a Bullet, "
+                          "kind projectile or attack for an AtkParam_Pc row" % name_)
                 continue
             if table == "bullet" and o["kind"] != "projectile":
                 c.bad(kp, "only kind projectile copies Bullet rows (a buff or an enchant calls SpEffect rows only)")
+                continue
+            if table == "atk" and o["kind"] not in ("projectile", "attack"):
+                c.bad(kp, "only the kinds projectile and attack copy AtkParam_Pc rows (a buff or an enchant calls SpEffect rows only)")
                 continue
         elif "from" in o and rid != o["from"]:
             c.bad(kp, "Magic and Goods can only be set on the copied rows: the row id must be this spell's `from` (%d). The "

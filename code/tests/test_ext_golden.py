@@ -16,10 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_spells import bases, build, container, grow, preflight, recipes, reblock, spec, zstd
-from eldendisk.extension.innovate_spells.container import Bnd4, ParamView
-from eldendisk.extension.innovate_spells.defs import TABLE_FILES, Def
-from eldendisk.extension.innovate_spells.service import InnovateSpells
+from eldendisk.extension.innovate_items import bases, container, grow, preflight, reblock, zstd
+from eldendisk.extension.innovate_items.spells import build, recipes, spec
+from eldendisk.extension.innovate_items.container import Bnd4, ParamView
+from eldendisk.extension.innovate_items.defs import TABLE_FILES, Def
+from eldendisk.extension.innovate_items.spells.service import Spells
 
 ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 pytestmark = pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
@@ -106,7 +107,7 @@ def test_every_row_of_the_game_is_still_there_unchanged(built, src):
     for k in new:
         o, n = {r[0]: bytes(r[2]) for r in old[k].rows}, {r[0]: bytes(r[2]) for r in new[k].rows}
         assert all(n[i] == b for i, b in o.items())
-        assert len(n) - len(o) == {"goods": 1, "magic": 1, "sp": 2, "shop": 1, "bullet": 0}[k]
+        assert len(n) - len(o) == {"goods": 1, "magic": 1, "sp": 2, "shop": 1, "bullet": 0, "atk": 0}[k]
 
 
 def test_the_result_is_a_deterministic_function_of_the_input(base, src, built):
@@ -376,7 +377,7 @@ def _z4_file(tmp_path):
 def test_service_builds_on_the_game_file(tmp_path, base):
     game = tmp_path / "game.bin"
     game.write_bytes(base)
-    ci = InnovateSpells(tmp_path / "ext", _z4_file(tmp_path))
+    ci = Spells(tmp_path / "ext", _z4_file(tmp_path))
     data, _ = ci.read_base(game)
     rep = ci.build(ci.items("all"), data)
     assert rep.built and rep.decrypted_sha256 == SLOT1_DECRYPTED_SHA256 and rep.changed_blocks == 13
@@ -387,13 +388,13 @@ def test_service_refuses_a_shop_in_a_slot_without_a_shop_line(tmp_path):
     f = file_of({"s%d" % i: (copy.deepcopy(Z4_SPELL) if i < 8 else copy.deepcopy(Z4_SPELL)) for i in range(1, 9)})
     p = tmp_path / "extension.json"
     p.write_text(json.dumps(f), encoding="utf-8")
-    ci = InnovateSpells(tmp_path / "ext", p)
+    ci = Spells(tmp_path / "ext", p)
     with pytest.raises(Exception, match="shop"):
         ci.items("all")
 
 
 # ---- the gate: the slot-1 file passes, and every kind of damage is noticed ----
-from eldendisk.extension.innovate_spells import gate     # noqa: E402
+from eldendisk.extension.innovate_items.spells import gate     # noqa: E402
 
 
 def test_the_gate_passes_the_slot_1_file(built, src):
@@ -508,7 +509,7 @@ def test_the_gate_stops_on_a_second_decoder_that_disagrees(built, src, monkeypat
 def test_the_whole_service_flow_with_the_real_build_and_gate(tmp_path, base):
     game = tmp_path / "game.bin"
     game.write_bytes(base)
-    ci = InnovateSpells(tmp_path / "ext", _z4_file(tmp_path))
+    ci = Spells(tmp_path / "ext", _z4_file(tmp_path))
     spells = ci.items("all")
     data, sha = ci.read_base(game)
     assert not ci.decide(spells, sha).use_secured

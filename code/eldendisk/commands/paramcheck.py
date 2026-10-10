@@ -11,8 +11,8 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..extension.innovate_spells import container, zstd
-from ..extension.innovate_spells.container import Bnd4, ContainerError
+from ..extension.innovate_items import container, zstd
+from ..extension.innovate_items.container import Bnd4, ContainerError
 from ..game.paramlayouts import LAYOUTS
 from ..game.paramtables import decode_row
 

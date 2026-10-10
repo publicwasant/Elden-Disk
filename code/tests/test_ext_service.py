@@ -1,4 +1,4 @@
-"""innovate-spells service: the design, the base (always the game's own file), the secured state and the decision to build.
+"""innovate-items spells service: the design, the base (always the game's own file), the secured state and the decision to build.
 The build and the gate are replaced by counters here (the real ones are in test_ext_golden.py); what is tested is what
 surrounds them: when a build happens, when it does not, and what a failed gate leaves behind."""
 import copy
@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_spells import bases, service, spec
-from eldendisk.extension.innovate_spells.build import Result
-from eldendisk.extension.innovate_spells.gate import Verdict
+from eldendisk.extension.innovate_items import bases
+from eldendisk.extension.innovate_items.spells import service, spec
+from eldendisk.extension.innovate_items.spells.build import Result
+from eldendisk.extension.innovate_items.spells.gate import Verdict
 
 BASE = b"pretend this is the game's regulation.bin" * 50
 PKG = Path(spec.__file__).parent
@@ -34,7 +35,7 @@ def ci(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "make", fake_make)
     monkeypatch.setattr(service, "prepare", lambda data: "SRC")
     monkeypatch.setattr(service.gate, "verify", fake_verify)
-    c = service.InnovateSpells(tmp_path / "ext", tmp_path / "extension.json")
+    c = service.Spells(tmp_path / "ext", tmp_path / "extension.json")
     c.state, c.game = state, tmp_path / "game-regulation.bin"
     c.game.write_bytes(BASE)
     c.spec_path.write_text(json.dumps(Z4), encoding="utf-8")
@@ -66,14 +67,14 @@ def decide(c):
 
 # ---------------- the shipped design ----------------
 def test_the_shipped_design_and_schema_are_where_the_service_looks():
-    code = PKG.parents[2]
+    code = PKG.parents[3]
     assert service.PKG_DIR == PKG and service.CODE_DIR == code and (code / "extension.json").is_file()
     assert (PKG / "spells.schema.json").is_file() and not (PKG / "spells.design.json").exists()
     assert len(spec.normalise(json.loads((code / "extension.json").read_text(encoding="utf-8")))["spells"]) >= 1
 
 
 def test_the_default_design_is_code_extension_json(tmp_path):
-    assert service.InnovateSpells(tmp_path).spec_path == PKG.parents[2] / "extension.json"
+    assert service.Spells(tmp_path).spec_path == PKG.parents[3] / "extension.json"
 
 
 # ---------------- the build ----------------
@@ -277,7 +278,7 @@ def test_only_a_name_or_description_or_formatting_change_keeps_the_secured_file(
     build_and_secure(ci)
     d = edited(lambda i: i.update(name="Another name", description="x"))
     s = spell_of(d)
-    d["innovate_spells"]["slots"][ID] = dict(reversed(list(s.items())))       # the spell's own keys in another order
+    d["innovate_items"]["spells"]["slots"][ID] = dict(reversed(list(s.items())))       # the spell's own keys in another order
     ci.spec_path.write_text(json.dumps(d, indent=8), encoding="utf-8")
     assert decide(ci).use_secured
 
@@ -293,7 +294,7 @@ def test_a_spell_moved_to_another_slot_is_a_change_because_the_slot_fixes_its_ro
     build_and_secure(ci)
     d = file_of({"<id-1>": None, ID: copy.deepcopy(SPELL)})
     ci.spec_path.write_text(json.dumps(d), encoding="utf-8")
-    dec = service.InnovateSpells.decide(ci, spec.normalise(d)["spells"], hashlib.sha256(BASE).hexdigest())
+    dec = service.Spells.decide(ci, spec.normalise(d)["spells"], hashlib.sha256(BASE).hexdigest())
     assert not dec.use_secured and f"{ID}.slot  1 -> 2" in dec.diff
 
 

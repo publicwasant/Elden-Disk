@@ -11,8 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_spells import bases, build, container, gate, recipes, spec
-from eldendisk.extension.innovate_spells.defs import TABLE_FILES, Def
+from eldendisk.extension.innovate_items import bases, container
+from eldendisk.extension.innovate_items.spells import build, gate, recipes, spec
+from eldendisk.extension.innovate_items.defs import TABLE_FILES, Def
 from tests.ext_helpers import param_blob
 from tests.z4 import ID as Z4_ID, SPELL as Z4_SPELL, file_of
 
@@ -26,7 +27,7 @@ def design(**kw):
 
 
 def spell_of(d):
-    return d["innovate_spells"]["slots"]["copy_of_black_flame"]
+    return d["innovate_items"]["spells"]["slots"]["copy_of_black_flame"]
 
 
 def problems(d):
@@ -68,9 +69,8 @@ def test_a_clone_and_a_buff_can_share_one_file():
     assert kinds == ["buff", "clone"]
 
 
-@pytest.mark.parametrize("kind", ["attack"])
-def test_the_kinds_that_are_planned_are_refused_by_name(kind):
-    assert any("planned but not built yet" in p for p in problems(design(kind=kind)))
+def test_every_kind_of_the_design_is_built_and_none_is_planned_any_more():
+    assert spec.PLANNED_KINDS == () and set(spec.KINDS) == {"attack", "buff", "clone", "enchant", "projectile"}
 
 
 def test_an_unknown_kind_is_refused():
@@ -287,7 +287,7 @@ def _orig(src):
 
 def _file_tables(data):
     import struct
-    from eldendisk.extension.innovate_spells import zstd
+    from eldendisk.extension.innovate_items import zstd
     dcx = container.decrypt(data)
     body = zstd.decode_frame(dcx[0x4C:0x4C + struct.unpack(">I", dcx[0x20:0x24])[0]])
     bnd = container.Bnd4(body)

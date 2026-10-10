@@ -1,4 +1,4 @@
-"""`extension --list` / `innovate-spells --add ...` / `--secure` through the CLI, and what `run` builds, swaps and says."""
+"""`extension --list` / `innovate-items spells --add ...` / `--secure` through the CLI, and what `run` builds, swaps and says."""
 import argparse
 import hashlib
 import json
@@ -8,9 +8,10 @@ import pytest
 
 import eldendisk.__main__ as cli
 import eldendisk.commands.run as run_cmd
-from eldendisk.extension.innovate_spells import bases, service, spec
-from eldendisk.extension.innovate_spells.build import Result
-from eldendisk.extension.innovate_spells.gate import Verdict
+from eldendisk.extension.innovate_items import bases
+from eldendisk.extension.innovate_items.spells import service, spec
+from eldendisk.extension.innovate_items.spells.build import Result
+from eldendisk.extension.innovate_items.spells.gate import Verdict
 from eldendisk.vault import SaveVault
 
 BASE = b"pretend this is the game's regulation.bin" * 50
@@ -44,14 +45,14 @@ def world(tmp_path, monkeypatch):
 
 
 def args_for(w, *more):
-    return ["extension", "innovate-spells", "--extension-dir", str(w.ext), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
+    return ["extension", "innovate-items", "spells", "--extension-dir", str(w.ext), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
 
 
 def test_add_builds_every_time_and_secures_nothing(world, capsys):
     assert cli.main(args_for(world, "--add", "all")) == 0
     out = capsys.readouterr()
     assert "built, gate passed" in out.err + out.out and "--secure" in out.err + out.out
-    assert (world.ext / "innovate-spells" / "regulation.bin").read_bytes().startswith(b"BUILT")
+    assert (world.ext / "innovate-items" / "spells" / "regulation.bin").read_bytes().startswith(b"BUILT")
     assert cli.main(args_for(world, "--add", "all")) == 0
     assert len(world.builds) == 2 and not any(world.ext.rglob("*.tmp"))
     assert sorted(p.name for p in world.ext.rglob("*") if p.is_file()) == ["regulation.bin"]
@@ -73,7 +74,7 @@ def test_secure_keeps_the_build_and_list_shows_it(world, capsys):
     capsys.readouterr()
     assert cli.main(args_for(world, "--secure")) == 0
     out = "".join(capsys.readouterr())
-    assert "secured" in out and sorted(p.name for p in (world.ext / "innovate-spells").iterdir()) == \
+    assert "secured" in out and sorted(p.name for p in (world.ext / "innovate-items" / "spells").iterdir()) == \
         ["regulation.bin", "regulation.secured.bin", "spells.commit.json"]
     base = ["extension", "--list", "--extension-dir", str(world.ext), "--spec", str(world.spec)]
     assert cli.main(base) == 0
@@ -149,13 +150,13 @@ def test_extension_without_anything_to_do_is_a_usage_error():
         cli.main(["extension"])
     assert e.value.code == 2
     with pytest.raises(SystemExit):
-        cli.main(["extension", "innovate-spells", "--list"])
+        cli.main(["extension", "innovate-items", "spells", "--list"])
     with pytest.raises(SystemExit):
-        cli.main(["extension", "innovate-spells", "--force"])        # gone: it builds every time
+        cli.main(["extension", "innovate-items", "spells", "--force"])        # gone: it builds every time
 
 
-def test_innovate_spells_without_add_shows_where_things_are(world, capsys):
-    assert cli.main(["extension", "innovate-spells", "--extension-dir", str(world.ext), "--spec", str(world.spec)]) == 0
+def test_innovate_items_spells_without_add_shows_where_things_are(world, capsys):
+    assert cli.main(["extension", "innovate-items", "spells", "--extension-dir", str(world.ext), "--spec", str(world.spec)]) == 0
     assert "extension.json" in "".join(capsys.readouterr())
 
 
@@ -173,7 +174,7 @@ def secure(w):
 def test_run_builds_the_first_time_and_says_why(world, tmp_path, capsys):
     vault = SaveVault(tmp_path / "vault")
     out, mode = run_cmd._regulation(run_args(world), vault, world.game, True)
-    assert mode == "built" and out == world.ext / "innovate-spells" / "regulation.bin" and out.read_bytes().startswith(b"BUILT")
+    assert mode == "built" and out == world.ext / "innovate-items" / "spells" / "regulation.bin" and out.read_bytes().startswith(b"BUILT")
     assert "building because no secured build yet" in " ".join("".join(capsys.readouterr()).split())
     run_cmd._regulation(run_args(world), vault, world.game, True)
     assert len(world.builds) == 2                                                  # nothing secured: every run builds
@@ -183,7 +184,7 @@ def test_run_swaps_the_secured_file_without_building(world, tmp_path, capsys):
     secure(world)
     capsys.readouterr()
     out, mode = run_cmd._regulation(run_args(world), SaveVault(tmp_path / "vault"), world.game, True)
-    assert mode == "secured" and out == world.ext / "innovate-spells" / "regulation.secured.bin" and world.builds == []
+    assert mode == "secured" and out == world.ext / "innovate-items" / "spells" / "regulation.secured.bin" and world.builds == []
     assert "no build" in "".join(capsys.readouterr())
 
 
@@ -264,3 +265,36 @@ def test_regulation_flag_overrides_the_build(world, tmp_path):
     assert run_cmd._regulation(run_args(world, regulation=str(mine)), v, world.game, False) == (None, "none")
     with pytest.raises(FileNotFoundError):
         run_cmd._regulation(run_args(world, regulation=str(tmp_path / "missing.bin")), v, world.game, True)
+
+
+# ---- the files live in the vault (1.7.0): <vault>\extension\innovate-items\spells ----
+def vault_args(w, vault, *more):
+    return ["extension", "innovate-items", "spells", "--vault", str(vault), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
+
+
+def test_without_extension_dir_the_files_go_under_the_vault(world, tmp_path):
+    vault = tmp_path / "myvault"
+    assert cli.main(vault_args(world, vault, "--add", "all")) == 0
+    built = vault / "extension" / "innovate-items" / "spells" / "regulation.bin"
+    assert built.read_bytes().startswith(b"BUILT")
+    assert not (tmp_path / "local" / "EldenDisk" / "extension").exists()          # the old place is not used any more
+
+
+def test_extension_dir_still_replaces_the_vault_place(world, tmp_path):
+    vault = tmp_path / "myvault"
+    assert cli.main(vault_args(world, vault, "--extension-dir", str(world.ext), "--add", "all")) == 0
+    assert (world.ext / "innovate-items" / "spells" / "regulation.bin").is_file() and not (vault / "extension").exists()
+
+
+def test_run_puts_the_files_in_the_vault_it_resolved(world, tmp_path):
+    vault = SaveVault(tmp_path / "vault")
+    args = argparse.Namespace(regulation=None, spec=str(world.spec), extension_dir=None)
+    out, mode = run_cmd._regulation(args, vault, world.game, True)
+    assert mode == "built" and out == tmp_path / "vault" / "extension" / "innovate-items" / "spells" / "regulation.bin"
+
+
+def test_the_vault_does_not_take_the_extension_folder_for_a_snapshot(world, tmp_path):
+    vault = tmp_path / "vault"
+    assert cli.main(vault_args(world, vault, "--add", "all")) == 0
+    sv = SaveVault(vault)
+    assert sv.list_snapshots(verify=False) == [] and sv.prune(1) == [] and (vault / "extension").is_dir()
