@@ -112,7 +112,7 @@ Slot 4 (slots 1-3: the tested spell, the Black Flame clone, the Black Flame Blad
 
 ## A. `kind: attack` and the attack rows of a projectile (Phase 2.4; passed in the game 2026-10-11)
 
-Needs the exe or `python -m eldendisk` rebuilt from the new code. Since 2.4, **slot 4 (P1's Black Flame projectile) also copies its two AtkParam_Pc rows**, so the file of the design re-encodes 26 blocks (the gate's limit from T9 to T10; 27 since T10): `extension innovate-items spells --add all --dry-run` must say `gate passed (26 blocks re-encoded)`. Slot 5 below is one more spell, so the limit may be reached (checked on the build here: the design with slot 5 as in A1 and as in A4 passes the gate with 26 blocks); if the gate stops it (R2/R7 say the numbers), tell me the numbers.
+Needs the exe or `python -m eldendisk` rebuilt from the new code. Since 2.4, **slot 4 (P1's Black Flame projectile) also copies its two AtkParam_Pc rows**, so the file of the design re-encodes 26 blocks (the gate's limit since T9): `extension innovate-items spells --add all --dry-run` must say `gate passed (26 blocks re-encoded)`. Slot 5 below is one more spell, so the limit may be reached (checked on the build here: the design with slot 5 as in A1 and as in A4 passes the gate with 26 blocks); if the gate stops it (R2/R7 say the numbers), tell me the numbers.
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
@@ -163,17 +163,17 @@ T8 failed because AtkParam_Pc had to be grown backwards and the 6 MB table in fr
 
 Result: the game accepts a table whose rows lie behind its strings, 26 re-encoded blocks and a frame that grew by 242,464 bytes. The gate went to 26 blocks and 243,000 frame bytes.
 
-## T10. The envelope test with a 20-slot design (Phase 2.5; passed in the game 2026-10-11)
+## T10. The envelope test with a 20-slot design (Phase 2.5; not run yet)
 
-A design with one `projectile` and 20 slots in all needs **27 re-encoded blocks and a frame growth of about 291,000** (the gate: 26 and 243,000; T9 passed with 26 and 242,464). T10 asks the game whether it loads such a file. The file is exactly a design (2 `projectile` + 2 `attack` + 16 `buff`, every slot with its own numbers), with no unreferenced rows. Slots 1-7 have a shop line, slots 8-20 have none (Phase 2.6), so the test is only that the game loads.
+A design with one `projectile` and 20 slots in all needs **27 re-encoded blocks and a frame growth of about 291,000** (the gate: 26 and 243,000; T9 passed with 26 and 242,464). T10 asks the game whether it loads such a file. The file is exactly a design (2 `projectile` + 2 `attack` + 16 `buff`, every slot with its own numbers), with no unreferenced rows. Slots 1-7 have a shop line, slots 8-20 have none (2.6, deferred), so the test is only that the game loads.
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
-| T10a | In the `code` folder: `python tools\capacity.py --source "<game folder>\regulation.bin" --mix projectile=2,attack=2,buff=16 --write-design t10-design.json`, then `python tools\envelope_test.py --source "<game folder>\regulation.bin" --spec t10-design.json --no-copies --out regulation.envelope-test.bin` (the source must be the game's own, untouched file) | `written ...`, `re-encoded blocks 27`, body growth 159,712, frame growth 291,040; the only warnings are R2 and R7 (frame). Passed 2026-10-11: written, 27 blocks, body +159,712, frame +291,040, warnings R2 and R7 (frame) only | ✓ |
-| T10b | `eldendisk run --regulation regulation.envelope-test.bin --vault-on -v`: Continue, walk around, open the merchant (the first 7 spells are for sale), quit | the game loads like normal. Passed 2026-10-11: Continue, the world loaded, the merchant's list complete (prices 1001-1007 show the slots), Return to Desktop | ✓ |
-| T10c | `vault status` / the log after T10b | original restored, save and `regulation.bin` byte-identical. Passed 2026-10-11: save and `regulation.bin` restored byte-identical, pruned 1 old snapshot | ✓ |
+| T10a | In the `code` folder: `python tools\capacity.py --source "<game folder>\regulation.bin" --mix projectile=2,attack=2,buff=16 --write-design t10-design.json`, then `python tools\envelope_test.py --source "<game folder>\regulation.bin" --spec t10-design.json --no-copies --out regulation.envelope-test.bin` (the source must be the game's own, untouched file) | `written ...`, `re-encoded blocks 27`, body growth 159,712, frame growth 291,040; the only warnings are R2 and R7 (frame) | [ ] |
+| T10b | `eldendisk run --regulation regulation.envelope-test.bin --vault-on -v`: Continue, walk around, open the merchant (the first 7 spells are for sale), quit | the game loads like normal | [ ] |
+| T10c | `vault status` / the log after T10b | original restored, save and `regulation.bin` byte-identical | [ ] |
 
-Result: it passed. The gate went to 27 blocks and 292,000 frame bytes (the body limit stays 219,000), and 20-slot designs with up to 8 `projectile` slots are allowed. (If the game had stopped at the title screen or crashes, say when (loading screen, title, after loading the character): the answer decides whether the blocks or the frame size is the limit, and the target is lowered to what T9 proved (26 and 243,000), which still allows 20 slots without a `projectile`.)
+If it passes, the gate goes to 27 blocks and 292,000 frame bytes (the body limit stays 219,000) and 20-slot designs with up to 8 `projectile` slots are allowed. If the game stops at the title screen or crashes, say when (loading screen, title, after loading the character): the answer decides whether the blocks or the frame size is the limit, and the target is lowered to what T9 proved (26 and 243,000), which still allows 20 slots without a `projectile`.
 
 ## T. Table move (several items, not built yet)
 

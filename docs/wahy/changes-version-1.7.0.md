@@ -95,6 +95,10 @@ What it changes for the spells:
 
 Target set by the author: 16-20 slots in all (not 64 of every kind). `tools/capacity.py` (new, developer tool, 13 tests) builds designs of N slots of one kind or of a mix and prints what the gate sees (blocks, body growth, frame growth, which limit is broken); `--write-design` writes the design to a file. Result, in spec 1.7.0 section 10b: a design without `projectile` fits 20 slots (clone alone 64, buff/enchant 32); one `projectile` makes it 26 blocks with one slot and 27 blocks / frame about 291,000 with 20, beyond the gate; 16 or more slots of one `projectile` / `attack` kind move a table (body about +900,000). `tools/envelope_test.py --no-copies` builds exactly the design, without the 8 unreferenced rows (T10: the game must load a 20-slot design with 27 blocks and frame 291,040; manual plan). **T10 passed in the game (2026-10-11)**: the file is exactly a 20-slot design (2 projectile + 2 attack + 16 buff, shop prices 1001-1007 for slots 1-7): 27 blocks, body +159,712, frame +291,040; the game loaded and the merchant's list was complete. **The gate went from 26 blocks / 243,000 frame bytes to 27 / 292,000** (`preflight.MAX_CHANGED_BLOCKS`, `MAX_FRAME_GROWTH`; the body limit stays 219,000), so a 20-slot design with up to 8 `projectile` slots builds. `capacity.py` prices the slots 1000 + the slot number.
 
+## Phase 2 closed (2026-10-11)
+
+Phase 1 and Phase 2 (2.0-2.5) are closed by the author with **7 slots available** (slots 1-7, the ones with a shop line). Slots 8-64 stay in the design (`maximum` 64) and in the code, and are built, but cannot be bought; step 2.6 (how to obtain them) is struck out of the roadmap as deferred, not removed. Not run in the game, optional: P3-P5, E2-E4, CL4-CL5.
+
 ## Decisions taken while implementing
 
 - **Exactly one item per file** (2a) until table growth is researched.

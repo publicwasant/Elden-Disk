@@ -1,6 +1,6 @@
 # Phase 2.0: draft spec for spells of every kind (for the author to approve; no code yet)
 
-Status: **APPROVED by the author 2026-10-09** (the six decisions of section 8). Built so far: 2.1 `clone` (section 9); the rest is not built. It extends spec 1.7.0 section 4 (the design) and section 10b (rows appended to the tables). Decisions already taken by the author: `from` is a numeric Magic id; slots 8-64 are decided later; names and descriptions stay "stored only".
+Status: **APPROVED by the author 2026-10-09** (the six decisions of section 8). Built so far: 2.1 `clone` (section 9); the rest is not built. It extends spec 1.7.0 section 4 (the design) and section 10b (rows appended to the tables). Decisions already taken by the author: `from` is a numeric Magic id; slots 8-64 are decided later (deferred again 2026-10-11 when Phase 2 was closed with 7 slots available); names and descriptions stay "stored only".
 
 ## 1. What the game's data says (measured on the 1.17.1 original, 317 Magic rows)
 
