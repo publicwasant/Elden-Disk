@@ -90,7 +90,7 @@ def test_a_build_goes_through_the_gate_and_then_replaces_regulation_bin(ci):
     assert ci.output_path.read_bytes().startswith(b"BUILT") and len(ci.state["verified"]) == 1
     assert ci.state["verified"][0][0] == ci.output_path.read_bytes()
     assert not list(ci.dir.glob("*.tmp"))
-    assert sorted(p.name for p in ci.ext.rglob("*") if p.is_file()) == ["regulation.bin"]     # nothing secured by a build
+    assert sorted(p.name for p in ci.ext.rglob("*") if p.is_file()) == ["regulation.bin", "spells.build.json"]     # nothing secured by a build
 
 
 def test_the_gate_judges_the_file_before_it_replaces_the_old_output(ci, monkeypatch):
@@ -199,7 +199,7 @@ def test_our_own_output_is_never_a_base(ci):
 # ---------------- --secure ----------------
 def test_secure_keeps_the_build_and_writes_the_record_last(ci):
     spells = build_and_secure(ci)
-    assert sorted(p.name for p in ci.dir.iterdir()) == ["regulation.bin", "regulation.secured.bin", "spells.commit.json"]
+    assert sorted(p.name for p in ci.dir.iterdir()) == ["regulation.bin", "regulation.secured.bin", "spells.build.json", "spells.commit.json"]
     assert ci.secured_bin.read_bytes() == ci.output_path.read_bytes()
     rec = ci.read_secured()
     assert rec["kind"] == service.SECURED_KIND and rec["recipe_version"] == bases.RECIPE_VERSION

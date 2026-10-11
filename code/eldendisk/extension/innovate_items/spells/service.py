@@ -7,8 +7,11 @@
         regulation.secured.bin    a copy of the build you confirmed (`--secure`)
         spells.commit.json        the commit: the spec behind that copy, the rows each slot took, and the proof (hashes, recipe
                                   version, base)
+        spells.build.json         the record of the latest build: WHICH spells it holds (the selection `--add` made, or `all`)
+                                  and the proof; `run` builds that selection and reuses the build while nothing changed
 
-`run` swaps the secured file without building when nothing changed (see `decide`); otherwise it builds, and the gate judges the
+`run` swaps the secured file without building when nothing changed (see `decide`), else reuses the latest build while nothing
+changed (see `decide_last`); otherwise it builds the selection (everything by default), and the gate judges the
 FILE (read back from disk) before it may replace regulation.bin. A failed gate raises GateFailed and nothing is swapped.
 No printing here (the commands print). Never imports the vault, the host or the game."""
 from __future__ import annotations
@@ -30,6 +33,7 @@ PKG_DIR = Path(__file__).resolve().parent                 # where spells.schema.
 CODE_DIR = PKG_DIR.parents[3]                             # code/: where extension.json lives in the source tree
 SPEC_FILE, SCHEMA_FILE = "extension.json", "spells.schema.json"
 OUTPUT_FILE, SECURED_BIN, SECURED_FILE = "regulation.bin", "regulation.secured.bin", "spells.commit.json"
+BUILD_FILE, BUILD_KIND, BUILD_FORMAT = "spells.build.json", "innovate-items.spells build", 1
 SECURED_KIND = "innovate-items.spells commit"
 COMMIT_FORMAT = 2
 
@@ -103,6 +107,14 @@ def diff_specs(old_view: dict, new_view: dict) -> list:
     return lines
 
 
+def _ids_text(ids) -> str:
+    return ", ".join(ids) if ids else "no spell"
+
+
+def _sel_text(sel) -> str:
+    return "all spells" if sel == "all" else ", ".join(sel)
+
+
 @dataclass
 class Decision:
     use_secured: bool
@@ -131,6 +143,7 @@ class Spells:
         self.output_path = self.dir / OUTPUT_FILE
         self.secured_bin = self.dir / SECURED_BIN
         self.secured_path = self.dir / SECURED_FILE
+        self.build_path = self.dir / BUILD_FILE
 
     # ---------------- the design ----------------
     def load_spec(self) -> dict:
@@ -143,8 +156,9 @@ class Spells:
         except UnicodeDecodeError:
             raise ExtensionError(f"{self.spec_path} must be UTF-8 text")
 
-    def items(self, which: str = "all") -> list:
-        """The spells to build: all of them, or the one with this id. An empty list means nothing to do."""
+    def items(self, which="all") -> list:
+        """The spells to build, in slot order: `all`, or the ones named by id / path (see spec.selection_of). An empty list
+        means nothing to do."""
         raw = self.load_spec()
         try:
             spells = specmod.select(raw, which)
@@ -187,6 +201,59 @@ class Spells:
             raise ValueError(f"{self.secured_path.name} is not an innovate-items.spells record")
         return rec
 
+    # ---------------- the latest build and what it holds ----------------
+    def read_build(self) -> dict | None:
+        """The record of spells.build.json, or None when there is none. A record that cannot be read raises ValueError."""
+        if not self.build_path.is_file():
+            return None
+        try:
+            rec = json.loads(self.build_path.read_text(encoding="utf-8"))
+            sel = rec["selection"]
+            ok = (isinstance(rec, dict) and rec.get("kind") == BUILD_KIND and rec.get("format") == BUILD_FORMAT
+                  and (sel == "all" or (isinstance(sel, list) and sel and all(isinstance(i, str) for i in sel)))
+                  and isinstance(rec["spec"]["spells"], list) and isinstance(rec["bin"]["sha256"], str)
+                  and isinstance(rec["base_sha256"], str) and isinstance(rec["recipe_version"], int))
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"{self.build_path.name} cannot be read ({e})")
+        if not ok:
+            raise ValueError(f"{self.build_path.name} is not an innovate-items.spells build record")
+        return rec
+
+    def selection(self) -> tuple:
+        """-> (selection, note): "all" or the list of spell ids the last `--add` chose (kept in the build record). Without a
+        record, or with one that cannot be read, it is "all" (the note says so for the unreadable one)."""
+        try:
+            rec = self.read_build()
+        except ValueError as e:
+            return "all", f"{e}: building every spell"
+        return (rec["selection"] if rec else "all"), None
+
+    def decide_last(self, spells: list, selection, base_sha: str) -> Decision:
+        """Use the latest build (regulation.bin) as it is? Only when ALL hold: its record holds the same selection and the
+        design of those spells is equal, the file has the recorded hash, the game's file is the base it was built on, and the
+        recipes are the same version. `use_secured` here means "use this file". Nothing is built to decide."""
+        try:
+            rec = self.read_build()
+        except ValueError as e:
+            return Decision(False, [f"{e}"])
+        if rec is None:
+            return Decision(False, ["no build yet"])
+        reasons, diff = [], []
+        if rec["selection"] != selection:
+            reasons.append("the selection changed (%s -> %s)" % (_sel_text(rec["selection"]), _sel_text(selection)))
+        if rec["recipe_version"] != bases.RECIPE_VERSION:
+            reasons.append(f"the recipes changed (built with version {rec['recipe_version']}, now {bases.RECIPE_VERSION})")
+        if rec["base_sha256"] != base_sha:
+            reasons.append("the game's regulation.bin is not the file the last build was made on")
+        diff = diff_specs(specmod.build_view(rec["spec"]), specmod.build_view({"format": specmod.FORMAT, "spells": spells}))
+        if diff and not reasons:
+            reasons.append(f"the design changed since the last build ({len(diff)} field{'s' if len(diff) != 1 else ''})")
+        if not self.output_path.is_file():
+            reasons.append(f"{OUTPUT_FILE} is missing")
+        elif sha256_file(self.output_path) != rec["bin"]["sha256"]:
+            reasons.append(f"{OUTPUT_FILE} is not the file that was built (its hash differs)")
+        return Decision(not reasons, reasons, diff)
+
     def decide(self, spells: list, base_sha: str) -> Decision:
         """Use the secured file as it is, or build? Secured only when ALL hold: the design equals the secured spec (name,
         description, whitespace, key order do not count), the secured file has the recorded hash, the game's file is the base
@@ -203,8 +270,11 @@ class Spells:
             reasons.append(f"the recipes changed (secured with version {rec['recipe_version']}, now {bases.RECIPE_VERSION})")
         if rec["base_sha256"] != base_sha:
             reasons.append("the game's regulation.bin is not the file the secured build was made on")
+        held, now = [i["id"] for i in rec["spec"]["spells"]], [i["id"] for i in spells]
         diff = diff_specs(specmod.build_view(rec["spec"]), specmod.build_view(want))
-        if diff:
+        if set(held) != set(now):
+            reasons.append("the secured build holds %s, this run builds %s" % (_ids_text(held), _ids_text(now)))
+        elif diff:
             reasons.append(f"the design changed since it was secured ({len(diff)} field{'s' if len(diff) != 1 else ''})")
         if not self.secured_bin.is_file():
             reasons.append(f"{SECURED_BIN} is missing")
@@ -213,9 +283,11 @@ class Spells:
         return Decision(not reasons, reasons, diff)
 
     # ---------------- the build ----------------
-    def build(self, spells: list, base: bytes, dry_run: bool = False) -> Report:
+    def build(self, spells: list, base: bytes, dry_run: bool = False, selection="all") -> Report:
         """Build `spells` on the game's original file; the gate judges the bytes READ BACK from disk; only then does the result
-        replace regulation.bin. A failed gate raises GateFailed and leaves regulation.bin and the secured files as they were."""
+        replace regulation.bin, and the build record (which spells it holds: `selection` is "all" or their ids; `run` builds the
+        same selection again) is written after it. A failed gate raises GateFailed and leaves regulation.bin, the record and the
+        secured files as they were. A dry run writes nothing, so it never changes the selection."""
         if not spells:
             return Report(False, dry_run, f"no spells in {self.spec_path}: nothing to build", output=self.output_path)
         try:
@@ -242,6 +314,11 @@ class Spells:
             raise GateFailed(v.problems)
         if not dry_run:
             os.replace(tmp, self.output_path)
+            rec = {"kind": BUILD_KIND, "format": BUILD_FORMAT, "built_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                   "recipe_version": bases.RECIPE_VERSION, "base_sha256": hashlib.sha256(base).hexdigest(),
+                   "bin": {"file": OUTPUT_FILE, "sha256": res.sha256, "size": len(res.data)},
+                   "selection": selection, "spec": {"format": specmod.FORMAT, "spells": spells}}
+            _write_atomic(self.build_path, (json.dumps(rec, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8"))
         return Report(not dry_run, dry_run, "built and checked" if not dry_run else "dry run: built in memory and checked, nothing written",
                       res.sha256, res.decrypted_sha256, v.stats.get("changed_blocks", 0), list(v.notes), self.output_path,
                       [i["id"] for i in spells])

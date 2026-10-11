@@ -13,7 +13,7 @@ _(baseline: **[changes-version-1.6.4.md](changes-version-1.6.4.md)**; design: **
 
 | # | Change | Where |
 |:-:|:---|:---|
-| 1 | **`extension --list`**, **`extension innovate-items spells --add all\|ID`** (`--dry-run`, `--spec`, `--source`, `--game-dir`, `--extension-dir`) and **`--secure`**. | `commands/extension.py`, `__main__.py` |
+| 1 | **`extension --list`**, **`extension innovate-items spells --add all\|PATH...`** (Phase 2.7: `spells.slots.<id>`, several allowed) (`--dry-run`, `--spec`, `--source`, `--game-dir`, `--extension-dir`) and **`--secure`**. | `commands/extension.py`, `__main__.py` |
 | 2 | **Build in the tool, stdlib only.** AES-256-CBC, zstd frame reading/rewriting (block by block, as the game accepts), BND4/PARAM containers, field layouts of four tables (generated from Paramdex), recipe, preflight, gate. | `extension/innovate_items/` |
 | 2b | **The design is `code/extension.json`**, section `innovate_items.spells`: `maximum` (64) and `slots`, one key per slot in order; a filled slot is a spell keyed by its id, an empty slot is `null`. The slot's place fixes the rows it takes in the game (every slot is built, as rows appended to the four tables; `shop` optional, slots 1-7 only can have one). The schema `spells.schema.json` stays in the `innovate_items.spells` package. The dev pipeline's build embeds the design like `offsets.json` / `chr_state_ids.json`; found as `--spec`, next to the exe, embedded, or in `code/`. No filled slot is valid: nothing to build, nothing swapped. The commit record `spells.commit.json` (format 2) now also lists the rows each spell took. | `commands/build.py`, `commands/extension.py`, `innovate_items.spells/spec.py`, `service.py` |
 | 3 | **One item per build** (Level 2a); `name`/`description` stored only; colour, icon and text refused as Level 3. | `spec.py`, `service.py` |
@@ -98,6 +98,10 @@ Target set by the author: 16-20 slots in all (not 64 of every kind). `tools/capa
 ## Phase 2 closed (2026-10-11)
 
 Phase 1 and Phase 2 (2.0-2.5) are closed by the author with **7 slots available** (slots 1-7, the ones with a shop line). The shipped `code/extension.json` now has 20 slots (`maximum` 20, the slots 6-20 empty; the format still allows up to 64): slots 8-20 are built but cannot be bought; step 2.6 (how to obtain slots 8 and above) is struck out of the roadmap as deferred, not removed. Not run in the game, optional: P3-P5, E2-E4, CL4-CL5.
+
+## Phase 2.7: build selection (2026-10-11)
+
+Asked by the author: build only some spells, and let `run` use that choice. `--add` now takes `all` or one or more paths `spells.slots.<id>` (the place of the spell in `extension.json`; `innovate_items.` in front and a bare `<id>` are accepted; `all` stands alone; an unknown path lists the paths the design has). A real `--add` (not `--dry-run`) writes the build record `spells.build.json` next to `regulation.bin`: the selection, the spells as designed, the hashes, the recipe version. `run` builds the same selection (without any `--add`, every spell), and swaps, in this order: the secured copy, the latest build while nothing changed, a new build. The selection is sticky until `--add all` or another `--add`. `--secure` secures the spells the latest build holds; `extension --list` shows the selection; a spell cannot be called `all`. Also: a second `run` without changes no longer builds again (the latest build is reused; before, only the secured copy was). Code: `spec.selection_of` / `select`, `Spells.read_build` / `selection` / `decide_last`, `prepare_regulation`. Tests: `test_ext_selection.py` (39), 3 golden builds of a template spell alone in a late slot (offline, gate passed). In the game: S1 (manual test plan) is open: a spell in a late slot built without the ones before it.
 
 ## Decisions taken while implementing
 

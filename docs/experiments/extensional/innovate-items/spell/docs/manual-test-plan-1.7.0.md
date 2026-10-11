@@ -175,6 +175,17 @@ A design with one `projectile` and 20 slots in all needs **27 re-encoded blocks 
 
 If it passes, the gate goes to 27 blocks and 292,000 frame bytes (the body limit stays 219,000) and 20-slot designs with up to 8 `projectile` slots are allowed. If the game stops at the title screen or crashes, say when (loading screen, title, after loading the character): the answer decides whether the blocks or the frame size is the limit, and the target is lowered to what T9 proved (26 and 243,000), which still allows 20 slots without a `projectile`.
 
+## S. Build selection (Phase 2.7; offline tests pass, S1-S3 open in the game)
+
+`--add spells.slots.<id>` builds only the spells named and `run` goes on building them. Use a design whose spells are in slots 1-3 (for example three `buff` spells with different prices).
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| S1 | `extension innovate-items spells --add spells.slots.<the spell in slot 3>`, then `run --vault-on -v`: buy it at the merchant (slot 3's line), memorize, cast | the log says `building only <id> ...; left out: ...` then `using ...regulation.bin (no build; not secured yet)`; the game loads like normal; the spell of slot 3 works; the spells of slots 1 and 2 are not in the shop | [ ] |
+| S2 | `--add spells.slots.<a> spells.slots.<b>` (two spells), `run` | both are for sale, the third is not; `extension --list` shows `selection` with the two ids | [ ] |
+| S3 | `--add all`, change the price of one spell, `run` | the log says `building because the design changed since the last build (1 field)`; all spells are for sale with the new price | [ ] |
+| S4 | `--add spells.slots.nope --dry-run` | error naming `spells.slots.nope` and the paths the design has; nothing written | [ ] |
+
 ## T. Table move (several items, not built yet)
 
 Written when T1 exists (spec 1.7.0 section 10b): the game must reach the title screen and load a character with the Goods table moved to the end of `regulation.bin`; no item is added.

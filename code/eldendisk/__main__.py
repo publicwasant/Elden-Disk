@@ -167,7 +167,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_verbose(ii, leaf=True)
     ik = ii.add_subparsers(dest="items_kind")
     ci = ik.add_parser("spells", help="build a regulation.bin with the spells of the design, or secure the one you tried")
-    ci.add_argument("--add", metavar="all|ID", help="build all spells of the design, or the one with this id (built every time)")
+    ci.add_argument("--add", metavar="all|PATH", nargs="+",
+                    help="which spells to build: `all`, or the path of each spell in extension.json (spells.slots.<id>; several can be given). "
+                         "Built every time, and `run` then builds the same selection until `--add` changes it; without any --add "
+                         "`run` builds every spell")
     ci.add_argument("--secure", action="store_true",
                     help="after you tried the build in the game (game closed): check it again and keep it as regulation.secured.bin; "
                          "`run` then swaps it without building while the design does not change")

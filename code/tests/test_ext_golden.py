@@ -326,6 +326,20 @@ def test_other_slots_build_pass_the_gate_and_take_their_own_ids(base, src, slots
     assert again.data == res.data
 
 
+@pytest.mark.parametrize("kind, frm, slot", [("projectile", 6210, 4), ("attack", 4440, 6), ("enchant", 6250, 3)])
+def test_a_template_spell_alone_in_a_late_slot_builds_and_passes_the_gate(base, src, kind, frm, slot):
+    """`--add spells.slots.<id>` can build one spell without the slots before it (Phase 2.7): its rows sit at its own ids."""
+    slots = {"<id-%d>" % n: None for n in range(1, slot)}
+    slots["late"] = {"kind": kind, "from": frm, "fp_cost": 5, "shop": {"price": 1000 + slot, "stock": -1}}
+    spells = spec.select(spec.normalise(file_of(slots, maximum=7)), ["spells.slots.late"])
+    assert [s["slot"] for s in spells] == [slot]
+    res = build.build(base, spells, src)                     # build.build runs the gate
+    P, _ = _tables(res.data)
+    ids = recipes.slot_rows(slot)
+    assert P["goods"].find(ids["goods"]) and P["magic"].find(ids["magic"]) and P["shop"].find(ids["shop_line"]) is not None
+    assert build.build(base, copy.deepcopy(spells), src).data == res.data
+
+
 def test_a_spell_keeps_its_rows_when_another_one_is_added(base, src):
     one = _tables(build.build(base, _spells(2), src).data)[0]
     two = _tables(build.build(base, _spells(2, 3), src).data)[0]

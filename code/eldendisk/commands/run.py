@@ -40,8 +40,9 @@ def auto_prune(vault: SaveVault, keep: int) -> None:
 
 def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
     """-> (the regulation.bin to swap in for this session or None, mode). mode: "none" | "file" (--regulation) | "secured"
-    (the confirmed copy, nothing built) | "built" (a new build the gate passed). `--regulation FILE` wins. Otherwise, with the
-    vault ON, the extension swaps the secured file when the design is unchanged and builds (about 20 s) when it is not. The vault
+    (the confirmed copy, nothing built) | "last" (the latest build, unchanged since, nothing built) | "built" (a new build the gate
+    passed). `--regulation FILE` wins. Otherwise, with the vault ON, the extension swaps the secured file, or the latest build, when
+    the design is unchanged and builds (about 20 s) when it is not: the spells the last `--add` chose, every spell without one. The vault
     is what makes that safe: it puts the game's file back. With the vault OFF the extension does not run. A build error or a
     failed gate stops `run` (ExtensionError / GateFailed): nothing is swapped, the game is not started.
     The 1.6.4 place `<vault>/regulation/regulation.bin` is not read any more."""
@@ -92,7 +93,8 @@ def cmd_run(args) -> int:
     rows = [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
             ("mode", "vault ON (backup before, restore after)" if protect else "vault OFF (no backup, no restore)")]
     if world is not None and protect:
-        what = {"secured": "secured copy, not rebuilt", "built": "new build, gate passed"}.get(mode, "your file")
+        what = {"secured": "secured copy, not rebuilt", "last": "latest build, unchanged, not rebuilt",
+                "built": "new build, gate passed"}.get(mode, "your file")
         rows.append(("regulation", f"{world} ({what}) replaces the game's regulation.bin for this session"))
     begin(args, "run", rows)
 
@@ -130,7 +132,7 @@ def cmd_run(args) -> int:
             tail.stop()
     if State.RESTORING in session.history:   # a session really ran; never prune a vault that still owes a restore
         auto_prune(vault, args.keep)
-        if mode == "built":
-            book.i("ext", "this regulation.bin was built just now. If it worked in the game, keep it for next time: "
+        if mode in ("built", "last"):
+            book.i("ext", "this regulation.bin is a build that is not secured yet. If it worked in the game, keep it for next time: "
                                 "eldendisk extension innovate-items spells --secure   (game closed)")
     return rc

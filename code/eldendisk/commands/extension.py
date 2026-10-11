@@ -1,8 +1,11 @@
-"""`extension --list`, `extension innovate-items spells --add all|ID` and `extension innovate-items spells --secure`.
+"""`extension --list`, `extension innovate-items spells --add all|PATH ...` and `extension innovate-items spells --secure`.
 
 innovate-items spells reads the design (`extension.json`, embedded in the exe), takes the game's own regulation.bin as the base and
 builds a new one; the gate judges the file. `--secure` confirms the build you tried in the game: it is kept as
 regulation.secured.bin, and `run` (vault ON) swaps that copy in without building again while the design does not change.
+`--add` also chooses WHICH spells later builds hold: `--add spells.slots.<id> ...` builds those only and `run` goes on building the
+same selection (and reuses the build while nothing changed) until `--add all` or another `--add` changes it; without any `--add`
+every spell is built. The choice is kept in the build record (`spells.build.json`).
 Nothing is put into the game here: `run` swaps it in for the session and the vault puts the game's own file back."""
 from __future__ import annotations
 
@@ -50,7 +53,7 @@ def game_file(args) -> Path | None:
 @dataclass
 class Prepared:
     path: Path | None            # the regulation.bin to swap in, or None
-    mode: str                    # "none" | "secured" | "built"
+    mode: str                    # "none" | "secured" | "last" (the latest build, unchanged) | "built"
     report: service.Report | None = None
 
 
@@ -61,29 +64,53 @@ def _show_diff(diff: list) -> None:
         book.i("ext", f"  … and {len(diff) - MAX_DIFF_LINES} more (see the design and {service.SECURED_FILE})")
 
 
-def prepare_regulation(args, game_dir_file: Path | None, which: str = "all", dry_run: bool = False,
+def prepare_regulation(args, game_dir_file: Path | None, which=None, dry_run: bool = False,
                        allow_secured: bool = False, vault_dir: Path | str | None = None) -> Prepared:
     """What both `extension innovate-items spells --add` and `run` do. Prints why, and what changed, before any long build.
-    Raises ExtensionError / GateFailed. `allow_secured`: swap the secured file without building when nothing changed (`run`)."""
+    Raises ExtensionError / GateFailed. `which`: what `--add` was given (a list of `all` / spell paths) or None for `run`, which
+    builds the selection the last `--add` made (every spell when there was none). `allow_secured` (`run`): swap the secured
+    file, or the latest build, without building when nothing changed."""
     ci = extension.open_spells(ext_dir(args, vault_dir), spec_file(args))
     book.d("config", f"design: {ci.spec_path} ({describe_resource(ci.spec_path)})")
-    spells = ci.items(which)
+    chosen = which is not None
+    if chosen:
+        try:
+            sel = specmod.selection_of(which)
+        except specmod.SpecError as e:
+            raise service.ExtensionError("; ".join(e.problems))
+    else:
+        sel, note = ci.selection()
+        if note:
+            book.w("ext", f"innovate-items spells: {note}")
+    spells = ci.items(sel)
+    if sel != "all":
+        sel = [i["id"] for i in spells]            # slot order, so the same choice is always written the same way
     ui.mark_spell_ids(i["id"] for i in spells)
     if not spells:
         book.i("ext", f"innovate-items spells: no spells in {ci.spec_path}: nothing to build")
         return Prepared(None, "none")
     names = ", ".join(i["id"] for i in spells)
+    if sel != "all":
+        left = [i["id"] for i in ci.items("all") if i["id"] not in sel]
+        book.i("ext", f"innovate-items spells: building only {names}"
+               + (" (chosen with the last --add; `--add all` builds every spell)" if not chosen else "")
+               + (f"; left out: {', '.join(left)}" if left else ""))
     base, base_sha = ci.read_base(game_dir_file)
     if allow_secured:
         d = ci.decide(spells, base_sha)
         if d.use_secured:
             book.ok("ext", f"innovate-items spells: {names} unchanged since it was secured: using {ci.secured_bin} (no build)")
             return Prepared(ci.secured_bin, "secured")
-        for r in d.reasons:
+        last = ci.decide_last(spells, sel, base_sha)
+        if last.use_secured:
+            book.ok("ext", f"innovate-items spells: {names} unchanged since the last build: using {ci.output_path} (no build; "
+                           "not secured yet)")
+            return Prepared(ci.output_path, "last")
+        for r in d.reasons + [r for r in last.reasons if r != "no build yet"]:
             book.i("ext", f"innovate-items spells: building because {r}")
-        _show_diff(d.diff)
+        _show_diff(d.diff or last.diff)
     book.i("ext", f"innovate-items spells: building {names} on {game_dir_file} and checking (about 20 s)")
-    rep = ci.build(spells, base, dry_run)
+    rep = ci.build(spells, base, dry_run, selection=sel)
     for n in rep.notes:
         book.d("ext", f"gate: {n}")
     book.ok("ext", f"innovate-items spells: {names} built, gate passed ({rep.changed_blocks} blocks re-encoded)"
@@ -121,6 +148,9 @@ def cmd_list(args) -> int:
                          else f"{len(diff)} change(s): `run` builds"))
             for line in diff[:MAX_DIFF_LINES]:
                 rows.append(("", line))
+    sel, note = ci.selection()
+    rows.append(("selection", note or ("every spell (no --add yet, or the last was `--add all`)" if sel == "all" else
+                                       f"{', '.join(sel)} (chosen with --add; `run` builds only these; `--add all` builds every spell)")))
     rows.append(("last build", str(ci.output_path) if ci.output_path.is_file()
                  else "none yet (built by `run` or `extension innovate-items spells --add all`)"))
     ui.fields(rows)
@@ -130,7 +160,10 @@ def cmd_list(args) -> int:
 def cmd_secure(args) -> int:
     ci = extension.open_spells(ext_dir(args), spec_file(args))
     try:
-        spells = ci.items("all")
+        sel, note = ci.selection()                      # the build holds the spells of the last --add: that is what is checked and kept
+        if note:
+            book.w("ext", f"innovate-items spells: {note}")
+        spells = ci.items(sel)
         ui.mark_spell_ids(i["id"] for i in spells)
         rep = ci.secure(spells, game_file(args))
     except service.ExtensionError as exc:
@@ -151,7 +184,9 @@ def cmd_spells(args) -> int:
     if args.add is None:
         ui.fields([("design", f"{ci.spec_path} ({describe_resource(ci.spec_path)})"), ("build", str(ci.output_path)),
                    ("secured", str(ci.secured_bin))])
-        ui.out("     build with: eldendisk extension innovate-items spells --add all")
+        sel, _note = ci.selection()
+        ui.out("     build with: eldendisk extension innovate-items spells --add all   (or --add spells.slots.<id> [spells.slots.<id> ...])")
+        ui.out("     selection now: " + ("every spell" if sel == "all" else f"{', '.join(sel)} (`run` builds only these)"))
         ui.out("     after you tried it in the game (game closed): eldendisk extension innovate-items spells --secure")
         return 0
     try:

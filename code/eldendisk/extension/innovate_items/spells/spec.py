@@ -298,6 +298,8 @@ def normalise(data) -> dict:
         p = "%s.slots[%s]" % (top, iid)
         if not re.fullmatch(ID_RE, iid):
             c.bad(p, "a filled slot's key is the spell's id: 1-40 characters, lower-case letters, digits, '_' and '-'")
+        if iid in RESERVED_IDS:
+            c.bad(p, "`%s` is reserved (`--add %s` means every spell): choose another id" % (iid, iid))
         if not isinstance(it, dict):
             c.bad(p, "must be an object (or null for an empty slot)")
             continue
@@ -355,11 +357,48 @@ def dumps(spec: dict) -> str:
     return json.dumps(spec, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
-def select(spec: dict, which: str) -> list:
-    """`all` or a spell id -> the spells to build."""
-    if which == "all":
+SELECT_PREFIXES = ("innovate_items.spells.slots", "spells.slots")      # where a spell sits in extension.json, as `--add` writes it
+RESERVED_IDS = ("all",)                                                 # `--add all` means every spell: no spell may be called that
+
+
+def selection_of(which) -> "str | list":
+    """What `--add` was given -> "all", or the ids of the spells (syntax only, nothing is looked up).
+
+    A value is `all`, `spells.slots` (the same), `spells.slots.<id>` (the path of a spell in extension.json; the leading
+    `innovate_items.` is optional) or a bare `<id>`. Several can be given. `all` stands alone. Raises SpecError."""
+    values = [which] if isinstance(which, str) else list(which)
+    if not values:
+        raise SpecError(["give `all` or the path of a spell: spells.slots.<id>"])
+    ids, every = [], False
+    for raw in values:
+        v = raw.strip() if isinstance(raw, str) else raw
+        if v == "all" or v in SELECT_PREFIXES:
+            every = True
+            continue
+        sid = v
+        if isinstance(v, str):
+            for pre in SELECT_PREFIXES:
+                if v.startswith(pre + "."):
+                    sid = v[len(pre) + 1:]
+                    break
+        if not isinstance(sid, str) or not re.fullmatch(ID_RE, sid) or sid in RESERVED_IDS:
+            raise SpecError(["%r is not a spell: write spells.slots.<id> (the id is the key of the slot in extension.json), or all" % (raw,)])
+        if sid not in ids:
+            ids.append(sid)
+    if every and ids:
+        raise SpecError(["`all` stands alone: it already builds every spell"])
+    return "all" if every else ids
+
+
+def select(spec: dict, which) -> list:
+    """`all`, a spell id / path, or a list of them -> the spells to build, in slot order. An id the design does not have is
+    an error that lists the spells it has, as the paths `--add` takes."""
+    sel = selection_of(which)
+    if sel == "all":
         return list(spec["spells"])
-    hit = [i for i in spec["spells"] if i["id"] == which]
-    if not hit:
-        raise SpecError(["no spell with id %r (have: %s)" % (which, ", ".join(i["id"] for i in spec["spells"]))])
-    return hit
+    have = [i["id"] for i in spec["spells"]]
+    missing = [i for i in sel if i not in have]
+    if missing:
+        raise SpecError(["no spell %s in the design%s" % (", ".join("spells.slots." + m for m in missing),
+                         " (spells: %s)" % ", ".join("spells.slots." + h for h in have) if have else ": its slots are all empty")])
+    return [i for i in spec["spells"] if i["id"] in sel]

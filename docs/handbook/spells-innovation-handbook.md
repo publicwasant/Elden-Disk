@@ -44,7 +44,7 @@ You really do have a lot of freedom. And there is a frame around it. Knowing bot
 
 ### 1.3 Why a frame at all?
 
-The game keeps its data in tables (think: spreadsheets with thousands of rows). We **add new rows** to those tables, and every new row has to fit the shape the game expects. The game reads these tables in a very strict way, so we only add what we know the game will accept, and we check the finished file before the game ever sees it (Chapter 9). That is also why the tool is strict about typos: it would rather stop and tell you than hand the game something broken.
+The game keeps its data in tables (think: spreadsheets with thousands of rows). We **add new rows** to those tables, and every new row has to fit the shape the game expects. The game reads these tables in a very strict way, so we only add what we know the game will accept, and we check the finished file before the game ever sees it (Chapter 10). That is also why the tool is strict about typos: it would rather stop and tell you than hand the game something broken.
 
 ### 1.4 Five ways to innovate (five workshops)
 
@@ -68,7 +68,7 @@ Which one to use? Look at the spell you want to start from:
 - You only want to change **cost, stats, size in the memory list** → *Photocopier* (works with any spell).
 - You want something **of your own** that none of those cover → *Home kitchen*.
 
-If you pick the wrong workshop, the tool tells you which one fits (Chapter 10).
+If you pick the wrong workshop, the tool tells you which one fits (Chapter 11).
 
 ### 1.5 A few ideas to spark you
 
@@ -79,7 +79,7 @@ If you pick the wrong workshop, the tool tells you which one fits (Chapter 10).
 | A heal that comes as a **big burst** instead of a slow trickle | Home kitchen | `heal_hp_per_tick` up, `duration_seconds` down |
 | An **FP fountain** that gives mana back | Home kitchen | `restore_fp_per_tick` up, `heal_hp_per_tick` 0 |
 | A famous spell that **costs almost nothing** and needs no stats | Photocopier ✓ | `fp_cost`, `requires` |
-| A spell that takes **1 memory slot** instead of 3 | Photocopier ✓ | `Magic.<id>.slotLength` |
+| A big spell that takes **1 memory slot** instead of 3 (for example Comet Azur, `4200`) | Photocopier ◦ | `Magic.4200.slotLength` |
 | A weapon blessing that lasts **10 minutes** | Enchant tuner ✓ | `effectEndurance` of the blessing |
 | A flame that **burns for 30 seconds** | Fireball workshop ✓ | `effectEndurance` of the burn |
 | A direct hit that hits **ten times harder** | Strike workshop ✓ | `atkMag` of each hit |
@@ -100,7 +100,9 @@ You only need these.
 | **Slot** | A numbered **shelf**. Your spells live on shelves 1, 2, 3… The shelf number decides the game ids your spell uses. |
 | **`extension.json`** | The **order form** where you write your spells. |
 | **JSON** | The way the order form is written. Section below. |
-| **`from`** | "Start from this game spell." It is the spell's id number. |
+| **Row / id** | Every line of a game table has a number, its **id**: its address. `6210` is the address of Black Flame. Chapter 3 is the map of these numbers. |
+| **`from`** | "Start from this game spell." It is the spell's id number (its Magic id). |
+| **Spell Finder / Row Finder** | Lookup tables in this handbook: *name → id* (Appendix A) and *id → the rows it uses* ([spells-row-finder.md](spells-row-finder.md)). |
 | **`set`** | "On my copy, change this one number." |
 | **Tick** | A **heartbeat** of an effect. A heal "every 0.5 seconds" is a tick every half second. |
 | **Gate** | A **security check** on the finished file: if it is too big or wrong, the file is not used and the game does not start. |
@@ -132,7 +134,117 @@ Edit it with a plain text editor that colours JSON (Notepad++, VS Code). **Not**
 
 ---
 
-## Chapter 3 — Your first spell in ten minutes
+## Chapter 3 — The number map: where do all these numbers come from?
+
+Open the file and you meet numbers like `6210`, `1621000`, `44400`. Nothing in the game's menus shows them, so it is fair to ask: *what are they, where do they come from, and how do I know which one to write?* This chapter answers that. Keep it open while you design.
+
+### 3.1 Every number is an address
+
+Behind the game there is a handful of giant **tables** (think of phone books with thousands of lines). Every line is a **row**, and every row has an **id**: its phone number. In `extension.json`, whenever you point at "that spell" or "that burn" or "that hit", you write its id.
+
+| Table (the name written in the file) | One row is… | What the id looks like | Example | Where you write it |
+|:--|:--|:--|:--|:--|
+| **Magic** | the **spell**: FP cost, stat requirements, memory slots, cast animation, and *which other rows it calls* | 4–7 digits | `6210` = Black Flame | `"from": 6210` · `Magic.6210.…` |
+| **Goods** | the **item** in your inventory and the shop for that spell. It has the **same id as its Magic row** | same as Magic | `6210` | `Goods.6210.…` |
+| **SpEffect** | an **effect**: a burn, a buff, a heal-over-time, a weapon blessing, with its duration | 4–7 digits | `1621000` = Black Flame's burn | `SpEffect.1621000.…` |
+| **Bullet** | a **projectile**: a fireball or stone in flight | 8 digits | `10621000` | `Bullet.10621000.…` |
+| **AtkParam_Pc** | a **hit**: one blow, with its damage | 4–6 digits | `62101` | `AtkParam_Pc.62101.…` |
+
+The ids are the game's own and never change between your builds. The names next to them in this handbook come from the community's **Paramdex** name lists; they are good but not perfect, so a blank or odd name is possible. The **numbers** in the Finders below were read straight from the game file (1.17.1).
+
+> 📌 **`from` is always a Magic id. Everything else in `set` is the id of a row the spell reaches.**
+
+### 3.2 A spell is a chain of rows
+
+A spell is not one row. The **Magic** row says "when cast, call these rows", and those rows call more rows. Here are three real spells, drawn as the chain the tool follows.
+
+**Black Flame** (`6210`) throws a fireball that burns:
+
+```
+Magic 6210  Black Flame                       18 FP · 1 memory slot
+ ├─ Bullet 10621000  Black Flame              the fireball
+ │   ├─ Bullet 10621001  Black Flame          (part of the fireball)
+ │   │   ├─ AtkParam_Pc 62101  Black Flame    the hit:  fire 244
+ │   │   └─ SpEffect 1621000  (DoT Black)     the BURN: lasts 2 s
+ │   └─ AtkParam_Pc 79980                     used by other spells too: shared, never copied
+ └─ Bullet 10621050  Black Flame [Charged]    the charged fireball
+     ├─ Bullet 10621051  Black Flame
+     │   ├─ AtkParam_Pc 62106  [Charged]      the hit:  fire 300
+     │   └─ SpEffect 1621000  (DoT Black)     the same burn
+     └─ AtkParam_Pc 79990                     shared, never copied
+```
+
+**Carian Slicer** (`4440`) hits straight away, no projectile:
+
+```
+Magic 4440  Carian Slicer                     4 FP · 1 memory slot
+ ├─ AtkParam_Pc 44400   hit: magic 180
+ ├─ AtkParam_Pc 44401   hit: magic 180
+ ├─ AtkParam_Pc 44405   hit: magic 180
+ ├─ AtkParam_Pc 44406   hit: magic 180
+ ├─ AtkParam_Pc 44407   hit: magic 184
+ ├─ AtkParam_Pc 44408   hit: magic 184
+ └─ (every hit also calls SpEffect 6901 "Accumulator Increase +4": the tool copies it; you never need to touch it)
+```
+
+**Black Flame Blade** (`6250`) blesses your weapon:
+
+```
+Magic 6250  Black Flame Blade                 15 FP · 1 memory slot
+ └─ SpEffect 1626000  the blessing            lasts 7 s
+     └─ SpEffect 1626001  (DoT Black)         the burn it applies: lasts 2 s
+```
+
+How a workshop uses the chain: a **Photocopier** copies only the first line (Magic + Goods). An **Enchant tuner** also copies the SpEffect lines. A **Fireball workshop** copies everything it reaches, except rows that many other spells use (they stay shared). Whatever is **copied** you can change with `set`; whatever is **shared** still belongs to the game and cannot be touched.
+
+### 3.3 How to read a key like `SpEffect.1621000.effectEndurance`
+
+```
+   SpEffect . 1621000 . effectEndurance : 30
+   ────┬───   ───┬───   ───────┬───────   ─┬
+       │         │             │           └─ the NEW value (here: seconds)
+       │         │             └─ the FIELD: a column of that table. Here "how long the effect lasts"
+       │         └─ the ROW id: which line of the table. Here Black Flame's burn
+       └─ the TABLE: which phone book. Here the effects
+```
+
+So the line means: *"On my copy, make Black Flame's burn last 30 seconds."* Every key in every `set` reads the same way.
+
+### 3.4 Finding the number you need (four steps)
+
+1. **Which spell?** Look up its name in the **Spell Finder** (Appendix A). The number in the first column is its **id**. That is your `from`, and also the number in `Magic.<id>.…` / `Goods.<id>.…`. The table also tells you its FP cost, its memory slots and **which workshops accept it**.
+2. **Which part do I want to change?** Look the id up in the **Row Finder** ([spells-row-finder.md](spells-row-finder.md), one entry per spell). It lists every effect, projectile and hit row of that spell, with their ids, names, durations and base damage. Those are the rows you may write in `set`.
+3. **Which field?** Use the dictionary in section 7.8 (what `effectEndurance`, `atkMag`, `dist` … mean).
+4. **Check the original value first** (section 7.9) so you know what you are changing from.
+
+Which row do I need? Use this:
+
+| I want to change… | Table | Field | Which row |
+|:--|:--|:--|:--|
+| how long a **burn, buff or blessing** lasts | SpEffect | `effectEndurance` | the effect row in the Row Finder (a burn is the row named "(DoT …)"; a blessing or buff carries the spell's own name) |
+| **damage** | AtkParam_Pc | `atkPhys` / `atkMag` / `atkFire` / `atkThun` | **every** hit row of the spell that shows damage |
+| how far or fast a **projectile** flies | Bullet | `dist`, `initVellocity`, `maxVellocity` | the projectile rows |
+| how many **memory slots** it takes | Magic | `slotLength` | the spell's own id |
+| **FP, stamina, stat requirements** | — | `fp_cost`, `stamina_cost`, `requires` | none (friendly fields) |
+| **price, stock** | — | `shop` | none |
+
+**Worked example: where do `1800` and `1840` come from?** In the Row Finder, Carian Slicer (`4440`) has six hit rows: `44400`, `44401`, `44405`, `44406` show *magic 180*, and `44407`, `44408` show *magic 184*. To hit **ten times harder** you write ten times each value: `1800` for the first four, `1840` for the last two. The ids are the rows this spell actually reaches; `44402`–`44404` are not in its chain, so they are not on the list. (Those are the spell's *base* damage numbers; the damage you see in the game is also scaled by your build.)
+
+### 3.5 When an id is not in the Finder
+
+The Finders cover every spell the tool accepts, for the game version this handbook was made for. If the game is patched, or you are curious about a row, you can read it yourself (the game must be running):
+
+```commandline
+eldendisk read --param Magic.6210
+```
+
+You will see fields `refCategory1…10` and `refId1…10`: each pair says "I call the row with this id in that table". The category tells you which table: **0 = AtkParam_Pc (a hit), 1 = Bullet, 2 = SpEffect**. Then `read --param Bullet.<id>` shows what *that* row calls, and so on down the chain, exactly like the drawings above.
+
+Community tools such as Paramdex and Smithbox show the same tables with the same ids; they are a good second opinion.
+
+---
+
+## Chapter 4 — Your first spell in ten minutes
 
 You will start from the spell that is already there: **Reverse Cursed Technique**, a regenerating incantation that gives back HP, FP and stamina over 15 seconds. We will make it last twice as long.
 
@@ -190,13 +302,15 @@ Replace that whole line (keep it in the **same position**) with:
 },
 ```
 
+What the numbers are: `"from": 6210` is the **id of Black Flame**, looked up by name in the Spell Finder (Appendix A); `fp_cost: 5` replaces its normal 18 FP; the `price` is yours to choose. (More about every number in Chapter 3.)
+
 Rehearse, run, buy at Kalé. You now own a **copy of Black Flame** that costs 5 FP and needs no Intelligence or Faith. The original Black Flame is untouched.
 
 > 📌 **Remember:** (1) change **one thing at a time**, (2) always **rehearse** first, (3) **keep every shelf where it is** and put new spells in empty shelves, (4) if it has no `shop`, you cannot buy it.
 
 ---
 
-## Chapter 4 — The file and its shelves
+## Chapter 5 — The file and its shelves
 
 ```json
 {
@@ -238,11 +352,11 @@ Rehearse, run, buy at Kalé. You now own a **copy of Black Flame** that costs 5 
 
 ---
 
-## Chapter 5 — 🍳 The home kitchen: your own spell
+## Chapter 6 — 🍳 The home kitchen: your own spell
 
 This is the workshop for a spell that is truly yours. It is a **regenerating incantation**: when cast, a glow starts that gives HP, FP and stamina back, beat by beat, for a while.
 
-### 5.1 The dials
+### 6.1 The dials
 
 | Dial | What it does | Range | If you leave it out |
 |:--|:--|:--|:--|
@@ -259,9 +373,9 @@ This is the workshop for a spell that is truly yours. It is a **regenerating inc
 | `effect.visual` | What you see on the body: `"flame"` (burning body), `"flask"` (a healing glow), `"none"` or `null` (nothing) | — | `"flame"` |
 | `poise_while_casting_seconds` | Super-armor while casting (you can't be staggered) | 0.1–10 | none |
 | `shop` | `price` 1–99,999,999 and `stock` (−1 = unlimited, or 1–99) | — | not for sale |
-| `name`, `description` | Kept in the file only (Chapter 8) | 80 / 400 characters | empty |
+| `name`, `description` | Kept in the file only (Chapter 9) | 80 / 400 characters | empty |
 
-### 5.2 How to think about the numbers
+### 6.2 How to think about the numbers
 
 The three effect numbers are **per heartbeat**. The total you get is:
 
@@ -281,7 +395,7 @@ Because everything is a rate, a long duration with a big amount is very strong. 
 | a different look | `visual`, `cast_motion` |
 | to not be interrupted while casting | `poise_while_casting_seconds` |
 
-### 5.3 Worked design: Reverse Cursed Technique ✓
+### 6.3 Worked design: Reverse Cursed Technique ✓
 
 *The idea.* A technique that turns negative energy into positive: a short, strong regeneration of HP, FP and stamina, cast with the Black Flame Blade motion, for a high price and high stats, sold **once**.
 
@@ -312,7 +426,7 @@ Reading it line by line:
 |:--|:--|
 | the label `reverse_curse_technique` | The spell's id. It is the **first** entry, so it lives on shelf 1. |
 | `type: incantation` | A spell cast with a sacred seal. |
-| `name`, `description` | Your words. They are saved in the file, but the game cannot show them yet (Chapter 8). |
+| `name`, `description` | Your words. They are saved in the file, but the game cannot show them yet (Chapter 9). |
 | `requires` 45 / 15 / 10 | To memorize it you need 45 Intelligence, 15 Faith and 10 Arcane. |
 | `fp_cost: 90` | Each cast costs 90 FP. |
 | `cast_motion: black-flame-blade` | The character plays the Black Flame Blade animation. |
@@ -330,15 +444,15 @@ Reading it line by line:
 - *Plain cast:* remove `poise_while_casting_seconds`; set `visual` to `"none"`.
 - *Flask glow:* `visual: "flask"`.
 
-### 5.4 Limits of the home kitchen
+### 6.4 Limits of the home kitchen
 
-It makes **incantations that give HP, FP and stamina**, and nothing else. It cannot throw a fireball or hit anything, and it cannot be a sorcery. For those, remix a game spell (Chapter 6).
+It makes **incantations that give HP, FP and stamina**, and nothing else. It cannot throw a fireball or hit anything, and it cannot be a sorcery. For those, remix a game spell (Chapter 7).
 
 ---
 
-## Chapter 6 — Remixing a game spell
+## Chapter 7 — Remixing a game spell
 
-### 6.1 The two words that matter: `from` and `set`
+### 7.1 The two words that matter: `from` and `set`
 
 Think of a **photocopier with a pen**:
 
@@ -357,9 +471,9 @@ Everything you do not touch stays exactly like the original: the animation, the 
 }
 ```
 
-### 6.2 Finding `from`
+### 7.2 Finding `from`
 
-`from` is the **Magic id** of a spell a player can cast (not a boss spell). Some you may know: `6210` Black Flame, `6250` Black Flame Blade, `6050` Flame, Grant Me Strength, `4000` Glintstone Pebble. **Appendix A lists every id that works** for each workshop.
+`from` is the **Magic id** of a spell a player can cast (not a boss spell). You do not have to guess it: **look the spell up by name in the Spell Finder (Appendix A)**. The id is in the first column, and the ✓ columns tell you which workshops accept that spell. Some you may know: `6210` Black Flame, `6250` Black Flame Blade, `6050` Flame, Grant Me Strength, `4000` Glintstone Pebble, `4440` Carian Slicer.
 
 How many spells each workshop accepts today:
 
@@ -371,9 +485,9 @@ How many spells each workshop accepts today:
 | Fireball workshop (`projectile`) | 103 | 59 |
 | Strike workshop (`attack`) | 2 | 3 |
 
-(23 more thrown spells are too big for one shelf and are refused by the fireball workshop; a photocopy of most of them works.)
+(23 more thrown spells are too big for one shelf; they show "too big" in the Finder and are refused by the fireball workshop. A photocopy of most of them works.)
 
-### 6.3 The common fields
+### 7.3 The common fields
 
 | Field | Range | If you leave it out |
 |:--|:--|:--|
@@ -383,12 +497,12 @@ How many spells each workshop accepts today:
 | `requires` | `intelligence`, `faith`, `arcane`, 0–99. Only the stats you list change. | the original's |
 | `type` | only as a check: a copy cannot change between incantation and sorcery | the original's |
 | `shop` | `price`, `stock` | not for sale |
-| `set` | see 6.5 | nothing changed |
+| `set` | see 7.5 | nothing changed |
 | `name`, `description` | stored only | empty |
 
 The smallest valid copy is `{"kind": "clone", "from": 6210}`. It is an exact copy with no shop line, so you cannot buy it, which is why you almost always add a `shop`.
 
-### 6.4 What each workshop copies
+### 7.4 What each workshop copies
 
 Think of a spell as a **chain of rows**. A workshop decides how long a piece of the chain it copies. What it copies, you can edit with `set`. What it does not copy still points to the **game's own** rows — and the game's rows are never changed, so you cannot `set` them.
 
@@ -409,15 +523,16 @@ Which spells fit which workshop (the tool checks this for you):
 
 A shelf has room for **8 effect rows, 16 projectile rows, 8 hit rows**. A spell that needs more is refused.
 
-### 6.5 `set` — the pen
+### 7.5 `set` — the pen
 
 ```json
 "set": {
-  "Magic.6210.slotLength": 1,
   "SpEffect.1621000.effectEndurance": 30,
-  "AtkParam_Pc.44400.atkMag": 1800
+  "AtkParam_Pc.62101.atkFire": 488
 }
 ```
+
+(An illustration for the spell `6210`, Black Flame: the first line makes its burn last 30 s, the second doubles the base fire damage of its main hit from 244 to 488. Both ids are rows of Black Flame's chain, see Chapter 3.)
 
 A key has **three parts** joined by dots: `Table . row id . field`. The value is the new number.
 
@@ -429,7 +544,7 @@ A key has **three parts** joined by dots: `Table . row id . field`. The value is
 | `Bullet` (projectiles) | the game's id of a projectile the spell makes | Fireball |
 | `AtkParam_Pc` (hits and their damage) | the game's id of a hit the spell makes | Fireball, Strike |
 
-**Write the game's ids, not yours.** `SpEffect.1621000` means "the burn of Black Flame"; the tool applies your change to the **copy** on your shelf. The original `1621000` stays as it was.
+**Write the game's ids, not yours.** `SpEffect.1621000` means "the burn of Black Flame"; the tool applies your change to the **copy** on your shelf. The original `1621000` stays as it was. Where to find the ids: Chapter 3 and the Row Finder.
 
 **Rules for the value:** a whole number for whole-number fields; a decimal is fine for decimal fields; a number that does not fit the field is an error (the tool never "rounds it to fit").
 
@@ -442,11 +557,11 @@ A key has **three parts** joined by dots: `Table . row id . field`. The value is
 | A row that is not one of the copied rows | The error lists the rows you may use. |
 | `SpEffect`, `Bullet` or `AtkParam_Pc` in a photocopy | A photocopy does not copy those. Choose a richer workshop. |
 
-### 6.6 Recipe cards — proven in the real game ✓
+### 7.6 Recipe cards — proven in the real game ✓
 
-*(These are illustrations. Put any of them on an empty shelf and give it a price.)*
+*(These are illustrations. Put any of them on an empty shelf and give it a price.) Under each card, a small map says where every number comes from.*
 
-**Recipe 1 — A cheaper, lighter Black Flame** *(Photocopier)*
+**Recipe 1 — A cheap Black Flame that needs no stats** *(Photocopier)*
 
 ```json
 "cheap_black_flame": {
@@ -454,12 +569,20 @@ A key has **three parts** joined by dots: `Table . row id . field`. The value is
   "from": 6210,
   "fp_cost": 5,
   "requires": { "intelligence": 0, "faith": 0 },
-  "shop": { "price": 2000, "stock": 2 },
-  "set": { "Magic.6210.slotLength": 1 }
+  "shop": { "price": 2000, "stock": 2 }
 }
 ```
 
-Costs **5 FP**, needs **no Intelligence or Faith** (Arcane stays the original's because it is not listed), and takes **1 memory slot**. Same fireball, same burn: a photocopy shares the original's chain.
+| Number | What it is | Where it comes from |
+|:--|:--|:--|
+| `6210` | the Magic id of **Black Flame** | Spell Finder, row "6210 · Black Flame" |
+| `fp_cost: 5` | your new cost | the original costs **18 FP** (the Finder's FP column) |
+| `requires` 0 / 0 | no Intelligence, no Faith needed | your choice; Arcane is not listed, so it stays the original's |
+| `price: 2000`, `stock: 2` | your merchant line | your choice |
+
+Same fireball, same burn: a photocopy shares the original's chain, so only the item itself differs.
+
+*Want it to take fewer memory slots too?* Add `"set": { "Magic.<id>.slotLength": 1 }` with the spell's own id. It only helps a spell that takes more than one slot (the Finder has a **Memory slots** column; Black Flame already takes 1). The `set` itself is proven, using it on a multi-slot spell is ◦.
 
 **Recipe 2 — A ten-minute weapon blessing** *(Enchant tuner)*
 
@@ -473,7 +596,14 @@ Costs **5 FP**, needs **no Intelligence or Faith** (Arcane stays the original's 
 }
 ```
 
-`1626000` is the effect that carries the blessing's duration. 600 seconds = ten minutes.
+| Number | What it is | Where it comes from |
+|:--|:--|:--|
+| `6250` | the Magic id of **Black Flame Blade** | Spell Finder, "6250 · Black Flame Blade" (✓ in the Enchant column) |
+| `SpEffect.1626000` | the **blessing itself** | the chain in section 3.2: the spell calls `1626000`, which lasts **7 s** |
+| `effectEndurance` | how long that effect lasts | field dictionary (section 7.8) |
+| `600` | 10 minutes in seconds | your choice (the original is 7) |
+
+`1626001` is the burn the blessing applies (2 s); we leave it alone.
 
 **Recipe 3 — A flame that burns for 30 seconds** *(Fireball workshop)*
 
@@ -487,7 +617,13 @@ Costs **5 FP**, needs **no Intelligence or Faith** (Arcane stays the original's 
 }
 ```
 
-The fireball flies and hits like the original; the **burn** it leaves lasts 30 seconds.
+| Number | What it is | Where it comes from |
+|:--|:--|:--|
+| `6210` | Black Flame | Spell Finder (✓ in the Fireball column) |
+| `SpEffect.1621000` | **the burn** ("DoT Black" = damage over time) | the chain in section 3.2, and the Row Finder entry of 6210; it lasts **2 s** in the original |
+| `30` | seconds | your choice |
+
+The fireball flies and hits like the original; the **burn** it leaves lasts 30 seconds. Both fireballs (normal and charged) call the same burn row, so one `set` changes both.
 
 **Recipe 4 — A strike that hits ten times harder** *(Strike workshop)*
 
@@ -508,9 +644,16 @@ The fireball flies and hits like the original; the **burn** it leaves lasts 30 s
 }
 ```
 
-This spell makes its damage with **six hit rows**. To make it stronger you change `atkMag` (magic damage) on **each** row; change only some and only those hits change. The original keeps its damage (180 in this case); the copy reads 1800.
+| Number | What it is | Where it comes from |
+|:--|:--|:--|
+| `4440` | the Magic id of **Carian Slicer** (a sorcery) | Spell Finder (✓ in the Strike column) |
+| `44400`, `44401`, `44405`, `44406`, `44407`, `44408` | the **six hit rows** this spell makes | the chain in section 3.2, Row Finder entry of 4440. Rows 44402–44404 exist in the game but this spell does not reach them |
+| `atkMag` | the hit's **magic damage** (base value) | field dictionary (section 7.8) |
+| `1800`, `1840` | **ten times** the original values | the Row Finder shows `180` for the first four hits and `184` for the last two; ×10 |
 
-### 6.7 What else could you change? ◦
+Change only some of the rows and only those hits get stronger. The original keeps its damage; the copy reads 1800.
+
+### 7.7 What else could you change? ◦
 
 The tool accepts about **220 settings** on a spell and its item, **360** on effects, **110** on projectiles and **200** on hits. These are the ones people are likely to want. *None of these were tried in the game: change one at a time, cast, look.*
 
@@ -524,6 +667,30 @@ The tool accepts about **220 settings** on a spell and its item, **360** on effe
 
 ⚠ **Signs differ between fields.** In the home kitchen's own buff a heal is stored as a *negative* number. Before changing a number, **read what the original has** and move from there.
 
+### 7.8 What the field names mean
+
+Field names are the column names of the game's tables. These are the ones used in this handbook. *Meanings follow the field names and community documentation; confirm by changing one and watching.*
+
+| Field | Table | Meaning |
+|:--|:--|:--|
+| `slotLength` | Magic | memory slots the spell takes |
+| `iconId` | Magic, Goods | which icon (a number from the game's icon sheet) |
+| `effectEndurance` | SpEffect | how long the effect lasts, in seconds (`-1` = endless, `0` = instant) |
+| `motionInterval` | SpEffect | seconds between beats of a repeating effect |
+| `changeHpPoint`, `changeMpPoint` | SpEffect | HP / FP changed on each beat (negative = restores, as the home kitchen uses it) |
+| `staminaRecoverChangeSpeed` | SpEffect | how much faster stamina recovers |
+| `atkPhys`, `atkMag`, `atkFire`, `atkThun` | AtkParam_Pc | base damage of the hit: physical, magic, fire, lightning |
+| `atkStam` | AtkParam_Pc | stamina damage the hit deals |
+| `life` | Bullet | how long the projectile lives, in seconds |
+| `dist` | Bullet | how far it flies |
+| `initVellocity`, `maxVellocity` | Bullet | starting speed, top speed |
+| `hitRadius` | Bullet | size of its hit area |
+| `numShoot` | Bullet | how many are shot at once |
+| `homingAngle` | Bullet | how sharply it steers toward a target |
+| `shootAngle` | Bullet | spread of the shots |
+
+### 7.9 Reading the original's value first
+
 **How to read a value or a field name:**
 
 ```commandline
@@ -536,7 +703,7 @@ eldendisk read --param-check                                 # after a build: ev
 
 ---
 
-## Chapter 7 — Selling it: the shop and the shelves
+## Chapter 8 — Selling it: the shop and the shelves
 
 You need to **buy** a spell to own it, so a spell needs a `shop` entry (a price and a stock).
 
@@ -548,7 +715,7 @@ You need to **buy** a spell to own it, so a spell needs a `shop` entry (a price 
 
 ---
 
-## Chapter 8 — What the tool cannot do (yet)
+## Chapter 9 — What the tool cannot do (yet)
 
 Being honest about the frame saves you disappointment.
 
@@ -563,12 +730,12 @@ Being honest about the frame saves you disappointment.
 | To **change a game spell** | ✗ Never. Your spells are always new. |
 | New **weapons, armor, talismans** | ✗ Spells only for now. |
 | More than 7 spells **for sale** | ✗ Not yet (shelves 8+). |
-| More than about 20 spells in one file | ✗ The size check (Chapter 9). |
+| More than about 20 spells in one file | ✗ The size check (Chapter 10). |
 | Online play | ✗ Offline only. |
 
 ---
 
-## Chapter 9 — How many spells can I make? (the suitcase)
+## Chapter 10 — How many spells can I make? (the suitcase)
 
 Imagine the game file as a **suitcase with a weight limit**. Each spell you add puts something in. The **gate** weighs the suitcase *before* the game ever sees it; if it is over, nothing is used and the game does not start. A warning counts as a stop.
 
@@ -596,9 +763,9 @@ What fits (measured offline, and checked in the game for the last row):
 
 ---
 
-## Chapter 10 — Running it, and what the messages mean
+## Chapter 11 — Running it, and what the messages mean
 
-### 10.1 The loop
+### 11.1 The loop
 
 ```commandline
 eldendisk extension innovate-items spells --add all --dry-run    # 1. rehearse (about 20 s, writes nothing)
@@ -606,13 +773,13 @@ eldendisk run                                                    # 2. build, che
 eldendisk extension innovate-items spells --secure               # 3. after it worked, game closed: keep this build
 ```
 
-- `--add <id>` builds just one spell instead of `all`.
+- **Build only some spells:** `--add spells.slots.<id>` (the path of the spell in `extension.json`) builds just that spell; give several paths to build several, e.g. `--add spells.slots.my_heal spells.slots.my_flame`. `eldendisk run` then goes on building **the same spells** until you type `--add all` (or another `--add`). If you never use `--add`, `run` builds every spell. A rehearsal (`--dry-run`) does not change the choice. The tool always tells you which spells it is building and which it left out.
 - `run` uses the **secured** build while your design equals the secured one. If you changed something it says what changed (`reverse_curse_technique.shop.price  34590 -> 40000`) and rebuilds.
 - The files live in `<vault>\extension\innovate-items\spells\`: `regulation.bin` (latest build), `regulation.secured.bin`, `spells.commit.json`.
 - With `--vault-off` the spells are not used.
 - After a build, `read --param-check` (game running) compares every original row with the game: they must all be equal, and your new rows are counted.
 
-### 10.2 Messages and what to do
+### 11.2 Messages and what to do
 
 The tool lists **every** problem it finds at once.
 
@@ -633,13 +800,27 @@ The tool lists **every** problem it finds at once.
 | `… is an id or type that links rows …` | You tried to change a link. | Not possible; the tool links the copies. |
 | `… already has a friendly field (…)` | You used `set` on `mp`, `requirementFaith`, … | Use `fp_cost`, `requires.…`. |
 | `slot N has no shop line` | A `shop` on shelf 8 or higher. | Remove `shop`, or use shelves 1–7. |
-| `GATE FAILED … nothing was swapped` | The suitcase is too heavy. | Fewer or lighter spells (Chapter 9). |
+| `GATE FAILED … nothing was swapped` | The suitcase is too heavy. | Fewer or lighter spells (Chapter 10). |
 
 ---
 
-## Chapter 11 — Quick Reference Card (the cheat-sheet)
+## Chapter 12 — Quick Reference Card (the cheat-sheet)
 
-### 11.1 Before you play
+### 12.0 The number map on one page
+
+| You see | It is | Look it up in |
+|:--|:--|:--|
+| `"from": 6210` | the **Magic id** of a spell | Spell Finder (Appendix A): name → id |
+| `Magic.6210.…` / `Goods.6210.…` | the same spell's own rows (item and spell) | same id as `from` |
+| `SpEffect.1621000.…` | an **effect** the spell calls (burn, buff, blessing) | Row Finder: the spell's *SpEffect* line |
+| `Bullet.10621000.…` | a **projectile** the spell makes | Row Finder: the spell's *Bullet* line |
+| `AtkParam_Pc.62101.…` | a **hit** the spell makes | Row Finder: the spell's *Hit* line (with its base damage) |
+| `….effectEndurance` / `….atkMag` | a **field** (column) | section 7.8 |
+| the number after `:` | the new value | yours |
+
+Key = `Table . row id . field : new value`.
+
+### 12.1 Before you play
 
 - [ ] Every shelf is where it was; `maximum` equals the number of shelves.
 - [ ] New spells are on **empty** shelves; spells you want to **buy** are on shelves **1–7**.
@@ -650,7 +831,7 @@ The tool lists **every** problem it finds at once.
 - [ ] `--add all --dry-run` says the gate passed.
 - [ ] **One new idea** since the last build that worked.
 
-### 11.2 Home-made spell (all fields; the values shown are the defaults)
+### 12.2 Home-made spell (all fields; the values shown are the defaults)
 
 ```json
 "my_spell_id": {
@@ -676,25 +857,25 @@ The tool lists **every** problem it finds at once.
 
 Required: `type`, `requires`, `fp_cost`. Everything else can be left out.
 
-### 11.3 Remixed spell (all fields)
+### 12.3 Remixed spell (all fields)
 
 ```json
 "my_remix_id": {
   "kind": "clone",
-  "from": 6210,
+  "from": 6100,
   "fp_cost": 5,
   "stamina_cost": 0,
   "requires": { "intelligence": 0, "faith": 0 },
   "shop": { "price": 1000, "stock": -1 },
-  "set": { "Magic.6210.slotLength": 1 },
+  "set": { "Magic.6100.slotLength": 1 },
   "name": "My Remix",
   "description": "What it does."
 }
 ```
 
-Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` or `buff`. Delete the lines you do not need.
+Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` or `buff`. Delete the lines you do not need. (`6100` is the id of Giantsflame Take Thee, a 2-slot spell; look yours up in the Spell Finder.)
 
-### 11.4 All the limits on one page
+### 12.4 All the limits on one page
 
 | Thing | Limit |
 |:--|:--|
@@ -716,7 +897,7 @@ Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` o
 | Cast animations (home-made) | `flame-grant-me-strength`, `black-flame-blade` |
 | Glow (`visual`) | `flame`, `flask`, `none` (or `null`) |
 
-### 11.5 Is it proven?
+### 12.5 Is it proven?
 
 | Workshop | State |
 |:--|:--|
@@ -734,34 +915,240 @@ Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` o
 
 ---
 
-## Appendix A — Which `from` ids work
+## Appendix A — Spell Finder: name → id (and who accepts it)
 
-Each list holds the spells the tool accepts for that workshop, checked against the 1.17.1 game file. Ids from 2,000,000 up come from the DLC.
+Look a spell up by name. The **Id** is what you write in `from`. **FP** and **Memory slots** are the original's values. A ✓ means that workshop accepts the spell; "too big" means its chain does not fit one shelf (a photocopy still works). Ids from 2,000,000 up are the DLC. Checked against the 1.17.1 game file; names from Paramdex.
 
-**Photocopier (`clone`) · incantation (129):** 5040, 6000, 6001, 6010, 6020, 6030, 6040, 6050, 6060, 6100, 6110, 6120, 6210, 6220, 6230, 6240, 6250, 6260, 6270, 6300, 6310, 6320, 6330, 6340, 6400, 6410, 6420, 6421, 6422, 6423, 6424, 6430, 6431, 6440, 6441, 6450, 6460, 6470, 6480, 6490, 6510, 6520, 6530, 6600, 6700, 6701, 6710, 6720, 6730, 6740, 6750, 6760, 6770, 6780, 6800, 6810, 6820, 6830, 6840, 6850, 6900, 6910, 6920, 6921, 6930, 6940, 6941, 6950, 6960, 6970, 6971, 7000, 7001, 7010, 7011, 7020, 7021, 7030, 7031, 7040, 7041, 7050, 7060, 7080, 7090, 7200, 7210, 7220, 7230, 7240, 7300, 7310, 7311, 7320, 7330, 7500, 7510, 7520, 7530, 7900, 7903, 2006300, 2006400, 2006650, 2006660, 2006670, 2006680, 2006690, 2006700, 2006710, 2006800, 2006900, 2006910, 2006920, 2007000, 2007010, 2007020, 2007200, 2007210, 2007300, 2007600, 2007700, 2007710, 2007720, 2007730, 2007740, 2007800, 2007810, 2007820
+*(Tip: use your editor's search to jump to a name.)*
 
-**Photocopier (`clone`) · sorcery (84):** 4000, 4001, 4010, 4020, 4021, 4030, 4040, 4050, 4060, 4070, 4080, 4090, 4100, 4110, 4120, 4130, 4140, 4200, 4210, 4220, 4300, 4301, 4302, 4360, 4361, 4370, 4380, 4381, 4390, 4400, 4410, 4420, 4430, 4431, 4440, 4450, 4460, 4470, 4480, 4490, 4500, 4510, 4520, 4600, 4610, 4620, 4630, 4640, 4650, 4660, 4670, 4700, 4701, 4710, 4720, 4721, 4800, 4810, 4820, 4830, 4900, 4910, 5000, 5001, 5010, 5020, 5030, 5100, 5110, 6500, 2004300, 2004310, 2004320, 2004500, 2004510, 2004700, 2004710, 2004900, 2004910, 2005000, 2006200, 2006210, 2007410, 2007420
+### Incantations (129)
 
-**Buff tuner (`buff` + `from`) · incantation (9):** 6050, 6060, 6260, 6450, 6460, 6470, 6480, 6840, 6971
+| Id (`from`) | Name | FP | Memory slots | Photocopier | Buff tuner | Enchant tuner | Fireball | Strike |
+|--:|:--|--:|--:|:-:|:-:|:-:|:-:|:-:|
+| 5040 | Death Lightning | 28 | 2 | ✓ |  |  | ✓ |  |
+| 6000 | Catch Flame | 10 | 1 | ✓ |  |  | ✓ |  |
+| 6001 | O, Flame! | 16 | 1 | ✓ |  |  | ✓ |  |
+| 6010 | Flame Sling | 11 | 1 | ✓ |  |  | ✓ |  |
+| 6020 | Flame Fall Upon Them | 16 | 1 | ✓ |  |  | ✓ |  |
+| 6030 | Whirl, O Flame | 19 | 1 | ✓ |  |  | ✓ |  |
+| 6040 | Flame Cleanse Me | 14 | 1 | ✓ |  |  | ✓ |  |
+| 6050 | Flame Grant Me Strength | 28 | 1 | ✓ | ✓ |  |  |  |
+| 6060 | Flame Protect Me | 30 | 1 | ✓ | ✓ |  |  |  |
+| 6100 | Giantsflame Take Thee | 30 | 2 | ✓ |  |  | ✓ |  |
+| 6110 | Flame of The Fell God | 34 | 2 | ✓ |  |  | ✓ |  |
+| 6120 | Burn, O Flame! | 26 | 1 | ✓ |  |  | ✓ |  |
+| 6210 | Black Flame | 18 | 1 | ✓ |  |  | ✓ |  |
+| 6220 | Surge, O Flame | 1 | 1 | ✓ |  |  | ✓ |  |
+| 6230 | Scouring Black Flame | 21 | 1 | ✓ |  |  | ✓ |  |
+| 6240 | Black Flame Ritual | 30 | 1 | ✓ |  |  | ✓ |  |
+| 6250 | Black Flame Blade | 15 | 1 | ✓ |  | ✓ |  |  |
+| 6260 | Black Flame's Protection | 30 | 1 | ✓ | ✓ |  |  |  |
+| 6270 | Noble Presence | 20 | 1 | ✓ |  |  | ✓ |  |
+| 6300 | Bloodflame Talons | 12 | 1 | ✓ |  |  | ✓ |  |
+| 6310 | Bloodboon | 13 | 1 | ✓ |  |  | ✓ |  |
+| 6320 | Bloodflame Blade | 20 | 1 | ✓ |  | ✓ |  |  |
+| 6330 | Barrier of Gold | 30 | 1 | ✓ |  |  | ✓ |  |
+| 6340 | Protection of The Erdtree | 30 | 1 | ✓ |  |  | ✓ |  |
+| 6400 | Rejection | 9 | 1 | ✓ |  |  | ✓ |  |
+| 6410 | Wrath of Gold | 40 | 1 | ✓ |  |  | ✓ |  |
+| 6420 | Urgent Heal | 16 | 1 | ✓ |  |  | ✓ |  |
+| 6421 | Heal | 32 | 1 | ✓ |  |  | ✓ |  |
+| 6422 | Great Heal | 45 | 1 | ✓ |  |  | ✓ |  |
+| 6423 | Lord's Heal | 55 | 1 | ✓ |  |  | ✓ |  |
+| 6424 | Erdtree Heal | 65 | 1 | ✓ |  |  | ✓ |  |
+| 6430 | Blessing's Boon | 30 | 1 | ✓ |  |  | ✓ |  |
+| 6431 | Blessing of The Erdtree | 60 | 1 | ✓ |  |  | ✓ |  |
+| 6440 | Cure Poison | 7 | 1 | ✓ |  |  | ✓ |  |
+| 6441 | Lord's Aid | 12 | 1 | ✓ |  |  | too big |  |
+| 6450 | Flame Fortification | 20 | 1 | ✓ | ✓ |  |  |  |
+| 6460 | Magic Fortification | 20 | 1 | ✓ | ✓ |  |  |  |
+| 6470 | Lightning Fortification | 20 | 1 | ✓ | ✓ |  |  |  |
+| 6480 | Divine Fortification | 20 | 1 | ✓ | ✓ |  |  |  |
+| 6490 | Lord's Divine Fortification | 30 | 1 | ✓ |  |  | ✓ |  |
+| 6510 | Assassin's Approach | 15 | 1 | ✓ |  |  | ✓ |  |
+| 6520 | Shadow Bait | 15 | 1 | ✓ |  |  | ✓ |  |
+| 6530 | Darkness | 24 | 1 | ✓ |  |  | ✓ |  |
+| 6600 | Golden Vow | 47 | 1 | ✓ |  |  | ✓ |  |
+| 6700 | Discus of Light | 3 | 1 | ✓ |  |  | ✓ |  |
+| 6701 | Triple Rings of Light | 23 | 1 | ✓ |  |  | ✓ |  |
+| 6710 | Radagon's Rings of Light | 21 | 1 | ✓ |  |  | ✓ |  |
+| 6720 | Elden Stars | 41 | 2 | ✓ |  |  | ✓ |  |
+| 6730 | Law of Regression | 55 | 1 | ✓ |  |  | too big |  |
+| 6740 | Immutable Shield | 15 | 1 | ✓ |  | ✓ |  |  |
+| 6750 | Litany of Proper Death | 17 | 1 | ✓ |  |  | ✓ |  |
+| 6760 | Law of Causality | 22 | 1 | ✓ |  |  | ✓ |  |
+| 6770 | Order's Blade | 22 | 1 | ✓ |  | ✓ |  |  |
+| 6780 | Order Healing | 15 | 1 | ✓ |  |  | ✓ |  |
+| 6800 | Bestial Sling | 7 | 1 | ✓ |  |  | ✓ |  |
+| 6810 | Stone of Gurranq | 15 | 1 | ✓ |  |  | ✓ |  |
+| 6820 | Beast Claw | 10 | 1 | ✓ |  |  | too big |  |
+| 6830 | Gurranq's Beast Claw | 21 | 1 | ✓ |  |  | ✓ |  |
+| 6840 | Bestial Vitality | 18 | 1 | ✓ | ✓ |  |  |  |
+| 6850 | Bestial Constitution | 10 | 1 | ✓ |  |  | ✓ |  |
+| 6900 | Lightning Spear | 18 | 1 | ✓ |  |  | ✓ |  |
+| 6910 | Ancient Dragons' Light Strike | 36 | 1 | ✓ |  |  | too big |  |
+| 6920 | Lightning Strike | 19 | 1 | ✓ |  |  | ✓ |  |
+| 6921 | Frozen Lightning Spear | 29 | 1 | ✓ |  |  | ✓ |  |
+| 6930 | Honed Bolt | 12 | 1 | ✓ |  |  | ✓ |  |
+| 6940 | Ancient Dragons' Light Spear | 25 | 1 | ✓ |  |  | ✓ |  |
+| 6941 | Fortissax's Light Spear | 35 | 1 | ✓ |  |  | too big |  |
+| 6950 | Lansseax's Glaive | 22 | 1 | ✓ |  |  | ✓ |  |
+| 6960 | Electrify Armament | 27 | 1 | ✓ |  | ✓ |  |  |
+| 6970 | Vyke's Dragonbolt | 35 | 1 | ✓ |  | ✓ |  |  |
+| 6971 | Dragonbolt Blessing | 20 | 1 | ✓ | ✓ |  |  |  |
+| 7000 | Dragonfire | 28 | 1 | ✓ |  |  | ✓ |  |
+| 7001 | Agheel's Flame | 36 | 1 | ✓ |  |  | ✓ |  |
+| 7010 | Magma Breath | 30 | 1 | ✓ |  |  | ✓ |  |
+| 7011 | Theodorix's Magma | 45 | 1 | ✓ |  |  | ✓ |  |
+| 7020 | Dragonice | 36 | 1 | ✓ |  |  | ✓ |  |
+| 7021 | Borealis's Mist | 48 | 1 | ✓ |  |  | ✓ |  |
+| 7030 | Rotten Breath | 36 | 1 | ✓ |  |  | ✓ |  |
+| 7031 | Ekzykes's Decay | 48 | 1 | ✓ |  |  | ✓ |  |
+| 7040 | Glintstone Breath | 28 | 1 | ✓ |  |  | ✓ |  |
+| 7041 | Smarag's Glint Breath | 36 | 1 | ✓ |  |  | ✓ |  |
+| 7050 | Placidusax's Ruin | 62 | 3 | ✓ |  |  | ✓ |  |
+| 7060 | Dragonclaw | 24 | 1 | ✓ |  |  | ✓ |  |
+| 7080 | Dragonmaw | 34 | 1 | ✓ |  |  |  | ✓ |
+| 7090 | Greyoll's Roar | 50 | 2 | ✓ |  |  | ✓ |  |
+| 7200 | Pest Threads | 19 | 1 | ✓ |  |  | ✓ |  |
+| 7210 | Swarm of Flies | 14 | 1 | ✓ |  |  | ✓ |  |
+| 7220 | Poison Mist | 18 | 1 | ✓ |  |  | ✓ |  |
+| 7230 | Poison Armament | 15 | 1 | ✓ |  | ✓ |  |  |
+| 7240 | Scarlet Aeonia | 48 | 3 | ✓ |  |  | ✓ |  |
+| 7300 | Inescapable Frenzy | 22 | 1 | ✓ |  |  | ✓ |  |
+| 7310 | The Flame of Frenzy | 16 | 1 | ✓ |  |  | ✓ |  |
+| 7311 | Unendurable Frenzy | 22 | 1 | ✓ |  |  | ✓ |  |
+| 7320 | Frenzied Burst | 24 | 1 | ✓ |  |  | ✓ |  |
+| 7330 | Howl of Shabriri | 21 | 1 | ✓ |  |  | ✓ |  |
+| 7500 | Aspects of the Crucible: Tail | 20 | 1 | ✓ |  |  | ✓ |  |
+| 7510 | Aspects of the Crucible: Horns | 18 | 1 | ✓ |  |  |  | ✓ |
+| 7520 | Aspects of the Crucible: Breath | 28 | 1 | ✓ |  |  | ✓ |  |
+| 7530 | Black Blade | 26 | 2 | ✓ |  |  | ✓ |  |
+| 7900 | Fire's Deadly Sin | 26 | 1 | ✓ |  |  | ✓ |  |
+| 7903 | Golden Light Fortification | 30 | 1 | ✓ |  |  | ✓ |  |
+| 2006300 | Furious Blade of Ansbach *(DLC)* | 18 | 1 | ✓ |  |  | too big |  |
+| 2006400 | Heal from Afar *(DLC)* | 45 | 1 | ✓ |  |  | ✓ |  |
+| 2006650 | Aspects of the Crucible: Thorns *(DLC)* | 14 | 1 | ✓ |  |  | ✓ |  |
+| 2006660 | Aspects of the Crucible: Bloom *(DLC)* | 23 | 1 | ✓ |  |  | ✓ |  |
+| 2006670 | Minor Erdtree *(DLC)* | 30 | 2 | ✓ |  |  | ✓ |  |
+| 2006680 | Land of Shadow *(DLC)* | 40 | 1 | ✓ |  |  | ✓ |  |
+| 2006690 | Wrath from Afar *(DLC)* | 18 | 1 | ✓ |  |  | ✓ |  |
+| 2006700 | Light of Miquella *(DLC)* | 48 | 2 | ✓ |  |  | ✓ |  |
+| 2006710 | Multilayered Ring of Light *(DLC)* | 23 | 1 | ✓ |  |  | ✓ |  |
+| 2006800 | Roar of Rugalea *(DLC)* | 17 | 1 | ✓ |  |  | ✓ |  |
+| 2006900 | Knight's Lightning Spear *(DLC)* | 29 | 1 | ✓ |  |  | too big |  |
+| 2006910 | Dragonbolt of Florissax *(DLC)* | 35 | 1 | ✓ |  |  | ✓ |  |
+| 2006920 | Electrocharge *(DLC)* | 26 | 1 | ✓ |  |  | ✓ |  |
+| 2007000 | Bayle's Tyranny *(DLC)* | 46 | 2 | ✓ |  |  | ✓ |  |
+| 2007010 | Bayle's Flame Lightning *(DLC)* | 43 | 2 | ✓ |  |  | ✓ |  |
+| 2007020 | Ghostflame Breath *(DLC)* | 36 | 1 | ✓ |  |  | ✓ |  |
+| 2007200 | Rotten Butterflies *(DLC)* | 48 | 1 | ✓ |  |  | ✓ |  |
+| 2007210 | Pest-Thread Spears *(DLC)* | 28 | 1 | ✓ |  |  | ✓ |  |
+| 2007300 | Midra's Flame of Frenzy *(DLC)* | 22 | 2 | ✓ |  |  | ✓ |  |
+| 2007600 | Watchful Spirit *(DLC)* | 12 | 1 | ✓ |  |  | ✓ |  |
+| 2007700 | Golden Arcs *(DLC)* | 12 | 1 | ✓ |  |  | ✓ |  |
+| 2007710 | Giant Golden Arc *(DLC)* | 24 | 1 | ✓ |  |  | ✓ |  |
+| 2007720 | Spira *(DLC)* | 10 | 2 | ✓ |  |  | ✓ |  |
+| 2007730 | Divine Beast Tornado *(DLC)* | 24 | 1 | ✓ |  |  | ✓ |  |
+| 2007740 | Divine Bird Feathers *(DLC)* | 3 | 1 | ✓ |  |  | ✓ |  |
+| 2007800 | Fire Serpent *(DLC)* | 11 | 1 | ✓ |  |  | ✓ |  |
+| 2007810 | Rain of Fire *(DLC)* | 27 | 1 | ✓ |  |  | too big |  |
+| 2007820 | Messmer's Orb *(DLC)* | 31 | 2 | ✓ |  |  | ✓ |  |
 
-**Buff tuner (`buff` + `from`) · sorcery (3):** 4140, 2004300, 2004900
+### Sorceries (84)
 
-**Enchant tuner (`enchant`) · incantation (7):** 6250, 6320, 6740, 6770, 6960, 6970, 7230
+| Id (`from`) | Name | FP | Memory slots | Photocopier | Buff tuner | Enchant tuner | Fireball | Strike |
+|--:|:--|--:|--:|:-:|:-:|:-:|:-:|:-:|
+| 4000 | Glintstone Pebble | 7 | 1 | ✓ |  |  | ✓ |  |
+| 4001 | Great Glintstone Shard | 12 | 1 | ✓ |  |  | ✓ |  |
+| 4010 | Swift Glintstone Shard | 5 | 1 | ✓ |  |  | ✓ |  |
+| 4020 | Glintstone Cometshard | 17 | 1 | ✓ |  |  | ✓ |  |
+| 4021 | Comet | 24 | 1 | ✓ |  |  | ✓ |  |
+| 4030 | Shard Spiral | 14 | 1 | ✓ |  |  | ✓ |  |
+| 4040 | Glintstone Stars | 12 | 1 | ✓ |  |  | too big |  |
+| 4050 | Star Shower | 23 | 1 | ✓ |  |  | too big |  |
+| 4060 | Crystal Barrage | 14 | 1 | ✓ |  |  | ✓ |  |
+| 4070 | Glintstone Arc | 9 | 1 | ✓ |  |  | ✓ |  |
+| 4080 | Cannon of Haima | 38 | 1 | ✓ |  |  | ✓ |  |
+| 4090 | Crystal Burst | 14 | 1 | ✓ |  |  | ✓ |  |
+| 4100 | Shatter Earth | 10 | 1 | ✓ |  |  | ✓ |  |
+| 4110 | Rock Blaster | 22 | 1 | ✓ |  |  | ✓ |  |
+| 4120 | Gavel of Haima | 22 | 1 | ✓ |  |  | ✓ |  |
+| 4130 | Terra Magicus | 20 | 1 | ✓ |  |  | ✓ |  |
+| 4140 | Starlight | 9 | 1 | ✓ | ✓ |  |  |  |
+| 4200 | Comet Azur | 40 | 3 | ✓ |  |  | ✓ |  |
+| 4210 | Founding Rain of Stars | 27 | 2 | ✓ |  |  | too big |  |
+| 4220 | Stars of Ruin | 32 | 1 | ✓ |  |  | too big |  |
+| 4300 | Glintblade Phalanx | 18 | 1 | ✓ |  |  | ✓ |  |
+| 4301 | Carian Phalanx | 24 | 1 | ✓ |  |  | ✓ |  |
+| 4302 | Greatblade Phalanx | 30 | 1 | ✓ |  |  | ✓ |  |
+| 4360 | Rennala's Full Moon | 47 | 2 | ✓ |  |  | ✓ |  |
+| 4361 | Ranni's Dark Moon | 57 | 2 | ✓ |  |  | ✓ |  |
+| 4370 | Magic Downpour | 18 | 1 | ✓ |  |  | too big |  |
+| 4380 | Loretta's Greatbow | 24 | 1 | ✓ |  |  | ✓ |  |
+| 4381 | Loretta's Mastery | 39 | 1 | ✓ |  |  | ✓ |  |
+| 4390 | Magic Glintblade | 12 | 1 | ✓ |  |  | ✓ |  |
+| 4400 | Glintstone Icecrag | 12 | 1 | ✓ |  |  | ✓ |  |
+| 4410 | Zamor Ice Storm | 17 | 1 | ✓ |  |  | ✓ |  |
+| 4420 | Freezing Mist | 20 | 1 | ✓ |  |  | ✓ |  |
+| 4430 | Carian Greatsword | 12 | 1 | ✓ |  |  |  | ✓ |
+| 4431 | Adula's Moonblade | 22 | 1 | ✓ |  |  | ✓ |  |
+| 4440 | Carian Slicer | 4 | 1 | ✓ |  |  |  | ✓ |
+| 4450 | Carian Piercer | 17 | 1 | ✓ |  |  |  | ✓ |
+| 4460 | Scholar's Armament | 25 | 1 | ✓ |  | ✓ |  |  |
+| 4470 | Scholar's Shield | 30 | 1 | ✓ |  | ✓ |  |  |
+| 4480 | Lucidity | 10 | 1 | ✓ |  |  | ✓ |  |
+| 4490 | Frozen Armament | 20 | 1 | ✓ |  | ✓ |  |  |
+| 4500 | Shattering Crystal | 21 | 1 | ✓ |  |  | ✓ |  |
+| 4510 | Crystal Release | 34 | 1 | ✓ |  |  | ✓ |  |
+| 4520 | Crystal Torrent | 20 | 1 | ✓ |  |  | ✓ |  |
+| 4600 | Ambush Shard | 13 | 1 | ✓ |  |  | ✓ |  |
+| 4610 | Night Shard | 7 | 1 | ✓ |  |  | ✓ |  |
+| 4620 | Night Comet | 21 | 1 | ✓ |  |  | ✓ |  |
+| 4630 | Thops's Barrier | 7 | 1 | ✓ |  |  | ✓ |  |
+| 4640 | Carian Retaliation | 8 | 1 | ✓ |  |  | ✓ |  |
+| 4650 | Eternal Darkness | 25 | 1 | ✓ |  |  | ✓ |  |
+| 4660 | Unseen Blade | 13 | 1 | ✓ |  | ✓ |  |  |
+| 4670 | Unseen Form | 20 | 1 | ✓ |  |  | ✓ |  |
+| 4700 | Meteorite | 30 | 1 | ✓ |  |  | too big |  |
+| 4701 | Meteorite of Astel | 60 | 2 | ✓ |  |  | too big |  |
+| 4710 | Rock Sling | 18 | 1 | ✓ |  |  | too big |  |
+| 4720 | Gravity Well | 12 | 1 | ✓ |  |  | ✓ |  |
+| 4721 | Collapsing Stars | 18 | 1 | ✓ |  |  | ✓ |  |
+| 4800 | Magma Shot | 16 | 1 | ✓ |  |  | ✓ |  |
+| 4810 | Gelmir's Fury | 16 | 1 | ✓ |  |  | ✓ |  |
+| 4820 | Roiling Magma | 28 | 1 | ✓ |  |  | too big |  |
+| 4830 | Rykard's Rancor | 23 | 2 | ✓ |  |  | ✓ |  |
+| 4900 | Briars of Sin | 6 | 1 | ✓ |  |  | ✓ |  |
+| 4910 | Briars of Punishment | 9 | 1 | ✓ |  |  | ✓ |  |
+| 5000 | Rancorcall | 12 | 1 | ✓ |  |  | ✓ |  |
+| 5001 | Ancient Death Rancor | 21 | 1 | ✓ |  |  | ✓ |  |
+| 5010 | Explosive Ghostflame | 29 | 1 | ✓ |  |  | ✓ |  |
+| 5020 | Fia's Mist | 25 | 1 | ✓ |  |  | ✓ |  |
+| 5030 | Tibia's Summons | 17 | 1 | ✓ |  |  | ✓ |  |
+| 5100 | Oracle Bubbles | 12 | 1 | ✓ |  |  | ✓ |  |
+| 5110 | Great Oracular Bubble | 16 | 1 | ✓ |  |  | ✓ |  |
+| 6500 | Night Maiden's Mist | 20 | 1 | ✓ |  |  | ✓ |  |
+| 2004300 | Miriam's Vanishing *(DLC)* | 9 | 1 | ✓ | ✓ |  |  |  |
+| 2004310 | Glintblade Trio *(DLC)* | 19 | 1 | ✓ |  |  | ✓ |  |
+| 2004320 | Rellana's Twin Moons *(DLC)* | 47 | 2 | ✓ |  |  | ✓ |  |
+| 2004500 | Glintstone Nail *(DLC)* | 10 | 1 | ✓ |  |  | too big |  |
+| 2004510 | Glintstone Nails *(DLC)* | 23 | 1 | ✓ |  |  | too big |  |
+| 2004700 | Blades of Stone *(DLC)* | 18 | 2 | ✓ |  |  | too big |  |
+| 2004710 | Gravitational Missile *(DLC)* | 18 | 1 | ✓ |  |  | too big |  |
+| 2004900 | Mantle of Thorns *(DLC)* | 9 | 1 | ✓ | ✓ |  |  |  |
+| 2004910 | Impenetrable Thorns *(DLC)* | 15 | 1 | ✓ |  |  | ✓ |  |
+| 2005000 | Rings of Spectral Light *(DLC)* | 14 | 1 | ✓ |  |  | ✓ |  |
+| 2006200 | Vortex of Putrescence *(DLC)* | 29 | 2 | ✓ |  |  | ✓ |  |
+| 2006210 | Mass of Putrescence *(DLC)* | 41 | 1 | ✓ |  |  | too big |  |
+| 2007410 | Fleeting Microcosm *(DLC)* | 26 | 1 | ✓ |  |  | ✓ |  |
+| 2007420 | Cherishing Fingers *(DLC)* | 20 | 1 | ✓ |  |  | too big |  |
 
-**Enchant tuner (`enchant`) · sorcery (4):** 4460, 4470, 4490, 4660
+## Appendix B — Row Finder: id → the rows a spell uses
 
-**Fireball workshop (`projectile`) · incantation (103):** 5040, 6000, 6001, 6010, 6020, 6030, 6040, 6100, 6110, 6120, 6210, 6220, 6230, 6240, 6270, 6300, 6310, 6330, 6340, 6400, 6410, 6420, 6421, 6422, 6423, 6424, 6430, 6431, 6440, 6490, 6510, 6520, 6530, 6600, 6700, 6701, 6710, 6720, 6750, 6760, 6780, 6800, 6810, 6830, 6850, 6900, 6920, 6921, 6930, 6940, 6950, 7000, 7001, 7010, 7011, 7020, 7021, 7030, 7031, 7040, 7041, 7050, 7060, 7090, 7200, 7210, 7220, 7240, 7300, 7310, 7311, 7320, 7330, 7500, 7520, 7530, 7900, 7903, 2006400, 2006650, 2006660, 2006670, 2006680, 2006690, 2006700, 2006710, 2006800, 2006910, 2006920, 2007000, 2007010, 2007020, 2007200, 2007210, 2007300, 2007600, 2007700, 2007710, 2007720, 2007730, 2007740, 2007800, 2007820
+One entry per spell for every workshop above the Photocopier, with the ids you may write in `set`, their names, durations and base damage: **[spells-row-finder.md](spells-row-finder.md)** (a companion file next to this one).
 
-**Fireball workshop (`projectile`) · sorcery (59):** 4000, 4001, 4010, 4020, 4021, 4030, 4060, 4070, 4080, 4090, 4100, 4110, 4120, 4130, 4200, 4300, 4301, 4302, 4360, 4361, 4380, 4381, 4390, 4400, 4410, 4420, 4431, 4480, 4500, 4510, 4520, 4600, 4610, 4620, 4630, 4640, 4650, 4670, 4720, 4721, 4800, 4810, 4830, 4900, 4910, 5000, 5001, 5010, 5020, 5030, 5100, 5110, 6500, 2004310, 2004320, 2004910, 2005000, 2006200, 2007410
-
-**Strike workshop (`attack`) · incantation (2):** 7080, 7510
-
-**Strike workshop (`attack`) · sorcery (3):** 4430, 4440, 4450
-
-**Too big for one shelf, refused by the Fireball workshop (23, incantations and sorceries together):** 4040, 4050, 4210, 4220, 4370, 4700, 4701, 4710, 4820, 6441, 6730, 6820, 6910, 6941, 2004500, 2004510, 2004700, 2004710, 2006210, 2006300, 2006900, 2007420, 2007810
-
-
-## Appendix B — For developers: where each fact comes from
+## Appendix C — For developers: where each fact comes from
 
 | Topic | Source |
 |:--|:--|
@@ -769,6 +1156,7 @@ Each list holds the spells the tool accepts for that workshop, checked against t
 | Rows per shelf, ids | `recipes.py`, `build.py`, `chain.py` |
 | Gate numbers | `code/eldendisk/extension/innovate_items/preflight.py` |
 | Field names per table | `paramdefs.py` (generated from Paramdex) |
+| Spell and row names, Finders | Paramdex `ER/Names/*.txt` (community), ids and numbers read from the original 1.17.1 `regulation.bin` with the tool's own chain reader (`chain.py`) |
 | Tests in the game | [manual-test-plan-1.7.0](../experiments/extensional/innovate-items/spell/docs/manual-test-plan-1.7.0.md) |
 | Roadmap, what is deferred | [roadmap-innovate-spells](../experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md) |
 | The full spec | [elden-disk-spec-v1.7.0](../specs/elden-disk-spec-v1.7.0.md) |

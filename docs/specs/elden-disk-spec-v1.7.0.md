@@ -32,6 +32,7 @@ code/extension.json    the design of the extensions (you edit it); the section `
 code/eldendisk/extension/innovate_items/spells/spells.schema.json   JSON schema of the design (for editors; dev tests check it agrees with the validator)
 <vault>\extension\innovate-items\spells\          (--extension-dir replaces <vault>\extension; the vault is --vault, else the Registry, else the default)
     regulation.bin           the latest build (gate passed, not yet confirmed)
+    spells.build.json        the record of the latest build: the selection (`all`, or the spell ids chosen with --add), the spells with their design, hashes of the file and of the base, recipe version
     regulation.secured.bin   a copy of the build you confirmed with --secure
     spells.commit.json       the commit: the design snapshot, the rows each spell took, hashes of the secured file and of the base, recipe version (format 2)
 ```
@@ -44,14 +45,14 @@ Code: `code/eldendisk/extension/` (registry) and `extension/innovate_items/` (th
 
 | Command | Does |
 |:--|:--|
-| `run` (vault ON) | **swaps `regulation.secured.bin` without building** when the secured state is valid (section 6); otherwise prints why and what changed, builds (about 20 s), and swaps the new `regulation.bin` after the gate passed |
+| `run` (vault ON) | **swaps `regulation.secured.bin` without building** when the secured state is valid (section 6), else uses the latest build when it is still valid; otherwise prints why and what changed, builds (about 20 s), and swaps the new `regulation.bin` after the gate passed |
 | `run --vault-off` | no build, no swap (an info line says so) |
 | `run --regulation FILE` | swaps that file instead (an experiment; vault ON only) |
 | `run --spec FILE`, `--extension-dir DIR` | the design; the folder of the files |
-| `extension --list` | the design (path, where it comes from, number of items), the secured state, the design-vs-secured diff, the last build |
+| `extension --list` | the design (path, where it comes from, number of items), the secured state, the design-vs-secured diff, the selection, the last build |
 | `extension innovate-items spells` | where the files are |
-| `extension innovate-items spells --add all` (or `--add <id>`) | builds like `run` does (always; never uses the secured file), without starting the game |
-| &nbsp;&nbsp;`--dry-run` | build and run the gate in memory; write nothing |
+| `extension innovate-items spells --add all` or `--add spells.slots.<id> [spells.slots.<id> ...]` | builds like `run` does (always; never uses the secured file or the latest build), without starting the game, **and records the selection** (section 6b). A bare `<id>` and `innovate_items.spells.slots.<id>` are accepted; `all` stands alone |
+| &nbsp;&nbsp;`--dry-run` | build and run the gate in memory; write nothing (the selection is not changed) |
 | `extension innovate-items spells --secure` | **game closed.** Runs the gate on `regulation.bin` against the current design and the game's file; copies it to `regulation.secured.bin`, then writes `spells.commit.json` (last). Stands alone (not with `--add` / `--dry-run`) |
 | &nbsp;&nbsp;`--source FILE`, `--game-dir DIR` | the game's original `regulation.bin` (default: the one in the auto-detected game folder) |
 | &nbsp;&nbsp;`--spec FILE`, `--extension-dir DIR` | as above |
@@ -191,6 +192,16 @@ Reference result: the Z4 spell in slot 1 (the fixed copy in `tests/z4.py`) gives
 
 Otherwise it builds and prints **the reasons** (no secured build yet; the design changed; the secured file is missing or its hash differs; the recipes changed; the base is another file; the record cannot be read) and, for a changed design, the **diff** field by field, for example `reverse_curse_technique.shop.price  34590 -> 40000`, before the long step.
 
+### 6b. Which spells are built: the selection (Phase 2.7)
+
+Every slot is a place in the list and the place fixes its rows, so a spell can be built **without** the slots before it. `--add` uses that:
+
+- `--add spells.slots.<id> [...]` builds only those spells (in slot order) and writes the **build record** `spells.build.json` after `regulation.bin` (`selection`: the ids, or `"all"`; the spells as designed; SHA-256 of the file and of the base; the recipe version). `--add all` writes `"all"`. A dry run, a failed gate and an unknown path write nothing and leave the selection as it was.
+- `run` reads the selection (none, or an unreadable record, means `all`; an unreadable record is reported) and decides in this order: (1) the secured copy, when it holds the same spells and sections 6 (1)-(4) hold for them; (2) the **latest build**, when its record has the same selection, the design of those spells is equal, the file has the recorded hash, the base is the same file and the recipes are the same version; (3) otherwise it builds the selection and writes the record again (the selection is kept). A selected spell that is no longer in the design stops `run` with an error that names its path.
+- A change to a spell that is **not** selected does not cause a build. The banner row says `latest build, unchanged, not rebuilt` for (2); `run` still reminds you to `--secure` a build that is not secured.
+- `--secure` secures the spells the latest build holds (the selection) and the secured record holds only those. A secured build of other spells is not used for another selection (the reason is printed: `the secured build holds a, b, this run builds c`).
+- `extension --list` shows the selection. The selection is **sticky**: it stays until `--add all` or another `--add`.
+
 ## 7. The gate (necessary, not sufficient)
 
 The gate (`gate.py`) judges the **bytes of the file read back from disk**, not what the builder believes it wrote. It replaces the old in-build preflight and decrypt round-trip (same time). **Any problem, and any warning, is a stop** (including more than 11 re-encoded blocks). The only real test of a file is the game.
@@ -213,7 +224,7 @@ The gate (`gate.py`) judges the **bytes of the file read back from disk**, not w
 ## 8. `run` and the vault
 
 - `run` decides (section 6), builds if needed, then passes the path to the host (`Hooks.regulation_world`); the vault methods take that path (`backup_regulation(snap, game_dir, world)`, `regulation_problems(game_dir, world)`, `world_info(world)`). Backup, record, swap, restore and RG1-RG7 of spec 1.6.4 are unchanged. The extension only **reads** the game's file; the vault does the swap.
-- The banner row `regulation` says whether the file is the secured copy or a new build.
+- The banner row `regulation` says whether the file is the secured copy, the latest build (unchanged) or a new build.
 - Log order: `extension ...` lines (design, reasons, diff, building, gate passed or failed), then the host lines (PREFLIGHT, SNAPSHOTTING, READY).
 - `--regulation FILE` wins over everything.
 - **Legacy:** `<vault>\regulation\regulation.bin` (1.6.4) is no longer read; `run` and `vault status` say so.
