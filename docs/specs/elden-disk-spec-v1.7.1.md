@@ -39,6 +39,10 @@ three numbers, red, green, blue, each from 0 to 2 (1 = the full colour, above 1 
 
 `build_view` leaves `text` and `flame_color` (and the 1.7.0 `name`/`description` of old records) out: an edit of either never changes the build, the gate, `decide` or `decide_last`, and never un-secures a secured build. `Spells.texts(selection)` gives `{goods id: text}` for **every** slot (the Goods id is `2230000 + slot - 1`), empty for a slot with no spell or a spell outside the selection.
 
+### 2b. Icons: an icon the game already has
+
+A new picture is not possible (it lives in the game's menu texture archives), but a spell made from a game spell can show the icon of **any item the game has**, with the `set` it already has: `"Goods.<from>.iconId": N` (`<from>` is the template's Magic id, as in 1.7.0 section 4b; `N` is the `iconId` of the Goods row of the item whose picture is wanted). The Goods row of the copy gets `N`; the Magic row keeps the template's `iconId` (`Magic.<from>.iconId` can be set the same way if the memory screen needs it). The picture must be in an icon sheet the game loads: the sheet of `MENU_ItemIcon_06806` is `SB_Icon_07_dlc`, so a DLC icon needs the DLC installed. Example of the author's design: `reverse_cursed_technique` (a copy of Heal, 6421) with `"Goods.6421.iconId": 6806`, the icon of Gravitational Missile (Goods 2004710); built on the original `regulation.bin` the gate passes and the new Goods row (2230000) holds 6806. Seen in the game on 2026-10-12 (the author's check: the icon fits the spell); the screens one by one are in manual plan 1.7.1, IC.
+
 ## 3. `write --text [--wait [SEC] | --when-loaded] [--spec FILE] [--extension-dir DIR]`
 
 Stands alone (an error with `--set`, `--refill`, `--reset` or `--flame-color`; `--wait`, `--when-loaded`, `--spec` and `--extension-dir` need `--text` or `--flame-color`; `--when-loaded` does not go with `--wait`). Same authorisation as every write (record readable, `RUNNING`, snapshot verified, the recorded game process, same exe hash, host alive; exit `5`); EAC loaded exit `3`; a profile without a `text` block exit `2`.
@@ -118,7 +122,7 @@ The earlier chain from the exe gave the right object in 3 of 5 runs and memory g
 
 ## 10. Not done (open)
 
-Thai and other scripts (glyphs in the game's font untested); a game language other than English (the profile holds the English sizes); the colour of the fire on the body (`524402`); icons (Level 3 step 2); a faster look for the array (it is found by a look through all the memory, ~72 s; it lies near the tables); a second `write --text` in the same game.
+Thai and other scripts (glyphs in the game's font untested); a game language other than English (the profile holds the English sizes); the colour of the fire on the body (`524402`); a new icon picture (Level 3 step 2; reusing an existing icon is 2b); a faster look for the array (it is found by a look through all the memory, ~72 s; it lies near the tables); a second `write --text` in the same game.
 
 ## 11. Tests
 

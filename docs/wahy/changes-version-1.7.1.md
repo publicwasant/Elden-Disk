@@ -24,7 +24,8 @@ _(baseline: **[changes-version-1.7.0.md](changes-version-1.7.0.md)**; design: **
 | 9 | **`run` starts them by itself.** `Hooks.on_running` is called once the record says `RUNNING` (vault ON); `run` starts `write --text --when-loaded` and `write --flame-color --when-loaded` as separate processes when the swapped file is the extension's and the design has text / a colour. `run` still never opens the game's memory. A child still running at the end is stopped. | `host/host.py`, `commands/run.py` |
 | 10 | **Cleanup of the research code.** `fmg.py` stays in the product. `archive.py`, `msgbnd.py` and the AES-128/ECB additions of `aes.py` are removed; the archive reader moved to `tools/gamearchive.py`, used by `tools/dump_msgbnd.py`. Removed with the chain: `tools/patch_text.py`, `tools/probe_chain.py` (and their tests). Removed as finished experiments on the fire: `tools/fxr_tint.py`, `tools/fxr_loaded.py` (and their tests), `reader/effects.py` (an orphan: `read --live-effects` became `--live-buffs` in 1.6.3). `dump_msgbnd.py`, `probe_text.py` and `fxr_recolor.py` stay in `tools/` as the record of the research (handbook 19.5, 19.7). | `tools/`, `extension/innovate_items/`, `reader/` |
 | 11 | **Tests.** New `test_write_text.py`, `test_write_flame.py`, `test_gamearchive.py`, `test_ext_fmg.py`, `test_probe_text.py`, `test_fxr_recolor.py`; additions to the spec, service, host, run, profile and safety tests; the Z4 fixture and the expected canonical forms use `text`. | `tests/` |
-| 12 | **Docs.** README, cli-commands (both), spells handbook (6.1b, new 6.1c), item-customization handbook (Part VI, Chapter 19 with new 19.7), adding-a-profile, spec and manual test plan 1.7.1. Version `1.7.1`. | `README.md`, `docs/` |
+| 12 | **An existing icon can be reused** with `set`: `"Goods.<from>.iconId": N` (spec 1.7.1 2b). The design of the author's spell uses 6806, the icon of Gravitational Missile. Built, gated and seen in the game on 2026-10-12 (manual plan 1.7.1, IC). | `code/extension.json` |
+| 13 | **Docs.** README, cli-commands (both), spells handbook (6.1b, new 6.1c), item-customization handbook (Part VI, Chapter 19 with new 19.7), adding-a-profile, spec and manual test plan 1.7.1. Version `1.7.1`. | `README.md`, `docs/` |
 
 ## Measured (real game, 2026-10-11, three `run` sessions)
 
@@ -36,4 +37,4 @@ Move the words of a spell into `text`: `name` → `text.goods_name`, `descriptio
 
 ## Not done
 
-Thai and other scripts, other game languages, the colour of the fire on the body, icons, a faster look for the array (see spec 1.7.1 section 10).
+Thai and other scripts, other game languages, the colour of the fire on the body, a new icon picture, a faster look for the array (see spec 1.7.1 section 10).

@@ -41,6 +41,14 @@ Only what is new in 1.7.1; everything else is [manual-test-plan-1.7.0](../experi
 | FL8 | `write --flame-color` with no game running / with anti-cheat | `eldenring.exe is not running` exit `1` / refused exit `3` | [ ] |
 | FL9 | Quit the game; `run` again | the fire is coloured again (it is done at every start) | [ ] |
 
+## IC. Icon (an existing icon reused)
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| IC1 | `run` with `"Goods.6421.iconId": 6806` in the spell's `set`; visit Kalé | the spell's line in the shop list shows the icon of Gravitational Missile (not Heal's) | [ ] |
+| IC2 | Buy it; open the Inventory and the memory (spells) menu | the same icon in the inventory list and in the memory-slot list; if the memory screen still shows Heal's, note it (then `Magic.6421.iconId` is the one to set) | [ ] |
+| IC3 | A game without the DLC (or an `iconId` the game has no picture for) | the icon is blank or missing, nothing else breaks — note what you see | [ ] |
+
 ## Automated tests (no game)
 
 `python -m pytest code` (golden tests need `ELDENDISK_REGULATION_ORIG`). The tests are `test_write_text.py`, `test_write_flame.py` and the additions listed in spec 1.7.1 section 11.

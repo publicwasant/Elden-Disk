@@ -845,7 +845,8 @@ Being honest about the frame saves you disappointment.
 |:--|:--|
 | A **name** and **description** that show up in the game | ✓ Since 1.7.1: write them in `text` (6.1b). They are put into the running game each time you start it with `run`; nothing is saved in the game's files. Only English letters are tried; Thai and other scripts may show as boxes ◦. |
 | A different **colour of the fire** of Flame, Grant Me Strength | ✓ Since 1.7.1: `flame_color` (6.1c). The fire of the cast and the burst, put into the running game; the burning on the body keeps its colour. |
-| A **new picture / icon** | ✗ Not yet. The copy keeps the original's icon. |
+| The **icon of another item** (reuse a picture the game already has) | ◦ Since 1.7.1, for spells made from a game spell (`clone`, `projectile`, `attack`, ...): `"set": {"Goods.<from>.iconId": 6806}` gives the copy the icon whose number you give (6806 = Gravitational Missile). The number is the item's `iconId` in the Goods table (`read --param Goods.<id>.iconId` shows it). The icon must be one the game loads: the DLC icons are in the DLC sheet and need the DLC installed. Tried in the game 2026-10-12 with 6806 on `reverse_cursed_technique`: the icon of Gravitational Missile shows (the author's check; the screens one by one are in manual plan 1.7.1, IC). |
+| A **new picture** that the game does not have | ✗ Not yet (it needs the game's menu texture archive). |
 | A **new animation** | ✗ The tool cannot make animations. A home-made spell can pick one of two; a copy keeps the original's. |
 | A copy that is a **sorcery instead of an incantation** (or the reverse) | ✗ It keeps its type. |
 | A home-made spell that **deals damage** or **throws something** | ✗ Home-made spells only heal. For damage, remix a game spell. |

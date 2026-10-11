@@ -112,7 +112,8 @@ Level 3 = items that never existed in the game: their own name, text, icon, colo
 - ✓ **3.1e In the tool.** `text` object in the spell design (replaces `name`/`description`, before `set`), profile block `text` (`files`, `sizes`), `writer/scan.py`, `writer/text.py`, `write --text [--wait | --when-loaded]`, and `run` starts it by itself once a character is in the world (`Hooks.on_running`). Three `run` sessions of 2026-10-11: written and read back every time, ~75 s after the character appears.
 - [ ] **3.1f In the game: what is seen** (manual plan 1.7.1, TX): the name, the short line and the long description show; a secured build is unchanged by a text edit.
 - [ ] **3.1g Thai (and other scripts).** Not tried; the font may lack the glyphs.
-- [ ] **3.2 Icon.** After the text work is finished. First try: reuse an existing `iconId` through `set` (probably possible already, untried); a truly new picture needs the menu texture archive.
+- ✓ **3.2a Reuse an icon.** `set` `Goods.<from>.iconId` builds, passes the gate and shows in the game (2026-10-12: Gravitational Missile's 6806 on `reverse_cursed_technique`).
+- [ ] **3.2b A truly new picture** needs the menu texture archive.
 - ✓ **3.3a The colour of the fire** (1.7.1): the effect files `524400` (cast) and `524401` (burst) are found in memory by their colours and recoloured with `flame_color`; `write --flame-color [--wait | --when-loaded]`, started by `run`. Three sessions of 2026-10-11: 68 places written and read back, ~7 s after the character appears.
 - [ ] **3.3b What is seen** (manual plan 1.7.1, FL): the fire in the game is the design's colour.
 - [ ] **3.3c The colour of the fire on the body** (effect `524402`) and a new effect, not only a colour.

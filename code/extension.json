@@ -32,7 +32,8 @@
             "Magic.6421.refType": 32,
             "Magic.6421.castSfxId": 524400,
             "Magic.6421.fireSfxId": 524401,
-            "Bullet.10642100.sfxId_Bullet": -1
+            "Bullet.10642100.sfxId_Bullet": -1,
+            "Goods.6421.iconId": 6806
           }
         },
         "<id-2>": null,
