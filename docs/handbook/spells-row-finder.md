@@ -3,7 +3,7 @@
 
 > **What this is:** for every spell that a workshop above the Photocopier accepts, the list of rows you may write in `set`: their **ids**, **names**, **durations** and **base damage**. Read Chapter 3 of the handbook first if the words "row" and "id" are new to you.
 > **Data:** read from the original Elden Ring 1.17.1 `regulation.bin` with the tool's own chain reader. Names come from the community's Paramdex lists and can be blank or imperfect; the **numbers** are the game's.
-> **Also in this file:** the **Motion Finder** (numbers for `cast_motion`) and the **Visual Finder** (numbers for `effect.visual`), right below, before the spells.
+> **Also in this file:** the **Motion Finder** (numbers for `cast_motion`), the **Visual Finder** (numbers for `effect.visual`) and the **Cast Finder** (the flash, sound and extra effect of a cast, and every number of a spell's cast in one row), right below, before the spells.
 > **Find a spell** with your editor's search (`Ctrl+F`, type the name or the id). The ids are the same as in the Spell Finder (Appendix A of the handbook).
 
 ### How to read an entry
@@ -267,6 +267,252 @@
 | **21691002** | Dragonbolt of Florissax (2006910) | 21691000 |  |
 | **21692000** | Electrocharge (2006920) | 21692000, 21692010 |  |
 | **92082000** | Adula's Moonblade (4431), Aspects of the Crucible: Horns (7510), Aspects of the Crucible: Tail (7500), Black Blade (7530), Carian Greatsword (4430), Carian Piercer (4450), +4 more | 6900, 6901, 6903 +3 |  |
+
+## Cast Finder — the cast of every spell, ready to copy
+
+Four numbers on a spell's own **Magic** row decide how its cast **looks and sounds**. Take all of them from one spell and your spell casts like it.
+
+| Field (on `Magic.<id>`) | What it is | `-1` means |
+|:--|:--|:--|
+| `refType` | the **cast animation** (this is `cast_motion`; see the Motion Finder above) | — |
+| `castSfxId` | the **flash and sound when the cast starts** (an effect id of the game's effect files) | none |
+| `fireSfxId` | the **flash and sound when the spell fires** | none |
+| `effectSfxId` | an **extra effect the spell keeps showing** (most spells have none) | none |
+
+**How to use it:** find the spell whose cast you want, and write its numbers into `set` on the Magic row of *your* spell. The row id in the key is **your own `from`** (not the spell you are copying from); the numbers you copy go in the **values**.
+
+```json
+"set": {
+  "Magic.6430.refType":    32,        ← your spell is made from 6430 (Blessing's Boon); 32 is Black Flame Blade's number below
+  "Magic.6430.castSfxId":  524090,    ← Black Flame Blade's row below
+  "Magic.6430.fireSfxId":  524091
+}
+```
+
+- The `castSfxId` and `fireSfxId` of one spell belong together: copy both. Spells of one family share them (all the glintstone shards share `523000` / `523001`).
+- A **home-made spell** (kind `buff` without `from`) has `cast_motion` for the animation only; its cast flash is always that of Flame, Grant Me Strength (`524400` / `524401`). To change it, make the spell from a game spell (kind `buff` with `from`, or another workshop) and use `set`.
+- **Untried in the game** except for the values of Flame, Grant Me Strength and Black Flame Blade as used by the home-made spell. The tool accepts any whole number here (the game's effect files decide what it shows, and an id the game does not have shows nothing). Try it and write down what you see.
+- Spells that only bosses and NPCs cast are not listed.
+
+| Spell (Magic id) | Type | `refType` | `castSfxId` | `fireSfxId` | `effectSfxId` |
+|:--|:-:|:-:|:-:|:-:|:-:|
+| Glintstone Pebble (4000) | Sor | 1 | 523000 | 523001 | 510010 |
+| Great Glintstone Shard (4001) | Sor | 1 | 523000 | 523001 | 510020 |
+| Swift Glintstone Shard (4010) | Sor | 79 | 522000 | 522001 | 510000 |
+| Glintstone Cometshard (4020) | Sor | 2 | 523060 | 523061 | 523064 |
+| Comet (4021) | Sor | 2 | 523070 | 523071 | 523064 |
+| Shard Spiral (4030) | Sor | 2 | 523070 | 523071 | 523064 |
+| Glintstone Stars (4040) | Sor | 107 | 523850 | 523851 | 523856 |
+| Star Shower (4050) | Sor | 107 | 523850 | 523851 | 523859 |
+| Crystal Barrage (4060) | Sor | 4 | 523720 | 523721 | — |
+| Glintstone Arc (4070) | Sor | 16 | 530150 | 530151 | — |
+| Cannon of Haima (4080) | Sor | 92 | -1 | -1 | — |
+| Crystal Burst (4090) | Sor | 113 | 523930 | 523931 | 523934 |
+| Shatter Earth (4100) | Sor | 56 | 523740 | 523741 | 523742 |
+| Rock Blaster (4110) | Sor | 57 | 523740 | 523741 | — |
+| Gavel of Haima (4120) | Sor | 78 | 523770 | 523771 | 523772 |
+| Terra Magicus (4130) | Sor | 13 | 523810 | 523811 | — |
+| Starlight (4140) | Sor | 13 | 523500 | 523501 | — |
+| Comet Azur (4200) | Sor | 7 | 526250 | -1 | 526255 |
+| Founding Rain of Stars (4210) | Sor | 124 | 523820 | 523821 | — |
+| Stars of Ruin (4220) | Sor | 107 | 523900 | 523901 | — |
+| Glintblade Phalanx (4300) | Sor | 8 | 523040 | 523041 | — |
+| Carian Phalanx (4301) | Sor | 8 | 523040 | 523041 | — |
+| Greatblade Phalanx (4302) | Sor | 95 | 523050 | 523051 | — |
+| Rennala's Full Moon (4360) | Sor | 6 | 523800 | 523801 | 523806 |
+| Ranni's Dark Moon (4361) | Sor | 6 | 523860 | 523861 | 523866 |
+| Magic Downpour (4370) | Sor | 107 | 523730 | 523731 | 523739 |
+| Loretta's Greatbow (4380) | Sor | 5 | 526250 | 526264 | 526269 |
+| Loretta's Mastery (4381) | Sor | 5 | 526250 | 526284 | 526289 |
+| Magic Glintblade (4390) | Sor | 118 | 523090 | 523091 | — |
+| Glintstone Icecrag (4400) | Sor | 1 | 523030 | 523031 | — |
+| Zamor Ice Storm (4410) | Sor | 14 | 523870 | -1 | 523875 |
+| Freezing Mist (4420) | Sor | 113 | 523880 | 523881 | 523875 |
+| Carian Greatsword (4430) | Sor | 9 | 523740 | 523741 | 523742 |
+| Adula's Moonblade (4431) | Sor | 9 | 523890 | 523891 | 523892 |
+| Carian Slicer (4440) | Sor | 80 | 523750 | 523751 | 523752 |
+| Carian Piercer (4450) | Sor | 10 | 523740 | 523741 | 523742 |
+| Scholar's Armament (4460) | Sor | 11 | 523100 | 523101 | — |
+| Scholar's Shield (4470) | Sor | 12 | 523300 | 523301 | — |
+| Lucidity (4480) | Sor | 13 | 523150 | 523151 | 523153 |
+| Frozen Armament (4490) | Sor | 11 | 523130 | 523131 | — |
+| Shattering Crystal (4500) | Sor | 113 | 523190 | 523191 | 523194 |
+| Crystal Release (4510) | Sor | 58 | -1 | -1 | — |
+| Crystal Torrent (4520) | Sor | 7 | 526240 | 526241 | — |
+| Ambush Shard (4600) | Sor | 83 | -1 | -1 | — |
+| Night Shard (4610) | Sor | 79 | 523240 | 523241 | 510300 |
+| Night Comet (4620) | Sor | 2 | 523200 | 523201 | 523204 |
+| Thops's Barrier (4630) | Sor | 110 | 523210 | 523211 | — |
+| Carian Retaliation (4640) | Sor | 84 | 523500 | 523501 | — |
+| Carian Retaliation (Unused 1) (4641) | Sor | 84 | 523500 | 523501 | — |
+| Carian Retaliation (Unused 2) (4642) | Sor | 84 | 523500 | 523501 | — |
+| Eternal Darkness (4650) | Sor | 8 | 523250 | 523251 | — |
+| Unseen Blade (4660) | Sor | 11 | 523400 | 523401 | 523402 |
+| Unseen Form (4670) | Sor | 109 | 523410 | 523411 | — |
+| Meteorite (4700) | Sor | 15 | 530120 | 530121 | 530124 |
+| Meteorite of Astel (4701) | Sor | 15 | 529990 | 529991 | — |
+| Rock Sling (4710) | Sor | 108 | 530130 | 530131 | — |
+| Gravity Well (4720) | Sor | 120 | 529980 | 529981 | 529984 |
+| Collapsing Stars (4721) | Sor | 120 | 529970 | 529971 | 529974 |
+| Magma Shot (4800) | Sor | 117 | 524500 | 524501 | — |
+| Gelmir's Fury (4810) | Sor | 102 | 524510 | 524511 | 524515 |
+| Roiling Magma (4820) | Sor | 117 | 529100 | 529101 | 529102 |
+| Rykard's Rancor (4830) | Sor | 95 | 524495 | -1 | — |
+| Briars of Sin (4900) | Sor | 81 | -1 | -1 | — |
+| Briars of Punishment (4910) | Sor | 82 | -1 | -1 | — |
+| Rancorcall (5000) | Sor | 103 | 523360 | 523361 | 523364 |
+| Ancient Death Rancor (5001) | Sor | 103 | 523370 | 523371 | 523374 |
+| Explosive Ghostflame (5010) | Sor | 115 | 523000 | 523001 | — |
+| Fia's Mist (5020) | Sor | 113 | 523350 | 523351 | 523354 |
+| Tibia's Summons (5030) | Sor | 121 | -1 | -1 | — |
+| Death Lightning (5040) | Sor | 42 | 525670 | 525676 | 525674 |
+| Oracle Bubbles (5100) | Sor | 75 | 523220 | 523221 | 523224 |
+| Great Oracular Bubble (5110) | Sor | 76 | 523230 | 523231 | 523234 |
+| Catch Flame (6000) | Inc | 106 | 524100 | -1 | — |
+| O, Flame! (6001) | Inc | 25 | 524110 | 524115 | 524114 |
+| Flame Sling (6010) | Inc | 17 | 524009 | 524001 | 524005 |
+| Flame Fall Upon Them (6020) | Inc | 17 | 524020 | 524021 | 524025 |
+| Whirl, O Flame (6030) | Inc | 20 | 524520 | 524521 | — |
+| Flame Cleanse Me (6040) | Inc | 31 | 524320 | -1 | — |
+| Flame Grant Me Strength (6050) | Inc | 31 | 524400 | 524401 | — |
+| Flame Protect Me (6060) | Inc | 31 | 524850 | 524851 | — |
+| Giantsflame Take Thee (6100) | Inc | 17 | 524020 | 524021 | 524025 |
+| Flame of The Fell God (6110) | Inc | 19 | 524080 | -1 | — |
+| Burn, O Flame! (6120) | Inc | 24 | 524030 | 524031 | 524035 |
+| Black Flame (6210) | Inc | 17 | 524540 | 524541 | 524545 |
+| Surge, O Flame (6220) | Inc | 23 | 524050 | -1 | — |
+| Scouring Black Flame (6230) | Inc | 22 | 524520 | 524521 | — |
+| Black Flame Ritual (6240) | Inc | 99 | -1 | -1 | — |
+| Black Flame Blade (6250) | Inc | 32 | 524090 | 524091 | — |
+| Black Flame's Protection (6260) | Inc | 31 | 524790 | 524791 | — |
+| Noble Presence (6270) | Inc | 105 | 525330 | 525335 | — |
+| Bloodflame Talons (6300) | Inc | 94 | -1 | -1 | — |
+| Bloodboon (6310) | Inc | 93 | -1 | -1 | — |
+| Bloodflame Blade (6320) | Inc | 112 | 524140 | 524141 | — |
+| Barrier of Gold (6330) | Inc | 34 | 524840 | 524841 | 524844 |
+| Protection of The Erdtree (6340) | Inc | 34 | 524880 | 524881 | 524884 |
+| Rejection (6400) | Inc | 28 | 525300 | -1 | — |
+| Wrath of Gold (6410) | Inc | 29 | 525310 | 525311 | 525315 |
+| Urgent Heal (6420) | Inc | 33 | 524900 | 524901 | — |
+| Heal (6421) | Inc | 34 | 525000 | 525001 | 525004 |
+| Great Heal (6422) | Inc | 34 | 525010 | 525011 | 525004 |
+| Lord's Heal (6423) | Inc | 34 | 525020 | 525021 | 525004 |
+| Erdtree Heal (6424) | Inc | 34 | 525030 | 525031 | 525034 |
+| Blessing's Boon (6430) | Inc | 34 | 525070 | 525071 | 525034 |
+| Blessing of The Erdtree (6431) | Inc | 34 | 525050 | 525051 | 525034 |
+| Cure Poison (6440) | Inc | 33 | 525080 | 525081 | — |
+| Lord's Aid (6441) | Inc | 34 | 525090 | 525091 | 525094 |
+| Flame Fortification (6450) | Inc | 33 | 524810 | 524811 | — |
+| Magic Fortification (6460) | Inc | 33 | 524800 | 524801 | — |
+| Lightning Fortification (6470) | Inc | 33 | 524820 | 524821 | — |
+| Divine Fortification (6480) | Inc | 33 | 524830 | 524831 | — |
+| Lord's Divine Fortification (6490) | Inc | 34 | 524870 | 524871 | 524874 |
+| Night Maiden's Mist (6500) | Inc | 113 | 523580 | -1 | 523204 |
+| Assassin's Approach (6510) | Inc | 114 | 523540 | 523541 | — |
+| Shadow Bait (6520) | Inc | 26 | 523520 | 523521 | — |
+| Darkness (6530) | Inc | 26 | 523570 | 523571 | — |
+| Golden Vow (6600) | Inc | 35 | 525630 | 525631 | 525632 |
+| Discus of Light (6700) | Inc | 27 | 528120 | 528121 | 528125 |
+| Triple Rings of Light (6701) | Inc | 27 | 528110 | 528111 | 528115 |
+| Radagon's Rings of Light (6710) | Inc | 48 | -1 | -1 | — |
+| Elden Stars (6720) | Inc | 91 | -1 | -1 | — |
+| Law of Regression (6730) | Inc | 86 | 528160 | -1 | — |
+| Immutable Shield (6740) | Inc | 49 | 528180 | 528181 | — |
+| Litany of Proper Death (6750) | Inc | 87 | -1 | -1 | — |
+| Law of Causality (6760) | Inc | 86 | 528170 | 528171 | — |
+| Order's Blade (6770) | Inc | 104 | 528190 | 528191 | — |
+| Order Healing (6780) | Inc | 86 | 528150 | -1 | — |
+| Bestial Sling (6800) | Inc | 38 | -1 | -1 | — |
+| Stone of Gurranq (6810) | Inc | 37 | -1 | -1 | — |
+| Beast Claw (6820) | Inc | 40 | 530170 | 530171 | 530174 |
+| Gurranq's Beast Claw (6830) | Inc | 41 | -1 | -1 | — |
+| Bestial Vitality (6840) | Inc | 31 | 525040 | 525041 | — |
+| Bestial Constitution (6850) | Inc | 31 | 529510 | -1 | — |
+| Lightning Spear (6900) | Inc | 36 | -1 | -1 | — |
+| Ancient Dragons' Light Strike (6910) | Inc | 42 | 525530 | 525536 | 525534 |
+| Lightning Strike (6920) | Inc | 111 | 525570 | 525571 | — |
+| Frozen Lightning Spear (6921) | Inc | 119 | -1 | -1 | — |
+| Honed Bolt (6930) | Inc | 111 | 525560 | 525561 | — |
+| Ancient Dragons' Light Spear (6940) | Inc | 44 | -1 | -1 | — |
+| Fortissax's Light Spear (6941) | Inc | 98 | -1 | -1 | — |
+| Lansseax's Glaive (6950) | Inc | 45 | -1 | -1 | — |
+| Electrify Armament (6960) | Inc | 59 | 525660 | 525661 | — |
+| Vyke's Dragonbolt (6970) | Inc | 59 | 525640 | 525641 | — |
+| Dragonbolt Blessing (6971) | Inc | 60 | 525650 | 525651 | — |
+| Dragonfire (7000) | Inc | 67 | 530400 | 530401 | 530402 |
+| Agheel's Flame (7001) | Inc | 50 | -1 | 530431 | 530440 |
+| Magma Breath (7010) | Inc | 123 | -1 | 530501 | 530502 |
+| Theodorix's Magma (7011) | Inc | 123 | -1 | 530511 | 530512 |
+| Dragonice (7020) | Inc | 67 | -1 | 530551 | 530552 |
+| Borealis's Mist (7021) | Inc | 50 | -1 | 530581 | 530590 |
+| Rotten Breath (7030) | Inc | 67 | -1 | 530601 | 530602 |
+| Ekzykes's Decay (7031) | Inc | 50 | -1 | 530631 | 530640 |
+| Glintstone Breath (7040) | Inc | 67 | -1 | 530651 | 530652 |
+| Smarag's Glint Breath (7041) | Inc | 50 | -1 | 530681 | 530690 |
+| Placidusax's Ruin (7050) | Inc | 51 | 523000 | 523001 | — |
+| Dragonclaw (7060) | Inc | 52 | 530160 | 530161 | — |
+| Dragonmaw (7080) | Inc | 54 | 523000 | 523001 | — |
+| Greyoll's Roar (7090) | Inc | 55 | -1 | -1 | — |
+| Pest Threads (7200) | Inc | 74 | -1 | -1 | — |
+| Swarm of Flies (7210) | Inc | 26 | 525540 | -1 | — |
+| Poison Mist (7220) | Inc | 26 | 526320 | -1 | — |
+| Poison Armament (7230) | Inc | 112 | 526310 | 526311 | — |
+| Scarlet Aeonia (7240) | Inc | 122 | -1 | -1 | — |
+| Inescapable Frenzy (7300) | Inc | 0 | -1 | -1 | — |
+| The Flame of Frenzy (7310) | Inc | 66 | -1 | -1 | — |
+| Unendurable Frenzy (7311) | Inc | 88 | -1 | -1 | — |
+| Frenzied Burst (7320) | Inc | 89 | -1 | -1 | — |
+| Howl of Shabriri (7330) | Inc | 90 | -1 | -1 | — |
+| Aspects of the Crucible: Tail (7500) | Inc | 70 | -1 | -1 | — |
+| Aspects of the Crucible: Horns (7510) | Inc | 71 | 523000 | 523001 | — |
+| Aspects of the Crucible: Breath (7520) | Inc | 100 | -1 | -1 | — |
+| Black Blade (7530) | Inc | 116 | -1 | -1 | — |
+| Fire's Deadly Sin (7900) | Inc | 24 | 525410 | -1 | 525415 |
+| Golden Light Fortification (7903) | Inc | 34 | 524860 | 524861 | 524844 |
+| Briars of Sin (8000) | Inc | 81 | -1 | -1 | — |
+| Briars of Punishment (8001) | Inc | 82 | -1 | -1 | — |
+| Miriam's Vanishing (2004300) | Sor | 127 | 550000 | 550002 | 550002 |
+| Glintblade Trio (2004310) | Sor | 138 | 550010 | 550011 | — |
+| Rellana's Twin Moons (2004320) | Sor | 161 | 523800 | 523801 | 523806 |
+| Glintstone Nail (2004500) | Sor | 107 | 552000 | 552001 | 552004 |
+| Glintstone Nails (2004510) | Sor | 107 | 552010 | 552011 | 552014 |
+| Blades of Stone (2004700) | Sor | 120 | 551000 | 551001 | 551004 |
+| Gravitational Missile (2004710) | Sor | 120 | 551010 | 551011 | 551004 |
+| Mantle of Thorns (2004900) | Sor | 150 | 523230 | 523231 | 523234 |
+| Impenetrable Thorns (2004910) | Sor | 156 | 523230 | 523231 | 523234 |
+| Rings of Spectral Light (2005000) | Sor | 143 | 553000 | 553001 | — |
+| Vortex of Putrescence (2006200) | Sor | 126 | 553510 | -1 | — |
+| Mass of Putrescence (2006210) | Sor | 158 | 553500 | 553501 | — |
+| Furious Blade of Ansbach (2006300) | Inc | 140 | -1 | -1 | 523752 |
+| Heal from Afar (2006400) | Inc | 130 | 540020 | 540021 | — |
+| Aspects of the Crucible: Thorns (2006650) | Inc | 125 | 523230 | 523231 | 523234 |
+| Aspects of the Crucible: Bloom (2006660) | Inc | 129 | 523230 | 523231 | 523234 |
+| Minor Erdtree (2006670) | Inc | 128 | 523230 | 523231 | 523234 |
+| Land of Shadow (2006680) | Inc | 91 | 524870 | 524871 | 524874 |
+| Wrath from Afar (2006690) | Inc | 151 | -1 | -1 | — |
+| Light of Miquella (2006700) | Inc | 145 | -1 | -1 | — |
+| Multilayered Ring of Light (2006710) | Inc | 149 | 541900 | 541901 | 541905 |
+| Roar of Rugalea (2006800) | Inc | 131 | 530400 | 530401 | 530402 |
+| Knight's Lightning Spear (2006900) | Inc | 139 | 523230 | 523231 | 523234 |
+| Dragonbolt of Florissax (2006910) | Inc | 144 | 541100 | 541101 | — |
+| Electrocharge (2006920) | Inc | 42 | 541130 | 541131 | 541134 |
+| Bayle's Tyranny (2007000) | Inc | 133 | 523230 | 523231 | 523234 |
+| Bayle's Flame Lightning (2007010) | Inc | 134 | 523230 | 523231 | 523234 |
+| Ghostflame Breath (2007020) | Inc | 50 | -1 | 540600 | 540601 |
+| Rotten Butterflies (2007200) | Inc | 135 | 523230 | 523231 | 523234 |
+| Pest-Thread Spears (2007210) | Inc | 136 | -1 | -1 | — |
+| Midra's Flame of Frenzy (2007300) | Inc | 137 | -1 | -1 | — |
+| Fleeting Microcosm (2007410) | Sor | 120 | 552020 | 552021 | 552040 |
+| Cherishing Fingers (2007420) | Sor | 157 | 552030 | 552031 | 552034 |
+| Watchful Spirit (2007600) | Sor | 19 | 541500 | -1 | — |
+| Golden Arcs (2007700) | Sor | 148 | 541300 | 541301 | 541305 |
+| Giant Golden Arc (2007710) | Sor | 154 | 541310 | 541311 | 541315 |
+| Spira (2007720) | Sor | 146 | 541310 | 541311 | 541315 |
+| Divine Beast Tornado (2007730) | Inc | 147 | -1 | -1 | — |
+| Divine Bird Feathers (2007740) | Inc | 152 | -1 | 541351 | — |
+| Fire Serpent (2007800) | Inc | 153 | 542000 | 542001 | — |
+| Rain of Fire (2007810) | Inc | 159 | 524030 | 524031 | 524035 |
+| Messmer's Orb (2007820) | Inc | 141 | 542042 | 542043 | — |
 
 ## Incantations (129)
 

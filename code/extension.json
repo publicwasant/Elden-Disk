@@ -4,28 +4,31 @@
       "maximum": 20,
       "slots": {
         "reverse_curse_technique": {
-          "type": "incantation",
-          "name": "Reverse Cursed Technique",
+          "kind": "projectile",
+          "from": 6421,  
+          "name": "Reverse Curse Technique",
           "description": "Converts negative cursed energy into positive energy.",
+          "fp_cost": 120,
           "requires": {
-            "intelligence": 15,
-            "faith": 90,
-            "arcane": 0
+            "intelligence": 0,
+            "faith": 60,
+            "arcane": 10
           },
-          "fp_cost": 90,
-          "cast_motion": "black-flame-blade",
-          "effect": {
-            "heal_hp_per_tick": 60,
-            "restore_fp_per_tick": 15,
-            "stamina_regen_speed": 100,
-            "tick_seconds": 0.5,
-            "duration_seconds": 15,
-            "visual": null
-          },
-          "poise_while_casting_seconds": 2.0,
           "shop": {
             "price": 34590,
             "stock": 1
+          },
+          "set": {
+            "SpEffect.1642100.effectEndurance": 20,
+            "SpEffect.1642100.motionInterval": 0.5,
+            "SpEffect.1642100.changeHpPoint": -45,
+            "SpEffect.1642100.changeMpPoint": -15,
+            "SpEffect.1642100.staminaRecoverChangeSpeed": 100,
+            "SpEffect.1642100.vfxId": -1,
+            "Magic.6421.refType": 32,
+            "Magic.6421.castSfxId": 524400,
+            "Magic.6421.fireSfxId": 524401,
+            "Bullet.10642100.sfxId_Bullet": -1
           }
         },
         "<id-2>": null,

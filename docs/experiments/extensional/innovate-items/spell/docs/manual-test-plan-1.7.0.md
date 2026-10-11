@@ -186,7 +186,7 @@ If it passes, the gate goes to 27 blocks and 292,000 frame bytes (the body limit
 | S3 | `--add all`, change the price of one spell, `run` | the log says `building because the design changed since the last build (1 field)`; all spells are for sale with the new price | [ ] |
 | S4 | `--add spells.slots.nope --dry-run` | error naming `spells.slots.nope` and the paths the design has; nothing written | [ ] |
 
-## M. Motion and visual by number (Phase 2.8; offline tests pass, M1-M2 open in the game)
+## M. Motion and visual by number (Phase 2.8; offline tests pass, M1, M2 and M4 open in the game)
 
 Exploratory: the numbers are checked against the game's tables by the build, but how they look on a home-made spell is not known. Write what you see in the roadmap.
 
@@ -195,6 +195,7 @@ Exploratory: the numbers are checked against the game's tables by the build, but
 | M1 | Slot 1 (home-made `buff`): `"cast_motion": 17` (the throw of Flame Sling / Black Flame) instead of the name; `run`; buy, memorize, cast | the build passes; either the cast plays the throwing animation (a finding) or it looks wrong or does nothing (also a finding); the heal still works | [ ] |
 | M2 | Slot 1: `"effect": {"visual": 9010}` (the black flames of Black Flame) instead of `"flame"`; `run`; cast | the build passes; the body shows black flames, nothing, or something odd (a finding); the heal still works | [ ] |
 | M3 | `"cast_motion": 3` or `"visual": 99999999`; `--dry-run` | the build refuses it, naming the field and saying that no spell (or effect) of the game uses the number; nothing written | [ ] |
+| M4 | Slot 2 = the worked example of handbook section 3.6 (`reverse_curse_boon`: kind `projectile`, `from` 6430, `set` with `Magic.6430.refType` 32, `castSfxId` 524090, `fireSfxId` 524091 and the SpEffect 1643000 numbers); `--add all --dry-run`, then `run`; buy, memorize, cast | the gate passes (26 blocks); the cast plays the Black Flame Blade animation with its flash; the mend heals 45 HP every 0.5 s for 20 s (1,800 HP) and gives back 15 FP per beat; no glow on the body. If the cast looks wrong, set `refType` back to 34 (Boon's own) and keep the two sfx ids; write down what you see | [ ] |
 
 ## T. Table move (several items, not built yet)
 

@@ -242,16 +242,23 @@ You will see fields `refCategory1…10` and `refId1…10`: each pair says "I cal
 
 Community tools such as Paramdex and Smithbox show the same tables with the same ids; they are a good second opinion.
 
-### 3.6 Two numbers that are not rows: the cast and the look
+### 3.6 Numbers inside a row: the cast and the look
 
-Two dials of the home kitchen (Chapter 6) can also be written as a game number instead of a name. They are not row ids like the ones above; they are **settings stored inside a row**, and the game reuses each of them for many spells.
+Some dials are not row ids at all. They are **settings stored inside a row**, and the game reuses each of them for many spells. Five of them decide how a spell *feels*: how the hands move, what flashes when you cast, and what you see on the body.
 
-| In your file | What it is | Stored in the game as | Where to look it up |
-|:--|:--|:--|:--|
-| `"cast_motion": 32` | the **cast animation** (how the hands move when you cast) | the `refType` field of the spell's Magic row | **Motion Finder**, in [spells-row-finder.md](spells-row-finder.md) |
-| `"visual": 1605000` | the **look on the body** while the effect lasts (burning body, glow) | the `vfxId` field of the effect's SpEffect row | **Visual Finder**, same file |
+| What you want to change | Home-made spell (Chapter 6) | Remixed spell (`set`, Chapter 7) | Stored in | Look it up in |
+|:--|:--|:--|:--|:--|
+| the **cast animation** (how the hands move) | `"cast_motion": 32` or a name | `"Magic.<from>.refType": 32` | the spell's Magic row | **Motion Finder** |
+| the **flash and sound when the cast starts** | always Flame, Grant Me Strength's | `"Magic.<from>.castSfxId": 524090` | the spell's Magic row | **Cast Finder** |
+| the **flash and sound when it fires** | always Flame, Grant Me Strength's | `"Magic.<from>.fireSfxId": 524091` | the spell's Magic row | **Cast Finder** |
+| an **extra effect the spell keeps showing** | none | `"Magic.<from>.effectSfxId": -1` | the spell's Magic row | **Cast Finder** |
+| the **look on the body** while the effect lasts | `"visual": 1605000` or a name | `"SpEffect.<effect id>.vfxId": 1605000` | an effect (SpEffect) row | **Visual Finder** |
 
-How to choose: **find a spell whose cast or look you like** (you know them from playing), look it up in the matching Finder, and write its number. The names are only shortcuts for the best-known numbers:
+All three Finders are in [spells-row-finder.md](spells-row-finder.md). The easiest way to choose: **find a spell whose cast or look you like** (you know them from playing), and copy its numbers. The Cast Finder lists all four Magic numbers of every spell in one row, so *"I want the cast of Black Flame Blade"* means: find "Black Flame Blade (6250)" and take `32`, `524090`, `524091`.
+
+> ⚠️ **In `Magic.<from>.…` the middle number is always your own `from`**, never the spell you copy from. The numbers you copy go in the *value*, after the colon. `"Magic.6050.refType": 31` on a spell made from `6430` is an error (*"the row id must be this spell's `from`"*); the right line is `"Magic.6430.refType": 31`.
+
+The names are only shortcuts for the best-known numbers:
 
 | Name | Number | It is |
 |:--|:-:|:--|
@@ -261,9 +268,47 @@ How to choose: **find a spell whose cast or look you like** (you know them from 
 | `flask` | `visual` 5030 | the healing glow of a Flask of Crimson Tears |
 | `none` (or `null`) | `visual` −1 | nothing on the body |
 
-On a spell made from a game spell the same two numbers go through `set` (Chapter 7): `"Magic.6210.refType": 31` changes the cast, `"SpEffect.1621000.vfxId": 9010` changes the look of the burn's effect. Both build and pass the tool's checks; neither has been tried in the game yet.
+**Worked example — a mend with the cast of Black Flame Blade** ◦ *(Fireball workshop; builds and passes the checks, not yet tried in the game)*
 
-> ◦ **Only these five have been tried in the game.** Any other number is checked (the tool refuses a number that no spell, or no effect, of the game uses) but not tested: it may look wrong, or show nothing. That is a fair experiment for an innovator: try it, and note what you see.
+```json
+"reverse_curse_boon": {
+  "kind": "projectile",
+  "from": 6430,
+  "name": "Reverse Curse Boon",
+  "description": "Blessing's Boon with the curse turned around: a short, strong mend instead of a long, faint one.",
+  "fp_cost": 70,
+  "requires": { "intelligence": 0, "faith": 25, "arcane": 25 },
+  "shop": { "price": 30000, "stock": 1 },
+  "set": {
+    "SpEffect.1643000.effectEndurance": 20,
+    "SpEffect.1643000.motionInterval": 0.5,
+    "SpEffect.1643000.changeHpPoint": -45,
+    "SpEffect.1643000.changeMpPoint": -15,
+    "SpEffect.1643000.staminaRecoverChangeSpeed": 100,
+    "SpEffect.1643000.vfxId": -1,
+    "Magic.6430.refType": 32,
+    "Magic.6430.castSfxId": 524090,
+    "Magic.6430.fireSfxId": 524091
+  }
+}
+```
+
+| Number | What it is | Where it comes from |
+|:--|:--|:--|
+| `6430` | the Magic id of **Blessing's Boon**: the spell this one is made from | Spell Finder (Appendix A), row "6430 · Blessing's Boon" |
+| `1643000` | the effect row of Boon: its slow HP regeneration | Row Finder, entry 6430, the `SpEffect 1643000` line (lasts 90 s) |
+| `effectEndurance: 20` | how long the effect lasts, in seconds | yours; the original is 90 (the Row Finder's "lasts" figure) |
+| `motionInterval: 0.5` | seconds between heartbeats | yours; the original is 1 (read it with section 7.9) |
+| `changeHpPoint: -45` | HP per heartbeat. **Negative heals** | yours; the original is −8 |
+| `changeMpPoint: -15` | FP per heartbeat. Negative restores | yours; the original is 0 |
+| `staminaRecoverChangeSpeed: 100` | faster stamina recovery while it lasts | yours; the original is 0 |
+| `vfxId: -1` | no glow on the body | −1 = none (Visual Finder); the original glows with 1643000 |
+| `refType: 32`, `castSfxId: 524090`, `fireSfxId: 524091` | the cast of **Black Flame Blade** | Cast Finder, row "Black Flame Blade (6250)"; the middle number of the key is *your* `from`, 6430 |
+| `price: 30000`, `stock: 1` | your merchant line | your choice |
+
+Total healed: 45 HP × (20 s ÷ 0.5 s) = **1,800 HP**. Blessing's Boon also applies a second, smaller regeneration (the effect `475`, 30 s); it is left as it is.
+
+> ◦ **Only five of these settings have been tried in the game:** the names in the table above. Any other number is checked (the tool refuses a motion or visual number that no spell or effect of the game uses) but not tested: it may look wrong, or show nothing. That is a fair experiment for an innovator: try it, and note what you see.
 
 ---
 
@@ -561,7 +606,7 @@ A key has **three parts** joined by dots: `Table . row id . field`. The value is
 
 | Table | The row id to write | Which workshops |
 |:--|:--|:--|
-| `Magic` (the spell) | the spell's own `from` | all |
+| `Magic` (the spell) | the spell's own `from`, **never another spell's id** (the numbers you copy from another spell go in the *value*) | all |
 | `Goods` (the item) | the spell's own `from` | all |
 | `SpEffect` (effects: burns, buffs, durations) | the **game's** id of an effect the spell uses | Enchant tuner, Buff tuner, Fireball, Strike |
 | `Bullet` (projectiles) | the game's id of a projectile the spell makes | Fireball |
@@ -698,6 +743,8 @@ Field names are the column names of the game's tables. These are the ones used i
 |:--|:--|:--|
 | `slotLength` | Magic | memory slots the spell takes |
 | `refType` | Magic | the cast animation (Motion Finder, section 3.6) |
+| `castSfxId`, `fireSfxId` | Magic | the flash and sound when the cast starts / when the spell fires (Cast Finder, section 3.6) |
+| `effectSfxId` | Magic | an extra effect the spell keeps showing; `-1` = none (Cast Finder) |
 | `iconId` | Magic, Goods | which icon (a number from the game's icon sheet) |
 | `effectEndurance` | SpEffect | how long the effect lasts, in seconds (`-1` = endless, `0` = instant) |
 | `motionInterval` | SpEffect | seconds between beats of a repeating effect |
@@ -841,7 +888,8 @@ The tool lists **every** problem it finds at once.
 | `Bullet.10621000.…` | a **projectile** the spell makes | Row Finder: the spell's *Bullet* line |
 | `AtkParam_Pc.62101.…` | a **hit** the spell makes | Row Finder: the spell's *Hit* line (with its base damage) |
 | `….effectEndurance` / `….atkMag` | a **field** (column) | section 7.8 |
-| `"cast_motion": 32` | a **cast animation** number (a Magic `refType`) | Motion Finder (in the Row Finder file) |
+| `"cast_motion": 32` / `Magic.6430.refType` | a **cast animation** number (a Magic `refType`) | Motion Finder (in the Row Finder file) |
+| `Magic.6430.castSfxId` / `fireSfxId` / `effectSfxId` | the **flash and sound** of the cast, and an extra effect (Magic fields) | Cast Finder (in the Row Finder file) |
 | `"visual": 1605000` | a **visual effect** number (a SpEffect `vfxId`) | Visual Finder (in the Row Finder file) |
 | the number after `:` | the new value | yours |
 
@@ -938,6 +986,7 @@ Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` o
 | Strike workshop | ✓ |
 | `cast_motion` / `visual` by **name** | ✓ |
 | `cast_motion` / `visual` by **another number** | ◦ accepted, not tried |
+| Cast flash / sound (`castSfxId`, `fireSfxId`, `effectSfxId`) through `set` | ◦ builds and passes the checks, not tried |
 | Names, descriptions, icons | ✗ not yet |
 | Items other than spells | ✗ not yet |
 | Shelves 8 and up for sale | ✗ not yet |
@@ -1175,7 +1224,7 @@ Look a spell up by name. The **Id** is what you write in `from`. **FP** and **Me
 
 ## Appendix B — Row Finder: id → the rows a spell uses
 
-One entry per spell for every workshop above the Photocopier, with the ids you may write in `set`, their names, durations and base damage. The same file also holds the **Motion Finder** (numbers for `cast_motion`) and the **Visual Finder** (numbers for `effect.visual`): **[spells-row-finder.md](spells-row-finder.md)** (a companion file next to this one).
+One entry per spell for every workshop above the Photocopier, with the ids you may write in `set`, their names, durations and base damage. The same file also holds the **Motion Finder** (numbers for `cast_motion`), the **Visual Finder** (numbers for `effect.visual`) and the **Cast Finder** (the four cast numbers of every spell): **[spells-row-finder.md](spells-row-finder.md)** (a companion file next to this one).
 
 ## Appendix C — For developers: where each fact comes from
 
