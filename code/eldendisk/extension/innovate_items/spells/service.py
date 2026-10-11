@@ -170,6 +170,19 @@ class Spells:
                                      "slots have a shop line (the merchant's group has no more free lines): remove its `shop`")
         return spells
 
+    def flame_color(self, which="all") -> tuple:
+        """-> (colour, note): the [red, green, blue] the design gives the fire of Flame, Grant Me Strength, or None. The game's fire
+        effects are shared by every spell that uses them, so there is ONE colour for the design: the first spell (by slot) that names
+        one; when the spells name different colours the note says which one is used. `write --flame-color` puts it into the game."""
+        named = [(s["slot"], tuple(s["flame_color"])) for s in self.items(which) if "flame_color" in s]
+        if not named:
+            return None, None
+        first = named[0][1]
+        other = sorted({c for _slot, c in named if c != first})
+        note = (f"the spells name {len(other) + 1} different flame colours; the fire effects are shared, so only slot {named[0][0]}'s is used"
+                if other else None)
+        return first, note
+
     def texts(self, which="all") -> dict:
         """The text for the game: {goods id: {"goods_name", "goods_info", "goods_captions"}} for EVERY slot of the design (the Goods
         id is the one the slot owns), empty where nothing is to be shown: a slot with no spell, or a spell that is not in `which`

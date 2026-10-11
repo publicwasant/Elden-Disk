@@ -131,11 +131,11 @@ class ParamsProfile:
 
 @dataclass(frozen=True)
 class TextProfile:
-    """Where the game keeps its text tables (measured on 1.17.1, tools/probe_chain.py): the pointer at `eldenring.exe + rva` leads
-    to an object, and the pointer to the table of text file N sits at `object + array + N * 8`. `files`: table name -> N."""
-    rva: int
-    array: int
+    """The text tables `write --text` changes (measured on 1.17.1, tools/probe_text.py; writer/text.py says how they are found). `files`:
+    table name -> the number of its text file (the pointer to the table sits at `array + number * 8`). `sizes`: table name -> the size of
+    the game's own file of that table, in bytes, in the language the game is played in."""
     files: dict[str, int]
+    sizes: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -267,13 +267,13 @@ def _parse_text(d: dict) -> TextProfile | None:
         return None
     if not isinstance(t, dict):
         raise Incomplete("text must be an object")
-    files = t.get("files")
+    files, sizes = t.get("files"), t.get("sizes")
     if not isinstance(files, dict) or not files:
         raise Incomplete("text.files must be an object: table name -> text file number")
-    out = {}
-    for name, n in files.items():
-        out[str(name)] = _number(n, f"text.files.{name}", 0, 255)
-    return TextProfile(_num(t.get("rva"), "text.rva"), _num(t.get("array"), "text.array"), out)
+    if not isinstance(sizes, dict) or set(sizes) != set(files):
+        raise Incomplete("text.sizes must be an object: the same table names -> the size of the game's own file in bytes")
+    return TextProfile({str(n): _number(v, f"text.files.{n}", 0, 255) for n, v in files.items()},
+                       {str(n): _number(v, f"text.sizes.{n}", 0x28, 64 * 1024 * 1024) for n, v in sizes.items()})
 
 
 def _parse_params(d: dict) -> ParamsProfile | None:

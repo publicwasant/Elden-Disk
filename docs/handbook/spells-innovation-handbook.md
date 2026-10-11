@@ -37,7 +37,7 @@ You really do have a lot of freedom. And there is a frame around it. Knowing bot
 | Make a fireball burn longer, fly farther, hit harder (by editing its numbers) | You cannot change a **game spell**. You only add **new** spells next to them. |
 | Make a weapon enchant last for minutes instead of seconds | Only **7** of your spells can be **sold** at the merchant today (the merchant has 7 free lines). |
 | Build up to about **20** spells in one file | A **size limit** protects the game file. Heavier spells (fireballs) use more of it. |
-| Decide the **balance**. The tool will not stop you from making a spell that heals 9,999 HP | **Names, descriptions and pictures** of your items cannot be changed yet. (The game shows `?GoodsName?` and the original's icon.) |
+| Decide the **balance**. The tool will not stop you from making a spell that heals 9,999 HP | **Pictures (icons)** of your items cannot be changed yet. (The game shows the original's icon; the name and description are yours since 1.7.1, 6.1b.) |
 | Play with it freely on your own machine | **Offline only.** This is for single-player play. |
 
 > 📌 **The frame in three words:** same animations, only spells, limited size.
@@ -445,6 +445,7 @@ This is the workshop for a spell that is truly yours. It is a **regenerating inc
 | `poise_while_casting_seconds` | Super-armor while casting (you can't be staggered) | 0.1–10 | none |
 | `shop` | `price` 1–99,999,999 and `stock` (−1 = unlimited, or 1–99) | — | not for sale |
 | `text` | An object: `goods_name` (the name), `goods_info` (the short line under it), `goods_captions` (the long description). Shown in the game (6.1b) | 80 / 120 / 1000 characters | empty |
+| `flame_color` | `[red, green, blue]`: the colour of the fire of Flame, Grant Me Strength while casting and in the burst. One colour for the whole design (6.1c) | each 0–2 (1 = full colour, above 1 shines brighter) | the game's own orange |
 
 ### 6.1b The text of your spell (since 1.7.1)
 
@@ -466,12 +467,28 @@ A spell has three pieces of text, all in the object `text` (all optional; an emp
 
 What to know:
 
-- ✓ You do nothing extra. When the game is up, `eldendisk run` puts the text in by itself (you will see `text: 1 spell named in the game …`). Tried in the real game 2026-10-11: the name and short line in the merchant's list, the long description in the inventory.
+- ✓ You do nothing extra. `eldendisk run` waits until a character is in the world, then puts the text in by itself, once (you will see `text: 1 spell named in the game …`; it takes about a minute and a half after the character appears, because the tool looks through the game's memory for the game's text without freezing the game). Tried in the real game 2026-10-11: the name and short line in the merchant's list, the long description in the inventory.
 - It lasts until the game closes and is not saved anywhere. Every `run` does it again.
-- Changing only the text **does not rebuild** anything and does not un-secure a secured build. To see a new text while the game is running: `eldendisk write --text`.
+- Changing only the text **does not rebuild** anything and does not un-secure a secured build. The text is put in once per game: to see a new text, close the game and `run` again. (A second `eldendisk write --text` in the same game is refused with `the text was set already in this session`: the tool finds the game's own tables by their shape, and the game no longer points at them.)
 - Words in `text` are only for the spells that are built (the `--add` choice, Chapter 11); a spell that is not built shows nothing.
 - ◦ Only English letters were tried. Thai or other scripts might not exist in the game's font (boxes or blanks); try a short word first.
 - The old fields `name` and `description` of 1.7.0 are errors now; the message tells you where they went (`name` → `text.goods_name`, `description` → `text.goods_info`).
+
+### 6.1c The colour of your fire (since 1.7.1)
+
+Flame, Grant Me Strength throws a fire when you cast and a burst when the cast ends. Both are effects of the game's own (they are not rows of a table), so a spell cannot have its own: you give **the whole design** a colour with `flame_color`, in any spell:
+
+```json
+"flame_color": [0.2, 0.65, 1.0]
+```
+
+Three numbers, red, green, blue, each from 0 to 2 (1 = the full colour; above 1 shines brighter). The fire of the cast and the burst turn blue here; the burning on the body keeps its colour.
+
+- ✓ You do nothing extra. `eldendisk run` waits until a character is in the world and recolours the fire by itself, once (`flame colour: the fire of Flame, Grant Me Strength is now (…)`; about 7 seconds after the character appears). Tried in the real game 2026-10-11, three sessions.
+- The fire effects are shared by every spell that uses them, so there is **one** colour for the design: the first spell (lowest slot) that names one. If two spells name different colours a warning says which was used.
+- It colours **Flame, Grant Me Strength itself**, not only your spell: the game's own spell has the new colour while the game runs. It lasts until the game closes and is not saved anywhere.
+- Editing `flame_color` does not rebuild anything and does not un-secure a secured build.
+- White stays white and black stays black: the colour is applied the way a tint is, so the shape and brightness of the fire are kept.
 
 ### 6.2 How to think about the numbers
 
@@ -827,7 +844,8 @@ Being honest about the frame saves you disappointment.
 | You might wish for… | Answer |
 |:--|:--|
 | A **name** and **description** that show up in the game | ✓ Since 1.7.1: write them in `text` (6.1b). They are put into the running game each time you start it with `run`; nothing is saved in the game's files. Only English letters are tried; Thai and other scripts may show as boxes ◦. |
-| A **new picture / icon** | ✗ Not yet (the next step after the text). The copy keeps the original's icon. |
+| A different **colour of the fire** of Flame, Grant Me Strength | ✓ Since 1.7.1: `flame_color` (6.1c). The fire of the cast and the burst, put into the running game; the burning on the body keeps its colour. |
+| A **new picture / icon** | ✗ Not yet. The copy keeps the original's icon. |
 | A **new animation** | ✗ The tool cannot make animations. A home-made spell can pick one of two; a copy keeps the original's. |
 | A copy that is a **sorcery instead of an incantation** (or the reverse) | ✗ It keeps its type. |
 | A home-made spell that **deals damage** or **throws something** | ✗ Home-made spells only heal. For damage, remix a game spell. |
@@ -909,7 +927,7 @@ The tool lists **every** problem it finds at once.
 | `GATE FAILED … nothing was swapped` | The suitcase is too heavy. | Fewer or lighter spells (Chapter 10). |
 | `.name: renamed in 1.7.1: use text.goods_name` (also `description`) | A 1.7.0 field. | Move the words into the `text` object (6.1b). |
 | `text: N spell(s) named in the game …` | The text was put into the running game. | Nothing; open the merchant or the inventory. |
-| `the game's text tables were not found within 300 s` | The game did not finish loading its text, or it is another version of the game. | Run `eldendisk write --text --wait` once the game shows the title screen. |
+| `the game's text tables were not found (…)` | The tool looked through the game's memory and did not find them: the game is not fully loaded, or it is another version or language of the game (the profile holds the sizes of the English tables). | Run `eldendisk write --text` once a character is in the world. |
 | `the game replaced its text tables again after they were set` | The game reloaded its text while the tool was done. | Run `eldendisk write --text` again. |
 
 ---

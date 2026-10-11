@@ -83,11 +83,11 @@
             },
             "goods_info": {
               "type": "string",
-              "maxLength": 120
+              "maxLength": 300
             },
             "goods_captions": {
               "type": "string",
-              "maxLength": 1000
+              "maxLength": 3000
             }
           }
         },
@@ -190,6 +190,17 @@
           "minimum": 0.1,
           "maximum": 10
         },
+        "flame_color": {
+          "description": "[red, green, blue] of the fire of Flame, Grant Me Strength (the fire while casting and the burst), put into the running game by write --flame-color; 1 = full colour, above 1 shines brighter",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          }
+        },
         "shop": {
           "type": "object",
           "additionalProperties": false,
@@ -258,11 +269,11 @@
             },
             "goods_info": {
               "type": "string",
-              "maxLength": 120
+              "maxLength": 300
             },
             "goods_captions": {
               "type": "string",
-              "maxLength": 1000
+              "maxLength": 3000
             }
           }
         },
@@ -296,6 +307,17 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 999
+        },
+        "flame_color": {
+          "description": "[red, green, blue] of the fire of Flame, Grant Me Strength (the fire while casting and the burst), put into the running game by write --flame-color; 1 = full colour, above 1 shines brighter",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          }
         },
         "shop": {
           "type": "object",

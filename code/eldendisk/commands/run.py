@@ -41,7 +41,6 @@ def auto_prune(vault: SaveVault, keep: int) -> None:
         book.d("vault", "pruned: " + ", ".join(gone))
 
 
-TEXT_WAIT = 300      # seconds the text step waits for the game to have loaded its text
 TEXT_MODES = ("secured", "last", "built")      # the regulation.bin is the extension's: the design's text belongs to it
 
 
@@ -55,24 +54,40 @@ def design_has_text(args, vault_path: Path) -> bool:
         return False
 
 
-def text_command(args, vault_path: Path) -> tuple[list[str], str | None]:
-    """The command that gives the running game the design's text, and the folder to run it in: `eldendisk write --text --wait`.
-    `run` itself never touches the game's memory; this is a separate process, as if you typed it in another terminal."""
+def design_has_flame(args, vault_path: Path) -> bool:
+    """Does a spell of the design name a flame_color? (Nothing to start otherwise.)"""
+    try:
+        ci = extension.open_spells(ext_dir(args, vault_path), spec_file(args))
+        sel, _note = ci.selection()
+        return ci.flame_color(sel)[0] is not None
+    except ExtensionError:
+        return False
+
+
+def text_command(args, vault_path: Path, flag: str = "--text") -> tuple[list[str], str | None]:
+    """The command that gives the running game the design's text, and the folder to run it in: `eldendisk write --text --when-loaded`
+    (`--flame-color` for the colour of the fire). `run` itself never touches the game's memory; this is a separate process, as
+    if you typed it in another terminal."""
     frozen = getattr(sys, "frozen", False)
     cmd = [sys.executable] if frozen else [sys.executable, "-m", "eldendisk"]
-    cmd += ["write", "--text", "--wait", str(TEXT_WAIT), "--vault", str(vault_path), "--offsets", str(args.offsets)]
+    cmd += ["write", flag, "--when-loaded", "--vault", str(vault_path), "--offsets", str(args.offsets)]
     for flag, value in (("--spec", getattr(args, "spec", None)), ("--extension-dir", getattr(args, "extension_dir", None))):
         if value:
             cmd += [flag, str(value)]
     return cmd, None if frozen else str(Path(eldendisk.__file__).resolve().parent.parent)
 
 
-def start_text(args, vault_path: Path, spawn=subprocess.Popen):
-    """Start the text step in the background. Its lines appear in this console and in the log; if it fails the game goes on."""
-    cmd, cwd = text_command(args, vault_path)
+def start_text(args, vault_path: Path, spawn=subprocess.Popen, flag: str = "--text"):
+    """Start the text step (or, with flag --flame-color, the fire colour step) in the background. Its lines appear in this console
+    and in the log; if it fails the game goes on."""
+    cmd, cwd = text_command(args, vault_path, flag)
     book.d("ext", "starting: " + " ".join(cmd))
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}   # -v shows its log lines
     return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), **quiet)
+
+
+def start_flame(args, vault_path: Path):
+    return start_text(args, vault_path, flag="--flame-color")
 
 
 def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
@@ -146,6 +161,17 @@ def cmd_run(args) -> int:
         return out
 
     children: list = []
+    steps = []       # the memory steps that have something to give: the regulation.bin is the extension's, the design has it
+    if protect and world is not None and mode in TEXT_MODES:
+        if design_has_text(args, vault_path):
+            steps.append(start_text)
+        if design_has_flame(args, vault_path):
+            steps.append(start_flame)
+
+    def on_running(pid):
+        for start in steps:
+            children.append(start(args, vault_path))
+
     hooks = Hooks(
         find_game_pid=lambda: find_pid(GAME_EXE),
         process_started=process_started,
@@ -154,8 +180,7 @@ def cmd_run(args) -> int:
         exe_sha256=sha, game_dir=game_dir, game_guard=GameFolderGuard(game_dir), extra_preflight=extra,
         regulation_world=world,
         launch_timeout=args.launch_timeout,
-        on_running=(lambda pid: children.append(start_text(args, vault_path)))
-        if protect and world is not None and mode in TEXT_MODES and design_has_text(args, vault_path) else (lambda pid: None),
+        on_running=on_running,
     )
     if any(n.lower() == STEAM_EXE for n in list_process_names()):
         book.w("steam", STEAM_CLOUD_NOTE)
@@ -168,7 +193,7 @@ def cmd_run(args) -> int:
     try:
         rc = session.run()
     finally:
-        for child in children:      # the text step ends by itself; do not leave it behind
+        for child in children:      # the steps end by themselves; do not leave one behind
             if child.poll() is None:
                 child.terminate()
         if tail is not None:

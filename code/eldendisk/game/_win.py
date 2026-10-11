@@ -8,6 +8,7 @@ IS_WINDOWS = sys.platform == "win32"
 
 PROCESS_VM_READ = 0x0010
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+PROCESS_QUERY_INFORMATION = 0x0400      # VirtualQueryEx (only the writer asks for it, to list the game's memory regions)
 STILL_ACTIVE = 259
 TH32CS_SNAPPROCESS = 0x2
 TH32CS_SNAPMODULE = 0x8
@@ -48,6 +49,18 @@ if IS_WINDOWS:
             ("szExeFile", ctypes.c_wchar * 260),
         ]
 
+    class MEMORY_BASIC_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("BaseAddress", ctypes.c_void_p),
+            ("AllocationBase", ctypes.c_void_p),
+            ("AllocationProtect", wintypes.DWORD),
+            ("PartitionId", wintypes.WORD),
+            ("RegionSize", ctypes.c_size_t),
+            ("State", wintypes.DWORD),
+            ("Protect", wintypes.DWORD),
+            ("Type", wintypes.DWORD),
+        ]
+
     k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     k32.OpenProcess.restype = wintypes.HANDLE
     k32.ReadProcessMemory.argtypes = [
@@ -55,6 +68,8 @@ if IS_WINDOWS:
         ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t),
     ]
     k32.ReadProcessMemory.restype = wintypes.BOOL
+    k32.VirtualQueryEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.POINTER(MEMORY_BASIC_INFORMATION), ctypes.c_size_t]
+    k32.VirtualQueryEx.restype = ctypes.c_size_t
     k32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
     k32.GetExitCodeProcess.restype = wintypes.BOOL
     k32.GetProcessTimes.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.FILETIME), ctypes.POINTER(wintypes.FILETIME),

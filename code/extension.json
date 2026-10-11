@@ -3,13 +3,14 @@
     "spells": {
       "maximum": 20,
       "slots": {
-        "reverse_curse_technique": {
+        "reverse_cursed_technique": {
           "kind": "projectile",
-          "from": 6421,  
+          "from": 6421,
+          "flame_color": [0.2, 0.65, 1],
           "text": {
-            "goods_name": "Reverse Curse Technique",
-            "goods_info": "Converts negative cursed energy into positive energy",
-            "goods_captions": "Converts negative cursed energy into positive energy.\nHeals over time and restores FP."
+            "goods_name": "Reverse Cursed Technique",
+            "goods_info": "An anomalous art left behind by an Unknown Sorcerer from another reality. Forces the concept of ruin to consume itself, commanding shattered flesh to remember its whole and unbroken state.",
+            "goods_captions": "The nature of a curse is to erode, corrupt, and destroy. Yet, this paradox dictates a terrifying truth: when two currents of profound malice are forced to violently collide and multiply, they do not bring absolute ruin. Instead, the multiplied negativity gives birth to a vibrant, positive spark of life capable of reversing death's approach.\n\nThis alien logic was introduced to the Lands Between by an Unknown Sorcerer—a wanderer who fell through the cracks of reality from a universe entirely unalike our own. They wore strange garments, swore fealty to no sovereign, and manipulated an unseen energy that defied every natural law of this world. To them, the impossible was merely a matter of calculation.\n\nThe sorcerer lingered only briefly before the fabric of space swallowed them once more, returning them to their distant home. In their wake, they left nothing but the formula for this absolute contradiction. Perhaps it was a deliberate miracle gifted to those who suffer, or perhaps, to a being who walks between dimensions, rewriting the rules of mortality was simply a fleeting whim."
           },
           "fp_cost": 120,
           "requires": {

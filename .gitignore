@@ -37,3 +37,7 @@ htmlcov/
 /code/textchain.json
 /code/textpatch.json
 *.envelope-test.bin
+/code/sfxdump/
+/code/menudump/
+/code/fxrpatch.json
+/code/taedump/

@@ -14,6 +14,8 @@ Rules enforced here:
   * nothing is written unless the WriteGate is open (session authorised, no anti-cheat, known exe)               FR-14
   * since 1.7.1 the one allocation: `alloc` gives `write --text` room in the game for a text table (writer/text.py);
     the game's own memory is never freed or resized
+  * since 1.7.1 `regions` lists the game's readable memory (VirtualQueryEx), so `write --flame-color` can find the game's copies
+    of three effect files (writer/fxr.py)
 """
 from __future__ import annotations
 
@@ -37,7 +39,9 @@ from ..game.values import is_param_name, write_targets
 PROCESS_VM_WRITE = 0x0020
 PROCESS_VM_OPERATION = 0x0008
 MEM_COMMIT_RESERVE, PAGE_READWRITE = 0x3000, 0x04
-WRITE_ACCESS_MASK = ACCESS_MASK | PROCESS_VM_WRITE | PROCESS_VM_OPERATION
+WRITE_ACCESS_MASK = ACCESS_MASK | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | _win.PROCESS_QUERY_INFORMATION
+MEM_COMMIT, PAGE_NOACCESS, PAGE_GUARD = 0x1000, 0x01, 0x100
+PAGE_NOCACHE, PAGE_WRITECOMBINE, MEM_PRIVATE = 0x200, 0x400, 0x20000      # a scan skips the first two (slow to read) and keeps private memory only
 
 # vitals block (see disk.parse_vitals_block): byte offset of the CURRENT value, index of its (capped) maximum
 VITAL_FIELDS = {"hp": (0, 1), "fp": (16, 5), "stamina": (28, 8)}
@@ -69,6 +73,27 @@ class WritableProcessMemory(ProcessMemory):
         n = ctypes.c_size_t(0)
         ok = _win.k32.WriteProcessMemory(self._h, ctypes.c_void_p(addr), buf, len(data), ctypes.byref(n))
         return bool(ok) and n.value == len(data)
+
+    def regions(self, strict: bool = False) -> list[tuple[int, int]]:
+        """(base, size) of every committed region of the game that can be read (not no-access, not guard), user space only. `strict`
+        (for a scan of the whole game) keeps only the game's own private memory (its heap) and leaves out what is slow or pointless to
+        read: write-combined and uncached memory (shared with the graphics card), mapped files and the program's own image."""
+        out, addr, mbi = [], 0, _win.MEMORY_BASIC_INFORMATION()
+        while addr < 0x7FFFFFFF0000 and _win.k32.VirtualQueryEx(self._h, ctypes.c_void_p(addr), ctypes.byref(mbi), ctypes.sizeof(mbi)):
+            size = mbi.RegionSize
+            if mbi.State == MEM_COMMIT and mbi.Protect and not mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD):
+                if not strict or (mbi.Type == MEM_PRIVATE and not mbi.Protect & (PAGE_NOCACHE | PAGE_WRITECOMBINE)):
+                    out.append((mbi.BaseAddress or 0, size))
+            addr = (mbi.BaseAddress or 0) + size
+        return out
+
+    def describe(self, addr: int) -> str:
+        """What kind of memory `addr` is in (for the log): type, protection, the size of its region."""
+        mbi = _win.MEMORY_BASIC_INFORMATION()
+        if not _win.k32.VirtualQueryEx(self._h, ctypes.c_void_p(addr), ctypes.byref(mbi), ctypes.sizeof(mbi)):
+            return "unknown"
+        kind = {0x20000: "private", 0x40000: "mapped", 0x1000000: "image"}.get(mbi.Type, f"type {mbi.Type:#x}")
+        return f"{kind}, protect {mbi.Protect:#x}, region {mbi.RegionSize >> 20} MB at {mbi.BaseAddress or 0:#x}"
 
     def alloc(self, size: int) -> int:
         """New read/write memory in the game, `size` bytes (0 on failure). Used once per text table by writer/text.py; the memory

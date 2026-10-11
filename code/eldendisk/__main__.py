@@ -2,7 +2,7 @@
 
   run    host: back up the save, launch the game offline, restore the save when it exits (leave this open)
   read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
-  write  edit values in the running game (--set, --refill, --reset) or give it the spells' text (--text); only inside a session started by `run`
+  write  edit values in the running game (--set, --refill, --reset), give it the spells' text (--text) or the fire colour (--flame-color); only inside a session started by `run`
   vault  save vault tools (status, list, verify, restore, keep, prune)
   extension  build things for the game outside the game: `extension --list`, `extension innovate-items spells --add all|--secure`
 
@@ -125,11 +125,18 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--refill", metavar="LIST", help="refill current hp, fp, stamina to their maximum once, e.g. hp,fp,stamina")
     w.add_argument("--text", action="store_true",
                    help="put the text of the design's spells (name, short line, description) into the running game; `run` does this by "
-                        "itself after the game is up. Stands alone (only --wait, --spec and --extension-dir go with it)")
+                        "itself after the game is up. Stands alone (only --wait or --when-loaded, --spec and --extension-dir go with it)")
+    w.add_argument("--flame-color", action="store_true",
+                   help="recolour the fire of Flame, Grant Me Strength (the fire while casting and the burst) in the running game with the design's "
+                        "`flame_color`; `run` does this by itself after the game is up. Stands alone (only --wait, --spec and "
+                        "--extension-dir go with it)")
+    w.add_argument("--when-loaded", dest="when_loaded", action="store_true",
+                   help="--text, --flame-color: wait until a character is in the world, write once, and end (what `run` starts); "
+                        "waits without a time limit, so it does not go with --wait")
     w.add_argument("--wait", nargs="?", type=float, const=300.0, default=0, metavar="SEC",
-                   help="--text: wait up to SEC seconds (default 300) for the game to have loaded its text")
-    w.add_argument("--spec", metavar="FILE", default=None, help="--text: the design (default: extension.json next to the exe, else the embedded copy)")
-    w.add_argument("--extension-dir", metavar="DIR", default=None, help="--text: where the built files are (default: <vault>\\extension)")
+                   help="--text, --flame-color: wait up to SEC seconds (default 300) for the game to have loaded what it needs")
+    w.add_argument("--spec", metavar="FILE", default=None, help="--text, --flame-color: the design (default: extension.json next to the exe, else the embedded copy)")
+    w.add_argument("--extension-dir", metavar="DIR", default=None, help="--text, --flame-color: where the built files are (default: <vault>\\extension)")
     add_vault_option(w)
     w.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
     add_verbose(w)
@@ -229,12 +236,16 @@ def main(argv=None) -> int:
             ap.error("--flat is for the printed values (read, --query, --live), not --export, --json or the monitors")
         if args.json and (args.live or args.export or monitor):
             ap.error("--json is for the one-shot print and --query only")
-    if args.cmd == "write" and not args.text and not args.set and not args.refill and not args.reset:
-        ap.error("nothing to do: give --set NAME=VALUE, --refill LIST and/or --reset NAME, or --text")
-    if args.cmd == "write" and args.text and (args.set or args.refill or args.reset):
-        ap.error("--text stands alone (it does not go with --set, --refill or --reset)")
-    if args.cmd == "write" and not args.text and (args.wait or args.spec or args.extension_dir):
-        ap.error("--wait, --spec and --extension-dir go with --text")
+    if args.cmd == "write" and not args.text and not args.flame_color and not args.set and not args.refill and not args.reset:
+        ap.error("nothing to do: give --set NAME=VALUE, --refill LIST and/or --reset NAME, or --text, or --flame-color")
+    if args.cmd == "write" and args.text and args.flame_color:
+        ap.error("--text and --flame-color are separate steps: run them one at a time")
+    if args.cmd == "write" and (args.text or args.flame_color) and (args.set or args.refill or args.reset):
+        ap.error("--text and --flame-color stand alone (they do not go with --set, --refill or --reset)")
+    if args.cmd == "write" and not args.text and not args.flame_color and (args.wait or args.when_loaded or args.spec or args.extension_dir):
+        ap.error("--wait, --when-loaded, --spec and --extension-dir go with --text or --flame-color")
+    if args.cmd == "write" and args.when_loaded and args.wait:
+        ap.error("--when-loaded waits without a time limit: it does not go with --wait")
     if args.cmd == "write" and args.wait < 0:
         ap.error("--wait must not be negative")
     if args.cmd == "extension" and not args.list and not args.ext_name:

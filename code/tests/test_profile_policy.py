@@ -48,8 +48,8 @@ def test_at_grace_null_turns_feature_off(tmp_path):
 # ---- 1.7.1: where the game keeps its text tables ----
 def test_the_shipped_profile_says_where_the_text_tables_are():
     p, why = _load_default()
-    assert why is None and p.text.rva == 0x3D61FB8 and p.text.array == 0x1F20
-    assert p.text.files == {"GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24}
+    assert why is None and p.text.files == {"GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24}
+    assert p.text.sizes == {"GoodsName": 114880, "GoodsInfo": 164208, "GoodsCaption": 975296}
 
 
 def _load_default():
@@ -63,9 +63,10 @@ def test_a_profile_without_text_just_has_no_text(tmp_path):
     assert why is None and p.text is None
 
 
-@pytest.mark.parametrize("bad", [True, "x", {"rva": "0x1", "array": "0x2"}, {"rva": "0x1", "array": "0x2", "files": {}},
-                                 {"rva": "0x1", "files": {"GoodsName": 10}}, {"rva": "0x1", "array": "0x2", "files": {"GoodsName": -1}},
-                                 {"rva": None, "array": "0x2", "files": {"GoodsName": 10}}])
+@pytest.mark.parametrize("bad", [True, "x", {"files": {"GoodsName": 10}}, {"sizes": {"GoodsName": 100}}, {"files": {}, "sizes": {}},
+                                 {"files": {"GoodsName": 10}, "sizes": {}}, {"files": {"GoodsName": 10}, "sizes": {"GoodsInfo": 100}},
+                                 {"files": {"GoodsName": -1}, "sizes": {"GoodsName": 100}}, {"files": {"GoodsName": 10}, "sizes": {"GoodsName": 3}},
+                                 {"files": {"GoodsName": 10}, "sizes": {"GoodsName": None}}])
 def test_a_text_block_that_is_there_must_be_complete(tmp_path, bad):
     p, why = _load(tmp_path, lambda r: r.__setitem__("text", bad))
     assert p is None and "text" in why

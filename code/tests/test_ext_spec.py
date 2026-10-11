@@ -98,7 +98,7 @@ def test_an_explicit_null_visual_means_none_but_a_missing_one_means_flame():
     assert spec.build_view(a) == spec.build_view(b)          # null and "none" are the same design (no rebuild between them)
 
 
-@pytest.mark.parametrize("key", ["icon_file", "colour", "color", "icon", "flame_color"])
+@pytest.mark.parametrize("key", ["icon_file", "colour", "color", "icon", "model"])
 def test_level_3_fields_are_refused_by_name(key):
     with pytest.raises(spec.SpecError) as e:
         spec.normalise(mutated(lambda i: i.update({key: "x"})))
@@ -113,7 +113,7 @@ def test_text_is_an_object_with_three_fields_all_kept_and_none_required():
 
 @pytest.mark.parametrize("text,where", [
     ("x", "text"), ({"goods_name": 5}, "goods_name"), ({"goods_name": "x" * 81}, "goods_name"),
-    ({"goods_info": "x" * 121}, "goods_info"), ({"goods_captions": "x" * 1001}, "goods_captions"),
+    ({"goods_info": "x" * 301}, "goods_info"), ({"goods_captions": "x" * 3001}, "goods_captions"),
     ({"goods_caption": "x"}, "goods_caption"), ({"name": "x"}, "text.name")])
 def test_a_bad_text_is_refused(text, where):
     with pytest.raises(spec.SpecError) as e:
@@ -257,3 +257,20 @@ def test_a_spell_without_a_shop_is_valid():
     f = copy.deepcopy(Z4)
     spell_of(f).pop("shop")
     assert spec.normalise(f)["spells"][0].get("shop") is None
+
+
+def test_flame_color_is_three_numbers_kept_in_the_design_and_out_of_the_build():
+    it = spec.normalise(mutated(lambda i: i.update(flame_color=[0.2, 0.65, 1])))["spells"][0]
+    assert it["flame_color"] == [0.2, 0.65, 1.0] and all(isinstance(x, float) for x in it["flame_color"])
+    assert "flame_color" not in spec.normalise(Z4)["spells"][0]                      # not named: not in the canonical form
+    a = spec.normalise(mutated(lambda i: i.update(flame_color=[0.2, 0.65, 1])))
+    b = spec.normalise(mutated(lambda i: i.update(flame_color=[1, 0, 0])))
+    assert spec.build_view(a) == spec.build_view(b) == spec.build_view(spec.normalise(Z4))     # a colour is no reason to rebuild
+    assert spec.normalise(spec.as_file(a)) == a
+
+
+@pytest.mark.parametrize("bad", [[1, 1], [1, 1, 1, 1], "blue", [0, 0, "1"], [-0.1, 0, 0], [0, 2.1, 0], [True, 0, 0], None])
+def test_flame_color_must_be_three_numbers_from_0_to_2(bad):
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(mutated(lambda i: i.update(flame_color=bad)))
+    assert any("flame_color" in p for p in e.value.problems)

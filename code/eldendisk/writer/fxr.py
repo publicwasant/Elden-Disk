@@ -1,0 +1,143 @@
+"""`write --flame-color`: recolour the fire of Flame, Grant Me Strength in the running game (spec 1.7.1). Memory only.
+
+What tools/fxr_recolor.py showed on 1.17.1 (checked in the game): the game keeps each SFX file (f000<id>.fxr) in memory exactly as
+it is in the file, the colours as four little-endian floats (RGBA). Two files make the fire that is recoloured: 524400 (the fire while
+casting) and 524401 (the burst when the cast ends); the third (524402, the fire on the body) is left alone. writer/fxr_plans.py lists where
+every colour sits in each file. So the whole change is: find the game's copy of a file by its colours, and write new colour bytes at the
+listed places. The game's files are not touched, and the change disappears when the game closes.
+
+How a colour changes: with v = the biggest of R,G,B (the brightness, may be above 1) and w = 1 - (v - smallest)/v (how white it
+is), new RGB = v * (w * white + (1 - w) * target); white stays white, black stays black, alpha is never touched. A bloom colour
+becomes v * target.
+
+The copies are found by reading the game's memory (writer/scan.py): the first part of each very large block of its private memory
+first, where the logs show both files, then the rest, and the look ends as soon as every file has a copy. A copy counts only when every
+colour of the plan has its bytes at its place.
+
+The effect files are shared by every spell that uses them (Flame, Grant Me Strength itself too), so the colour is one for the whole
+game session.
+
+This module knows bytes only. The design's colour is read by the command (extension/.../service.py: flame_color); the writer
+package may not import the extension package.
+"""
+from __future__ import annotations
+
+import struct
+from dataclasses import dataclass
+
+from . import scan
+from .fxr_plans import PLANS
+
+
+class FlameError(Exception):
+    pass
+
+
+# ---- pure parts ---------------------------------------------------------------------------------------------------
+def recolor(old: bytes, target, bloom: bool = False) -> bytes:
+    """The new 16 bytes of one colour (see the module text). `old` is RGBA as four little-endian floats."""
+    r, g, b, a = struct.unpack("<4f", old)
+    v = max(r, g, b)
+    if v <= 0:
+        return old
+    if bloom:
+        return struct.pack("<4f", v * target[0], v * target[1], v * target[2], a)
+    w = 1 - (v - min(r, g, b)) / v
+    return struct.pack("<4f", *(v * (w + (1 - w) * t) for t in target), a)
+
+
+def colour_states(plan: dict, target) -> list[tuple[int, bytes, bytes]]:
+    """[(offset, the game's own bytes, the bytes after the change)] for every colour of the plan (equal where nothing changes)."""
+    out = []
+    for at, hexa, bloom in plan["colours"]:
+        old = bytes.fromhex(hexa)
+        out.append((at, old, recolor(old, target, bloom)))
+    return out
+
+
+def plan_writes(plan: dict, target) -> dict[int, tuple[bytes, bytes]]:
+    """offset -> (the game's own bytes, the new bytes), only where something changes."""
+    return {at: (old, new) for at, old, new in colour_states(plan, target) if new != old}
+
+
+def _signature(plan: dict, target) -> tuple[int, bytes, bytes]:
+    """The changing colour that tells the effect apart best: the one with the most different numbers in it."""
+    changing = [s for s in colour_states(plan, target) if s[1] != s[2]]
+    if not changing:
+        raise FlameError("this colour changes nothing in the effect")
+    return max(changing, key=lambda s: len(set(struct.unpack("<4f", s[1]))))
+
+
+@dataclass(frozen=True)
+class Found:
+    """What one look found: per effect the base addresses of the copies with the game's own colours and of the ones already changed."""
+    own: dict
+    changed: dict
+    walked: scan.Walked      # how far the look went and how long it took
+
+
+def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = True) -> Found:
+    """One look through the game's memory for all of `eids`; it ends when every one has a copy (own colours, or already changed when
+    `painted`). A copy counts only when EVERY colour of the plan has its bytes at its place."""
+    patterns, sig, states = {}, {}, {}
+    for eid in eids:
+        at, old, new = _signature(PLANS[eid], target)
+        patterns[(eid, False)], sig[eid], states[eid] = old, at, colour_states(PLANS[eid], target)
+        if painted:
+            patterns[(eid, True)] = new
+    own, changed, seen = {e: [] for e in eids}, {e: [] for e in eids}, set()
+
+    def visit(addr: int, data: bytes, n: int) -> bool:
+        for (eid, is_painted), pattern in patterns.items():
+            i = data.find(pattern)
+            while i != -1:
+                base = addr + i - sig[eid]
+                if i < n and (addr + i) % 4 == 0 and (eid, is_painted, base) not in seen:
+                    seen.add((eid, is_painted, base))
+                    if all(mem.read(base + a, 16) == (nw if is_painted else od) for a, od, nw in states[eid]):
+                        (changed if is_painted else own)[eid].append(base)
+                i = data.find(pattern, i + 1)
+        return all(own[e] or changed[e] for e in eids)
+
+    walked = scan.walk(mem, visit, overlap=max(len(p) for p in patterns.values()) - 1, budget=budget)
+    return Found(own, changed, walked)
+
+
+def effect_ids() -> tuple[str, ...]:
+    return tuple(PLANS)
+
+
+# ---- writing ------------------------------------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Painted:
+    effect: str
+    copies: int        # copies of the file found in the game (own colours)
+    already: int       # copies that already carry the change
+    places: int        # places written now
+    bases: tuple = ()  # where the game holds the copies that now carry the change
+
+
+def paint_many(mem, gate, eids, target, budget: float = scan.BUDGET, painted: bool = True) -> tuple[dict, Found]:
+    """Change the game's copies of `eids` after ONE look through its memory (find_all). -> ({effect: Painted, only those the game holds},
+    what the look found). An effect the game does not hold (yet) is not in the result. A copy is written only when EVERY place still holds the game's
+    own bytes; a write that does not stick is an error."""
+    if not gate.allowed:
+        raise FlameError(f"writes are not allowed ({gate.reason})")
+    found = find_all(mem, eids, target, budget, painted)
+    out = {}
+    for eid in eids:
+        bases, done = found.own[eid], found.changed[eid]
+        if not bases and not done:
+            continue
+        writes = plan_writes(PLANS[eid], target)
+        places = 0
+        for base in bases:
+            for off, (old, _new) in writes.items():
+                if mem.read(base + off, len(old)) != old:
+                    raise FlameError(f"{eid}: {base + off:#x} does not hold the game's own bytes any more; nothing written at this copy")
+            for off, (old, new) in writes.items():
+                if not mem.write(base + off, new) or mem.read(base + off, len(new)) != new:
+                    raise FlameError(f"{eid}: could not write at {base + off:#x}")
+                places += 1
+        out[eid] = Painted(eid, len(bases), len(done), places, tuple(bases or done))
+    return out, found

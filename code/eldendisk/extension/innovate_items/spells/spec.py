@@ -62,8 +62,9 @@ ID_FIELDS = {
               "vagrantBonusEneDropItemLotId", "vagrantItemEneDropItemLotId", "reinforceGoodsId", "reinforceMaterialId",
               "goodsType"},      # goodsType decides attack/support and sorcery/incantation: it follows the template
 }
-LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "flame_color", "model"}
-TEXT_FIELDS = {"goods_name": 80, "goods_info": 120, "goods_captions": 1000}   # field -> most characters (name; the short line under it; the long description)
+LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "model"}
+FLAME_COLOR_MAX = 2.0     # a colour channel: 0..1 is the colour, up to 2 shines brighter
+TEXT_FIELDS = {"goods_name": 80, "goods_info": 300, "goods_captions": 3000}   # field -> most characters (name; the short line under it; the long description). A loose guard, not a game limit: the game's own longest are 43 / 86 / 462
 RENAMED = {"name": "text.goods_name", "description": "text.goods_info (the long description is text.goods_captions)"}   # 1.7.0 -> 1.7.1
 
 
@@ -176,10 +177,23 @@ def _shop(c, it, p):
     return s
 
 
+def _flame_color(c, it, p, o):
+    """`flame_color`: [red, green, blue], each 0..2 (1 = full colour, above 1 shines brighter). The fire of Flame, Grant Me Strength
+    (the fire while casting and the burst; the fire on the body is left alone) is recoloured in the running game by `write --flame-color`; the effects are the game's own and
+    shared by every spell that uses them, so the colour belongs to the whole design (see service.flame_color). Not part of the build."""
+    if "flame_color" not in it:
+        return
+    v = it["flame_color"]
+    if not (isinstance(v, list) and len(v) == 3 and all(_num(x) and 0 <= x <= FLAME_COLOR_MAX for x in v)):
+        c.bad(p + ".flame_color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
+        return
+    o["flame_color"] = [float(x) for x in v]
+
+
 def _buff(c, it, p, n, iid):
     """A heal-over-time buff built from Flame, Grant Me Strength (the canonical form has no `kind`: it is the default)."""
     c.keys(it, p, ["type", "requires", "fp_cost"],
-           ["kind", "text", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop"])
+           ["kind", "text", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop", "flame_color"])
     if it.get("type") != "incantation":
         c.bad(p + ".type", 'only "incantation" is supported')
     o = {"slot": n, "id": iid, "type": "incantation", "text": _text_object(c, it, p)}
@@ -217,6 +231,7 @@ def _buff(c, it, p, n, iid):
         o["poise_while_casting_seconds"] = c.real(it, "poise_while_casting_seconds", p, 0.1, 10, 2.0)
     if "shop" in it:
         o["shop"] = _shop(c, it, p)
+    _flame_color(c, it, p, o)
     return o
 
 
@@ -224,7 +239,7 @@ def _template(c, it, p, n, iid, kind):
     """A spell made from a game spell: `clone` (copy of the Goods and Magic rows, it keeps calling the template's own chain),
     `buff` with `from` and `enchant` (the same, and the template's own SpEffect rows are copied too, so they can be tuned with
     `set`). What is not named stays the template's, so the canonical form holds only what the design says."""
-    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set"])
+    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set", "flame_color"])
     o = {"slot": n, "id": iid, "kind": kind, "text": _text_object(c, it, p)}
     src = c.integer(it, "from", p, 1, 2**31 - 1)
     if src is not None:
@@ -244,6 +259,7 @@ def _template(c, it, p, n, iid, kind):
         o["shop"] = _shop(c, it, p)
     if "set" in it:
         o["set"] = _set(c, it["set"], p + ".set", o)
+    _flame_color(c, it, p, o)
     return o
 
 
@@ -381,9 +397,9 @@ def as_file(spec: dict) -> dict:
 
 
 def build_view(spec: dict) -> dict:
-    """What decides the bytes of the build (the text fields do not)."""
+    """What decides the bytes of the build (the text fields and the flame colour do not: they are put into the running game)."""
     return {"format": spec["format"],
-            "spells": [{k: v for k, v in it.items() if k not in ("text", "name", "description")} for it in spec["spells"]]}
+            "spells": [{k: v for k, v in it.items() if k not in ("text", "name", "description", "flame_color")} for it in spec["spells"]]}
 
 
 def dumps(spec: dict) -> str:

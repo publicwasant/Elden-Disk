@@ -465,10 +465,12 @@ To find the chains and the file on a new build: export the rows with Smithbox (v
 
 ## Optional block: `text` (since 1.7.1)
 
-`text` tells `write --text` where the game keeps its item-text tables, so it can give the running game a spell's name and description. Optional: without it `write --text` says the game version has no `text` block (exit `2`). A block that is there must be complete.
+`text` tells `write --text` which item-text tables to look for in the game, so it can give the running game a spell's name and description. Optional: without it `write --text` says the game version has no `text` block (exit `2`). A block that is there must be complete.
 
 ```json
-"text": { "rva": "0x3D61FB8", "array": "0x1F20", "files": { "GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24 } }
+"text": { "files": { "GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24 }, "sizes": { "GoodsName": 114880, "GoodsInfo": 164208, "GoodsCaption": 975296 } }
 ```
 
-Read the 8-byte pointer at `eldenring.exe + rva`; it leads to an object. The pointer to the table of text file number N is at `object + array + N * 8`; `files` names the three tables and their N. To find them on a new build, follow handbook Chapter 19.5: `tools/dump_msgbnd.py` (the original tables), a game started by `run`, `tools/patch_text.py --scan --apply`, then `tools/probe_chain.py`. Check the result in the game (a rename must show).
+No address is kept: the tool **finds** what it changes, by looking through the game's memory (handbook Chapter 19.4). `sizes` is the size in bytes of the game's own table (its `.fmg` file) in the language the game is played in: a table of the right shape and exactly that size is the one wanted. `files` names the three tables and their text file numbers N: the pointer to the table of file N sits at `array + N * 8` in an array that the tool also finds (three pointers to the three tables at exactly these distances). Both keys are required and must name the same three tables.
+
+To fill them in for a new build or language: `tools/dump_msgbnd.py` writes the original tables (their sizes are the file sizes); the numbers N come from the distances between the pointers `tools/probe_text.py` reports for the three tables (Chapter 19.5). Check the result in the game (a rename must show). The sizes in the example are those of the English (engUS) tables of 1.17.1.

@@ -1,0 +1,411 @@
+{
+"524400": {
+"size": 19248,
+"colours": [
+{
+"at": 17040,
+"old": "0000803f0000003f0000803e9a99993d",
+"bloom": true
+},
+{
+"at": 17204,
+"old": "0000803f8180003f8180803e0000803f",
+"bloom": false
+},
+{
+"at": 17220,
+"old": "0000a03f0000403f0000803f0000a03f",
+"bloom": false
+},
+{
+"at": 17468,
+"old": "0000803f0000003f0000803e9a99993d",
+"bloom": true
+},
+{
+"at": 17632,
+"old": "0000803f8180003f8180803e0000803f",
+"bloom": false
+},
+{
+"at": 17648,
+"old": "0000a03f0000403f0000803f0000a03f",
+"bloom": false
+},
+{
+"at": 17852,
+"old": "0000803fdbda5a3fc0bf3f3f0000803f",
+"bloom": false
+},
+{
+"at": 17980,
+"old": "0000803f0000203f0000c03e9a99993d",
+"bloom": true
+},
+{
+"at": 18288,
+"old": "0000803fa2a1213fbdbcbc3e00000000",
+"bloom": false
+},
+{
+"at": 18304,
+"old": "0000803f5959193faeadad3e0000803f",
+"bloom": false
+},
+{
+"at": 18320,
+"old": "0000803f1111113f9f9e9e3e0000803f",
+"bloom": false
+},
+{
+"at": 18336,
+"old": "0000803f8180003f8180803e00000000",
+"bloom": false
+},
+{
+"at": 18372,
+"old": "0000f03f0000903f0000c03f0000803f",
+"bloom": false
+},
+{
+"at": 18412,
+"old": "0000a03f0000403f0000803f0000803f",
+"bloom": false
+},
+{
+"at": 18788,
+"old": "0000803f0000003f0000803ecdcccc3d",
+"bloom": true
+},
+{
+"at": 18940,
+"old": "0000803fe5e4e43ed1d0503d0000803f",
+"bloom": false
+},
+{
+"at": 18956,
+"old": "000048420000fa41000016420000a03f",
+"bloom": false
+},
+{
+"at": 19060,
+"old": "0000803fe5e4e43ed1d0503d0000803f",
+"bloom": false
+}
+],
+"blend": []
+},
+"524401": {
+"size": 46464,
+"colours": [
+{
+"at": 39904,
+"old": "0000803fa2a1213fbdbcbc3e0000803f",
+"bloom": false
+},
+{
+"at": 39920,
+"old": "0000803fa2a1213fbdbcbc3e0000803f",
+"bloom": false
+},
+{
+"at": 41164,
+"old": "0000803fdbda5a3fc0bf3f3f0000803f",
+"bloom": false
+},
+{
+"at": 41280,
+"old": "0000803f0000003f0000803e0000803e",
+"bloom": true
+},
+{
+"at": 41504,
+"old": "0000803fa2a1213fbdbcbc3e0000803f",
+"bloom": false
+},
+{
+"at": 41532,
+"old": "0000803fa2a1213fbdbcbc3e8180003f",
+"bloom": false
+},
+{
+"at": 41548,
+"old": "0000803f5959193faeadad3e0000803f",
+"bloom": false
+},
+{
+"at": 41564,
+"old": "0000803f8180003f8180803e00000000",
+"bloom": false
+},
+{
+"at": 41600,
+"old": "0000a03f0000403f0000803f0000803f",
+"bloom": false
+},
+{
+"at": 41640,
+"old": "00000000000000000000000000000000",
+"bloom": false
+},
+{
+"at": 41820,
+"old": "0000803fdbda5a3fc0bf3f3f0000803f",
+"bloom": false
+},
+{
+"at": 41932,
+"old": "0000803f0000003f0000803ecdcccc3d",
+"bloom": true
+},
+{
+"at": 42168,
+"old": "0000803fa2a1213fbdbcbc3e0000803f",
+"bloom": false
+},
+{
+"at": 42196,
+"old": "0000803fa2a1213fbdbcbc3e8180003f",
+"bloom": false
+},
+{
+"at": 42212,
+"old": "0000803f5959193faeadad3e0000803f",
+"bloom": false
+},
+{
+"at": 42228,
+"old": "0000803f8180003f8180803e00000000",
+"bloom": false
+},
+{
+"at": 42264,
+"old": "000020400000c03f0000004000000040",
+"bloom": false
+},
+{
+"at": 42304,
+"old": "00000000000000000000000000000000",
+"bloom": false
+},
+{
+"at": 42612,
+"old": "0000803fdbda5a3fc0bf3f3f0000803f",
+"bloom": false
+},
+{
+"at": 42724,
+"old": "0000803f0000003f0000803ecdcccc3d",
+"bloom": true
+},
+{
+"at": 42960,
+"old": "0000803fa2a1213fbdbcbc3e0000803f",
+"bloom": false
+},
+{
+"at": 42988,
+"old": "0000803fa2a1213fbdbcbc3e8180003f",
+"bloom": false
+},
+{
+"at": 43004,
+"old": "0000803f5959193faeadad3e0000803f",
+"bloom": false
+},
+{
+"at": 43020,
+"old": "0000803f8180003f8180803e00000000",
+"bloom": false
+},
+{
+"at": 43056,
+"old": "0000a03f0000403f0000803f0000803f",
+"bloom": false
+},
+{
+"at": 43096,
+"old": "00000000000000000000000000000000",
+"bloom": false
+},
+{
+"at": 43404,
+"old": "0000803fdbda5a3fc0bf3f3f0000803f",
+"bloom": false
+},
+{
+"at": 43520,
+"old": "0000803f0000003f0000803ecdcccc3d",
+"bloom": true
+},
+{
+"at": 43748,
+"old": "0000803fa2a1213fbdbcbc3e0000803f",
+"bloom": false
+},
+{
+"at": 43780,
+"old": "0000803fa2a1213fbdbcbc3e8180003f",
+"bloom": false
+},
+{
+"at": 43796,
+"old": "0000803f5959193faeadad3e0000803f",
+"bloom": false
+},
+{
+"at": 43812,
+"old": "0000803f1111113f9f9e9e3e0000803f",
+"bloom": false
+},
+{
+"at": 43828,
+"old": "0000803f8180003f8180803e00000000",
+"bloom": false
+},
+{
+"at": 44280,
+"old": "0000803f0000803e0000803e9a99993d",
+"bloom": true
+},
+{
+"at": 44596,
+"old": "0000803f8180003f8180003f8180003f",
+"bloom": false
+},
+{
+"at": 44612,
+"old": "0000803fe9e8e83ee9e8e83e0000803f",
+"bloom": false
+},
+{
+"at": 44628,
+"old": "0000803fa1a0a03ea1a0a03e0000803f",
+"bloom": false
+},
+{
+"at": 44644,
+"old": "0000803f8180003e8180003e00000000",
+"bloom": false
+},
+{
+"at": 45136,
+"old": "0000803f0000003f0000803ecdcccc3d",
+"bloom": true
+},
+{
+"at": 45288,
+"old": "0000803fe5e4e43ed1d0503d0000803f",
+"bloom": false
+},
+{
+"at": 45304,
+"old": "000048420000fa41000016420000a03f",
+"bloom": false
+},
+{
+"at": 45408,
+"old": "0000803fe5e4e43ed1d0503d0000803f",
+"bloom": false
+},
+{
+"at": 45608,
+"old": "0000803fdbda5a3fc0bf3f3f0000803f",
+"bloom": false
+},
+{
+"at": 45724,
+"old": "0000803f0000003f0000803ecdcccc3d",
+"bloom": true
+},
+{
+"at": 45948,
+"old": "0000803fa2a1213fbdbcbc3e0000803f",
+"bloom": false
+},
+{
+"at": 45984,
+"old": "0000803fa2a1213fbdbcbc3e8180003f",
+"bloom": false
+},
+{
+"at": 46000,
+"old": "0000803f1c1c1c3fb3b2b23e0000803f",
+"bloom": false
+},
+{
+"at": 46016,
+"old": "0000803f1111113f9f9e9e3e0000803f",
+"bloom": false
+},
+{
+"at": 46032,
+"old": "0000803f0606063f8b8a8a3e00000000",
+"bloom": false
+},
+{
+"at": 46048,
+"old": "0000803f8180003f8180803e00000000",
+"bloom": false
+},
+{
+"at": 46084,
+"old": "0000a03f0000403f0000803f0000803f",
+"bloom": false
+},
+{
+"at": 46128,
+"old": "0000a03f0000403f0000803f00000000",
+"bloom": false
+},
+{
+"at": 46144,
+"old": "0000a03f0000403f0000803f00000000",
+"bloom": false
+},
+{
+"at": 46192,
+"old": "00000000000000000000000000000000",
+"bloom": false
+}
+],
+"blend": []
+},
+"524402": {
+"size": 6592,
+"colours": [
+{
+"at": 5948,
+"old": "0000803f0000803e0000803e0000803e",
+"bloom": true
+},
+{
+"at": 6260,
+"old": "0000803f8180003f8180003f8180003f",
+"bloom": false
+},
+{
+"at": 6276,
+"old": "0000803fe1e0e03ee1e0e03e0000803f",
+"bloom": false
+},
+{
+"at": 6292,
+"old": "0000803f8180803e8180803e0000803f",
+"bloom": false
+},
+{
+"at": 6308,
+"old": "0000803f8180003e8180003e00000000",
+"bloom": false
+}
+],
+"blend": [
+{
+"at": 6120,
+"old": 2,
+"add": 4
+}
+]
+}
+}

@@ -175,10 +175,10 @@ def _args(tmp_path, **kw):
     return argparse.Namespace(**{**d, **kw})
 
 
-def test_the_text_command_is_write_text_wait_with_the_same_vault_offsets_and_design(tmp_path, monkeypatch):
+def test_the_text_command_is_write_text_when_loaded_with_the_same_vault_offsets_and_design(tmp_path, monkeypatch):
     monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
     cmd, cwd = run_cmd.text_command(_args(tmp_path, spec="my.json", extension_dir="ext"), tmp_path / "vault")
-    assert cmd[:3] == [run_cmd.sys.executable, "-m", "eldendisk"] and cmd[3:6] == ["write", "--text", "--wait"]
+    assert cmd[:3] == [run_cmd.sys.executable, "-m", "eldendisk"] and cmd[3:6] == ["write", "--text", "--when-loaded"]
     assert cmd[cmd.index("--vault") + 1] == str(tmp_path / "vault") and cmd[cmd.index("--offsets") + 1] == "offsets.json"
     assert cmd[cmd.index("--spec") + 1] == "my.json" and cmd[cmd.index("--extension-dir") + 1] == "ext"
     assert cwd and (run_cmd.Path(cwd) / "eldendisk").is_dir()
@@ -200,7 +200,7 @@ def test_start_text_spawns_in_its_own_process_group_and_stays_quiet_only_under_v
     assert all("creationflags" in c for c in calls)
 
 
-def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text):
+def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text, flame=False):
     """cmd_run with a fake Session that keeps the hooks it was given -> (hooks, spawned commands)."""
     import argparse
     from eldendisk.logbook import book
@@ -225,6 +225,8 @@ def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text):
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (world, mode))
     monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: text)
+    monkeypatch.setattr(run_cmd, "design_has_flame", lambda a, v: flame)
+    monkeypatch.setattr(run_cmd, "start_flame", lambda a, v: spawned.append("flame") or type("P", (), {"poll": lambda s: 0})())
     monkeypatch.setattr(run_cmd, "start_text", lambda a, v: spawned.append("text") or type("P", (), {"poll": lambda s: 0})())
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=protect,
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
@@ -241,6 +243,22 @@ def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text):
     (False, "w.bin", "built", True, [])])            # vault OFF: `write` is not allowed at all
 def test_run_starts_the_text_step_only_when_it_has_something_to_give(tmp_path, monkeypatch, protect, world, mode, text, expect):
     assert _run_hooks(tmp_path, monkeypatch, protect=protect, world=world, mode=mode, text=text) == expect
+
+
+@pytest.mark.parametrize("protect,world,mode,text,flame,expect", [
+    (True, "w.bin", "built", False, True, ["flame"]),            # a flame colour without any text still starts its step
+    (True, "w.bin", "secured", True, True, ["text", "flame"]),
+    (True, "w.bin", "built", False, False, []),
+    (True, "w.bin", "file", True, True, []),                     # not the extension's build
+    (False, "w.bin", "built", True, True, [])])                  # vault OFF
+def test_run_starts_the_flame_colour_step_only_with_a_colour_in_the_design(tmp_path, monkeypatch, protect, world, mode, text, flame, expect):
+    assert _run_hooks(tmp_path, monkeypatch, protect=protect, world=world, mode=mode, text=text, flame=flame) == expect
+
+
+def test_the_flame_command_is_write_flame_color_when_loaded(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
+    cmd, _ = run_cmd.text_command(_args(tmp_path), tmp_path / "vault", "--flame-color")
+    assert cmd[3:6] == ["write", "--flame-color", "--when-loaded"]
 
 
 def test_a_text_step_still_running_when_the_session_ends_is_stopped(tmp_path, monkeypatch):
@@ -268,6 +286,7 @@ def test_a_text_step_still_running_when_the_session_ends_is_stopped(tmp_path, mo
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     monkeypatch.setattr(run_cmd, "_regulation", lambda *a: ("w.bin", "built"))
     monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "design_has_flame", lambda a, v: False)
     monkeypatch.setattr(run_cmd, "start_text", lambda a, v: Child())
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=True,
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)

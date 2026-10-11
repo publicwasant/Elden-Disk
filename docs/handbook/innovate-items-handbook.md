@@ -13,7 +13,7 @@
 > **Update 2026-10-09 (later).** Slot 1 of the back-growth build (appended rows in Goods, Magic, SpEffect and ShopLineup) passed in the game, and Elden-Disk can now *look at and change the tables of the running game*: `read --param Magic.6230` shows any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup by field name, `write --set params.Magic.6230.mp=0` changes a field live (and `--reset` puts the game's own value back), `read --param-check` compares a built `regulation.bin` with the game row by row (the slot-1 build was equal on every row of all six tables). This is the "observe" half of the method in this book without Cheat Engine, and the test bench for the next kinds of spell (clone, buff, enchant, projectile, attack): Magic is read at the cast, Bullet when the bullet is created, and a changed row acts only on what is created afterwards. See [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md) and [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md).
 
 >
-> **Update 2026-10-11 (1.7.1) — the text layer works.** Name, short line and long description of the new item now show in the real game. Not by editing a file (a loose replacement of the text archive is not read by the unpatched game, tried), but by giving the *running* game a rebuilt text table: Elden-Disk copies the game's own table, adds the entries for the new Goods ids, puts it in memory it allocates in the game and changes the single pointer that leads to it. Chapter 19 has the method, the chain from `eldenring.exe`, the research tools and the limits. The icon is still open.
+> **Update 2026-10-11 (1.7.1) — the text layer works.** Name, short line and long description of the new item now show in the real game. Not by editing a file (a loose replacement of the text archive is not read by the unpatched game, tried), but by giving the *running* game a rebuilt text table: Elden-Disk copies the game's own table, adds the entries for the new Goods ids, puts it in memory it allocates in the game and changes the single pointer that leads to it. Chapter 19 has the method, how the tool finds the tables (by scanning, not by a fixed chain), the colour of the fire, the research tools and the limits. The icon is still open.
 ---
 
 ## Preface — what this book is, and what it is not
@@ -873,17 +873,18 @@ Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame G
 
 1. `tools/probe_text.py` (read-only) looked for the dumped `GoodsName.fmg` in the running game's memory. No byte-exact copy existed, but a laid-over comparison (`analyse`) showed that the game keeps **each table as it is in the file, except the 8 bytes at `0x18`** (the position of the string offsets): there the game holds an absolute address (`table base + offsets position`). String offsets inside the table stay relative. **One** 8-byte pointer in the game's memory leads to each table.
 2. `tools/patch_text.py` built the table again with new entries (`Fmg.read(original)`, add, `write()`), allocated memory in the game (`VirtualAllocEx`), wrote the new table there (with its own address at `0x18`) and changed the one pointer (one aligned 8-byte write). The old table is untouched; putting the old pointer back undoes it; closing the game removes everything. Tried in the real game: Flame, Grant Me Strength showed "(text test)" and slot 1 in Kalé's shop showed its new name, short line and (Inventory → controller square) long description.
-3. Finding the pointer by scanning all of the game's memory took minutes and made the PC stutter. `tools/probe_chain.py` walked **backwards** from the pointer to the exe's own data and found a fixed chain for 1.17.1: the pointer at `eldenring.exe + 0x3D61FB8` leads to an object, and the pointer to the table of text file number N is at `object + 0x1F20 + N * 8` (GoodsName N = 10, GoodsInfo N = 20, GoodsCaption N = 24, all checked in the game). Following it takes about a second and worked in a fresh `run` session. In Elden-Disk it is the `text` block of the profile in `offsets.json`.
+3. **Finding the pointer.** A first scan of all of the game's memory took minutes and made the PC stutter; a fixed chain from the exe (`eldenring.exe + 0x3D61FB8` → an object → `object + 0x1F20 + N * 8`) was found by walking backwards from the pointer and took about a second. But in five runs of the same game the pointer held the right object in three and memory that had been given back and used for something else in two (an FMG groups table, UTF-16 text, whole numbers), so **the chain was dropped**: nothing here follows a fixed address. The pointer to the table of text file number N sits at `array + N * 8` (GoodsName N = 10, GoodsInfo N = 20, GoodsCaption N = 24, checked in the game), and the tool *finds* that array and the tables each time (19.4). Only the numbers N and the sizes of the tables are in the `text` block of the profile in `offsets.json`.
 
 ### 19.4 In the tool
 
 | Piece | What |
 |---|---|
 | `extension.json` | each spell's `"text": {"goods_name", "goods_info", "goods_captions"}`, before `set`; 80 / 120 / 1000 characters. It is **not** part of the build (`build_view` leaves it out), so editing a text never rebuilds or un-secures anything |
-| `eldendisk/writer/text.py` | the memory side, bytes only: follow the chain, read the table the game holds, check it looks like a table, allocate, write the new table, change the pointer, read it back |
+| `eldendisk/writer/scan.py` | the one way the tool looks through the game's memory (text and fire share it): 16 MB pieces, a rest after each of half the time it took (so the game keeps its share of the memory bus whatever the speed), the first 128 MB of each private block of 256 MB or more first and then the rest (biggest first), a stop as soon as the caller has what it wants, a budget of 120 s, an unreadable piece read again in parts of 256 KB. It never writes |
+| `eldendisk/writer/text.py` | the memory side, bytes only. **Step A:** find the game's tables by shape (version-2 header, the `1` at `0x08`, the address at `0x18` equal to the table's own base + `0x28` + 16 × the number of groups) and by size (`text.sizes` of the profile). **Step B:** find the places that hold pointers to those tables at the distances the file numbers give (`A + 10 * 8`, `A + 20 * 8`, `A + 24 * 8`): three pointers at exactly these distances do not happen by chance. Then read the table the game holds, allocate, write the new table, change the pointer, read it back |
 | `eldendisk/extension/innovate_items/fmg.py` | the FMG reader/writer (stdlib only); `write()` is canonical (4 of 6 real files come back byte-identical; the other two differ in 2 trailing bytes and the size field) |
-| `write --text [--wait [SEC]]` (`commands/write.py`) | builds the three tables from the design and the game's own tables, skips a table that would not change, waits for the game to have loaded its text (the same tables twice in a row), switches the pointers, checks 3 s later that the game kept them |
-| `run` | with the vault ON and an extension build swapped in, starts `write --text --wait 300` once the record says RUNNING (hook `Hooks.on_running`). A separate process, so the host still never touches the game's memory; if it fails the game goes on |
+| `write --text [--wait [SEC] \| --when-loaded]` (`commands/write.py`) | builds the three tables from the design and the game's own tables, skips a table that would not change, switches the pointers (every array found, so a copy the game no longer uses is changed too), checks 3 s later that the game kept them. `--when-loaded` waits until a character has been in the world for 5 s (the loading screens flicker), looks, writes **once** and ends: nothing watches the game afterwards |
+| `run` | with the vault ON and an extension build swapped in, starts `write --text --when-loaded` (and `write --flame-color --when-loaded`, 19.7) once the record says RUNNING (hook `Hooks.on_running`). Separate processes, so the host still never touches the game's memory; if one fails the game goes on |
 
 Rules that keep it safe: the same session check as every `write`; `VirtualAllocEx` exists only in `writer/writer.py` (the one new allocation; `test_write_capability_is_confined_to_the_writer_package` enforces it); the game's own table is never changed; an empty text removes the entry; an unchanged result allocates nothing.
 
@@ -894,10 +895,10 @@ Rules that keep it safe: the same session check as every `write`; `VirtualAllocE
 | `dump_msgbnd.py --game <Game folder> --out msgdump` | reads `item`/`menu` (+ DLC) `msgbnd.dcx` out of `Data0-3.bdt` (with `gamearchive.py`), opens the DCX (Oodle through the game's DLL) and the BND4, writes the `.fmg` files and `report.txt`. Writes only to `--out` |
 | `gamearchive.py` | the archive reader: RSA index, BHD5, path hash, AES-128 ECB. A library for the tool |
 | `probe_text.py` | read-only: finds the dumped table, or its laid-over copy, in the running game and the pointers to it (`--out textprobe.json`) |
-| `patch_text.py` | the experiment before the feature: `--apply` / `--undo` / `--scan` with the fixed text of the test |
-| `probe_chain.py` | read-only: from `textpatch.json` walks back to `eldenring.exe + rva`; the way to find the chain again for another game version |
 
-For another game version: run `dump_msgbnd.py` (the keys are in that exe), start the game with `run`, `patch_text.py --scan --apply`, then `probe_chain.py`, and put `rva`/`array`/`files` into the profile's `text` block.
+(`patch_text.py`, the experiment that first wrote a table into the game, and `probe_chain.py`, which found the fixed chain, are gone: `write --text` does the first and the chain was dropped, 19.3.)
+
+For another game version or language: run `dump_msgbnd.py` (the keys are in that exe); the size of each `GoodsName.fmg`, `GoodsInfo.fmg` and `GoodsCaption.fmg` it writes is the size to put in `text.sizes`; the file numbers N come from the distances between the pointers that `probe_text.py` reports for the three tables.
 
 ### 19.6 Results and limits
 
@@ -906,12 +907,28 @@ For another game version: run `dump_msgbnd.py` (the keys are in that exe), start
 | Rename of an existing item (Flame, Grant Me Strength + " (text test)") in the inventory | ✅ |
 | New item in Kalé's shop: name, short line | ✅ |
 | New item: long description (Inventory → controller square) | ✅ |
-| Fixed chain, a fresh `run` session, patch run by hand | ✅ about 1 s |
-| `run` starting `write --text --wait` by itself | ◦ built and unit-tested, to be tried (manual plan 1.7.1, TX) |
+| Fixed chain, a fresh `run` session, patch run by hand | ◦ worked in 3 of 5 runs (19.3): dropped |
+| `run` starting `write --text --when-loaded` by itself (3 runs, `run -v` logs of 2026-10-11) | ✅ all three tables found, written and read back in every run. The tables were found in 0.6-0.7 s (176 MB read: the head of the private blocks; they lie about 43 MB into a block of 1530 MB); the one array was about 6 MB before them and was found by a look through all the memory (7.3 GB, 70-73 s, 3 pointers seen, 1 array). The text is in the game about 75 s after the character is in the world |
 | Thai or other scripts | ◦ not tried; the game's font may lack the glyphs |
 | A language other than English | ◦ not tried (the tool patches whichever tables the game has loaded) |
 
 The text exists only while the game runs. The old tables stay in memory (a few hundred KB per switch) until the game closes.
+
+Known limit: a second `write --text` by hand in the same game ends with `set already in this session`, because the array no longer points at the game's own tables (the tool looks for those). The text stays as written.
+
+### 19.7 The colour of the fire (`flame_color`)
+
+The same idea, for the fire of *Flame, Grant Me Strength*, which is made of effect files (SFX, `f000<id>.fxr`), not of params or text. Level 3 step 3, done for the fire of the cast.
+
+| What | How |
+|---|---|
+| Where the fire lives | the game keeps each effect file in memory **as it is in the file**; a colour is four little-endian floats (RGBA). Two files make the fire that is recoloured: `524400` (the fire while casting; 18 colours) and `524401` (the burst when the cast ends; 54 colours). The third, `524402` (the fire on the body), is left alone. `eldendisk/writer/fxr_plans.py` lists where each colour sits in each file |
+| The new colour | with v = the biggest of R, G, B and w = 1 − (v − the smallest) / v: new RGB = v × (w + (1 − w) × target). White stays white, black stays black, alpha is never touched; a bloom colour becomes v × target |
+| Finding the copies | by the colours, with the same scan as the text (`writer/scan.py`): a copy counts only if **every** colour of the plan matches the game's bytes, the original or the painted one (so a second run finds its own work). The look stops as soon as each effect has a copy; the writes are read back |
+| In the design | `"flame_color": [red, green, blue]` in a spell, each 0 to 2 (1 = full colour, above 1 shines brighter). The fire effects are shared by every spell that uses them, so there is **one** colour for the design: the first spell (by slot) that names one; if the spells name different colours a warning says which was used. It is not part of the build: editing it never rebuilds or un-secures anything |
+| `write --flame-color [--wait [SEC] \| --when-loaded]` | same session rules, same `--when-loaded` as `--text`; started by `run` when a spell of the design names a colour |
+
+Real game, 2026-10-11, three `run` sessions with the colour `[0.2, 0.65, 1.0]`: one copy of each effect found (about 1312 MB into the largest private block, of 2560 MB, in all three runs), 68 colour places written (18 + 50; a place that would not change, such as black, is not written), read back, in 6.4-6.6 s (1712 MB read); the fire is written about 7 s after the character is in the world. The head of the blocks did not hold the fire (the look ended in the rest of the memory), which is why the look goes on to the rest. The colour lasts until the game closes.
 
 ---
 
@@ -1062,7 +1079,7 @@ The text exists only while the game runs. The old tables stay in memory (a few h
 | `legacy_raw_noop.py` | the failing no-op (S6/K-style): stored blocks, same bytes |
 | `inspect_rows.py`, `inspect_frame.py`, `selftest.py` | diff two rows / frame census / offline checks |
 | `example_all_spells_1fp.py` | the minimal "edit any table" example (Chapter 15) |
-| `dump_msgbnd.py`, `gamearchive.py`, `probe_text.py`, `patch_text.py`, `probe_chain.py` | the text research of 1.7.1 (`code/tools/`, Chapter 19.5) |
+| `dump_msgbnd.py`, `gamearchive.py`, `probe_text.py` | the text research of 1.7.1 (`code/tools/`, Chapter 19.5) |
 
 ---
 

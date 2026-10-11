@@ -371,3 +371,25 @@ def test_a_text_change_is_not_a_build_change_for_any_of_the_decisions(ci):
     changed = ci.items("all")
     base, sha = ci.read_base(ci.game)
     assert ci.decide(changed, sha).use_secured and ci.decide_last(changed, "all", sha).use_secured
+
+
+# ---- 1.7.1: the colour of the fire ----
+def test_flame_color_is_none_without_one_and_the_first_slots_when_there_are_several(ci):
+    assert ci.flame_color("all") == (None, None)
+    a, b = copy.deepcopy(SPELL), copy.deepcopy(SPELL)
+    a["flame_color"], b["flame_color"] = [0.2, 0.65, 1], [1, 0, 0]
+    write_spec(ci, file_of({ID: a, "second": b}))
+    colour, note = ci.flame_color("all")
+    assert colour == (0.2, 0.65, 1.0) and "slot 1" in note and "2 different" in note
+    assert ci.flame_color([ID]) == ((0.2, 0.65, 1.0), None)                    # only the spells that are built count
+    b["flame_color"] = [0.2, 0.65, 1]
+    write_spec(ci, file_of({ID: a, "second": b}))
+    assert ci.flame_color("all") == ((0.2, 0.65, 1.0), None)
+
+
+def test_a_flame_color_change_is_not_a_build_change_for_any_of_the_decisions(ci):
+    build_and_secure(ci)
+    write_spec(ci, edited(lambda i: i.update(flame_color=[0.2, 0.65, 1])))
+    changed = ci.items("all")
+    base, sha = ci.read_base(ci.game)
+    assert ci.decide(changed, sha).use_secured and ci.decide_last(changed, "all", sha).use_secured
