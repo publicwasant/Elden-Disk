@@ -3,6 +3,7 @@
 
 > **What this is:** for every spell that a workshop above the Photocopier accepts, the list of rows you may write in `set`: their **ids**, **names**, **durations** and **base damage**. Read Chapter 3 of the handbook first if the words "row" and "id" are new to you.
 > **Data:** read from the original Elden Ring 1.17.1 `regulation.bin` with the tool's own chain reader. Names come from the community's Paramdex lists and can be blank or imperfect; the **numbers** are the game's.
+> **Also in this file:** the **Motion Finder** (numbers for `cast_motion`) and the **Visual Finder** (numbers for `effect.visual`), right below, before the spells.
 > **Find a spell** with your editor's search (`Ctrl+F`, type the name or the id). The ids are the same as in the Spell Finder (Appendix A of the handbook).
 
 ### How to read an entry
@@ -23,6 +24,249 @@
 - Different spells can list the same row id; each shelf gets its own private copy, so changing it on your shelf does not affect any other spell.
 
 ---
+
+## Motion Finder — numbers for `cast_motion`
+
+`cast_motion` is the **cast animation**: the way your character raises the hands and plays the spell. In the game it is one number on a spell's own Magic row (`Magic.<id>.refType`). Spells that cast alike share the number: all the fireballs (Flame Sling, Black Flame…) use `17`, the four "Flame, … Me" buffs use `31`. To borrow a cast animation, **find a spell whose cast you like and write its number**.
+
+```json
+"cast_motion": 32,                         ← the number of Black Flame Blade
+"cast_motion": "black-flame-blade"         ← the same thing, by name
+```
+
+- The two **names** are shortcuts: `flame-grant-me-strength` = `31`, `black-flame-blade` = `32`. Only these two have been tried in the game (✓).
+- **Any other number is accepted but untried.** The tool checks that some spell of the game really uses it (it refuses `3`, for instance, which no spell uses), but it cannot know how the animation looks on your spell. Try it, and tell us what you see.
+- The animation of a *sorcery* on an *incantation* shelf (or the other way round) may look odd or play with a different timing: that is exactly the kind of experiment this table is for.
+- Only the home-made spell (kind `buff` without `from`) has a `cast_motion`. A spell made from a game spell keeps the cast of the original, unless you write `"set": {"Magic.<its id>.refType": <number>}` (the build and its checks pass; not tried in the game yet ◦).
+- Spells that only boss and NPC characters cast are not listed.
+
+| Motion | Incantations that use it | Sorceries that use it | Name |
+|:-:|:--|:--|:--|
+| **0** | Inescapable Frenzy (7300) | — |  |
+| **1** | — | Glintstone Icecrag (4400), Glintstone Pebble (4000), Great Glintstone Shard (4001) |  |
+| **2** | — | Comet (4021), Glintstone Cometshard (4020), Night Comet (4620), Shard Spiral (4030) |  |
+| **4** | — | Crystal Barrage (4060) |  |
+| **5** | — | Loretta's Greatbow (4380), Loretta's Mastery (4381) |  |
+| **6** | — | Ranni's Dark Moon (4361), Rennala's Full Moon (4360) |  |
+| **7** | — | Comet Azur (4200), Crystal Torrent (4520) |  |
+| **8** | — | Carian Phalanx (4301), Eternal Darkness (4650), Glintblade Phalanx (4300) |  |
+| **9** | — | Adula's Moonblade (4431), Carian Greatsword (4430) |  |
+| **10** | — | Carian Piercer (4450) |  |
+| **11** | — | Frozen Armament (4490), Scholar's Armament (4460), Unseen Blade (4660) |  |
+| **12** | — | Scholar's Shield (4470) |  |
+| **13** | — | Lucidity (4480), Starlight (4140), Terra Magicus (4130) |  |
+| **14** | — | Zamor Ice Storm (4410) |  |
+| **15** | — | Meteorite (4700), Meteorite of Astel (4701) |  |
+| **16** | — | Glintstone Arc (4070) |  |
+| **17** | Black Flame (6210), Flame Fall Upon Them (6020), Flame Sling (6010), Giantsflame Take Thee (6100) | — |  |
+| **19** | Flame of The Fell God (6110) | Watchful Spirit (2007600) |  |
+| **20** | Whirl, O Flame (6030) | — |  |
+| **22** | Scouring Black Flame (6230) | — |  |
+| **23** | Surge, O Flame (6220) | — |  |
+| **24** | Burn, O Flame! (6120), Fire's Deadly Sin (7900) | — |  |
+| **25** | O, Flame! (6001) | — |  |
+| **26** | Darkness (6530), Poison Mist (7220), Shadow Bait (6520), Swarm of Flies (7210) | — |  |
+| **27** | Discus of Light (6700), Triple Rings of Light (6701) | — |  |
+| **28** | Rejection (6400) | — |  |
+| **29** | Wrath of Gold (6410) | — |  |
+| **31** | Bestial Constitution (6850), Bestial Vitality (6840), Black Flame's Protection (6260), Flame Cleanse Me (6040), Flame Grant Me Strength (6050), Flame Protect Me (6060) | — | `flame-grant-me-strength` |
+| **32** | Black Flame Blade (6250) | — | `black-flame-blade` |
+| **33** | Cure Poison (6440), Divine Fortification (6480), Flame Fortification (6450), Lightning Fortification (6470), Magic Fortification (6460), Urgent Heal (6420) | — |  |
+| **34** | Barrier of Gold (6330), Blessing of The Erdtree (6431), Blessing's Boon (6430), Erdtree Heal (6424), Golden Light Fortification (7903), Great Heal (6422), Heal (6421), Lord's Aid (6441), Lord's Divine Fortification (6490), Lord's Heal (6423), Protection of The Erdtree (6340) | — |  |
+| **35** | Golden Vow (6600) | — |  |
+| **36** | Lightning Spear (6900) | — |  |
+| **37** | Stone of Gurranq (6810) | — |  |
+| **38** | Bestial Sling (6800) | — |  |
+| **40** | Beast Claw (6820) | — |  |
+| **41** | Gurranq's Beast Claw (6830) | — |  |
+| **42** | Ancient Dragons' Light Strike (6910), Electrocharge (2006920) | Death Lightning (5040) |  |
+| **44** | Ancient Dragons' Light Spear (6940) | — |  |
+| **45** | Lansseax's Glaive (6950) | — |  |
+| **48** | Radagon's Rings of Light (6710) | — |  |
+| **49** | Immutable Shield (6740) | — |  |
+| **50** | Agheel's Flame (7001), Borealis's Mist (7021), Ekzykes's Decay (7031), Ghostflame Breath (2007020), Smarag's Glint Breath (7041) | — |  |
+| **51** | Placidusax's Ruin (7050) | — |  |
+| **52** | Dragonclaw (7060) | — |  |
+| **54** | Dragonmaw (7080) | — |  |
+| **55** | Greyoll's Roar (7090) | — |  |
+| **56** | — | Shatter Earth (4100) |  |
+| **57** | — | Rock Blaster (4110) |  |
+| **58** | — | Crystal Release (4510) |  |
+| **59** | Electrify Armament (6960), Vyke's Dragonbolt (6970) | — |  |
+| **60** | Dragonbolt Blessing (6971) | — |  |
+| **66** | The Flame of Frenzy (7310) | — |  |
+| **67** | Dragonfire (7000), Dragonice (7020), Glintstone Breath (7040), Rotten Breath (7030) | — |  |
+| **70** | Aspects of the Crucible: Tail (7500) | — |  |
+| **71** | Aspects of the Crucible: Horns (7510) | — |  |
+| **74** | Pest Threads (7200) | — |  |
+| **75** | — | Oracle Bubbles (5100) |  |
+| **76** | — | Great Oracular Bubble (5110) |  |
+| **78** | — | Gavel of Haima (4120) |  |
+| **79** | — | Night Shard (4610), Swift Glintstone Shard (4010) |  |
+| **80** | — | Carian Slicer (4440) |  |
+| **81** | Briars of Sin (8000) | Briars of Sin (4900) |  |
+| **82** | Briars of Punishment (8001) | Briars of Punishment (4910) |  |
+| **83** | — | Ambush Shard (4600) |  |
+| **84** | — | Carian Retaliation (4640), Carian Retaliation (Unused 1) (4641), Carian Retaliation (Unused 2) (4642) |  |
+| **86** | Law of Causality (6760), Law of Regression (6730), Order Healing (6780) | — |  |
+| **87** | Litany of Proper Death (6750) | — |  |
+| **88** | Unendurable Frenzy (7311) | — |  |
+| **89** | Frenzied Burst (7320) | — |  |
+| **90** | Howl of Shabriri (7330) | — |  |
+| **91** | Elden Stars (6720), Land of Shadow (2006680) | — |  |
+| **92** | — | Cannon of Haima (4080) |  |
+| **93** | Bloodboon (6310) | — |  |
+| **94** | Bloodflame Talons (6300) | — |  |
+| **95** | — | Greatblade Phalanx (4302), Rykard's Rancor (4830) |  |
+| **98** | Fortissax's Light Spear (6941) | — |  |
+| **99** | Black Flame Ritual (6240) | — |  |
+| **100** | Aspects of the Crucible: Breath (7520) | — |  |
+| **102** | — | Gelmir's Fury (4810) |  |
+| **103** | — | Ancient Death Rancor (5001), Rancorcall (5000) |  |
+| **104** | Order's Blade (6770) | — |  |
+| **105** | Noble Presence (6270) | — |  |
+| **106** | Catch Flame (6000) | — |  |
+| **107** | — | Glintstone Nail (2004500), Glintstone Nails (2004510), Glintstone Stars (4040), Magic Downpour (4370), Star Shower (4050), Stars of Ruin (4220) |  |
+| **108** | — | Rock Sling (4710) |  |
+| **109** | — | Unseen Form (4670) |  |
+| **110** | — | Thops's Barrier (4630) |  |
+| **111** | Honed Bolt (6930), Lightning Strike (6920) | — |  |
+| **112** | Bloodflame Blade (6320), Poison Armament (7230) | — |  |
+| **113** | Night Maiden's Mist (6500) | Crystal Burst (4090), Fia's Mist (5020), Freezing Mist (4420), Shattering Crystal (4500) |  |
+| **114** | Assassin's Approach (6510) | — |  |
+| **115** | — | Explosive Ghostflame (5010) |  |
+| **116** | Black Blade (7530) | — |  |
+| **117** | — | Magma Shot (4800), Roiling Magma (4820) |  |
+| **118** | — | Magic Glintblade (4390) |  |
+| **119** | Frozen Lightning Spear (6921) | — |  |
+| **120** | — | Blades of Stone (2004700), Collapsing Stars (4721), Fleeting Microcosm (2007410), Gravitational Missile (2004710), Gravity Well (4720) |  |
+| **121** | — | Tibia's Summons (5030) |  |
+| **122** | Scarlet Aeonia (7240) | — |  |
+| **123** | Magma Breath (7010), Theodorix's Magma (7011) | — |  |
+| **124** | — | Founding Rain of Stars (4210) |  |
+| **125** | Aspects of the Crucible: Thorns (2006650) | — |  |
+| **126** | — | Vortex of Putrescence (2006200) |  |
+| **127** | — | Miriam's Vanishing (2004300) |  |
+| **128** | Minor Erdtree (2006670) | — |  |
+| **129** | Aspects of the Crucible: Bloom (2006660) | — |  |
+| **130** | Heal from Afar (2006400) | — |  |
+| **131** | Roar of Rugalea (2006800) | — |  |
+| **133** | Bayle's Tyranny (2007000) | — |  |
+| **134** | Bayle's Flame Lightning (2007010) | — |  |
+| **135** | Rotten Butterflies (2007200) | — |  |
+| **136** | Pest-Thread Spears (2007210) | — |  |
+| **137** | Midra's Flame of Frenzy (2007300) | — |  |
+| **138** | — | Glintblade Trio (2004310) |  |
+| **139** | Knight's Lightning Spear (2006900) | — |  |
+| **140** | Furious Blade of Ansbach (2006300) | — |  |
+| **141** | Messmer's Orb (2007820) | — |  |
+| **143** | — | Rings of Spectral Light (2005000) |  |
+| **144** | Dragonbolt of Florissax (2006910) | — |  |
+| **145** | Light of Miquella (2006700) | — |  |
+| **146** | — | Spira (2007720) |  |
+| **147** | Divine Beast Tornado (2007730) | — |  |
+| **148** | — | Golden Arcs (2007700) |  |
+| **149** | Multilayered Ring of Light (2006710) | — |  |
+| **150** | — | Mantle of Thorns (2004900) |  |
+| **151** | Wrath from Afar (2006690) | — |  |
+| **152** | Divine Bird Feathers (2007740) | — |  |
+| **153** | Fire Serpent (2007800) | — |  |
+| **154** | — | Giant Golden Arc (2007710) |  |
+| **156** | — | Impenetrable Thorns (2004910) |  |
+| **157** | — | Cherishing Fingers (2007420) |  |
+| **158** | — | Mass of Putrescence (2006210) |  |
+| **159** | Rain of Fire (2007810) | — |  |
+| **161** | — | Rellana's Twin Moons (2004320) |  |
+
+## Visual Finder — numbers for `effect.visual`
+
+`effect.visual` is **what you see on the character while the effect lasts**: the burning body, the healing glow. In the game it is one number on the effect's row (`SpEffect.<id>.vfxId`), the id of a *visual effect* (a particle show). Many effects share one visual.
+
+```json
+"visual": 1605000,                         ← the burning body of Flame, Grant Me Strength
+"visual": "flame"                          ← the same thing, by name
+"visual": -1                               ← no visual (same as "none" or null)
+```
+
+- Three **names** are shortcuts: `flame` = `1605000`, `flask` = `5030` (the glow of a Flask of Crimson Tears), `none` = `-1`.
+- **Any other number is accepted but untried.** The tool checks that some effect of the game uses it (the game has about 1,000 such numbers; the table below lists the **72 used by the effects of spells**). A visual may be made for something else (the weapon, the hit, a boss) and show nothing on a body, or show it somewhere odd. Try it and see.
+- A spell can have several effects with several visuals; the table lists each visual with the spells whose effects use it and a few of the effect rows (`SpEffect` ids; read them with `eldendisk read --param SpEffect.<id>`).
+- Only the home-made spell (kind `buff` without `from`) has `effect.visual`. To change the look of a copied spell, use `set` on its `SpEffect` rows (`vfxId` is one of the fields in section 7.8 of the handbook).
+
+| Visual | Spells whose effects use it | Effect rows | Name |
+|:-:|:--|:--|:--|
+| **2** | Poison Armament (7230), Poison Mist (7220) | 1722000, 1723001 |  |
+| **5** | Ekzykes's Decay (7031), Rotten Breath (7030), Rotten Butterflies (2007200), Scarlet Aeonia (7240) | 1703000, 1703100, 1724000 +2 |  |
+| **6** | Bloodboon (6310), Bloodflame Blade (6320), Bloodflame Talons (6300), Briars of Punishment (4910), Briars of Punishment (8001), Briars of Sin (4900), +4 more | 1490001, 1490010, 1491001 +11 |  |
+| **260** | Adula's Moonblade (4431), Borealis's Mist (7021), Dragonice (7020), Explosive Ghostflame (5010), Freezing Mist (4420), Frozen Armament (4490), +8 more | 1436100, 1440000, 1441000 +17 |  |
+| **5304** | Minor Erdtree (2006670) | 21667000 |  |
+| **9010** | Black Flame (6210), Black Flame Blade (6250), Black Flame Ritual (6240), Noble Presence (6270), Scouring Black Flame (6230) | 1621000, 1623000, 1624010 +2 |  |
+| **9012** | Black Blade (7530) | 6850 |  |
+| **9013** | Black Blade (7530) | 6860 |  |
+| **1413000** | Terra Magicus (4130) | 1413000 |  |
+| **1414000** | Starlight (4140) | 1414000 |  |
+| **1436000** | Rennala's Full Moon (4360) | 1436000 |  |
+| **1436100** | Ranni's Dark Moon (4361) | 1436101 |  |
+| **1446000** | Scholar's Armament (4460) | 1446000 |  |
+| **1447000** | Scholar's Shield (4470) | 1447000 |  |
+| **1448000** | Lucidity (4480) | 1448000 |  |
+| **1449000** | Frozen Armament (4490) | 1449000 |  |
+| **1466000** | Unseen Blade (4660) | 1466000 |  |
+| **1467000** | Unseen Form (4670) | 1467000 |  |
+| **1467001** | Unseen Form (4670) | 1467001 |  |
+| **1467002** | Unseen Form (4670) | 1467002 |  |
+| **1467005** | Unseen Form (4670) | 1467005 |  |
+| **1467006** | Unseen Form (4670) | 1467006 |  |
+| **1604000** | Flame Cleanse Me (6040) | 1604000 |  |
+| **1605000** | Flame Grant Me Strength (6050) | 1605000 | `flame` |
+| **1606000** | Flame Protect Me (6060) | 1606000 |  |
+| **1626000** | Black Flame Blade (6250) | 1626000 |  |
+| **1627000** | Black Flame's Protection (6260) | 1627000 |  |
+| **1632000** | Bloodflame Blade (6320) | 1632000 |  |
+| **1633000** | Barrier of Gold (6330) | 1633000 |  |
+| **1634000** | Protection of The Erdtree (6340) | 1634000 |  |
+| **1642000** | Urgent Heal (6420) | 1642000 |  |
+| **1642100** | Heal (6421) | 1642100, 1642101 |  |
+| **1642200** | Great Heal (6422), Heal from Afar (2006400) | 1642200, 1642201, 21640000 +1 |  |
+| **1642300** | Lord's Heal (6423) | 1642300, 1642301 |  |
+| **1642400** | Erdtree Heal (6424) | 1642400, 1642401 |  |
+| **1643000** | Blessing's Boon (6430) | 1643000, 1643001 |  |
+| **1643100** | Blessing of The Erdtree (6431) | 1643100, 1643101 |  |
+| **1644000** | Cure Poison (6440) | 1644000 |  |
+| **1644100** | Lord's Aid (6441) | 1644100, 1644110 |  |
+| **1645000** | Flame Fortification (6450) | 1645000 |  |
+| **1646000** | Magic Fortification (6460) | 1646000 |  |
+| **1647000** | Lightning Fortification (6470) | 1647000 |  |
+| **1648000** | Divine Fortification (6480) | 1648000 |  |
+| **1649000** | Lord's Divine Fortification (6490) | 1649000 |  |
+| **1651000** | Assassin's Approach (6510) | 1651000 |  |
+| **1651001** | Assassin's Approach (6510) | 1651002 |  |
+| **1653000** | Darkness (6530) | 1653001 |  |
+| **1673000** | Law of Regression (6730) | 1673000, 1673020 |  |
+| **1674000** | Immutable Shield (6740) | 1674000 |  |
+| **1676000** | Law of Causality (6760) | 1676000 |  |
+| **1676001** | Law of Causality (6760) | 1676007 |  |
+| **1676002** | Law of Causality (6760) | 1676010 |  |
+| **1677000** | Order's Blade (6770) | 1677000 |  |
+| **1678000** | Order Healing (6780) | 1678000 |  |
+| **1685000** | Bestial Vitality (6840) | 1685000 |  |
+| **1686000** | Bestial Constitution (6850) | 1686000 |  |
+| **1696000** | Electrify Armament (6960) | 1696000 |  |
+| **1697000** | Vyke's Dragonbolt (6970) | 1697000 |  |
+| **1697001** | Vyke's Dragonbolt (6970) | 1697001 |  |
+| **1697100** | Dragonbolt Blessing (6971) | 1697100 |  |
+| **1709000** | Greyoll's Roar (7090) | 1709000 |  |
+| **1723000** | Poison Armament (7230) | 1723000 |  |
+| **1733000** | Howl of Shabriri (7330) | 1733000 |  |
+| **1790000** | Fire's Deadly Sin (7900) | 1790000, 1790010 |  |
+| **1790300** | Golden Light Fortification (7903) | 1790300 |  |
+| **21430000** | Miriam's Vanishing (2004300) | 21430000 |  |
+| **21490000** | Mantle of Thorns (2004900) | 21490000 |  |
+| **21490001** | Mantle of Thorns (2004900) | 21490001 |  |
+| **21691000** | Dragonbolt of Florissax (2006910) | 21691001 |  |
+| **21691002** | Dragonbolt of Florissax (2006910) | 21691000 |  |
+| **21692000** | Electrocharge (2006920) | 21692000, 21692010 |  |
+| **92082000** | Adula's Moonblade (4431), Aspects of the Crucible: Horns (7510), Aspects of the Crucible: Tail (7500), Black Blade (7530), Carian Greatsword (4430), Carian Piercer (4450), +4 more | 6900, 6901, 6903 +3 |  |
 
 ## Incantations (129)
 

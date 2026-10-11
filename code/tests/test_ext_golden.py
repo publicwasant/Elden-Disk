@@ -340,6 +340,37 @@ def test_a_template_spell_alone_in_a_late_slot_builds_and_passes_the_gate(base, 
     assert build.build(base, copy.deepcopy(spells), src).data == res.data
 
 
+def test_a_cast_motion_may_be_a_name_or_the_games_own_number(base, src):
+    """`cast_motion` 32 and "black-flame-blade" are the same file; a number no spell of the game uses is refused by the build."""
+    def one(motion):
+        sp = copy.deepcopy(Z4["spells"])
+        sp[0]["cast_motion"] = motion
+        return sp
+    by_name = build.build(base, one("black-flame-blade"), src)
+    assert build.build(base, one(32), src).data == by_name.data
+    assert build.build(base, one(31), src).data != by_name.data
+    P, D = _tables(by_name.data)
+    assert D["magic"].get(P["magic"].find(SLOT1["magic"])[2], "refType") == 32
+    with pytest.raises(build.BuildError, match="cast_motion 3 is not a motion number"):
+        build.build(base, one(3), src)
+
+
+def test_a_visual_may_be_a_name_or_the_games_own_number(base, src):
+    """`effect.visual` 1605000 and "flame" are the same file; a number no effect of the game uses is refused by the build."""
+    def one(visual):
+        sp = copy.deepcopy(Z4["spells"])
+        sp[0]["effect"]["visual"] = visual
+        return sp
+    by_name = build.build(base, one("flame"), src)
+    assert build.build(base, one(1605000), src).data == by_name.data
+    other = build.build(base, one(9010), src)                       # the black flames of Black Flame
+    assert other.data != by_name.data
+    P, D = _tables(other.data)
+    assert D["sp"].get(P["sp"].find(SLOT1["sp_effect"])[2], "vfxId") == 9010
+    with pytest.raises(build.BuildError, match="effect.visual 99999999 is not a visual number"):
+        build.build(base, one(99999999), src)
+
+
 def test_a_spell_keeps_its_rows_when_another_one_is_added(base, src):
     one = _tables(build.build(base, _spells(2), src).data)[0]
     two = _tables(build.build(base, _spells(2, 3), src).data)[0]

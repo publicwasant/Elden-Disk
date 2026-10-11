@@ -13,7 +13,7 @@ from typing import NamedTuple
 
 from ..container import ContainerError, Param
 from ..defs import TABLE_FILES, Def
-from .spec import CAST_MOTIONS, GOODS_TYPES, MAX_SLOTS
+from .spec import GOODS_TYPES, MAX_SLOTS, VISUAL_VFX, motion_number, visual_number
 from . import chain as chainmod
 
 
@@ -26,8 +26,7 @@ DUMMY = 999999999            # never-used debug row at the end of Goods / Magic 
 SHOP_DUMMY = 9999002         # the same in ShopLineup
 CAST_FROM = 6050             # Magic row cloned: Flame, Grant Me Strength (cast animation, sfx)
 SHOP_CLONE = 100507
-# effect.visual -> SpEffect.vfxId: flame = the burning body of Flame! Grant Me Strength, flask = Heal's glow, none = no lingering visual
-VISUAL_VFX = {"flame": 1605000, "flask": 5030, "none": -1}
+# effect.visual -> SpEffect.vfxId (spec.VISUAL_VFX): flame = the burning body of Flame! Grant Me Strength, flask = Heal's glow, none = no lingering visual
 HEAL_GOODS, HEAL_SP, FLAME_SP, ENDURE_SP, ICON_GOODS = 6421, 1642100, 1605000, 1650, 6424
 
 KEYS = ("goods", "magic", "sp", "shop", "bullet", "atk")      # the tables a recipe may add rows to
@@ -73,6 +72,22 @@ def _row(P: Param, rid: int, what: str):
     if r is None:
         raise RecipeError("%s: row %d is missing, so this is not the 1.17.1 regulation.bin" % (what, rid))
     return r
+
+
+def _motion(P: dict, D: dict, spell: dict) -> int:
+    """Magic.refType of a spell made from scratch: the number of its `cast_motion`, which some Magic row of the game must use."""
+    n = motion_number(spell["cast_motion"])
+    if not any(D["magic"].get(r[2], "refType") == n for r in P["magic"].rows):
+        raise RecipeError("%s: cast_motion %d is not a motion number any spell of the game uses (the handbook lists them)" % (spell["id"], n))
+    return n
+
+
+def _visual(P: dict, D: dict, spell: dict) -> int:
+    """SpEffect.vfxId of the body effect of a spell made from scratch: the number of its `effect.visual`, which some SpEffect row of the game must use."""
+    n = visual_number(spell["effect"]["visual"])
+    if n not in VISUAL_VFX.values() and not any(D["sp"].get(r[2], "vfxId") == n for r in P["sp"].rows):
+        raise RecipeError("%s: effect.visual %d is not a visual number any effect of the game uses (the handbook lists them)" % (spell["id"], n))
+    return n
 
 
 def _shop_row(P: dict, D: dict, spell: dict, ids: dict):
@@ -233,7 +248,7 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
         f = dict(changeHpPoint=-e["heal_hp_per_tick"], changeMpPoint=-e["restore_fp_per_tick"],
                  staminaRecoverChangeSpeed=e["stamina_regen_speed"], effectEndurance=e["duration_seconds"],
                  motionInterval=e["tick_seconds"], iconId=20411, spCategory=161, stateInfo=50,
-                 vfxId=VISUAL_VFX[e["visual"]])
+                 vfxId=_visual(P, D, spell))
         for n in ("isExtendSpEffectLife", "isContractSpEffectLife"):
             f[n] = D["sp"].get(flame, n)
         for n, v in f.items():
@@ -252,7 +267,7 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
         f = dict(disableParam_NT=0, sortId=5511 + spell["slot"] - 1, mp=spell["fp_cost"], stamina=spell["stamina_cost"],
                  requirementFaith=r["faith"], iconId=4036, refCategory1=2, refId1=ids["sp_effect"],
                  requirementIntellect=r["intelligence"], requirementLuck=r["arcane"],      # Arcane is stored in requirementLuck
-                 refType=CAST_MOTIONS[spell["cast_motion"]])
+                 refType=_motion(P, D, spell))
         if poise:
             f.update(refCategory2=2, refId2=ids["poise_sp_effect"])
         for n, v in f.items():
@@ -338,7 +353,7 @@ def check_incantation(P: dict, D: dict, spell: dict) -> list:
         need("magic", magic, "refId1", ids["sp_effect"], mname)
         need("magic", magic, "disableParam_NT", 0, mname)
         for name, want in (("mp", spell["fp_cost"]), ("stamina", spell["stamina_cost"]), ("requirementIntellect", r["intelligence"]),
-                           ("requirementFaith", r["faith"]), ("requirementLuck", r["arcane"]), ("refType", CAST_MOTIONS[spell["cast_motion"]])):
+                           ("requirementFaith", r["faith"]), ("requirementLuck", r["arcane"]), ("refType", motion_number(spell["cast_motion"]))):
             need("magic", magic, name, want, mname, "G5")
         if spell.get("poise_while_casting_seconds"):
             need("magic", magic, "refCategory2", 2, mname)
@@ -357,7 +372,7 @@ def check_incantation(P: dict, D: dict, spell: dict) -> list:
                 bad.append("G13: %s: %s.%s is %s: a heal must be negative or it drains the player" % (who, sname, name, got))
             need("sp", sp, name, -amount, sname, "G13")
         for name, want in (("staminaRecoverChangeSpeed", e["stamina_regen_speed"]), ("effectEndurance", e["duration_seconds"]),
-                           ("motionInterval", e["tick_seconds"]), ("vfxId", VISUAL_VFX[e["visual"]])):
+                           ("motionInterval", e["tick_seconds"]), ("vfxId", visual_number(e["visual"]))):
             need("sp", sp, name, want, sname, "G5")
     _check_shop(P, D, spell, ids, who, row, need, bad)
     if goods is None and magic is not None:

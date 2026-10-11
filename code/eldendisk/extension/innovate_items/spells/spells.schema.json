@@ -112,9 +112,18 @@
           "maximum": 999
         },
         "cast_motion": {
-          "enum": [
-            "flame-grant-me-strength",
-            "black-flame-blade"
+          "anyOf": [
+            {
+              "enum": [
+                "flame-grant-me-strength",
+                "black-flame-blade"
+              ]
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999
+            }
           ]
         },
         "effect": {
@@ -147,11 +156,20 @@
               "maximum": 600
             },
             "visual": {
-              "enum": [
-                "flame",
-                "flask",
-                "none",
-                null
+              "anyOf": [
+                {
+                  "enum": [
+                    "flame",
+                    "flask",
+                    "none",
+                    null
+                  ]
+                },
+                {
+                  "type": "integer",
+                  "minimum": -1,
+                  "maximum": 99999999
+                }
               ]
             }
           }

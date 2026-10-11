@@ -237,7 +237,9 @@ def test_a_buff_next_to_the_heal_over_time_spell_keeps_both_slots_rows():
     P["sp"] = container.Param(param_blob(sorted([(r[0], bytes(r[2])) for r in P["sp"].rows] + [(recipes.HEAL_SP, bytes(D["sp"].size)),
                                                     (recipes.FLAME_SP, bytes(D["sp"].size)), (recipes.ENDURE_SP, bytes(D["sp"].size))]),
                                          D["sp"].size))
-    P["magic"] = container.Param(param_blob(sorted([(r[0], bytes(r[2])) for r in P["magic"].rows] + [(recipes.CAST_FROM, bytes(D["magic"].size))]),
+    motion = bytearray(D["magic"].size)
+    D["magic"].set(motion, "refType", 32)                 # a Magic row that uses the motion the spell asks for (the build checks this)
+    P["magic"] = container.Param(param_blob(sorted([(r[0], bytes(r[2])) for r in P["magic"].rows] + [(recipes.CAST_FROM, bytes(motion))]),
                                             D["magic"].size))
     P["goods"] = container.Param(param_blob(sorted([(r[0], bytes(r[2])) for r in P["goods"].rows] + [(recipes.HEAL_GOODS, bytes(D["goods"].size)),
                                                     (recipes.ICON_GOODS, bytes(D["goods"].size))]), D["goods"].size))

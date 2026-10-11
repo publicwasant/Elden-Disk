@@ -20,7 +20,20 @@ PATH = ("innovate_items", "spells")   # where this extension sits in extension.j
 SECTION = ".".join(PATH)             # the same, as it is written in error messages
 MAX_SLOTS = 64                # proven in the game (T6): 64 new rows in each of Goods, Magic, ShopLineup and SpEffect
 ID_RE = r"[a-z0-9][a-z0-9_-]{0,39}"
-CAST_MOTIONS = {"flame-grant-me-strength": 31, "black-flame-blade": 32}
+CAST_MOTIONS = {"flame-grant-me-strength": 31, "black-flame-blade": 32}   # names for two of the game's motion numbers (Magic.refType)
+MAX_MOTION = 999              # a motion may also be written as the game's own number; the build checks that a Magic row uses it
+
+
+def motion_number(cm) -> int:
+    """The Magic.refType a `cast_motion` stands for: a name from CAST_MOTIONS or the number itself."""
+    return CAST_MOTIONS[cm] if isinstance(cm, str) else cm
+VISUAL_VFX = {"flame": 1605000, "flask": 5030, "none": -1}   # names for three of the game's visual numbers (SpEffect.vfxId)
+MAX_VFX = 99999999            # a visual may also be written as the game's own number; the build checks that a SpEffect row uses it
+
+
+def visual_number(v) -> int:
+    """The SpEffect.vfxId an `effect.visual` stands for: a name from VISUAL_VFX or the number itself."""
+    return VISUAL_VFX[v] if isinstance(v, str) else v
 VISUALS = ("flame", "flask", "none")   # none: only the cast flash (from Flame! Grant Me Strength), nothing burning on the body afterwards
 KINDS = ("attack", "buff", "clone", "enchant", "projectile")               # built today; "buff" is the default so designs from before `kind` stay as they were
 PLANNED_KINDS = ()                                 # kinds named in the design but not built yet (none since Phase 2.4)
@@ -156,8 +169,9 @@ def _buff(c, it, p, n, iid):
     o["fp_cost"] = c.integer(it, "fp_cost", p, 0, 999, 0)
     o["stamina_cost"] = c.integer(it, "stamina_cost", p, 0, 999, 0)
     cm = it.get("cast_motion", "flame-grant-me-strength")
-    if cm not in CAST_MOTIONS:
-        c.bad(p + ".cast_motion", "must be one of: " + ", ".join(sorted(CAST_MOTIONS)))
+    if not (cm in CAST_MOTIONS if isinstance(cm, str) else _int(cm) and 0 <= cm <= MAX_MOTION):
+        c.bad(p + ".cast_motion", "must be one of the names %s or a motion number from 0 to %d (Magic.refType; the handbook lists them)"
+              % (", ".join(sorted(CAST_MOTIONS)), MAX_MOTION))
         cm = "flame-grant-me-strength"
     o["cast_motion"] = cm
     eff = it.get("effect", {})
@@ -175,8 +189,9 @@ def _buff(c, it, p, n, iid):
         v = eff.get("visual", "flame")      # left out: flame. An explicit null means "nothing on the body", same as "none"
         if "visual" in eff and v is None:
             v = "none"
-        if v not in VISUALS:
-            c.bad(p + ".effect.visual", "must be one of: " + ", ".join(VISUALS))
+        if not (v in VISUALS if isinstance(v, str) else _int(v) and -1 <= v <= MAX_VFX):
+            c.bad(p + ".effect.visual", "must be one of the names %s or a visual number from -1 to %d (SpEffect.vfxId; the handbook lists them)"
+                  % (", ".join(VISUALS), MAX_VFX))
             v = "flame"
         e["visual"] = v
     o["effect"] = e

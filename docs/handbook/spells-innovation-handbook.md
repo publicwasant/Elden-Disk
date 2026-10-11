@@ -242,6 +242,29 @@ You will see fields `refCategory1…10` and `refId1…10`: each pair says "I cal
 
 Community tools such as Paramdex and Smithbox show the same tables with the same ids; they are a good second opinion.
 
+### 3.6 Two numbers that are not rows: the cast and the look
+
+Two dials of the home kitchen (Chapter 6) can also be written as a game number instead of a name. They are not row ids like the ones above; they are **settings stored inside a row**, and the game reuses each of them for many spells.
+
+| In your file | What it is | Stored in the game as | Where to look it up |
+|:--|:--|:--|:--|
+| `"cast_motion": 32` | the **cast animation** (how the hands move when you cast) | the `refType` field of the spell's Magic row | **Motion Finder**, in [spells-row-finder.md](spells-row-finder.md) |
+| `"visual": 1605000` | the **look on the body** while the effect lasts (burning body, glow) | the `vfxId` field of the effect's SpEffect row | **Visual Finder**, same file |
+
+How to choose: **find a spell whose cast or look you like** (you know them from playing), look it up in the matching Finder, and write its number. The names are only shortcuts for the best-known numbers:
+
+| Name | Number | It is |
+|:--|:-:|:--|
+| `flame-grant-me-strength` | `cast_motion` 31 | the cast of Flame, Grant Me Strength (also Flame Protect Me and others) |
+| `black-flame-blade` | `cast_motion` 32 | the cast of Black Flame Blade |
+| `flame` | `visual` 1605000 | the burning body of Flame, Grant Me Strength |
+| `flask` | `visual` 5030 | the healing glow of a Flask of Crimson Tears |
+| `none` (or `null`) | `visual` −1 | nothing on the body |
+
+On a spell made from a game spell the same two numbers go through `set` (Chapter 7): `"Magic.6210.refType": 31` changes the cast, `"SpEffect.1621000.vfxId": 9010` changes the look of the burn's effect. Both build and pass the tool's checks; neither has been tried in the game yet.
+
+> ◦ **Only these five have been tried in the game.** Any other number is checked (the tool refuses a number that no spell, or no effect, of the game uses) but not tested: it may look wrong, or show nothing. That is a fair experiment for an innovator: try it, and note what you see.
+
 ---
 
 ## Chapter 4 — Your first spell in ten minutes
@@ -364,13 +387,13 @@ This is the workshop for a spell that is truly yours. It is a **regenerating inc
 | `requires` | Stats needed: `intelligence`, `faith`, `arcane` | 0–99 each | **required** (missing stats are 0) |
 | `fp_cost` | FP to cast | 0–999 | **required** |
 | `stamina_cost` | Stamina to cast | 0–999 | 0 |
-| `cast_motion` | The animation: `"flame-grant-me-strength"` or `"black-flame-blade"` | those two | the first |
+| `cast_motion` | The cast animation: a **name** (`"flame-grant-me-strength"`, `"black-flame-blade"`) or the game's own **number** from the Motion Finder (section 3.6) | 2 names, or a number 0–999 that some spell of the game uses | `"flame-grant-me-strength"` |
 | `effect.heal_hp_per_tick` | HP gained each heartbeat | 0–9999 | 60 |
 | `effect.restore_fp_per_tick` | FP gained each heartbeat | 0–999 | 4 |
 | `effect.stamina_regen_speed` | How much faster stamina recovers while it lasts | 0–9999 | 100 |
 | `effect.tick_seconds` | Seconds between heartbeats | 0.1–60 | 0.5 |
 | `effect.duration_seconds` | How long the effect lasts | 0.5–600 | 15 |
-| `effect.visual` | What you see on the body: `"flame"` (burning body), `"flask"` (a healing glow), `"none"` or `null` (nothing) | — | `"flame"` |
+| `effect.visual` | What you see on the body: a **name** (`"flame"` burning body, `"flask"` healing glow, `"none"` or `null` nothing) or the game's own **number** from the Visual Finder (section 3.6) | 3 names, or −1 to 99,999,999 that some effect of the game uses | `"flame"` |
 | `poise_while_casting_seconds` | Super-armor while casting (you can't be staggered) | 0.1–10 | none |
 | `shop` | `price` 1–99,999,999 and `stock` (−1 = unlimited, or 1–99) | — | not for sale |
 | `name`, `description` | Kept in the file only (Chapter 9) | 80 / 400 characters | empty |
@@ -392,7 +415,7 @@ Because everything is a rate, a long duration with a big amount is very strong. 
 | the heal to be slow and steady | `duration_seconds` up, `heal_hp_per_tick` down |
 | mana back | `restore_fp_per_tick` up |
 | it harder to cast | `fp_cost` up, `requires` up |
-| a different look | `visual`, `cast_motion` |
+| a different look | `visual`, `cast_motion` (a name, or a number from the Visual / Motion Finder) |
 | to not be interrupted while casting | `poise_while_casting_seconds` |
 
 ### 6.3 Worked design: Reverse Cursed Technique ✓
@@ -674,9 +697,11 @@ Field names are the column names of the game's tables. These are the ones used i
 | Field | Table | Meaning |
 |:--|:--|:--|
 | `slotLength` | Magic | memory slots the spell takes |
+| `refType` | Magic | the cast animation (Motion Finder, section 3.6) |
 | `iconId` | Magic, Goods | which icon (a number from the game's icon sheet) |
 | `effectEndurance` | SpEffect | how long the effect lasts, in seconds (`-1` = endless, `0` = instant) |
 | `motionInterval` | SpEffect | seconds between beats of a repeating effect |
+| `vfxId` | SpEffect | the visual effect shown while it lasts (Visual Finder, section 3.6); `-1` = none |
 | `changeHpPoint`, `changeMpPoint` | SpEffect | HP / FP changed on each beat (negative = restores, as the home kitchen uses it) |
 | `staminaRecoverChangeSpeed` | SpEffect | how much faster stamina recovers |
 | `atkPhys`, `atkMag`, `atkFire`, `atkThun` | AtkParam_Pc | base damage of the hit: physical, magic, fire, lightning |
@@ -816,6 +841,8 @@ The tool lists **every** problem it finds at once.
 | `Bullet.10621000.…` | a **projectile** the spell makes | Row Finder: the spell's *Bullet* line |
 | `AtkParam_Pc.62101.…` | a **hit** the spell makes | Row Finder: the spell's *Hit* line (with its base damage) |
 | `….effectEndurance` / `….atkMag` | a **field** (column) | section 7.8 |
+| `"cast_motion": 32` | a **cast animation** number (a Magic `refType`) | Motion Finder (in the Row Finder file) |
+| `"visual": 1605000` | a **visual effect** number (a SpEffect `vfxId`) | Visual Finder (in the Row Finder file) |
 | the number after `:` | the new value | yours |
 
 Key = `Table . row id . field : new value`.
@@ -894,8 +921,8 @@ Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` o
 | `duration_seconds` | 0.5–600 |
 | `poise_while_casting_seconds` | 0.1–10 |
 | Effect rows per shelf | 8 · projectile rows 16 · hit rows 8 |
-| Cast animations (home-made) | `flame-grant-me-strength`, `black-flame-blade` |
-| Glow (`visual`) | `flame`, `flask`, `none` (or `null`) |
+| Cast animations (home-made) | `flame-grant-me-strength`, `black-flame-blade`, or a number 0–999 used by a spell of the game |
+| Glow (`visual`) | `flame`, `flask`, `none` (or `null`), or a number −1 to 99,999,999 used by an effect of the game |
 
 ### 12.5 Is it proven?
 
@@ -909,6 +936,8 @@ Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` o
 | Buff tuner | ◦ |
 | Fireball workshop | ✓ |
 | Strike workshop | ✓ |
+| `cast_motion` / `visual` by **name** | ✓ |
+| `cast_motion` / `visual` by **another number** | ◦ accepted, not tried |
 | Names, descriptions, icons | ✗ not yet |
 | Items other than spells | ✗ not yet |
 | Shelves 8 and up for sale | ✗ not yet |
@@ -1146,7 +1175,7 @@ Look a spell up by name. The **Id** is what you write in `from`. **FP** and **Me
 
 ## Appendix B — Row Finder: id → the rows a spell uses
 
-One entry per spell for every workshop above the Photocopier, with the ids you may write in `set`, their names, durations and base damage: **[spells-row-finder.md](spells-row-finder.md)** (a companion file next to this one).
+One entry per spell for every workshop above the Photocopier, with the ids you may write in `set`, their names, durations and base damage. The same file also holds the **Motion Finder** (numbers for `cast_motion`) and the **Visual Finder** (numbers for `effect.visual`): **[spells-row-finder.md](spells-row-finder.md)** (a companion file next to this one).
 
 ## Appendix C — For developers: where each fact comes from
 

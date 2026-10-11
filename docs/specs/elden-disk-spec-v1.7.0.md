@@ -77,8 +77,8 @@ Exit codes: `0` ok; `1` error (invalid design, unknown base, gate failed); `2` u
 | `type` | `incantation` |
 | `requires` | `intelligence`, `faith`, `arcane` 0-99 (45 / 15 / 10) |
 | `fp_cost`, `stamina_cost` | 0-999 (80 / 0) |
-| `cast_motion` | `flame-grant-me-strength` (default) or `black-flame-blade` (`Magic.refType` 31 / 32) |
-| `effect` | heal over time: `heal_hp_per_tick`, `restore_fp_per_tick`, `stamina_regen_speed`, `tick_seconds`, `duration_seconds`, `visual` `flame` (the burning body of Flame! Grant Me Strength) / `flask` (Heal's glow) / `none` or an explicit `null` (no lingering effect on the body; the cast flash stays; leaving the field out means `flame`) (60 / 4 / 100 / 0.5 / 15 / flame) |
+| `cast_motion` | a name, `flame-grant-me-strength` (default, `Magic.refType` 31) or `black-flame-blade` (32), or the game's own motion number, an integer 0-999 that some Magic row of the game uses as `refType` (checked by the build; only the two names are tried in the game; the numbers are listed in the handbook's Motion Finder) |
+| `effect` | heal over time: `heal_hp_per_tick`, `restore_fp_per_tick`, `stamina_regen_speed`, `tick_seconds`, `duration_seconds`, `visual` a name, `flame` (the burning body of Flame! Grant Me Strength, SpEffect `vfxId` 1605000) / `flask` (Heal's glow, 5030) / `none` or an explicit `null` (-1: no lingering effect on the body; the cast flash stays; leaving the field out means `flame`), or the game's own visual number, an integer from -1 to 99,999,999 that some SpEffect row of the game uses as `vfxId` (checked by the build; only the names are tried in the game; the Visual Finder lists the 72 used by spells) (60 / 4 / 100 / 0.5 / 15 / flame) |
 | `poise_while_casting_seconds` | optional; hyper armor (Endure-style poise buff, no damage reduction) while casting (2.0) |
 | `shop` | `price` 1..99,999,999, `stock` -1 (unlimited) or 1..99 (34590 / 1) |
 

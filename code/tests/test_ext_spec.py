@@ -32,6 +32,12 @@ def test_the_z4_example_is_valid_and_normalises_to_itself_plus_defaults():
     assert it["slot"] == 1 and it["id"] == ID and n["maximum"] == 64
 
 
+def test_a_cast_motion_is_a_name_or_a_number_and_is_kept_as_written():
+    for cm in ("black-flame-blade", 32, 0, 999):
+        assert spec.normalise(mutated(lambda i: i.update(cast_motion=cm)))["spells"][0]["cast_motion"] == cm
+    assert spec.motion_number("black-flame-blade") == 32 and spec.motion_number(7) == 7
+
+
 def test_missing_optional_parts_get_the_documented_defaults():
     d = mutated(lambda i: [i.pop(k) for k in ("effect", "cast_motion", "poise_while_casting_seconds", "name", "description")])
     it = spec.normalise(d)["spells"][0]
@@ -46,11 +52,21 @@ def test_missing_optional_parts_get_the_documented_defaults():
     (lambda i: i["requires"].update(faith=100), "requires.faith"),
     (lambda i: i["requires"].update(strength=10), "requires.strength"),
     (lambda i: i.update(cast_motion="fireball"), "cast_motion"),
+    (lambda i: i.update(cast_motion=1000), "cast_motion"),
+    (lambda i: i.update(cast_motion=-1), "cast_motion"),
+    (lambda i: i.update(cast_motion=True), "cast_motion"),
+    (lambda i: i.update(cast_motion="31"), "cast_motion"),
+    (lambda i: i.update(cast_motion=32.0), "cast_motion"),
     (lambda i: i.update(type="sorcery"), "type"),
     (lambda i: i.update(id="Bad Id"), "id"),
     (lambda i: i["shop"].update(stock=0), "shop.stock"),
     (lambda i: i["shop"].update(price=0), "shop.price"),
     (lambda i: i["effect"].update(visual="rainbow"), "effect.visual"),
+    (lambda i: i["effect"].update(visual=-2), "effect.visual"),
+    (lambda i: i["effect"].update(visual=100000000), "effect.visual"),
+    (lambda i: i["effect"].update(visual=True), "effect.visual"),
+    (lambda i: i["effect"].update(visual="1605000"), "effect.visual"),
+    (lambda i: i["effect"].update(visual=1.5), "effect.visual"),
     (lambda i: i["effect"].update(tick_seconds=0), "effect.tick_seconds"),
     (lambda i: i.update(poise_while_casting_seconds=99), "poise_while_casting_seconds"),
     (lambda i: i.update(surprise=1), "surprise"),
@@ -66,6 +82,12 @@ def test_invalid_specs_are_refused_with_the_path_of_the_problem(fn, where):
 def test_every_visual_is_accepted(visual):
     d = mutated(lambda i: i["effect"].update(visual=visual))
     assert spec.normalise(d)["spells"][0]["effect"]["visual"] == visual
+
+
+def test_a_visual_is_a_name_or_a_number_and_is_kept_as_written():
+    for v in ("flame", 1605000, -1, 9010):
+        assert spec.normalise(mutated(lambda i: i["effect"].update(visual=v)))["spells"][0]["effect"]["visual"] == v
+    assert spec.visual_number("flask") == 5030 and spec.visual_number(9010) == 9010
 
 
 def test_an_explicit_null_visual_means_none_but_a_missing_one_means_flame():
@@ -185,7 +207,7 @@ def test_the_schema_and_the_validator_agree():
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((PKG / "spells.schema.json").read_text(encoding="utf-8"))
     cases = [Z4] + [mutated(f) for f in (
-        lambda i: i.update(fp_cost=-1), lambda i: i["requires"].update(faith=100), lambda i: i.update(cast_motion="x"),
+        lambda i: i.update(fp_cost=-1), lambda i: i["requires"].update(faith=100), lambda i: i.update(cast_motion="x"), lambda i: i.update(cast_motion=32), lambda i: i.update(cast_motion=1000),
         lambda i: i["shop"].update(stock=0), lambda i: i.update(surprise=1), lambda i: i.pop("shop"),
         lambda i: i["effect"].update(tick_seconds=0), lambda i: i.update(icon_file="a.png"),
         lambda i: i["shop"].update(stock=-1), lambda i: i["shop"].update(price=99999999),
