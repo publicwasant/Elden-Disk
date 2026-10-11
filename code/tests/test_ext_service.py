@@ -274,9 +274,9 @@ def test_a_changed_price_needs_a_build_and_the_diff_names_the_field(ci):
     assert any("design changed" in r and "1 field" in r for r in d.reasons)
 
 
-def test_only_a_name_or_description_or_formatting_change_keeps_the_secured_file(ci):
+def test_only_a_text_or_formatting_change_keeps_the_secured_file(ci):
     build_and_secure(ci)
-    d = edited(lambda i: i.update(name="Another name", description="x"))
+    d = edited(lambda i: i.update(text={"goods_name": "Another name", "goods_captions": "x"}))
     s = spell_of(d)
     d["innovate_items"]["spells"]["slots"][ID] = dict(reversed(list(s.items())))       # the spell's own keys in another order
     ci.spec_path.write_text(json.dumps(d, indent=8), encoding="utf-8")
@@ -351,3 +351,23 @@ def test_diff_specs_lists_every_changed_field_in_dotted_form():
                      "reverse_curse_technique.fp_cost  80 -> 81",
                      "reverse_curse_technique.requires.arcane  10 -> (none)"]
     assert service.diff_specs(old, old) == []
+
+
+# ---- 1.7.1: the text for the game ----
+def test_texts_hold_every_slot_and_the_text_only_of_the_spells_that_are_built(ci):
+    from eldendisk.extension.innovate_items.spells import recipes
+    t = ci.texts("all")
+    gid = recipes.slot_rows(1)["goods"]
+    assert len(t) == 64 and t[gid] == SPELL["text"] and t[gid + 1] == {"goods_name": "", "goods_info": "", "goods_captions": ""}
+    write_spec(ci, file_of({ID: copy.deepcopy(SPELL), "second": copy.deepcopy(SPELL)}))
+    both, only_first = ci.texts("all"), ci.texts([ID])
+    assert both[gid + 1] == SPELL["text"] and only_first[gid + 1]["goods_name"] == "" and only_first[gid] == SPELL["text"]
+
+
+def test_a_text_change_is_not_a_build_change_for_any_of_the_decisions(ci):
+    spells = build_and_secure(ci)
+    d = edited(lambda i: i.update(text={"goods_name": "Changed"}))
+    write_spec(ci, d)
+    changed = ci.items("all")
+    base, sha = ci.read_base(ci.game)
+    assert ci.decide(changed, sha).use_secured and ci.decide_last(changed, "all", sha).use_secured

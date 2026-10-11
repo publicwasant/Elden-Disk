@@ -482,3 +482,28 @@ def test_a_record_that_cannot_be_written_discards_the_snapshot_without_tripping_
     s, world = make(env)
     assert s.run() == 1 and world.launched == 0
     assert tree(live) == before and not vault.list_snapshots() and vault.read_session() is None
+
+
+# ---- 1.7.1: the step after the game is up (the text of the spells) ----
+def test_on_running_is_called_once_when_the_record_authorises_write(env):
+    _, live, game, vault = env
+    seen = []
+    s, _ = make(env, World())
+    s.hooks.on_running = lambda pid: seen.append((pid, vault.read_session().state, vault.read_session().game_pid))
+    assert s.run() == 0
+    assert seen == [(GAME_PID, SessionState.RUNNING, GAME_PID)]
+
+
+def test_a_failing_on_running_never_ends_the_session(env):
+    logs = []
+    s, world = make(env, World(), log=SessionLog(emit=lambda *a, **k: logs.append(a)))
+    s.hooks.on_running = lambda pid: (_ for _ in ()).throw(OSError("cannot start"))
+    assert s.run() == 0 and world.launched == 1
+    assert s.history[-1] == State.IDLE and "the step after launch failed" in " | ".join(" ".join(map(str, a)) for a in logs)
+
+
+def test_on_running_is_not_called_with_the_vault_off(env):
+    seen = []
+    s, _ = make(env, World(), protect=False)
+    s.hooks.on_running = lambda pid: seen.append(pid)
+    assert s.run() == 0 and seen == []

@@ -34,7 +34,7 @@ def problems(d):
 # ---------------------------------------------------------------- the design file
 def test_an_enchant_holds_only_what_the_design_names():
     s = spec.normalise(design())["spells"][0]
-    assert s == {"slot": 1, "id": "black_flame_blade_copy", "kind": "enchant", "from": 6250, "name": "", "description": "", "requires": {}}
+    assert s == {"slot": 1, "id": "black_flame_blade_copy", "kind": "enchant", "from": 6250, "text": {"goods_name": "", "goods_info": "", "goods_captions": ""}, "requires": {}}
 
 
 def test_set_takes_speffect_keys_for_an_enchant_and_a_buff_with_from():

@@ -2,7 +2,7 @@
 
   run    host: back up the save, launch the game offline, restore the save when it exits (leave this open)
   read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
-  write  edit values in the running game (--set, --refill, --reset); only inside a session started by `run`
+  write  edit values in the running game (--set, --refill, --reset) or give it the spells' text (--text); only inside a session started by `run`
   vault  save vault tools (status, list, verify, restore, keep, prune)
   extension  build things for the game outside the game: `extension --list`, `extension innovate-items spells --add all|--secure`
 
@@ -123,6 +123,13 @@ def build_parser() -> argparse.ArgumentParser:
                         "params.effects.1621000 (one row), params.Magic.6230.mp (a field changed in this game process), "
                         "params.Magic.6230 (a row), or all")
     w.add_argument("--refill", metavar="LIST", help="refill current hp, fp, stamina to their maximum once, e.g. hp,fp,stamina")
+    w.add_argument("--text", action="store_true",
+                   help="put the text of the design's spells (name, short line, description) into the running game; `run` does this by "
+                        "itself after the game is up. Stands alone (only --wait, --spec and --extension-dir go with it)")
+    w.add_argument("--wait", nargs="?", type=float, const=300.0, default=0, metavar="SEC",
+                   help="--text: wait up to SEC seconds (default 300) for the game to have loaded its text")
+    w.add_argument("--spec", metavar="FILE", default=None, help="--text: the design (default: extension.json next to the exe, else the embedded copy)")
+    w.add_argument("--extension-dir", metavar="DIR", default=None, help="--text: where the built files are (default: <vault>\\extension)")
     add_vault_option(w)
     w.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
     add_verbose(w)
@@ -222,8 +229,14 @@ def main(argv=None) -> int:
             ap.error("--flat is for the printed values (read, --query, --live), not --export, --json or the monitors")
         if args.json and (args.live or args.export or monitor):
             ap.error("--json is for the one-shot print and --query only")
-    if args.cmd == "write" and not args.set and not args.refill and not args.reset:
-        ap.error("nothing to do: give --set NAME=VALUE, --refill LIST and/or --reset NAME")
+    if args.cmd == "write" and not args.text and not args.set and not args.refill and not args.reset:
+        ap.error("nothing to do: give --set NAME=VALUE, --refill LIST and/or --reset NAME, or --text")
+    if args.cmd == "write" and args.text and (args.set or args.refill or args.reset):
+        ap.error("--text stands alone (it does not go with --set, --refill or --reset)")
+    if args.cmd == "write" and not args.text and (args.wait or args.spec or args.extension_dir):
+        ap.error("--wait, --spec and --extension-dir go with --text")
+    if args.cmd == "write" and args.wait < 0:
+        ap.error("--wait must not be negative")
     if args.cmd == "extension" and not args.list and not args.ext_name:
         ap.error("give --list or an extension name (innovate-items spells)")
     if args.cmd == "extension" and args.ext_name == "innovate-items" and not getattr(args, "items_kind", None):

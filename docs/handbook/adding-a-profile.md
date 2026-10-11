@@ -460,3 +460,15 @@ A profile is pinned to one `eldenring.exe` hash, so nothing is borrowed from ano
 - **`rows`:** the key is the row **id** (digits, no leading zero), `name` is a text for people (shown as `name` in `disk-state.json`, never written, and not a field name you can use); every writable field needs its game value in `defaults` (what `write --reset` puts back; take it from the CSV export of the param). The tool finds a row by id in the descriptor table. A field called `name` is rejected in `fields`.
 
 To find the chains and the file on a new build: export the rows with Smithbox (view/export only), scan Cheat Engine for the first bytes of one row as an array of byte, find the file head (row count and data start next to it), then run a pointer scan on the head address (static addresses only, 8-byte aligned, level 4, max offset 16383) and keep the paths that are still right after restarting the game twice.
+
+---
+
+## Optional block: `text` (since 1.7.1)
+
+`text` tells `write --text` where the game keeps its item-text tables, so it can give the running game a spell's name and description. Optional: without it `write --text` says the game version has no `text` block (exit `2`). A block that is there must be complete.
+
+```json
+"text": { "rva": "0x3D61FB8", "array": "0x1F20", "files": { "GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24 } }
+```
+
+Read the 8-byte pointer at `eldenring.exe + rva`; it leads to an object. The pointer to the table of text file number N is at `object + array + N * 8`; `files` names the three tables and their N. To find them on a new build, follow handbook Chapter 19.5: `tools/dump_msgbnd.py` (the original tables), a game started by `run`, `tools/patch_text.py --scan --apply`, then `tools/probe_chain.py`. Check the result in the game (a rename must show).

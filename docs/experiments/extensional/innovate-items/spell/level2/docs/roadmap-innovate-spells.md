@@ -90,7 +90,8 @@ Goal: `extension.json` accepts and builds the five kinds; the number of slots pe
 
 - ✓ How `from` names a template: a numeric Magic id (author, 2026-10-09; a short name would need Paramdex, whose licence has not been checked).
 - [ ] ~~How slots 8-64 are obtained in the game (2.6).~~ Deferred 2026-10-11; to be discussed later.
-- [ ] Names, descriptions and icons need the game's text and archive files; still out of scope.
+- ✓ Names and descriptions (1.7.1, Level 3 step 1): not by archive files but by rebuilding the game's text tables in memory (handbook Chapter 19). Decided 2026-10-11: the `text` object replaces `name`/`description`; applied automatically after the swap.
+- [ ] Icons (Level 3 step 2) and a new colour/effect (step 3): to be discussed after the text work.
 
 ## Risks
 
@@ -98,3 +99,17 @@ Goal: `extension.json` accepts and builds the five kinds; the number of slots pe
 - Live edits only take effect where the game reads the row: measured Magic at the cast, Bullet at spawn, and a changed row acts on what is created afterwards; Goods in the menu and SpEffect on a target are not measured.
 - A cast motion may fire ref slots in a way that does not match a new spell's rows; found only by trying.
 - The envelope may be lower than hoped for five or six tables; the answer is a smaller number of slots, not a gate bypass.
+
+## Phase 3: Item Customization Level 3 (version 1.7.1)
+
+Level 3 = items that never existed in the game: their own name, text, icon, colour/effect. Order agreed 2026-10-11: (1) name and description text, (2) icon, (3) new colour/effect.
+
+- ✓ **3.1a Where the text lives and how to read it.** `tools/dump_msgbnd.py` (the game's archive: RSA index, AES-128, DCX KRAK) dumped `item`/`menu` `msgbnd` and their FMG tables.
+- ✓ **3.1b Does the game read a loose file?** No (tried 2026-10-11, with the files in the right folder the old name still showed).
+- ✓ **3.1c A rebuilt table in the game's memory.** `tools/probe_text.py`, `tools/patch_text.py`: renamed an item and added the new item's name, short line and long description in the real game.
+- ✓ **3.1d A fixed chain from the exe** (`eldenring.exe + 0x3D61FB8` → object, slot at `+ 0x1F20 + N * 8`), about 1 s instead of minutes (`tools/probe_chain.py`).
+- ✓ **3.1e In the tool.** `text` object in the spell design (replaces `name`/`description`, before `set`), profile block `text`, `writer/text.py`, `write --text [--wait]`, and `run` starts it by itself after the swap and launch (`Hooks.on_running`).
+- [ ] **3.1f In the game: the whole flow** (manual plan 1.7.1, TX): `run` alone gives the text, edit-and-redo with `write --text`, secured build unchanged by a text edit.
+- [ ] **3.1g Thai (and other scripts).** Not tried; the font may lack the glyphs.
+- [ ] **3.2 Icon.** After the text work is finished. First try: reuse an existing `iconId` through `set` (probably possible already, untried); a truly new picture needs the menu texture archive.
+- [ ] **3.3 New colour/effect** (for example a blue flame).

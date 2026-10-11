@@ -39,10 +39,10 @@ def test_a_cast_motion_is_a_name_or_a_number_and_is_kept_as_written():
 
 
 def test_missing_optional_parts_get_the_documented_defaults():
-    d = mutated(lambda i: [i.pop(k) for k in ("effect", "cast_motion", "poise_while_casting_seconds", "name", "description")])
+    d = mutated(lambda i: [i.pop(k) for k in ("effect", "cast_motion", "poise_while_casting_seconds", "text")])
     it = spec.normalise(d)["spells"][0]
     assert it["cast_motion"] == "flame-grant-me-strength" and it["effect"]["heal_hp_per_tick"] == 60
-    assert "poise_while_casting_seconds" not in it and it["name"] == ""
+    assert "poise_while_casting_seconds" not in it and it["text"] == {"goods_name": "", "goods_info": "", "goods_captions": ""}
 
 
 @pytest.mark.parametrize("fn,where", [
@@ -98,11 +98,34 @@ def test_an_explicit_null_visual_means_none_but_a_missing_one_means_flame():
     assert spec.build_view(a) == spec.build_view(b)          # null and "none" are the same design (no rebuild between them)
 
 
-@pytest.mark.parametrize("key", ["icon_file", "colour", "color", "icon", "text", "flame_color"])
+@pytest.mark.parametrize("key", ["icon_file", "colour", "color", "icon", "flame_color"])
 def test_level_3_fields_are_refused_by_name(key):
     with pytest.raises(spec.SpecError) as e:
         spec.normalise(mutated(lambda i: i.update({key: "x"})))
     assert any("Level 3" in p for p in e.value.problems)
+
+
+def test_text_is_an_object_with_three_fields_all_kept_and_none_required():
+    it = spec.normalise(mutated(lambda i: i.update(text={"goods_name": "A", "goods_captions": "Line 1\nLine 2"})))["spells"][0]
+    assert it["text"] == {"goods_name": "A", "goods_info": "", "goods_captions": "Line 1\nLine 2"}
+    assert list(it).index("text") < list(it).index("requires")       # the object sits before the numbers (and before `set` in a template)
+
+
+@pytest.mark.parametrize("text,where", [
+    ("x", "text"), ({"goods_name": 5}, "goods_name"), ({"goods_name": "x" * 81}, "goods_name"),
+    ({"goods_info": "x" * 121}, "goods_info"), ({"goods_captions": "x" * 1001}, "goods_captions"),
+    ({"goods_caption": "x"}, "goods_caption"), ({"name": "x"}, "text.name")])
+def test_a_bad_text_is_refused(text, where):
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(mutated(lambda i: i.update(text=text)))
+    assert any(where in p for p in e.value.problems)
+
+
+@pytest.mark.parametrize("old,new", [("name", "text.goods_name"), ("description", "text.goods_info")])
+def test_the_old_name_and_description_say_what_replaced_them(old, new):
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(mutated(lambda i: i.update({old: "x"})))
+    assert any(old in p and "renamed in 1.7.1" in p and new in p for p in e.value.problems)
 
 
 def test_all_problems_are_listed_not_just_the_first():
@@ -189,7 +212,7 @@ def test_moving_a_spell_to_another_slot_is_a_change_of_what_decides_the_build():
 def test_text_fields_do_not_change_what_decides_the_build():
     a = spec.normalise(Z4)
     b = copy.deepcopy(a)
-    b["spells"][0]["name"], b["spells"][0]["description"] = "Other name", "Other text"
+    b["spells"][0]["text"] = {"goods_name": "Other name", "goods_info": "x", "goods_captions": "Other text"}
     assert spec.build_view(a) == spec.build_view(b)
     b["spells"][0]["fp_cost"] += 1
     assert spec.build_view(a) != spec.build_view(b)

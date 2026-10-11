@@ -6,8 +6,11 @@
         "reverse_curse_technique": {
           "kind": "projectile",
           "from": 6421,  
-          "name": "Reverse Curse Technique",
-          "description": "Converts negative cursed energy into positive energy.",
+          "text": {
+            "goods_name": "Reverse Curse Technique",
+            "goods_info": "Converts negative cursed energy into positive energy",
+            "goods_captions": "Converts negative cursed energy into positive energy.\nHeals over time and restores FP."
+          },
           "fp_cost": 120,
           "requires": {
             "intelligence": 0,

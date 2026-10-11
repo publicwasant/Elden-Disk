@@ -10,8 +10,10 @@
 
 > **Update 2026-10-09.** The final item (Z4: Flame-style cast, 34,590 runes, stock 1, Int 45 / Fai 15 / Arc 10, FP 80, 2.0 s poise buff) worked in the real game, and **Elden-Disk now builds this file itself** (`extension innovate-items spells`, spec 1.7.0): same bytes as `tools/make_item.py --name Z4` (decrypted SHA-256 `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`), swapped in by `run`, put back byte-identical by the vault. The Y1/Y2 "pending" lines below are superseded by Z4. The poise part is not yet confirmed in the game. For more than one item see 17.1 (measurements added) and spec 1.7.0 section 10b.
 >
-> **Update 2026-10-09 (later).** Slot 1 of the back-growth build (appended rows in Goods, Magic, SpEffect and ShopLineup) passed in the game, and Elden-Disk can now *look at and change the tables of the running game*: `read --param Magic.6230` shows any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup by field name, `write --set params.Magic.6230.mp=0` changes a field live (and `--reset` puts the game's own value back), `read --param-check` compares a built `regulation.bin` with the game row by row (the slot-1 build was equal on every row of all six tables). This is the "observe" half of the method in this book without Cheat Engine, and the test bench for the next kinds of spell (clone, buff, enchant, projectile, attack): Magic is read at the cast, Bullet when the bullet is created, and a changed row acts only on what is created afterwards. See [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/docs/phase1-params-workbench.md) and [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md).
+> **Update 2026-10-09 (later).** Slot 1 of the back-growth build (appended rows in Goods, Magic, SpEffect and ShopLineup) passed in the game, and Elden-Disk can now *look at and change the tables of the running game*: `read --param Magic.6230` shows any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup by field name, `write --set params.Magic.6230.mp=0` changes a field live (and `--reset` puts the game's own value back), `read --param-check` compares a built `regulation.bin` with the game row by row (the slot-1 build was equal on every row of all six tables). This is the "observe" half of the method in this book without Cheat Engine, and the test bench for the next kinds of spell (clone, buff, enchant, projectile, attack): Magic is read at the cast, Bullet when the bullet is created, and a changed row acts only on what is created afterwards. See [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md) and [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md).
 
+>
+> **Update 2026-10-11 (1.7.1) — the text layer works.** Name, short line and long description of the new item now show in the real game. Not by editing a file (a loose replacement of the text archive is not read by the unpatched game, tried), but by giving the *running* game a rebuilt text table: Elden-Disk copies the game's own table, adds the entries for the new Goods ids, puts it in memory it allocates in the game and changes the single pointer that leads to it. Chapter 19 has the method, the chain from `eldenring.exe`, the research tools and the limits. The icon is still open.
 ---
 
 ## Preface — what this book is, and what it is not
@@ -62,7 +64,7 @@ Create a **brand-new incantation** (not a re-skin of an existing one), by any te
 |---|---|---|---|
 | 1 | A truly new item, repeatable method | ✅ done for **one** item; a second item needs free rows (see 17.1) | E3 |
 | 2a | Has an icon | ✅ (re-uses an existing icon id) | E3 |
-| 2b | Has a name and a description | ❌ shows `?GoodsName?` / `?GoodsInfo?` (text lives in `msgbnd`, not yet touched) | E3 |
+| 2b | Has a name and a description | ✅ (1.7.1, real game 2026-10-11) name, short line and long description are put into the running game's text tables, no file changes (Chapter 19) | E3, 19.6 |
 | 2c | Has a custom *image* | ⏳ not started (needs the menu-texture archive) | — |
 | 3 | Is an incantation with a configurable Faith requirement | ✅ shows *Incantation*, *Fai 20*, FP cost 30 | E3 |
 | 4 | On use: restore HP, FP and stamina | ✅ buff lasts 15.0 s, all three rise | E3 |
@@ -813,7 +815,7 @@ Known: every failing file had stored blocks; every compressed-only frame passed 
 
 ### 17.3 Name and description text (the UI layer, part 1)
 
-The game shows `?GoodsName?`/`?GoodsInfo?` because there is no text for the new Goods id. Text lives in **FMG** string tables inside `msgbnd` archives (e.g. the English item-text archive), which themselves live in the game's big archive files (`.bdt`/`.bhd`). Planned approach (E0): extract the item-name and item-info FMGs, add entries keyed by the new Goods id (`2230000`), repack, and (a) test whether the game accepts a **loose-file override** of that archive, or (b) apply the same *compressed-blocks-only* discipline if the archive is also zstd/DCX packed. The Elden-Disk **vault** also needs to learn to swap this file, which is why the original request said *"bring msgbnd into the vault"*.
+**Solved in 1.7.1, for the session — see Chapter 19.** The game showed `?GoodsName?`/`?GoodsInfo?` because there is no text for the new Goods id. The text lives in FMG string tables inside `msgbnd.dcx` archives inside `Data0.bdt`; a loose copy of the archive is not read by the unpatched game, so the text is put into the running game's memory instead. What stays open: a permanent file change (not needed), other scripts such as Thai (the font is untested) and other game languages.
 
 ### 17.4 A custom image (the UI layer, part 2)
 
@@ -840,13 +842,76 @@ Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame G
 | Step | Goal | Method | Risk |
 |---|---|---|---|
 | 1 | Close the loop on Y1/Y2 (cast style, re-cast, price, stock) | in-game test | low |
-| 2 | Add text (name, description) | FMG edit + vault support for the archive | medium (new file type) |
+| 2 | Add text (name, description) | ✅ 1.7.1: not by the archive but by a rebuilt table in the game's memory (Chapter 19) | done |
 | 3 | Retry table growth with compressed blocks only → more items (first test: move the Goods table to the end, see 17.1) | `reencode` + a table-growing `Bnd4` | medium |
 | 4 | "Until full" logic | SpEffect conditions | medium (unknown fields) |
 | 5 | Visual variants and colour | borrow ids; compare | low |
 | 6 | Custom image | texture archive | high |
 | 7 | Generalise `make_item.py` into a recipe/config format for many items | done for one item: Elden-Disk `spells.design.json` (spec 1.7.0); several items wait for step 3 | low |
-| 8 | Spells of every kind (clone, buff, enchant, projectile, attack) in up to 64 slots | Phase 1 (live read/write of six tables, check against the build) is done; Phase 2 is planned in [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md) | medium |
+| 8 | Spells of every kind (clone, buff, enchant, projectile, attack) in up to 64 slots | Phase 1 (live read/write of six tables, check against the build) is done; Phase 2 is planned in [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md) | medium |
+
+---
+
+# Part VI — Level 3: text in the game
+
+## Chapter 19 — Name, short line and description of a new item (1.7.1)
+
+### 19.1 Where the text lives
+
+| What | Where |
+|---|---|
+| The tables | **FMG** version 2 (little endian, 64-bit offsets): ids → UTF-16 strings. `GoodsName` (the name), `GoodsInfo` (the short line, "Item Effect"), `GoodsCaption` (the long description). A spell's text is keyed by its Goods id, which for our slots is `2230000 + slot - 1` (nothing in the game has text for those ids, so they showed `?GoodsName?`) |
+| The files | `/msg/engUS/item.msgbnd.dcx` (and `menu`, and the `_dlc01`/`_dlc02` ones): a BND4 inside a DCX (KRAK, the Oodle codec; `oo2core_6_win64.dll` is in the game folder) |
+| The archive | `Data0.bdt`, indexed by `Data0.bhd`: a BHD5 index encrypted with RSA (the public keys are embedded in `eldenring.exe`, five PEM blocks, in the order Data0..Data3, DLC); each file is found by a 64-bit hash of its lower-case path (multiplier `0x85`), and encrypted with an AES-128 key (ECB) stored in its index entry |
+
+### 19.2 What did not work, and what was not tried
+
+- **A loose file.** The archive was extracted and rebuilt with the new text (`tools/dump_msgbnd.py` + an edited copy) and placed in `Game\msg\engUS\`: the game showed no change. The unpatched game does not read loose message files (2026-10-11: the first attempt had the files in the wrong folder, the second had them in `Game\msg\engUS` and still showed the old name).
+- **Rewriting `Data0.bdt`.** Not tried: it is a very large file the vault would have to guard, and the in-memory method below needs none of that.
+
+### 19.3 What works: a rebuilt table in the game's memory
+
+1. `tools/probe_text.py` (read-only) looked for the dumped `GoodsName.fmg` in the running game's memory. No byte-exact copy existed, but a laid-over comparison (`analyse`) showed that the game keeps **each table as it is in the file, except the 8 bytes at `0x18`** (the position of the string offsets): there the game holds an absolute address (`table base + offsets position`). String offsets inside the table stay relative. **One** 8-byte pointer in the game's memory leads to each table.
+2. `tools/patch_text.py` built the table again with new entries (`Fmg.read(original)`, add, `write()`), allocated memory in the game (`VirtualAllocEx`), wrote the new table there (with its own address at `0x18`) and changed the one pointer (one aligned 8-byte write). The old table is untouched; putting the old pointer back undoes it; closing the game removes everything. Tried in the real game: Flame, Grant Me Strength showed "(text test)" and slot 1 in Kalé's shop showed its new name, short line and (Inventory → controller square) long description.
+3. Finding the pointer by scanning all of the game's memory took minutes and made the PC stutter. `tools/probe_chain.py` walked **backwards** from the pointer to the exe's own data and found a fixed chain for 1.17.1: the pointer at `eldenring.exe + 0x3D61FB8` leads to an object, and the pointer to the table of text file number N is at `object + 0x1F20 + N * 8` (GoodsName N = 10, GoodsInfo N = 20, GoodsCaption N = 24, all checked in the game). Following it takes about a second and worked in a fresh `run` session. In Elden-Disk it is the `text` block of the profile in `offsets.json`.
+
+### 19.4 In the tool
+
+| Piece | What |
+|---|---|
+| `extension.json` | each spell's `"text": {"goods_name", "goods_info", "goods_captions"}`, before `set`; 80 / 120 / 1000 characters. It is **not** part of the build (`build_view` leaves it out), so editing a text never rebuilds or un-secures anything |
+| `eldendisk/writer/text.py` | the memory side, bytes only: follow the chain, read the table the game holds, check it looks like a table, allocate, write the new table, change the pointer, read it back |
+| `eldendisk/extension/innovate_items/fmg.py` | the FMG reader/writer (stdlib only); `write()` is canonical (4 of 6 real files come back byte-identical; the other two differ in 2 trailing bytes and the size field) |
+| `write --text [--wait [SEC]]` (`commands/write.py`) | builds the three tables from the design and the game's own tables, skips a table that would not change, waits for the game to have loaded its text (the same tables twice in a row), switches the pointers, checks 3 s later that the game kept them |
+| `run` | with the vault ON and an extension build swapped in, starts `write --text --wait 300` once the record says RUNNING (hook `Hooks.on_running`). A separate process, so the host still never touches the game's memory; if it fails the game goes on |
+
+Rules that keep it safe: the same session check as every `write`; `VirtualAllocEx` exists only in `writer/writer.py` (the one new allocation; `test_write_capability_is_confined_to_the_writer_package` enforces it); the game's own table is never changed; an empty text removes the entry; an unchanged result allocates nothing.
+
+### 19.5 The research tools (`code/tools/`, a record; not needed to use the feature)
+
+| Tool | Does |
+|---|---|
+| `dump_msgbnd.py --game <Game folder> --out msgdump` | reads `item`/`menu` (+ DLC) `msgbnd.dcx` out of `Data0-3.bdt` (with `gamearchive.py`), opens the DCX (Oodle through the game's DLL) and the BND4, writes the `.fmg` files and `report.txt`. Writes only to `--out` |
+| `gamearchive.py` | the archive reader: RSA index, BHD5, path hash, AES-128 ECB. A library for the tool |
+| `probe_text.py` | read-only: finds the dumped table, or its laid-over copy, in the running game and the pointers to it (`--out textprobe.json`) |
+| `patch_text.py` | the experiment before the feature: `--apply` / `--undo` / `--scan` with the fixed text of the test |
+| `probe_chain.py` | read-only: from `textpatch.json` walks back to `eldenring.exe + rva`; the way to find the chain again for another game version |
+
+For another game version: run `dump_msgbnd.py` (the keys are in that exe), start the game with `run`, `patch_text.py --scan --apply`, then `probe_chain.py`, and put `rva`/`array`/`files` into the profile's `text` block.
+
+### 19.6 Results and limits
+
+| Test (real game, 2026-10-11) | Result |
+|---|---|
+| Rename of an existing item (Flame, Grant Me Strength + " (text test)") in the inventory | ✅ |
+| New item in Kalé's shop: name, short line | ✅ |
+| New item: long description (Inventory → controller square) | ✅ |
+| Fixed chain, a fresh `run` session, patch run by hand | ✅ about 1 s |
+| `run` starting `write --text --wait` by itself | ◦ built and unit-tested, to be tried (manual plan 1.7.1, TX) |
+| Thai or other scripts | ◦ not tried; the game's font may lack the glyphs |
+| A language other than English | ◦ not tried (the tool patches whichever tables the game has loaded) |
+
+The text exists only while the game runs. The old tables stay in memory (a few hundred KB per switch) until the game closes.
 
 ---
 
@@ -997,7 +1062,8 @@ Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame G
 | `legacy_raw_noop.py` | the failing no-op (S6/K-style): stored blocks, same bytes |
 | `inspect_rows.py`, `inspect_frame.py`, `selftest.py` | diff two rows / frame census / offline checks |
 | `example_all_spells_1fp.py` | the minimal "edit any table" example (Chapter 15) |
+| `dump_msgbnd.py`, `gamearchive.py`, `probe_text.py`, `patch_text.py`, `probe_chain.py` | the text research of 1.7.1 (`code/tools/`, Chapter 19.5) |
 
 ---
 
-*End of checkpoint 1. When the UI layer (text, image, inventory placement) is done, this book gets Part VI.*
+*End of checkpoint 1. Part VI (text, 1.7.1) is written; when the image and the inventory placement are done, this book gets Part VII.*

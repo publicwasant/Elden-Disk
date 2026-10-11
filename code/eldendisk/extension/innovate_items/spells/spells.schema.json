@@ -72,13 +72,24 @@
         "type": {
           "const": "incantation"
         },
-        "name": {
-          "type": "string",
-          "maxLength": 80
-        },
-        "description": {
-          "type": "string",
-          "maxLength": 400
+        "text": {
+          "type": "object",
+          "description": "The spell's text in the game (not part of the build; `write --text` puts it into the running game). goods_name: the name; goods_info: the short line under it; goods_captions: the long description (Inventory, square button). Empty or left out: the game shows nothing.",
+          "additionalProperties": false,
+          "properties": {
+            "goods_name": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "goods_info": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "goods_captions": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          }
         },
         "requires": {
           "type": "object",
@@ -236,13 +247,24 @@
             "sorcery"
           ]
         },
-        "name": {
-          "type": "string",
-          "maxLength": 80
-        },
-        "description": {
-          "type": "string",
-          "maxLength": 400
+        "text": {
+          "type": "object",
+          "description": "The spell's text in the game (not part of the build; `write --text` puts it into the running game). goods_name: the name; goods_info: the short line under it; goods_captions: the long description (Inventory, square button). Empty or left out: the game shows nothing.",
+          "additionalProperties": false,
+          "properties": {
+            "goods_name": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "goods_info": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "goods_captions": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          }
         },
         "requires": {
           "type": "object",

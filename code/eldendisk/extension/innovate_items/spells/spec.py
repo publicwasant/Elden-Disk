@@ -6,8 +6,9 @@ A slot is a place in the list, counted from 1 in file order; its number fixes th
 that moves to another slot gets other rows). A slot holding null is empty and is not built. The other sections of extension.json
 (other kinds of items under `innovate_items`, other extensions) and are left alone.
 
-Level 2a rules (handbook Part VI): text (name, description) is stored but not written into the game; anything that needs files
-inside the game's archives (colour, icon) is Level 3 and refused."""
+Text (since 1.7.1): `text` = {"goods_name", "goods_info", "goods_captions"} is the spell's name, its short line and its long
+description in the game. It is not part of the build (a new text never builds again; `write --text` puts it into the running game).
+Anything that needs files inside the game's archives (colour, icon) is still Level 3 and refused."""
 from __future__ import annotations
 
 import json
@@ -61,7 +62,9 @@ ID_FIELDS = {
               "vagrantBonusEneDropItemLotId", "vagrantItemEneDropItemLotId", "reinforceGoodsId", "reinforceMaterialId",
               "goodsType"},      # goodsType decides attack/support and sorcery/incantation: it follows the template
 }
-LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "text", "flame_color", "model"}
+LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "flame_color", "model"}
+TEXT_FIELDS = {"goods_name": 80, "goods_info": 120, "goods_captions": 1000}   # field -> most characters (name; the short line under it; the long description)
+RENAMED = {"name": "text.goods_name", "description": "text.goods_info (the long description is text.goods_captions)"}   # 1.7.0 -> 1.7.1
 
 
 class SpecError(Exception):
@@ -87,7 +90,9 @@ class _Check:
 
     def keys(self, obj, path, required, optional):
         for k in obj:
-            if k in LEVEL3_KEYS:
+            if k in RENAMED:
+                self.bad("%s.%s" % (path, k), "renamed in 1.7.1: use %s" % RENAMED[k])
+            elif k in LEVEL3_KEYS:
                 self.bad("%s.%s" % (path, k), "this needs files inside the game's archives (Level 3) and is not supported yet")
             elif k not in required and k not in optional:
                 self.bad("%s.%s" % (path, k), "unknown field")
@@ -121,6 +126,20 @@ class _Check:
             self.bad("%s.%s" % (path, key), "must be text of at most %d characters" % maxlen)
             return default
         return v
+
+
+def _text_object(c, it, p):
+    """`text`: {"goods_name", "goods_info", "goods_captions"} (each optional, text; empty = the game shows nothing). The canonical form
+    always holds all three."""
+    raw = it.get("text", {})
+    out = {k: "" for k in TEXT_FIELDS}
+    if not isinstance(raw, dict):
+        c.bad(p + ".text", "must be an object: " + ", ".join('"%s"' % k for k in TEXT_FIELDS))
+        return out
+    c.keys(raw, p + ".text", [], list(TEXT_FIELDS))
+    for k, hi in TEXT_FIELDS.items():
+        out[k] = c.text(raw, k, p + ".text", hi)
+    return out
 
 
 def empty_text(maximum: int = MAX_SLOTS) -> str:
@@ -160,11 +179,10 @@ def _shop(c, it, p):
 def _buff(c, it, p, n, iid):
     """A heal-over-time buff built from Flame, Grant Me Strength (the canonical form has no `kind`: it is the default)."""
     c.keys(it, p, ["type", "requires", "fp_cost"],
-           ["kind", "name", "description", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop"])
+           ["kind", "text", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop"])
     if it.get("type") != "incantation":
         c.bad(p + ".type", 'only "incantation" is supported')
-    o = {"slot": n, "id": iid, "type": "incantation",
-         "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
+    o = {"slot": n, "id": iid, "type": "incantation", "text": _text_object(c, it, p)}
     o["requires"] = _requires(c, it, p, True)
     o["fp_cost"] = c.integer(it, "fp_cost", p, 0, 999, 0)
     o["stamina_cost"] = c.integer(it, "stamina_cost", p, 0, 999, 0)
@@ -206,8 +224,8 @@ def _template(c, it, p, n, iid, kind):
     """A spell made from a game spell: `clone` (copy of the Goods and Magic rows, it keeps calling the template's own chain),
     `buff` with `from` and `enchant` (the same, and the template's own SpEffect rows are copied too, so they can be tuned with
     `set`). What is not named stays the template's, so the canonical form holds only what the design says."""
-    c.keys(it, p, ["kind", "from"], ["type", "name", "description", "requires", "fp_cost", "stamina_cost", "shop", "set"])
-    o = {"slot": n, "id": iid, "kind": kind, "name": c.text(it, "name", p, 80), "description": c.text(it, "description", p, 400)}
+    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set"])
+    o = {"slot": n, "id": iid, "kind": kind, "text": _text_object(c, it, p)}
     src = c.integer(it, "from", p, 1, 2**31 - 1)
     if src is not None:
         o["from"] = src
@@ -365,7 +383,7 @@ def as_file(spec: dict) -> dict:
 def build_view(spec: dict) -> dict:
     """What decides the bytes of the build (the text fields do not)."""
     return {"format": spec["format"],
-            "spells": [{k: v for k, v in it.items() if k not in ("name", "description")} for it in spec["spells"]]}
+            "spells": [{k: v for k, v in it.items() if k not in ("text", "name", "description")} for it in spec["spells"]]}
 
 
 def dumps(spec: dict) -> str:

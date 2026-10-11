@@ -416,7 +416,7 @@ def test_the_shipped_chr_state_ids_json_loads_and_has_no_sources():
 def test_write_capability_is_confined_to_the_writer_package():
     """game/memory.py stays read-only; WriteProcessMemory / PROCESS_VM_WRITE exist in one module (writer/writer.py)."""
     assert memory_reader.ACCESS_MASK == 0x1010
-    never = ["VirtualAllocEx", "CreateRemoteThread", "VirtualProtectEx", "NtWriteVirtualMemory", "SetThreadContext"]
+    never = ["CreateRemoteThread", "VirtualProtectEx", "NtWriteVirtualMemory", "SetThreadContext"]
     writer_py = PKG / "writer" / "writer.py"
     for f in PKG.rglob("*.py"):
         text = f.read_text(encoding="utf-8")
@@ -424,6 +424,7 @@ def test_write_capability_is_confined_to_the_writer_package():
         for name in never:
             assert name not in text, f"{name} found in {rel}"
         if f != writer_py:
+            assert "VirtualAllocEx" not in text, f"VirtualAllocEx found in {rel}"   # 1.7.1: the one allocation, for a text table
             assert "WriteProcessMemory" not in text, f"WriteProcessMemory found in {rel}"
             assert "PROCESS_VM_WRITE" not in text, f"PROCESS_VM_WRITE found in {rel}"
         if rel not in ("writer/writer.py", "commands/write.py"):

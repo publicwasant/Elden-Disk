@@ -39,7 +39,7 @@ def problems(d):
 # ---------------------------------------------------------------- the design file
 def test_a_clone_holds_only_what_the_design_names():
     s = spec.normalise(design())["spells"][0]
-    assert s == {"slot": 1, "id": "copy_of_black_flame", "kind": "clone", "name": "", "description": "", "from": 6210, "requires": {}}
+    assert s == {"slot": 1, "id": "copy_of_black_flame", "kind": "clone", "text": {"goods_name": "", "goods_info": "", "goods_captions": ""}, "from": 6210, "requires": {}}
 
 
 def test_a_clone_takes_cost_requirements_shop_and_set():
@@ -159,7 +159,7 @@ def test_the_schema_and_the_validator_agree_on_clones():
 def test_a_changed_clone_changes_what_decides_the_build():
     a = spec.build_view(spec.normalise(design(fp_cost=25)))
     b = spec.build_view(spec.normalise(design(fp_cost=26)))
-    c = spec.build_view(spec.normalise(design(fp_cost=25, name="Another name")))
+    c = spec.build_view(spec.normalise(design(fp_cost=25, text={"goods_name": "Another name"})))
     assert a != b and a == c
 
 

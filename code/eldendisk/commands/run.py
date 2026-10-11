@@ -1,10 +1,13 @@
 """`run`: the host. Vault backup -> offline launch -> wait for the game -> restore. It never reads game memory."""
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
+import eldendisk
 from ..console import require_windows_x64
-from .. import ui
+from .. import extension, ui
 from ..logbook import Tail, book
 from ..game.processes import GAME_EXE, anticheat_processes, find_pid, list_process_names, process_started, sha256_file
 from ..game.profile import load_profile
@@ -13,7 +16,7 @@ from ..host.host import Hooks, Session, State
 from ..paths import describe_resource
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, session_log
-from .extension import prepare_regulation
+from .extension import ext_dir, prepare_regulation, spec_file
 from ..extension.innovate_items.spells.service import ExtensionError, GateFailed
 
 
@@ -36,6 +39,40 @@ def auto_prune(vault: SaveVault, keep: int) -> None:
     if gone:
         book.ok("vault", f"pruned {len(gone)} old snapshot(s), kept the newest {keep}")
         book.d("vault", "pruned: " + ", ".join(gone))
+
+
+TEXT_WAIT = 300      # seconds the text step waits for the game to have loaded its text
+TEXT_MODES = ("secured", "last", "built")      # the regulation.bin is the extension's: the design's text belongs to it
+
+
+def design_has_text(args, vault_path: Path) -> bool:
+    """Is there any text in the design for the spells the build holds? (Nothing to start otherwise.)"""
+    try:
+        ci = extension.open_spells(ext_dir(args, vault_path), spec_file(args))
+        sel, _note = ci.selection()
+        return any(any(t.values()) for t in ci.texts(sel).values())
+    except ExtensionError:
+        return False
+
+
+def text_command(args, vault_path: Path) -> tuple[list[str], str | None]:
+    """The command that gives the running game the design's text, and the folder to run it in: `eldendisk write --text --wait`.
+    `run` itself never touches the game's memory; this is a separate process, as if you typed it in another terminal."""
+    frozen = getattr(sys, "frozen", False)
+    cmd = [sys.executable] if frozen else [sys.executable, "-m", "eldendisk"]
+    cmd += ["write", "--text", "--wait", str(TEXT_WAIT), "--vault", str(vault_path), "--offsets", str(args.offsets)]
+    for flag, value in (("--spec", getattr(args, "spec", None)), ("--extension-dir", getattr(args, "extension_dir", None))):
+        if value:
+            cmd += [flag, str(value)]
+    return cmd, None if frozen else str(Path(eldendisk.__file__).resolve().parent.parent)
+
+
+def start_text(args, vault_path: Path, spawn=subprocess.Popen):
+    """Start the text step in the background. Its lines appear in this console and in the log; if it fails the game goes on."""
+    cmd, cwd = text_command(args, vault_path)
+    book.d("ext", "starting: " + " ".join(cmd))
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}   # -v shows its log lines
+    return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), **quiet)
 
 
 def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
@@ -108,6 +145,7 @@ def cmd_run(args) -> int:
             out.append("the vault must not be inside the game folder")
         return out
 
+    children: list = []
     hooks = Hooks(
         find_game_pid=lambda: find_pid(GAME_EXE),
         process_started=process_started,
@@ -116,6 +154,8 @@ def cmd_run(args) -> int:
         exe_sha256=sha, game_dir=game_dir, game_guard=GameFolderGuard(game_dir), extra_preflight=extra,
         regulation_world=world,
         launch_timeout=args.launch_timeout,
+        on_running=(lambda pid: children.append(start_text(args, vault_path)))
+        if protect and world is not None and mode in TEXT_MODES and design_has_text(args, vault_path) else (lambda pid: None),
     )
     if any(n.lower() == STEAM_EXE for n in list_process_names()):
         book.w("steam", STEAM_CLOUD_NOTE)
@@ -128,6 +168,9 @@ def cmd_run(args) -> int:
     try:
         rc = session.run()
     finally:
+        for child in children:      # the text step ends by itself; do not leave it behind
+            if child.poll() is None:
+                child.terminate()
         if tail is not None:
             tail.stop()
     if State.RESTORING in session.history:   # a session really ran; never prune a vault that still owes a restore

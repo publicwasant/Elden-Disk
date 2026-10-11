@@ -130,6 +130,15 @@ class ParamsProfile:
 
 
 @dataclass(frozen=True)
+class TextProfile:
+    """Where the game keeps its text tables (measured on 1.17.1, tools/probe_chain.py): the pointer at `eldenring.exe + rva` leads
+    to an object, and the pointer to the table of text file N sits at `object + array + N * 8`. `files`: table name -> N."""
+    rva: int
+    array: int
+    files: dict[str, int]
+
+
+@dataclass(frozen=True)
 class Profile:
     sha256: str
     label: str
@@ -145,6 +154,7 @@ class Profile:
     at_grace: AtGraceConfig | None = None
     buffs_note: str | None = None
     params: ParamsProfile | None = None   # None -> params unsupported for this exe
+    text: TextProfile | None = None       # None -> `write --text` unsupported for this exe
 
 
 def _parse_sp_effect(d: dict) -> tuple[SpEffectLayout | None, str | None]:
@@ -250,6 +260,22 @@ def _parse_catalog(raw) -> dict[str, ParamChain]:
     return out
 
 
+def _parse_text(d: dict) -> TextProfile | None:
+    """Absent block -> None (text unsupported). A block that is there must be complete."""
+    t = d.get("text")
+    if t is None:
+        return None
+    if not isinstance(t, dict):
+        raise Incomplete("text must be an object")
+    files = t.get("files")
+    if not isinstance(files, dict) or not files:
+        raise Incomplete("text.files must be an object: table name -> text file number")
+    out = {}
+    for name, n in files.items():
+        out[str(name)] = _number(n, f"text.files.{name}", 0, 255)
+    return TextProfile(_num(t.get("rva"), "text.rva"), _num(t.get("array"), "text.array"), out)
+
+
 def _parse_params(d: dict) -> ParamsProfile | None:
     """Absent block -> None (params unsupported). A block that is there must be complete and consistent."""
     pr = d.get("params")
@@ -342,6 +368,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
         vitals = _parse_vitals(raw)
         at_grace = _parse_at_grace(raw)
         params = _parse_params(raw)
+        text = _parse_text(raw)
         return Profile(
             sha256=exe_sha256.lower(),
             label=str(raw.get("label") or exe_sha256[:12]),
@@ -357,6 +384,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
             at_grace=at_grace,
             buffs_note=note,
             params=params,
+            text=text,
         ), None
     except Incomplete as exc:
         return None, f"profile incomplete: {exc}"

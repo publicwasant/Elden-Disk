@@ -50,7 +50,7 @@ _(baseline: **[changes-version-1.6.4.md](changes-version-1.6.4.md)**; design: **
 | 17 | The reader accepts a table whose gap before the data is any multiple of 4 bytes (the grown Goods, Magic and ShopLineup files have gaps of 184, 168 and 56). | `game/params.py` |
 | 18 | **Tests:** `test_probe.py`, `test_param_tables.py`, `test_param_write.py`, `test_param_check.py` and additions to `test_params.py`, `test_main.py`, `test_read_command.py` (about 1,000 tests in all; the golden ones need the game's original `regulation.bin`). | `code/tests/` |
 
-Measured in the game: a Magic row is read at the cast, a Bullet row when the bullet is created, a written value survives Quit to Title and Continue, a changed row acts on what is created afterwards; the slot-1 build equals the game on every row of the six tables. Manual plan: PW1-PW11. Plan and results: [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/docs/phase1-params-workbench.md); what comes next: [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md).
+Measured in the game: a Magic row is read at the cast, a Bullet row when the bullet is created, a written value survives Quit to Title and Continue, a changed row acts on what is created afterwards; the slot-1 build equals the game on every row of the six tables. Manual plan: PW1-PW11. Plan and results: [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md); what comes next: [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md).
 
 ## Principle
 

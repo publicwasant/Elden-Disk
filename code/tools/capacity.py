@@ -24,7 +24,7 @@ from eldendisk.extension.innovate_items.spells import build, gate, recipes, spec
 KINDS = ("buff", "clone", "enchant", "projectile", "attack")
 FROM = {"clone": 6210, "enchant": 6250, "projectile": 6210, "attack": 4440}
 BUFF = {
-    "type": "incantation", "name": "Capacity buff", "description": "Heals over time.",
+    "type": "incantation", "text": {"goods_name": "Capacity buff", "goods_captions": "Heals over time."},
     "requires": {"intelligence": 45, "faith": 15, "arcane": 10}, "fp_cost": 80, "cast_motion": "black-flame-blade",
     "effect": {"heal_hp_per_tick": 60, "restore_fp_per_tick": 4, "stamina_regen_speed": 100, "tick_seconds": 0.5,
                "duration_seconds": 15, "visual": "flame"},

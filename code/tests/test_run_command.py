@@ -166,3 +166,110 @@ def test_run_hints_at_secure_only_after_a_session_that_ran_a_new_build(tmp_path,
     out = capsys.readouterr()
     book.close()
     assert ("extension innovate-items spells --secure" in out.out + out.err) is hint
+
+
+# ---- 1.7.1: the text step ----
+def _args(tmp_path, **kw):
+    import argparse
+    d = dict(vault=str(tmp_path / "vault"), offsets="offsets.json", spec=None, extension_dir=None, verbose=False)
+    return argparse.Namespace(**{**d, **kw})
+
+
+def test_the_text_command_is_write_text_wait_with_the_same_vault_offsets_and_design(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
+    cmd, cwd = run_cmd.text_command(_args(tmp_path, spec="my.json", extension_dir="ext"), tmp_path / "vault")
+    assert cmd[:3] == [run_cmd.sys.executable, "-m", "eldendisk"] and cmd[3:6] == ["write", "--text", "--wait"]
+    assert cmd[cmd.index("--vault") + 1] == str(tmp_path / "vault") and cmd[cmd.index("--offsets") + 1] == "offsets.json"
+    assert cmd[cmd.index("--spec") + 1] == "my.json" and cmd[cmd.index("--extension-dir") + 1] == "ext"
+    assert cwd and (run_cmd.Path(cwd) / "eldendisk").is_dir()
+    plain, _ = run_cmd.text_command(_args(tmp_path), tmp_path / "vault")
+    assert "--spec" not in plain and "--extension-dir" not in plain
+
+
+def test_the_frozen_exe_runs_itself(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_cmd.sys, "frozen", True, raising=False)
+    cmd, cwd = run_cmd.text_command(_args(tmp_path), tmp_path / "vault")
+    assert cmd[:2] == [run_cmd.sys.executable, "write"] and cwd is None
+
+
+def test_start_text_spawns_in_its_own_process_group_and_stays_quiet_only_under_v(tmp_path):
+    calls = []
+    run_cmd.start_text(_args(tmp_path), tmp_path / "vault", spawn=lambda cmd, **kw: calls.append(kw))
+    run_cmd.start_text(_args(tmp_path, verbose=True), tmp_path / "vault", spawn=lambda cmd, **kw: calls.append(kw))
+    assert "stdout" not in calls[0] and calls[1]["stdout"] is run_cmd.subprocess.DEVNULL
+    assert all("creationflags" in c for c in calls)
+
+
+def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text):
+    """cmd_run with a fake Session that keeps the hooks it was given -> (hooks, spawned commands)."""
+    import argparse
+    from eldendisk.logbook import book
+    box = {}
+
+    class FakeSession:
+        history = []
+
+        def __init__(self, vault, live, hooks, **k): box["hooks"] = hooks
+
+        def run(self):
+            box["hooks"].on_running(4242)
+            return 0
+
+    spawned = []
+    monkeypatch.setattr(run_cmd, "Session", FakeSession)
+    monkeypatch.setattr(run_cmd, "require_windows_x64", lambda: None)
+    monkeypatch.setattr(run_cmd.launcher, "find_game_dir", lambda d: tmp_path / "game")
+    monkeypatch.setattr(run_cmd, "sha256_file", lambda p: "ab" * 32)
+    monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
+    monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
+    monkeypatch.setattr(run_cmd, "session_log", lambda: None)
+    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (world, mode))
+    monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: text)
+    monkeypatch.setattr(run_cmd, "start_text", lambda a, v: spawned.append("text") or type("P", (), {"poll": lambda s: 0})())
+    args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=protect,
+                              no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
+    assert run_cmd.cmd_run(args) == 0
+    book.close()
+    return spawned
+
+
+@pytest.mark.parametrize("protect,world,mode,text,expect", [
+    (True, "w.bin", "built", True, ["text"]), (True, "w.bin", "secured", True, ["text"]), (True, "w.bin", "last", True, ["text"]),
+    (True, "w.bin", "built", False, []),             # no text in the design: nothing to start
+    (True, "w.bin", "file", True, []),               # `--regulation FILE` is not the extension's build
+    (True, None, "none", True, []),                  # nothing was swapped
+    (False, "w.bin", "built", True, [])])            # vault OFF: `write` is not allowed at all
+def test_run_starts_the_text_step_only_when_it_has_something_to_give(tmp_path, monkeypatch, protect, world, mode, text, expect):
+    assert _run_hooks(tmp_path, monkeypatch, protect=protect, world=world, mode=mode, text=text) == expect
+
+
+def test_a_text_step_still_running_when_the_session_ends_is_stopped(tmp_path, monkeypatch):
+    import argparse
+    from eldendisk.logbook import book
+    stopped = []
+
+    class Child:
+        def poll(self): return None
+        def terminate(self): stopped.append(1)
+
+    class FakeSession:
+        history = []
+        def __init__(self, vault, live, hooks, **k): self.h = hooks
+        def run(self):
+            self.h.on_running(1)
+            return 0
+
+    monkeypatch.setattr(run_cmd, "Session", FakeSession)
+    monkeypatch.setattr(run_cmd, "require_windows_x64", lambda: None)
+    monkeypatch.setattr(run_cmd.launcher, "find_game_dir", lambda d: tmp_path / "game")
+    monkeypatch.setattr(run_cmd, "sha256_file", lambda p: "ab" * 32)
+    monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
+    monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
+    monkeypatch.setattr(run_cmd, "session_log", lambda: None)
+    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: ("w.bin", "built"))
+    monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "start_text", lambda a, v: Child())
+    args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=True,
+                              no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
+    assert run_cmd.cmd_run(args) == 0 and stopped == [1]
+    book.close()

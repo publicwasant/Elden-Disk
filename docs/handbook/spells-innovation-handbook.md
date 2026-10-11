@@ -2,7 +2,7 @@
 ### Remix the spells Elden Ring already has into new ones — a hands-on guide for players, with a cheat-sheet inside
 
 > **For:** anyone who wants to design a spell and play it. You do **not** need to be a programmer.
-> **Version:** Elden-Disk 1.7.0 · Elden Ring 1.17.1 · offline play only · 2026-10-11
+> **Version:** Elden-Disk 1.7.1 · Elden Ring 1.17.1 · offline play only · 2026-10-11
 > **How sure are we?** Every claim carries a mark. **✓** = tried in the real game and it worked · **◦** = the tool accepts it and builds the right data, but nobody has cast it yet · **✗** = not possible.
 > **📌 Cheat-sheet boxes** (like this one) give the short version. The last chapter, *Quick Reference Card*, puts everything on one page.
 > **Looking for how the file is built inside?** That is the [Item Customization Handbook](innovate-items-handbook.md). **All commands?** See [cli-commands](../guilde/cli-commands.md).
@@ -274,8 +274,11 @@ The names are only shortcuts for the best-known numbers:
 "reverse_curse_boon": {
   "kind": "projectile",
   "from": 6430,
-  "name": "Reverse Curse Boon",
-  "description": "Blessing's Boon with the curse turned around: a short, strong mend instead of a long, faint one.",
+  "text": {
+    "goods_name": "Reverse Curse Boon",
+    "goods_info": "A short, strong mend instead of a long, faint one",
+    "goods_captions": "Blessing's Boon with the curse turned around: a short, strong mend instead of a long, faint one."
+  },
   "fp_cost": 70,
   "requires": { "intelligence": 0, "faith": 25, "arcane": 25 },
   "shop": { "price": 30000, "stock": 1 },
@@ -441,7 +444,34 @@ This is the workshop for a spell that is truly yours. It is a **regenerating inc
 | `effect.visual` | What you see on the body: a **name** (`"flame"` burning body, `"flask"` healing glow, `"none"` or `null` nothing) or the game's own **number** from the Visual Finder (section 3.6) | 3 names, or −1 to 99,999,999 that some effect of the game uses | `"flame"` |
 | `poise_while_casting_seconds` | Super-armor while casting (you can't be staggered) | 0.1–10 | none |
 | `shop` | `price` 1–99,999,999 and `stock` (−1 = unlimited, or 1–99) | — | not for sale |
-| `name`, `description` | Kept in the file only (Chapter 9) | 80 / 400 characters | empty |
+| `text` | An object: `goods_name` (the name), `goods_info` (the short line under it), `goods_captions` (the long description). Shown in the game (6.1b) | 80 / 120 / 1000 characters | empty |
+
+### 6.1b The text of your spell (since 1.7.1)
+
+A spell has three pieces of text, all in the object `text` (all optional; an empty one shows nothing):
+
+| Field | Where you see it |
+|:--|:--|
+| `goods_name` | The name: in the merchant's list and wherever the game shows the item's name |
+| `goods_info` | The short line shown with the item |
+| `goods_captions` | The long description: Inventory → select the spell → the controller's square button (the item's description page). `\n` starts a new line |
+
+```json
+"text": {
+  "goods_name": "Reverse Cursed Technique",
+  "goods_info": "Converts negative cursed energy into positive energy",
+  "goods_captions": "Converts negative cursed energy into positive energy.\nHeals over time and restores FP."
+}
+```
+
+What to know:
+
+- ✓ You do nothing extra. When the game is up, `eldendisk run` puts the text in by itself (you will see `text: 1 spell named in the game …`). Tried in the real game 2026-10-11: the name and short line in the merchant's list, the long description in the inventory.
+- It lasts until the game closes and is not saved anywhere. Every `run` does it again.
+- Changing only the text **does not rebuild** anything and does not un-secure a secured build. To see a new text while the game is running: `eldendisk write --text`.
+- Words in `text` are only for the spells that are built (the `--add` choice, Chapter 11); a spell that is not built shows nothing.
+- ◦ Only English letters were tried. Thai or other scripts might not exist in the game's font (boxes or blanks); try a short word first.
+- The old fields `name` and `description` of 1.7.0 are errors now; the message tells you where they went (`name` → `text.goods_name`, `description` → `text.goods_info`).
 
 ### 6.2 How to think about the numbers
 
@@ -470,8 +500,11 @@ Because everything is a rate, a long duration with a big amount is very strong. 
 ```json
 "reverse_curse_technique": {
   "type": "incantation",
-  "name": "Reverse Cursed Technique",
-  "description": "Converts negative cursed energy into positive energy.",
+  "text": {
+    "goods_name": "Reverse Cursed Technique",
+    "goods_info": "Converts negative cursed energy into positive energy",
+    "goods_captions": "Converts negative cursed energy into positive energy.\nHeals over time and restores FP."
+  },
   "requires": { "intelligence": 45, "faith": 15, "arcane": 10 },
   "fp_cost": 90,
   "cast_motion": "black-flame-blade",
@@ -494,7 +527,7 @@ Reading it line by line:
 |:--|:--|
 | the label `reverse_curse_technique` | The spell's id. It is the **first** entry, so it lives on shelf 1. |
 | `type: incantation` | A spell cast with a sacred seal. |
-| `name`, `description` | Your words. They are saved in the file, but the game cannot show them yet (Chapter 9). |
+| `text` | Your words: the name, the short line and the long description. The game shows them (6.1b). |
 | `requires` 45 / 15 / 10 | To memorize it you need 45 Intelligence, 15 Faith and 10 Arcane. |
 | `fp_cost: 90` | Each cast costs 90 FP. |
 | `cast_motion: black-flame-blade` | The character plays the Black Flame Blade animation. |
@@ -566,7 +599,7 @@ How many spells each workshop accepts today:
 | `type` | only as a check: a copy cannot change between incantation and sorcery | the original's |
 | `shop` | `price`, `stock` | not for sale |
 | `set` | see 7.5 | nothing changed |
-| `name`, `description` | stored only | empty |
+| `text` | `goods_name`, `goods_info`, `goods_captions` (6.1b) | empty |
 
 The smallest valid copy is `{"kind": "clone", "from": 6210}`. It is an exact copy with no shop line, so you cannot buy it, which is why you almost always add a `shop`.
 
@@ -793,8 +826,8 @@ Being honest about the frame saves you disappointment.
 
 | You might wish for… | Answer |
 |:--|:--|
-| A **name** and **description** that show up in the game | ✗ Not yet. The game shows `?GoodsName?`. What you write in `name` / `description` is **saved in your file** for when that is built. |
-| A **new picture / icon** | ✗ Not yet. The copy keeps the original's icon. |
+| A **name** and **description** that show up in the game | ✓ Since 1.7.1: write them in `text` (6.1b). They are put into the running game each time you start it with `run`; nothing is saved in the game's files. Only English letters are tried; Thai and other scripts may show as boxes ◦. |
+| A **new picture / icon** | ✗ Not yet (the next step after the text). The copy keeps the original's icon. |
 | A **new animation** | ✗ The tool cannot make animations. A home-made spell can pick one of two; a copy keeps the original's. |
 | A copy that is a **sorcery instead of an incantation** (or the reverse) | ✗ It keeps its type. |
 | A home-made spell that **deals damage** or **throws something** | ✗ Home-made spells only heal. For damage, remix a game spell. |
@@ -848,7 +881,8 @@ eldendisk extension innovate-items spells --secure               # 3. after it w
 - **Build only some spells:** `--add spells.slots.<id>` (the path of the spell in `extension.json`) builds just that spell; give several paths to build several, e.g. `--add spells.slots.my_heal spells.slots.my_flame`. `eldendisk run` then goes on building **the same spells** until you type `--add all` (or another `--add`). If you never use `--add`, `run` builds every spell. A rehearsal (`--dry-run`) does not change the choice. The tool always tells you which spells it is building and which it left out.
 - `run` uses the **secured** build while your design equals the secured one. If you changed something it says what changed (`reverse_curse_technique.shop.price  34590 -> 40000`) and rebuilds.
 - The files live in `<vault>\extension\innovate-items\spells\`: `regulation.bin` (latest build), `regulation.secured.bin`, `spells.commit.json`.
-- With `--vault-off` the spells are not used.
+- With `--vault-off` the spells are not used (and so no text is put in).
+- The text of the spells (6.1b) is put in by `run` once the game is up; `eldendisk write --text` (game running) does it again after you edit it.
 - After a build, `read --param-check` (game running) compares every original row with the game: they must all be equal, and your new rows are counted.
 
 ### 11.2 Messages and what to do
@@ -873,6 +907,10 @@ The tool lists **every** problem it finds at once.
 | `… already has a friendly field (…)` | You used `set` on `mp`, `requirementFaith`, … | Use `fp_cost`, `requires.…`. |
 | `slot N has no shop line` | A `shop` on shelf 8 or higher. | Remove `shop`, or use shelves 1–7. |
 | `GATE FAILED … nothing was swapped` | The suitcase is too heavy. | Fewer or lighter spells (Chapter 10). |
+| `.name: renamed in 1.7.1: use text.goods_name` (also `description`) | A 1.7.0 field. | Move the words into the `text` object (6.1b). |
+| `text: N spell(s) named in the game …` | The text was put into the running game. | Nothing; open the merchant or the inventory. |
+| `the game's text tables were not found within 300 s` | The game did not finish loading its text, or it is another version of the game. | Run `eldendisk write --text --wait` once the game shows the title screen. |
+| `the game replaced its text tables again after they were set` | The game reloaded its text while the tool was done. | Run `eldendisk write --text` again. |
 
 ---
 
@@ -925,8 +963,7 @@ Key = `Table . row id . field : new value`.
   },
   "poise_while_casting_seconds": 2.0,
   "shop": { "price": 1000, "stock": -1 },
-  "name": "My Spell",
-  "description": "What it does."
+  "text": { "goods_name": "My Spell", "goods_info": "One short line", "goods_captions": "What it does." }
 }
 ```
 
@@ -942,9 +979,8 @@ Required: `type`, `requires`, `fp_cost`. Everything else can be left out.
   "stamina_cost": 0,
   "requires": { "intelligence": 0, "faith": 0 },
   "shop": { "price": 1000, "stock": -1 },
-  "set": { "Magic.6100.slotLength": 1 },
-  "name": "My Remix",
-  "description": "What it does."
+  "text": { "goods_name": "My Remix", "goods_info": "One short line", "goods_captions": "What it does." },
+  "set": { "Magic.6100.slotLength": 1 }
 }
 ```
 
@@ -961,7 +997,7 @@ Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` o
 | `fp_cost`, `stamina_cost` | 0–999 |
 | `shop.price` | 1–99,999,999 |
 | `shop.stock` | −1 or 1–99 |
-| `name` / `description` | 80 / 400 characters (saved only) |
+| `text.goods_name` / `goods_info` / `goods_captions` | 80 / 120 / 1000 characters |
 | `heal_hp_per_tick` | 0–9999 |
 | `restore_fp_per_tick` | 0–999 |
 | `stamina_regen_speed` | 0–9999 |
@@ -1235,7 +1271,7 @@ One entry per spell for every workshop above the Photocopier, with the ids you m
 | Gate numbers | `code/eldendisk/extension/innovate_items/preflight.py` |
 | Field names per table | `paramdefs.py` (generated from Paramdex) |
 | Spell and row names, Finders | Paramdex `ER/Names/*.txt` (community), ids and numbers read from the original 1.17.1 `regulation.bin` with the tool's own chain reader (`chain.py`) |
-| Tests in the game | [manual-test-plan-1.7.0](../experiments/extensional/innovate-items/spell/docs/manual-test-plan-1.7.0.md) |
-| Roadmap, what is deferred | [roadmap-innovate-spells](../experiments/extensional/innovate-items/spell/docs/roadmap-innovate-spells.md) |
+| Tests in the game | [manual-test-plan-1.7.0](../experiments/extensional/innovate-items/spell/level2/docs/manual-test-plan-1.7.0.md) |
+| Roadmap, what is deferred | [roadmap-innovate-spells](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md) |
 | The full spec | [elden-disk-spec-v1.7.0](../specs/elden-disk-spec-v1.7.0.md) |
 | The story of how the first spell was built | [Item Customization Handbook](innovate-items-handbook.md) |

@@ -46,6 +46,7 @@ class Hooks:
     game_guard: GameFolderGuard | None = None
     regulation_world: Path | None = None           # 1.7.0: the regulation.bin to swap in for this session (named by the caller)
     extra_preflight: Callable[[], list[str]] = lambda: []
+    on_running: Callable[[int], None] = lambda pid: None   # 1.7.1: called once the game runs and the record authorises `write` (vault ON only)
     sleep: Callable[[float], None] = time.sleep
     clock: Callable[[], float] = time.monotonic
     launch_timeout: float = 120.0                  # seconds to wait for the game process to appear
@@ -249,6 +250,11 @@ class Session:
                     else:
                         self.log.ok("game", f"running, pid {cur}; `read` allowed, `write` not allowed")
                     self._to(State.RUNNING)   # from here `write` may edit; the record is what authorises it
+                    if self.protect:
+                        try:
+                            h.on_running(cur)
+                        except Exception as exc:   # whatever the caller starts here must never end the session
+                            self.log.w("host", f"the step after launch failed: {exc!r}")
                 h.sleep(h.poll)
             except KeyboardInterrupt:
                 self._absorb_interrupt()

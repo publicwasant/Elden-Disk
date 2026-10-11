@@ -36,7 +36,7 @@ def problems(d):
 # ---------------------------------------------------------------- the design file
 def test_a_projectile_holds_only_what_the_design_names():
     s = spec.normalise(design())["spells"][0]
-    assert s == {"slot": 1, "id": "black_flame_heal", "kind": "projectile", "from": 6210, "name": "", "description": "", "requires": {}}
+    assert s == {"slot": 1, "id": "black_flame_heal", "kind": "projectile", "from": 6210, "text": {"goods_name": "", "goods_info": "", "goods_captions": ""}, "requires": {}}
 
 
 def test_set_takes_bullet_and_speffect_keys_for_a_projectile():

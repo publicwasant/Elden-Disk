@@ -1,6 +1,6 @@
 # Manual test plan 1.7.0 (real game, Windows): extensions and `innovate-items spells`
 
-Only what is new in 1.7.0. The swap itself is [manual-test-plan-1.6.4.md](../../../../../manual-tests/manual-test-plan-1.6.4.md) (RG/RH checks still apply, with the file now coming from the extension). Tick `[ ]` as you go and write what you saw next to anything unexpected.
+Only what is new in 1.7.0. The swap itself is [manual-test-plan-1.6.4.md](../../../../../../manual-tests/manual-test-plan-1.6.4.md) (RG/RH checks still apply, with the file now coming from the extension). Tick `[ ]` as you go and write what you saw next to anything unexpected.
 
 > [!IMPORTANT]
 > **Before anything:** copy the save folder (`%APPDATA%\EldenRing\<SteamID64>`) **and** the game's own `regulation.bin` (`...\ELDEN RING\Game\regulation.bin`) somewhere safe; `vault status` must say no unresolved session. Offline only.

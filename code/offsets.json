@@ -1,5 +1,5 @@
 {
-  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. params (optional): the game's own tables (SpEffectParam), see docs/adding-a-profile.md. See README section 'Adding a profile'.",
+  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. text (optional): the pointer at eldenring.exe + rva leads to an object; the pointer to the text table of text file N is at object + array + N * 8 (files: the tables `write --text` replaces). params (optional): the game's own tables (SpEffectParam), see docs/adding-a-profile.md. See README section 'Adding a profile'.",
   "profiles": {
     "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891": {
       "label": "Elden Ring 1.17.1",
@@ -25,6 +25,7 @@
         "data_to_vitals": "0x138"
       },
       "at_grace": { "source": "anim", "equals": ["0x109AB"] },
+      "text": { "rva": "0x3D61FB8", "array": "0x1F20", "files": { "GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24 } },
       "params": {
         "file_layout": {
           "row_count": "0xA", "data_start": "0x30", "descriptors": "0x40",

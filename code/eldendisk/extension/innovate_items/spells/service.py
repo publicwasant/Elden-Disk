@@ -170,6 +170,16 @@ class Spells:
                                      "slots have a shop line (the merchant's group has no more free lines): remove its `shop`")
         return spells
 
+    def texts(self, which="all") -> dict:
+        """The text for the game: {goods id: {"goods_name", "goods_info", "goods_captions"}} for EVERY slot of the design (the Goods
+        id is the one the slot owns), empty where nothing is to be shown: a slot with no spell, or a spell that is not in `which`
+        (it is not built, so the game has no item to show it for). `write --text` puts this into the running game."""
+        raw = self.load_spec()
+        out = {recipes.slot_rows(n)["goods"]: dict.fromkeys(specmod.TEXT_FIELDS, "") for n in range(1, raw["maximum"] + 1)}
+        for s in self.items(which):
+            out[recipes.slot_rows(s["slot"])["goods"]] = dict(s["text"])
+        return out
+
     # ---------------- the base ----------------
     def read_base(self, game_file: Path | None) -> tuple:
         """The game's own regulation.bin -> (bytes, sha256). It must be the known untouched original, on every path."""
@@ -255,8 +265,8 @@ class Spells:
         return Decision(not reasons, reasons, diff)
 
     def decide(self, spells: list, base_sha: str) -> Decision:
-        """Use the secured file as it is, or build? Secured only when ALL hold: the design equals the secured spec (name,
-        description, whitespace, key order do not count), the secured file has the recorded hash, the game's file is the base
+        """Use the secured file as it is, or build? Secured only when ALL hold: the design equals the secured spec (text,
+        whitespace, key order do not count), the secured file has the recorded hash, the game's file is the base
         the record was made on, and the recipes are the same version. Nothing is ever built to decide this."""
         want = {"format": specmod.FORMAT, "spells": spells}      # build_view looks only at the spells
         try:

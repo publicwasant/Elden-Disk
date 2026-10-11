@@ -29,3 +29,11 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Research output of tools/ (game text dumps, probe records, test files)
+/code/msgdump/
+/code/texttest/
+/code/textprobe.json
+/code/textchain.json
+/code/textpatch.json
+*.envelope-test.bin

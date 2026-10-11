@@ -12,6 +12,8 @@ Rules enforced here:
   * writes run at a bounded rate and every value is clamped to a sane range                                       MW-5
   * offsets come from the profile that matched the exe hash (the Layout's profile)                                MW-6
   * nothing is written unless the WriteGate is open (session authorised, no anti-cheat, known exe)               FR-14
+  * since 1.7.1 the one allocation: `alloc` gives `write --text` room in the game for a text table (writer/text.py);
+    the game's own memory is never freed or resized
 """
 from __future__ import annotations
 
@@ -34,6 +36,7 @@ from ..game.values import is_param_name, write_targets
 
 PROCESS_VM_WRITE = 0x0020
 PROCESS_VM_OPERATION = 0x0008
+MEM_COMMIT_RESERVE, PAGE_READWRITE = 0x3000, 0x04
 WRITE_ACCESS_MASK = ACCESS_MASK | PROCESS_VM_WRITE | PROCESS_VM_OPERATION
 
 # vitals block (see disk.parse_vitals_block): byte offset of the CURRENT value, index of its (capped) maximum
@@ -48,6 +51,8 @@ if _win.IS_WINDOWS:
         wintypes.HANDLE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t),
     ]
     _win.k32.WriteProcessMemory.restype = wintypes.BOOL
+    _win.k32.VirtualAllocEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.c_size_t, wintypes.DWORD, wintypes.DWORD]
+    _win.k32.VirtualAllocEx.restype = ctypes.c_void_p
 
 
 class WritableProcessMemory(ProcessMemory):
@@ -64,6 +69,13 @@ class WritableProcessMemory(ProcessMemory):
         n = ctypes.c_size_t(0)
         ok = _win.k32.WriteProcessMemory(self._h, ctypes.c_void_p(addr), buf, len(data), ctypes.byref(n))
         return bool(ok) and n.value == len(data)
+
+    def alloc(self, size: int) -> int:
+        """New read/write memory in the game, `size` bytes (0 on failure). Used once per text table by writer/text.py; the memory
+        stays until the game closes."""
+        if size <= 0:
+            return 0
+        return _win.k32.VirtualAllocEx(self._h, None, size, MEM_COMMIT_RESERVE, PAGE_READWRITE) or 0
 
 
 class WriteGate:

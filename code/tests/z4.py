@@ -5,8 +5,9 @@ import json
 ID = "reverse_curse_technique"
 SPELL = {
     "type": "incantation",
-    "name": "Reverse Curse Technique",
-    "description": "Heals over time while you cast; you can be hit but the cast is not interrupted.",
+    "text": {"goods_name": "Reverse Curse Technique",
+             "goods_info": "Heals over time while you cast",
+             "goods_captions": "Heals over time while you cast; you can be hit but the cast is not interrupted."},
     "requires": {"intelligence": 45, "faith": 15, "arcane": 10},
     "fp_cost": 80,
     "cast_motion": "black-flame-blade",
