@@ -267,11 +267,12 @@ def cmd_write_text(args) -> int:
         mem.close()
 
 
-def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None) -> int:
-    """Recolour the fire (`colour`, the two effects) and the golden eyes (`eyes`, when the design gives them a colour): one look
+def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=False) -> int:
+    """Recolour the fire (`colour`, the two effects) and the positive curse energy eyes (`eyes`, when the design gives them a colour): one look
     through the game's memory for the effect files not done yet (all in the same look), as the schedule `passes` says (the rest in
     seconds before each look). A look is only made while something is missing. Either colour may be None. `accent`: the second colour
-    of the fire (the places the fire's plan leaves out, writer/fxr_plans.py `accent`), with `colour` only."""
+    of the fire (the places the fire's plan leaves out, writer/fxr_plans.py `accent`), with `colour` only. `fresh` (`--when-loaded`, a game
+    `run` has just started): nothing can be painted yet, so the look searches only for the game's own colours (half the searching)."""
     ring = accent if colour is not None else None          # the ring of runes at the hand takes the fire's second colour
     targets = {**({e: colour for e in wfxr.effect_ids()} if colour is not None else {}),
                **({e: eyes for e in wfxr.eyes_ids()} if eyes is not None else {}),
@@ -290,7 +291,7 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None) -> int:
             got, found = wfxr.paint_many(mem, gate, todo, {e: targets[e] for e in todo},
                                          everything=any(e in wfxr.eyes_ids() or e in optional for e in todo),
                                          accent=accent if colour is not None else None,
-                                         required=[e for e in todo if e not in optional])
+                                         required=[e for e in todo if e not in optional], painted=not fresh)
         except wfxr.FlameError as exc:
             book.e("write", f"{what}: {exc}")
             return 1
@@ -331,7 +332,7 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None) -> int:
 
 
 def cmd_write_flame(args) -> int:
-    """`write --flame-color [--wait [SEC] | --when-loaded]`: see the module text. The golden eyes get their colour in the same step."""
+    """`write --flame-color [--wait [SEC] | --when-loaded]`: see the module text. The positive curse energy eyes get their colour in the same step."""
     require_windows_x64()
     when_loaded = bool(getattr(args, "when_loaded", False))
     wait = ATTACH_WAIT if when_loaded else float(getattr(args, "wait", 0) or 0)
@@ -350,7 +351,7 @@ def cmd_write_flame(args) -> int:
         if n:
             book.w("write", n)
     if colour is None and eyes is None:
-        book.i("write", "no spell of the design names a flame_color or a golden_eyes color: nothing to do")
+        book.i("write", "no spell of the design names a flame_color or a positive_curse_energy_eyes color: nothing to do")
         return 0
     target, code, record = _attach(args, wait)
     if target is None:
@@ -366,7 +367,7 @@ def cmd_write_flame(args) -> int:
             if not _wait_world(mem, target, "flame colour"):
                 book.i("write", "flame colour: the game closed before a character was in the world; nothing was written")
                 return 0
-            return _put_flame(mem, gate, colour, LOOKS, eyes, accent)
+            return _put_flame(mem, gate, colour, LOOKS, eyes, accent, fresh=True)
         return _put_flame(mem, gate, colour, LOOKS if wait > 0 else ONCE, eyes, accent)
     finally:
         mem.close()

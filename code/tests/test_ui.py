@@ -373,7 +373,8 @@ def test_a_diff_line_colours_only_the_id_part(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
     ui.pretty_sink(stream=buf)(ev(tag=EXT_TAG, msg="  black_flame_copy.shop.price  1000 -> 2000"))
-    assert PURPLE.format("black_flame_copy") + ".shop.price  1000 -> 2000" in buf.getvalue()
+    assert PURPLE.format("black_flame_copy") + ".shop.price  " in buf.getvalue()           # the id of the spell is purple, the rest is not
+    assert "[38;5;179m1000[0m -> [38;5;179m2000[0m" in buf.getvalue()      # numbers of 4 digits or more: their own colour
 
 
 def test_other_tags_paths_and_longer_words_are_left_alone(spells, monkeypatch):
@@ -413,3 +414,72 @@ def test_an_error_stays_red_and_clearing_the_ids_stops_the_colour(spells, monkey
     buf = Stream()
     ui.pretty_sink(stream=buf)(ev(tag=EXT_TAG, msg="built black_flame_copy"))
     assert "\x1b[35m" not in buf.getvalue()
+
+
+# ---- ids and addresses, and the block of `extension innovate-items spells` ----
+ID, ADDR = "\x1b[38;5;179m{}\x1b[0m", "\x1b[38;5;75m{}\x1b[0m"
+
+
+def test_ids_and_addresses_have_their_own_colours_and_nothing_else_does(monkeypatch):
+    colour(monkeypatch)
+    text = r"GoodsName: 114880 -> 114952 bytes, now at 0x7ff3cbbb0000 (20261012-185726, 10,008,626, ER0000.sl2, 23:41:02, 1.7.1, C:\x\2230000)"
+    got = ui.paint_numbers(text, True)
+    assert ID.format("114880") in got and ID.format("114952") in got and ADDR.format("0x7ff3cbbb0000") in got
+    assert got.count("\x1b[38;5;") == 3                                     # three painted: not the date, the time, the version, the path
+    assert ui.paint_numbers(text, False) == text
+
+
+def test_a_number_inside_a_warning_goes_back_to_the_colour_of_the_warning(monkeypatch):
+    colour(monkeypatch)
+    buf = Stream()
+    ui.pretty_sink(stream=buf)(ev(level="W", tag="write", msg="the game moved 114880 bytes"))
+    assert ID.format("114880") + "\x1b[33m" in buf.getvalue()
+
+
+def test_the_raw_view_colours_the_message_and_not_the_pid(monkeypatch):
+    colour(monkeypatch)
+    buf = Stream()
+    ui.raw_sink(stream=buf)(ev(level="D", tag="write", msg="table at 0x7ff3cbbb0000 is 114880 bytes"))
+    out = buf.getvalue()
+    assert ADDR.format("0x7ff3cbbb0000") in out and ID.format("114880") in out and ID.format("4242") not in out
+
+
+def test_a_block_draws_the_lines_of_the_design_tag_inside_it(monkeypatch):
+    monkeypatch.setenv("NO_COLOR", "1")
+    err = Stream()
+    sink = ui.pretty_sink(stream=err)
+    clock = iter([0.0, 5.8])
+    with ui.Block("design", stream=err, clock=lambda: next(clock)) as blk:
+        sink(ev(tag=EXT_TAG, msg="building because the design changed"))
+        sink(ev(tag="vault", msg="other tag stays as it is"))
+        blk.rows([("name", "Reverse"), ("game", "goods 2230000")])
+        sink(ev(level="E", tag=EXT_TAG, msg="  $.a.b: unknown field"))
+        blk.close("regulation.bin written")
+    lines = err.getvalue().splitlines()
+    assert lines[0] == " \u256d\u2500 design"
+    assert lines[1] == " \u2502  \u00b7  building because the design changed"
+    assert lines[2].endswith("other tag stays as it is") and "\u2502" not in lines[2] and "vault" in lines[2]
+    assert lines[3] == " \u2502    name  Reverse" and lines[4] == " \u2502    game  goods 2230000"
+    assert lines[5].startswith(" \u2502  \u2716    $.a.b: unknown field")
+    assert lines[6] == " \u2570\u2500 \u2713  regulation.bin written  (5.8 s)"
+    sink(ev(tag=EXT_TAG, msg="after the block"))
+    assert "design" in err.getvalue().splitlines()[-1] and "\u2502" not in err.getvalue().splitlines()[-1]
+
+
+def test_a_block_that_is_not_active_draws_nothing_and_leaves_the_lines_alone(monkeypatch):
+    monkeypatch.setenv("NO_COLOR", "1")
+    err = Stream()
+    sink = ui.pretty_sink(stream=err)
+    with ui.block("design", verbose=True, stream=err) as blk:
+        blk.note("x")
+        blk.rows([("a", "b")])
+        sink(ev(tag=EXT_TAG, msg="m"))
+    assert err.getvalue().splitlines() == [" \u00b7  design    m"]
+
+
+def test_a_problem_of_the_design_has_its_place_in_cyan(monkeypatch):
+    colour(monkeypatch)
+    err = Stream()
+    with ui.Block("design", stream=err):
+        ui.pretty_sink(stream=err)(ev(level="E", tag=EXT_TAG, msg="  $.innovate_items.spells.slots[x].customs.basic: unknown field"))
+    assert "\x1b[36m$.innovate_items.spells.slots[x].customs.basic\x1b[0m\x1b[31m: unknown field" in err.getvalue()

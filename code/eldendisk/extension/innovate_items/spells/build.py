@@ -25,6 +25,7 @@ class Result:
     decrypted_sha256: str
     changed_blocks: int = 0
     notes: list = field(default_factory=list)
+    footprint: object = None          # recipes.Footprint: the ids of the rows the recipes added (make() fills it)
 
 
 def prepare(base: bytes):
@@ -63,13 +64,13 @@ def plan(src: Source, spells: list):
 
 def make(src: Source, spells: list) -> Result:
     """spells + the game's original -> the finished (encrypted) file. NO checks here: the gate (gate.verify) judges the bytes."""
-    newbody, _fp = plan(src, spells)
+    newbody, fp = plan(src, spells)
     frame, _edit, _converted, _appended = reblock.rewrite_grow(src, newbody)
     h = bytearray(src.header)
     struct.pack_into(">II", h, 0x1C, len(newbody), len(frame))
     dcx = bytes(h) + frame + b"\0" * ((-(len(h) + len(frame))) % 16)
     data = container.encrypt(dcx)
-    return Result(data, hashlib.sha256(data).hexdigest(), hashlib.sha256(dcx).hexdigest())
+    return Result(data, hashlib.sha256(data).hexdigest(), hashlib.sha256(dcx).hexdigest(), footprint=fp)
 
 
 def build(base: bytes, spells: list, src: Source | None = None) -> Result:

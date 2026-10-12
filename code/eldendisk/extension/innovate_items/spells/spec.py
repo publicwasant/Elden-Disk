@@ -64,9 +64,10 @@ ID_FIELDS = {
 }
 LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "model"}
 FLAME_COLOR_MAX = 2.0     # a colour channel: 0..1 is the colour, up to 2 shines brighter
-EYES_ON_RE = re.compile(r"SpEffect\.(\d+)")    # golden_eyes.on: the copied SpEffect row the caster has while the buff lasts
+EYES_ON_RE = re.compile(r"SpEffect\.(\d+)")    # positive_curse_energy_eyes.on: the copied SpEffect row the caster has while the buff lasts
 TEXT_FIELDS = {"goods_name": 80, "goods_info": 300, "goods_captions": 3000}   # field -> most characters (name; the short line under it; the long description). A loose guard, not a game limit: the game's own longest are 43 / 86 / 462
-RENAMED = {"name": "text.goods_name", "description": "text.goods_info (the long description is text.goods_captions)"}   # 1.7.0 -> 1.7.1
+RENAMED = {"name": "text.goods_name", "description": "text.goods_info (the long description is text.goods_captions)",   # 1.7.0 -> 1.7.1
+           "golden_eyes": "positive_curse_energy_eyes"}                                                              # in 1.7.1
 
 
 class SpecError(Exception):
@@ -130,18 +131,21 @@ class _Check:
         return v
 
 
-def _text_object(c, it, p):
-    """`text`: {"goods_name", "goods_info", "goods_captions"} (each optional, text; empty = the game shows nothing). The canonical form
-    always holds all three."""
-    raw = it.get("text", {})
+def _text_obj(c, raw, path, fields=TEXT_FIELDS):
+    """`raw` = {"goods_name", "goods_info", "goods_captions"} (each optional, text; empty = the game shows nothing) -> the canonical
+    form, which always holds all three. `path` is where the user wrote it (for the messages)."""
     out = {k: "" for k in TEXT_FIELDS}
     if not isinstance(raw, dict):
-        c.bad(p + ".text", "must be an object: " + ", ".join('"%s"' % k for k in TEXT_FIELDS))
+        c.bad(path, "must be an object: " + ", ".join('"%s"' % k for k in fields))
         return out
-    c.keys(raw, p + ".text", [], list(TEXT_FIELDS))
+    c.keys(raw, path, [], list(fields))
     for k, hi in TEXT_FIELDS.items():
-        out[k] = c.text(raw, k, p + ".text", hi)
+        out[k] = c.text(raw, k, path, hi)
     return out
+
+
+def _text_object(c, it, p):
+    return _text_obj(c, it.get("text", {}), p + ".text")
 
 
 def empty_text(maximum: int = MAX_SLOTS) -> str:
@@ -163,19 +167,23 @@ def _requires(c, it, p, full):
     return {**r, **got} if full else got
 
 
-def _shop(c, it, p):
-    """`shop`: optional; a spell without a shop line is built but cannot be bought (slots above 7 have no line)."""
-    shop = it["shop"]
+def _shop_obj(c, shop, path):
+    """A shop line {"price", "stock"} -> the canonical form. `path` is where the user wrote it (for the messages)."""
     s = {"price": 0, "stock": 1}
     if not isinstance(shop, dict):
-        c.bad(p + ".shop", "must be an object")
+        c.bad(path, "must be an object")
     else:
-        c.keys(shop, p + ".shop", ["price"], ["stock"])
-        s["price"] = c.integer(shop, "price", p + ".shop", 1, 99999999, 1)
-        s["stock"] = c.integer(shop, "stock", p + ".shop", -1, 99, 1)
+        c.keys(shop, path, ["price"], ["stock"])
+        s["price"] = c.integer(shop, "price", path, 1, 99999999, 1)
+        s["stock"] = c.integer(shop, "stock", path, -1, 99, 1)
         if s["stock"] == 0:
-            c.bad(p + ".shop.stock", "must be -1 (unlimited) or 1 to 99")
+            c.bad(path + ".stock", "must be -1 (unlimited) or 1 to 99")
     return s
+
+
+def _shop(c, it, p):
+    """`shop`: optional; a spell without a shop line is built but cannot be bought (slots above 7 have no line)."""
+    return _shop_obj(c, it["shop"], p + ".shop")
 
 
 def _flame_color(c, it, p, o):
@@ -205,16 +213,16 @@ def _colour(v) -> bool:
     return isinstance(v, list) and len(v) == 3 and all(_num(x) and 0 <= x <= FLAME_COLOR_MAX for x in v)
 
 
-def _golden_eyes(c, it, p, o, template):
-    """`golden_eyes`: {"on": "SpEffect.<id>", "color": [red, green, blue]}. While the buff lasts both of the caster's eyes glow (the
+def _positive_curse_energy_eyes(c, it, p, o, template):
+    """`positive_curse_energy_eyes`: {"on": "SpEffect.<id>", "color": [red, green, blue]}. While the buff lasts both of the caster's eyes glow (the
     game's own effect 4866 of a human NPC of the DLC, SpEffectVfx 20090050 and 20090051 on the eyes, added to the buff's SpEffect row by
     the build). `on` names the copied SpEffect row that is the buff (a spell made from a game spell; the template's id, as in `set`); a
     heal-over-time buff made from scratch has one buff row and no `on`. `color` (optional, as flame_color) recolours the glow in the
     running game (`write --flame-color` does both); without it the eyes are the game's red. The effect file is shared with that NPC, so
     the colour belongs to the whole design (service.eyes_color). `on` is part of the build, `color` is not."""
-    if "golden_eyes" not in it:
+    if "positive_curse_energy_eyes" not in it:
         return
-    v, q = it["golden_eyes"], p + ".golden_eyes"
+    v, q = it["positive_curse_energy_eyes"], p + ".positive_curse_energy_eyes"
     if o.get("kind") == "clone":
         c.bad(q, "a clone shares the template's SpEffect rows with the game's own spell: use kind buff (with `from`), enchant, "
                  "projectile or attack, which copy them")
@@ -242,13 +250,13 @@ def _golden_eyes(c, it, p, o, template):
             e["color"] = [float(x) for x in v["color"]]
         else:
             c.bad(q + ".color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
-    o["golden_eyes"] = e
+    o["positive_curse_energy_eyes"] = e
 
 
 def _buff(c, it, p, n, iid):
     """A heal-over-time buff built from Flame, Grant Me Strength (the canonical form has no `kind`: it is the default)."""
     c.keys(it, p, ["type", "requires", "fp_cost"],
-           ["kind", "text", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop", "flame_color", "flame_accent_color", "golden_eyes"])
+           ["kind", "text", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop", "flame_color", "flame_accent_color", "positive_curse_energy_eyes"])
     if it.get("type") != "incantation":
         c.bad(p + ".type", 'only "incantation" is supported')
     o = {"slot": n, "id": iid, "type": "incantation", "text": _text_object(c, it, p)}
@@ -287,7 +295,7 @@ def _buff(c, it, p, n, iid):
     if "shop" in it:
         o["shop"] = _shop(c, it, p)
     _flame_color(c, it, p, o)
-    _golden_eyes(c, it, p, o, False)
+    _positive_curse_energy_eyes(c, it, p, o, False)
     return o
 
 
@@ -295,7 +303,7 @@ def _template(c, it, p, n, iid, kind):
     """A spell made from a game spell: `clone` (copy of the Goods and Magic rows, it keeps calling the template's own chain),
     `buff` with `from` and `enchant` (the same, and the template's own SpEffect rows are copied too, so they can be tuned with
     `set`). What is not named stays the template's, so the canonical form holds only what the design says."""
-    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set", "flame_color", "flame_accent_color", "golden_eyes"])
+    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set", "flame_color", "flame_accent_color", "positive_curse_energy_eyes"])
     o = {"slot": n, "id": iid, "kind": kind, "text": _text_object(c, it, p)}
     src = c.integer(it, "from", p, 1, 2**31 - 1)
     if src is not None:
@@ -316,7 +324,7 @@ def _template(c, it, p, n, iid, kind):
     if "set" in it:
         o["set"] = _set(c, it["set"], p + ".set", o)
     _flame_color(c, it, p, o)
-    _golden_eyes(c, it, p, o, True)
+    _positive_curse_energy_eyes(c, it, p, o, True)
     return o
 
 
@@ -373,6 +381,200 @@ def _set(c, raw, path, o):
     return out
 
 
+# ---------------------------------------------------------------- the structure of section 1b
+# A spell may be written as
+#   {"__info__": "...", "kind": "projectile", "from": 6421,
+#    "requires":  {"status": {"intelligence", "faith", "arcane"}, "cost": {"focus_point", "stamina"}},
+#    "locations": {"kale": {"price", "stock"}},
+#    "customs":   {"basic":    {"__info__": "...", "SpEffect.<id>.<field>": n, "Magic.<from>.<field>": n, ...},
+#                  "advanced": {"__info__": "...", "texts": {"goods_name", "goods_info", "goods_caption"},
+#                               "colors": {"Magic.<from>.castSfxId": [r, g, b] | {"main": [r, g, b], "accent": [r, g, b]},
+#                                          "SpEffect.<id>": [r, g, b] | null}}}}
+# (a spell made from a game spell: `from`). `upgrade_spell` turns it into the fields the rest of the tool has always read; the
+# earlier fields stay valid, so a design written either way builds the same file. `design_of` goes the other way.
+SHOP_PLACES = {"kale": "Kale, the merchant of the Church of Elleh (the lines 100508, 100509, ... of ShopLineupParam)"}
+_SHOP_KEY_RE = re.compile("kal[eé]|<shop-id-[0-9]+>", re.IGNORECASE)
+_CAST_COLOR_RE = re.compile(r"Magic\.([0-9]+)\.castSfxId")
+_EYES_COLOR_RE = re.compile(r"SpEffect\.([0-9]+)")
+FIRE_EFFECT = 524400          # the cast effect of Flame, Grant Me Strength: the one `colors` has a colour plan for (writer/fxr_plans.py)
+STATUS_KEYS = ("intelligence", "faith", "arcane")
+COST_KEYS = {"focus_point": ("fp_cost", 999), "stamina": ("stamina_cost", 999)}
+
+
+def _is_v2(it: dict) -> bool:
+    req = it.get("requires")
+    return "locations" in it or "customs" in it or (isinstance(req, dict) and bool({"status", "cost"} & set(req)))
+
+
+def _object(c, v, path, allowed, what=None):
+    """`v` must be an object whose keys are in `allowed` (plus `__info__`); -> the object (empty when it is not one)."""
+    if not isinstance(v, dict):
+        c.bad(path, "must be an object" + (": " + what if what else ""))
+        return {}
+    for k in v:
+        if k != "__info__" and k not in allowed:
+            c.bad("%s.%s" % (path, k), "unknown field (use %s)" % ", ".join(allowed))
+    return v
+
+
+def upgrade_spell(c, it: dict, p: str) -> dict:
+    """A spell in the structure of section 1b -> the same spell in the fields the rest of the tool reads (`requires`, `fp_cost`,
+    `stamina_cost`, `shop`, `set`, `text`, `flame_color`, `flame_accent_color`, `positive_curse_energy_eyes`). Every message names the place the
+    user wrote. A spell that is not written that way comes back as it is (only `__info__`, a comment, is taken out)."""
+    it = {k: v for k, v in it.items() if k != "__info__"}
+    if not _is_v2(it):
+        return it
+    out = {k: v for k, v in it.items() if k not in ("locations", "customs", "requires")}
+    if "from" not in it:
+        c.bad(p, "the structure with `requires.status`, `requires.cost`, `locations` and `customs` is for a spell made from a game "
+                 "spell (`from`); a heal-over-time buff made from scratch is written with its own fields")
+        return out
+    src = it["from"] if _int(it["from"]) else None
+    # ---- requires: status (the attributes the spell needs) and cost (what casting it takes)
+    if "requires" in it:
+        req = _object(c, it["requires"], p + ".requires", ("status", "cost"), "status and cost")
+        status = req.get("status")
+        if status is not None:
+            status = _object(c, status, p + ".requires.status", STATUS_KEYS)
+            out["requires"] = {k: c.integer(status, k, p + ".requires.status", 0, 99, 0) for k in STATUS_KEYS if k in status}
+        cost = req.get("cost")
+        if cost is not None:
+            cost = _object(c, cost, p + ".requires.cost", tuple(COST_KEYS))
+            for k, (legacy, hi) in COST_KEYS.items():
+                if k in cost:
+                    v = c.integer(cost, k, p + ".requires.cost", 0, hi)
+                    if v is not None:
+                        out[legacy] = v
+    # ---- locations: where the spell is sold (this time Kale only)
+    if "locations" in it:
+        loc = it["locations"]
+        if not isinstance(loc, dict):
+            c.bad(p + ".locations", 'must be an object: {"kale": {"price": ..., "stock": ...}}')
+        else:
+            places = [k for k in loc if k != "__info__"]
+            for k in places:
+                if not _SHOP_KEY_RE.fullmatch(k):
+                    c.bad("%s.locations.%s" % (p, k), 'unknown place: this version sells only at Kale, written "kale"')
+            if len(places) > 1:
+                c.bad(p + ".locations", "one place only: a spell has one shop line")
+            for k in places[:1]:
+                if _SHOP_KEY_RE.fullmatch(k):
+                    out["shop"] = _shop_obj(c, loc[k], "%s.locations.%s" % (p, k))
+    # ---- customs: basic (the game's own rows, Level 2) and advanced (what is put into the running game, Level 3)
+    if "customs" in it:
+        cus = _object(c, it["customs"], p + ".customs", ("basic", "advanced"), "basic and advanced")
+        if "basic" in cus:
+            basic = cus["basic"]
+            if not isinstance(basic, dict):
+                c.bad(p + ".customs.basic", 'must be an object: "Magic.<from>.<field>": number, "SpEffect.<id>.<field>": number, ...')
+            else:
+                raw = {k: v for k, v in basic.items() if k != "__info__"}
+                pseudo = {"kind": it.get("kind", "buff")}
+                if src is not None:
+                    pseudo["from"] = src
+                out["set"] = _set(c, raw, p + ".customs.basic", pseudo)
+        if "advanced" in cus:
+            _advanced(c, cus["advanced"], p + ".customs.advanced", src, out)
+    return out
+
+
+def _advanced(c, adv, path, src, out):
+    adv = _object(c, adv, path, ("texts", "colors"), "texts and colors")
+    if "texts" in adv:
+        raw = adv["texts"]
+        if isinstance(raw, dict):             # the long description: `goods_caption` (the template) or `goods_captions`
+            raw = {("goods_captions" if k == "goods_caption" else k): v for k, v in raw.items()}
+        out["text"] = _text_obj(c, raw, path + ".texts", ("goods_name", "goods_info", "goods_caption", "goods_captions"))
+    if "colors" not in adv:
+        return
+    colors = adv["colors"]
+    if not isinstance(colors, dict):
+        c.bad(path + ".colors", 'must be an object: "Magic.<from>.castSfxId": [r, g, b], "SpEffect.<id>": [r, g, b]')
+        return
+    bad_colour = "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX
+    for key, val in colors.items():
+        if key == "__info__":
+            continue
+        kp = "%s.colors.%s" % (path, key)
+        m, e = _CAST_COLOR_RE.fullmatch(key), _EYES_COLOR_RE.fullmatch(key)
+        if m:
+            if src is not None and int(m.group(1)) != src:
+                c.bad(kp, "the row id must be this spell's `from` (%d)" % src)
+                continue
+            if isinstance(val, dict):
+                for k in val:
+                    if k not in ("main", "accent"):
+                        c.bad("%s.%s" % (kp, k), "unknown field (use main and accent)")
+                main, accent = val.get("main"), val.get("accent")
+            else:
+                main, accent = val, None
+            if not _colour(main):
+                c.bad(kp + (".main" if isinstance(val, dict) else ""), bad_colour)
+                continue
+            out["flame_color"] = [float(x) for x in main]
+            if accent is not None:
+                if _colour(accent):
+                    out["flame_accent_color"] = [float(x) for x in accent]
+                else:
+                    c.bad(kp + ".accent", bad_colour)
+            fx = out.get("set", {}).get("Magic.%d.castSfxId" % src) if src is not None else None
+            if fx is not None and fx != FIRE_EFFECT:
+                c.bad(kp, "the spell casts the effect %d, which has no colour plan (only %d, the fire of Flame, Grant Me Strength, "
+                          "has one): set Magic.%d.castSfxId to %d in `customs.basic`" % (fx, FIRE_EFFECT, src, FIRE_EFFECT))
+        elif e:
+            eyes = {"on": "SpEffect.%d" % int(e.group(1))}
+            if val is not None:
+                if not _colour(val):
+                    c.bad(kp, "must be null (the game's own colour) or three numbers [red, green, blue], each from 0 to %g" % FLAME_COLOR_MAX)
+                    continue
+                eyes["color"] = [float(x) for x in val]
+            out["positive_curse_energy_eyes"] = eyes
+        else:
+            c.bad(kp, 'a key is "Magic.<from>.castSfxId" (the fire and the ring of the cast) or "SpEffect.<id>" (the eyes while '
+                      "that buff row lasts)")
+
+
+def design_of(spell: dict) -> dict:
+    """A spell of the canonical form -> the structure of section 1b (without `__info__`; `slot` and `id` are left out). A spell that
+    is not made from a game spell keeps its own fields."""
+    s = {k: v for k, v in spell.items() if k not in ("slot", "id")}
+    if "from" not in s:
+        return s
+    out = {k: s[k] for k in ("kind", "from", "type") if k in s}
+    req = {}
+    if s.get("requires"):
+        req["status"] = dict(s["requires"])
+    cost = {name: s[legacy] for name, (legacy, _hi) in COST_KEYS.items() if legacy in s}
+    if cost:
+        req["cost"] = cost
+    if req:
+        out["requires"] = req
+    if "shop" in s:
+        out["locations"] = {"kale": dict(s["shop"])}
+    customs, adv = {}, {}
+    if s.get("set"):
+        customs["basic"] = dict(s["set"])
+    if "text" in s:
+        t = s["text"]
+        adv["texts"] = {"goods_name": t.get("goods_name", ""), "goods_info": t.get("goods_info", ""),
+                        "goods_caption": t.get("goods_captions", "")}
+    colors = {}
+    if "flame_color" in s:
+        main = list(s["flame_color"])
+        colors["Magic.%d.castSfxId" % s["from"]] = ({"main": main, "accent": list(s["flame_accent_color"])}
+                                                    if "flame_accent_color" in s else main)
+    if "positive_curse_energy_eyes" in s:
+        g = s["positive_curse_energy_eyes"]
+        colors[g["on"]] = list(g["color"]) if "color" in g else None
+    if colors:
+        adv["colors"] = colors
+    if adv:
+        customs["advanced"] = adv
+    if customs:
+        out["customs"] = customs
+    return out
+
+
 def normalise(data) -> dict:
     """Validate and fill in defaults -> the canonical form {"format", "maximum", "spells": [{"slot", "id", ...}]}, filled slots
     only, in slot order. Raises SpecError listing every problem found."""
@@ -409,6 +611,7 @@ def normalise(data) -> dict:
         if not isinstance(it, dict):
             c.bad(p, "must be an object (or null for an empty slot)")
             continue
+        it = upgrade_spell(c, it, p)
         kind = it.get("kind", "buff")
         if kind in PLANNED_KINDS:
             c.bad(p + ".kind", "%r is planned but not built yet (Phase 2.4); built kinds: %s" % (kind, ", ".join(KINDS)))
@@ -454,14 +657,25 @@ def as_file(spec: dict) -> dict:
 
 
 def build_view(spec: dict) -> dict:
-    """What decides the bytes of the build (the text fields and the colours do not: they are put into the running game; the golden
-    eyes themselves are built, their colour is not)."""
+    """What decides the bytes of the build (the text fields and the colours do not: they are put into the running game; the Positive
+    Curse Energy Eyes themselves are built, their colour is not). A record written before the eyes were renamed (`golden_eyes`) reads
+    the same, so it does not build again."""
     def view(it):
+        it = {("positive_curse_energy_eyes" if k == "golden_eyes" else k): v for k, v in it.items()}
         out = {k: v for k, v in it.items() if k not in ("text", "name", "description", "flame_color", "flame_accent_color")}
-        if "golden_eyes" in out:
-            out["golden_eyes"] = {k: v for k, v in out["golden_eyes"].items() if k != "color"}
+        if "positive_curse_energy_eyes" in out:
+            out["positive_curse_energy_eyes"] = {k: v for k, v in out["positive_curse_energy_eyes"].items() if k != "color"}
         return out
     return {"format": spec["format"], "spells": [view(it) for it in spec["spells"]]}
+
+
+def design_view(spec: dict) -> dict:
+    """What decides the bytes of the build (`build_view`), written the way the design is (section 1b): the lines of a diff then name
+    the places the user edits (`locations.kale.price`, `customs.basic.SpEffect.1642100.effectEndurance`)."""
+    spells = []
+    for it in build_view(spec)["spells"]:
+        spells.append({"id": it["id"], "slot": it["slot"], **design_of(it)})
+    return {"format": spec["format"], "spells": spells}
 
 
 def dumps(spec: dict) -> str:

@@ -67,45 +67,91 @@ def _show_diff(diff: list) -> None:
         book.i(EXT_TAG, f"  \u2514\u2500 \u2026 and {more} more (see the design and {service.SECURED_FILE})")
 
 
-def _facts(s: dict) -> list[tuple[str, str]]:
-    """What a spell of the design holds that is worth a glance, for its card: only what the design says."""
-    rows = []
+def _colour_text(rgb, color: bool) -> str:
+    return f"{ui.swatch(rgb, color)} " + " ".join(f"{c:g}" for c in rgb)
+
+
+def _facts(s: dict, rows: dict | None = None, color: bool = False) -> list[tuple[str, str]]:
+    """What a spell of the design holds that is worth a glance, for its rows in the block: only what the design says, in the words of
+    the design (status, cost, sold at, fire, eyes), and the ids the game really uses (`rows`: recipes.spell_rows) once it is built.
+    `color`: a little square in each colour."""
+    out = []
     text = s.get("text") or {}
     if text.get("goods_name"):
-        rows.append(("name", text["goods_name"]))
-    cost = [f"FP {s['fp_cost']}"] if s.get("fp_cost") is not None else []
-    need = s.get("requires") or {}
-    cost += [f"{k} {v}" for k, v in need.items() if v]
+        out.append(("name", text["goods_name"]))
+    need = [f"{k} {v}" for k, v in (s.get("requires") or {}).items() if v]
+    if need:
+        out.append(("status", " \u00b7 ".join(need)))
+    cost = ([f"focus point {s['fp_cost']}"] if s.get("fp_cost") is not None else []) + ([f"stamina {s['stamina_cost']}"] if s.get("stamina_cost") else [])
     if cost:
-        rows.append(("cost", " \u00b7 ".join(cost)))
+        out.append(("cost", " \u00b7 ".join(cost)))
     shop = s.get("shop")
     if shop:
-        rows.append(("shop", f"{shop.get('price')} runes" + (f", stock {shop['stock']}" if shop.get("stock") is not None else "")))
+        out.append(("sold", f"Kal\u00e9 \u00b7 {shop.get('price')} runes" + (f", stock {shop['stock']}" if shop.get("stock") is not None else "")))
     if s.get("flame_color"):
-        rows.append(("fire", " ".join(f"{c:g}" for c in s["flame_color"])))
-    if "golden_eyes" in s:
-        eyes = s["golden_eyes"]
-        rows.append(("eyes", " ".join(f"{c:g}" for c in eyes["color"]) if "color" in eyes else "gold"))
-    rows.append(("slot", str(s.get("slot"))))
-    return rows
+        fire = _colour_text(s["flame_color"], color)
+        if s.get("flame_accent_color"):
+            fire += "   accent " + _colour_text(s["flame_accent_color"], color)
+        out.append(("fire", fire))
+    if "positive_curse_energy_eyes" in s:
+        eyes = s["positive_curse_energy_eyes"]
+        out.append(("eyes", _colour_text(eyes["color"], color) if "color" in eyes else "the game's own"))
+    if rows:
+        ids = [f"goods {rows['goods']}", f"magic {rows['magic']}"]
+        if rows.get("sp_effect"):
+            ids.append("SpEffect " + ", ".join(map(str, rows["sp_effect"])))
+        for key, label in (("bullet", "Bullet"), ("atk", "AtkParam_Pc")):
+            if rows.get(key):
+                ids.append(f"{label} " + ", ".join(map(str, rows[key])))
+        if rows.get("shop"):
+            ids.append(f"shop line {rows['shop']}")
+        out.append(("game", " \u00b7 ".join(ids)))
+    out.append(("slot", str(s.get("slot"))))
+    return out
 
 
-def _cards(args, spells: list) -> None:
-    """One card per spell of the build (console only; `-v` shows the log itself)."""
-    if getattr(args, "verbose", False):
-        return
-    for s in spells:
-        ui.card(s["id"], _facts(s))
+def _spell_rows(blk, spells: list, rows: dict) -> None:
+    """The spells of the build in the block: one line each (id, slot, kind) and what the design says under it."""
+    color = ui.use_color(blk.stream)
+    for sp in spells:
+        kind = sp.get("kind", "buff")
+        head = f"{sp['id']}  slot {sp['slot']} \u00b7 {kind}" + (f" of {sp['from']}" if "from" in sp else "")
+        blk.note(head)
+        blk.rows([r for r in _facts(sp, rows.get(sp["id"]), color) if r[0] != "slot"])
+
+
+def _show_error(exc: Exception) -> None:
+    """The lines of an error (a design that is not valid, a gate that failed) inside the block, one by one; the command does not
+    say them again (`exc.shown`)."""
+    for line in str(exc).splitlines() or [""]:
+        book.e(EXT_TAG, line)
+    exc.shown = True
+
+
+def say_error(exc: Exception, tag: str = EXT_TAG) -> None:
+    """For the caller of prepare_regulation: say the error unless the block already did."""
+    if not getattr(exc, "shown", False):
+        book.e(tag, str(exc))
 
 
 def prepare_regulation(args, game_dir_file: Path | None, which=None, dry_run: bool = False,
-                       allow_secured: bool = False, vault_dir: Path | str | None = None) -> Prepared:
-    """What both `extension innovate-items spells --add` and `run` do. Prints why, and what changed, before any long build.
-    Raises ExtensionError / GateFailed. `which`: what `--add` was given (a list of `all` / spell paths) or None for `run`, which
-    builds the selection the last `--add` made (every spell when there was none). `allow_secured` (`run`): swap the secured
-    file, or the latest build, without building when nothing changed."""
+                       allow_secured: bool = False, vault_dir: Path | str | None = None, summary: bool = False) -> Prepared:
+    """What both `extension innovate-items spells --add` and `run` do, in one block on the console: why the build happens, what changed
+    in the design, the build and the gate, then the spells with the ids the game really uses. Raises ExtensionError / GateFailed
+    (their lines are in the block already: `exc.shown`). `which`: what `--add` was given (a list of `all` / spell paths) or None for
+    `run`, which builds the selection the last `--add` made (every spell when there was none). `allow_secured` (`run`): swap the
+    secured file, or the latest build, without building when nothing changed. `summary`: the hashes and what to do next in the block."""
     ci = extension.open_spells(ext_dir(args, vault_dir), spec_file(args))
     book.d("config", f"design: {ci.spec_path} ({describe_resource(ci.spec_path)})")
+    with ui.block("design \u00b7 innovate-items spells", verbose=getattr(args, "verbose", False)) as blk:
+        try:
+            return _prepare(args, ci, blk, game_dir_file, which, dry_run, allow_secured, summary)
+        except service.ExtensionError as exc:      # includes GateFailed
+            _show_error(exc)
+            raise
+
+
+def _prepare(args, ci, blk, game_dir_file, which, dry_run, allow_secured, summary) -> Prepared:
     chosen = which is not None
     if chosen:
         try:
@@ -115,43 +161,58 @@ def prepare_regulation(args, game_dir_file: Path | None, which=None, dry_run: bo
     else:
         sel, note = ci.selection()
         if note:
-            book.w(EXT_TAG, f"innovate-items spells: {note}")
+            book.w(EXT_TAG, note)
     spells = ci.items(sel)
     if sel != "all":
         sel = [i["id"] for i in spells]            # slot order, so the same choice is always written the same way
     ui.mark_spell_ids(i["id"] for i in spells)
     if not spells:
-        book.i(EXT_TAG, f"innovate-items spells: no spells in {ci.spec_path}: nothing to build")
+        book.i(EXT_TAG, f"no spells in {ci.spec_path}: nothing to build")
+        blk.close("nothing to build", "info")
         return Prepared(None, "none")
     names = ", ".join(i["id"] for i in spells)
     if sel != "all":
         left = [i["id"] for i in ci.items("all") if i["id"] not in sel]
-        book.i(EXT_TAG, f"innovate-items spells: building only {names}"
+        book.i(EXT_TAG, f"building only {names}"
                + (" (chosen with the last --add; `--add all` builds every spell)" if not chosen else "")
                + (f"; left out: {', '.join(left)}" if left else ""))
     base, base_sha = ci.read_base(game_dir_file)
     if allow_secured:
         d = ci.decide(spells, base_sha)
         if d.use_secured:
-            book.ok(EXT_TAG, f"innovate-items spells: {names} unchanged since it was secured: using {ci.secured_bin} (no build)")
+            book.ok(EXT_TAG, f"{names} unchanged since it was secured: using {ci.secured_bin} (no build)")
+            blk.close("no build", "ok")
             return Prepared(ci.secured_bin, "secured")
         last = ci.decide_last(spells, sel, base_sha)
         if last.use_secured:
-            book.ok(EXT_TAG, f"innovate-items spells: {names} unchanged since the last build: using {ci.output_path} (no build; "
-                           "not secured yet)")
+            book.ok(EXT_TAG, f"{names} unchanged since the last build: using {ci.output_path} (no build; not secured yet)")
+            blk.close("no build", "ok")
             return Prepared(ci.output_path, "last")
         for r in d.reasons + [r for r in last.reasons if r != "no build yet"]:
-            book.i(EXT_TAG, f"innovate-items spells: building because {r}")
+            book.i(EXT_TAG, f"building because {r}")
         _show_diff(d.diff or last.diff)
-    with ui.working(EXT_TAG, f"innovate-items spells: building {names} on {game_dir_file} and checking",
-                    short=f"building {names}") as step:
+    with ui.working(EXT_TAG, f"building {names} on {game_dir_file} and checking", short=f"building {names}") as step:
         rep = ci.build(spells, base, dry_run, selection=sel)
         for n in rep.notes:
             book.d(EXT_TAG, f"gate: {n}")
-        step.done(f"innovate-items spells: {names} built, gate passed ({rep.changed_blocks} blocks re-encoded)"
-                  + ("" if rep.dry_run else f" -> {rep.output}"))
-    _cards(args, spells)
+        step.done(f"{names} built, gate passed ({rep.changed_blocks} blocks re-encoded)")
+    _spell_rows(blk, spells, rep.rows)
+    if summary and rep.spells:
+        _summary(blk, rep)
+    blk.close("dry run: nothing written" if rep.dry_run else f"wrote {rep.output}", "ok")
     return Prepared(rep.output if rep.built else None, "built" if rep.built else "none", rep)
+
+
+def _summary(blk, rep: service.Report) -> None:
+    """The hashes of the file and what to do next: under the spells in the block (on `-v`, where there is no block, as before)."""
+    verb = "would write" if rep.dry_run else "wrote"
+    rows = [("sha256", rep.sha256[:16] + "\u2026"), ("content", rep.decrypted_sha256[:16] + "\u2026"), (verb, str(rep.output)),
+            ("next", "`eldendisk run` (vault ON) swaps it in for the session; when it works in the game, close the game and run "
+                     "`extension innovate-items spells --secure`" if not rep.dry_run else "run again without --dry-run to write it")]
+    if blk.active:
+        blk.rows(rows)
+    else:
+        ui.fields(rows)
 
 
 def cmd_list(args) -> int:
@@ -178,8 +239,8 @@ def cmd_list(args) -> int:
     else:
         rows.append(("secured", f"{rec.get('committed_at', '?')} ({ci.secured_bin})"))
         if spells is not None:
-            diff = service.diff_specs(specmod.build_view(rec["spec"]),
-                                      specmod.build_view({"format": specmod.FORMAT, "spells": spells}))
+            diff = service.diff_specs(specmod.design_view(rec["spec"]),
+                                      specmod.design_view({"format": specmod.FORMAT, "spells": spells}))
             rows.append(("design vs secured", "same: `run` swaps the secured file, no build" if not diff
                          else f"{len(diff)} change(s): `run` builds"))
             for line in diff[:MAX_DIFF_LINES]:
@@ -195,21 +256,28 @@ def cmd_list(args) -> int:
 
 def cmd_secure(args) -> int:
     ci = extension.open_spells(ext_dir(args), spec_file(args))
-    try:
-        sel, note = ci.selection()                      # the build holds the spells of the last --add: that is what is checked and kept
-        if note:
-            book.w(EXT_TAG, f"innovate-items spells: {note}")
-        spells = ci.items(sel)
-        ui.mark_spell_ids(i["id"] for i in spells)
-        rep = ci.secure(spells, game_file(args))
-    except service.ExtensionError as exc:
-        book.e(EXT_TAG, str(exc))
-        return 1
-    for n in rep.notes:
-        book.d(EXT_TAG, f"gate: {n}")
-    book.ok(EXT_TAG, f"innovate-items spells: {', '.join(rep.spells)} secured -> {rep.output}")
-    ui.fields([("sha256", rep.sha256[:16] + "…"), ("record", str(ci.secured_path)),
-               ("next", "`eldendisk run` swaps the secured file without building while the design does not change")])
+    with ui.block("design \u00b7 innovate-items spells \u00b7 secure", verbose=getattr(args, "verbose", False)) as blk:
+        try:
+            sel, note = ci.selection()                  # the build holds the spells of the last --add: that is what is checked and kept
+            if note:
+                book.w(EXT_TAG, note)
+            spells = ci.items(sel)
+            ui.mark_spell_ids(i["id"] for i in spells)
+            rep = ci.secure(spells, game_file(args))
+        except service.ExtensionError as exc:
+            _show_error(exc)
+            blk.close("not secured", "error")
+            return 1
+        for n in rep.notes:
+            book.d(EXT_TAG, f"gate: {n}")
+        book.ok(EXT_TAG, f"{', '.join(rep.spells)} secured -> {rep.output}")
+        rows = [("sha256", rep.sha256[:16] + "\u2026"), ("record", str(ci.secured_path)),
+                ("next", "`eldendisk run` swaps the secured file without building while the design does not change")]
+        if blk.active:
+            blk.rows(rows)
+        else:
+            ui.fields(rows)
+        blk.close("secured", "ok")
     return 0
 
 
@@ -226,17 +294,10 @@ def cmd_spells(args) -> int:
         ui.out("     after you tried it in the game (game closed): eldendisk extension innovate-items spells --secure")
         return 0
     try:
-        prep = prepare_regulation(args, game_file(args), args.add, args.dry_run)
+        prepare_regulation(args, game_file(args), args.add, args.dry_run, summary=True)
     except service.ExtensionError as exc:      # includes GateFailed
-        book.e(EXT_TAG, str(exc))
+        say_error(exc)
         return 1
-    rep = prep.report
-    if rep is not None and rep.spells:
-        verb = "would write" if rep.dry_run else "wrote"
-        ui.fields([("sha256", rep.sha256[:16] + "…"), ("content", rep.decrypted_sha256[:16] + "…"),
-                   (verb, str(rep.output)), ("next", "`eldendisk run` (vault ON) swaps it in for the session; when it works in the game, "
-                                                    "close the game and run `extension innovate-items spells --secure`"
-                                                    if not rep.dry_run else "run again without --dry-run to write it")])
     return 0
 
 
@@ -247,7 +308,7 @@ def cmd_extension(args) -> int:
         if args.ext_name == "innovate-items" and getattr(args, "items_kind", None) == "spells":
             return cmd_spells(args)
     except service.ExtensionError as exc:      # includes a vault that cannot be found (ext_dir)
-        book.e(EXT_TAG, str(exc))
+        say_error(exc)
         return 1
     ui.result("error", "give --list, or an extension and a kind: innovate-items spells")
     return 2

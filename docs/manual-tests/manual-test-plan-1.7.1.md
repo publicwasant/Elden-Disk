@@ -49,15 +49,26 @@ Only what is new in 1.7.1; everything else is [manual-test-plan-1.7.0](../experi
 | FA2 | Hold L1 to cast | the fire in the hand blue, the ring of runes purple | [x] 2026-10-12 (by hand: `write --flame-color` after a cast) |
 | FA3 | `flame_accent_color` without `flame_color` | the design is refused (`goes with flame_color`) | [ ] |
 
-## EY. Golden eyes (not tried yet)
+## EY. Positive Curse Energy Eyes (not tried yet)
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
-| EY1 | Design with `golden_eyes: {"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]}` on `reverse_cursed_technique`, `run -v` | it builds again (the eyes changed), gate passed; the card shows `eyes  0.2 0.65 1` | [ ] |
+| EY1 | Design with `positive_curse_energy_eyes: {"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]}` on `reverse_cursed_technique`, `run -v` | it builds again (the eyes changed), gate passed; the card shows `eyes  0.2 0.65 1` | [ ] |
 | EY2 | Load a character | the colour step logs `look 1/5: … (the whole memory …); found 524400, 524401, 4866` and `✓ … eyes colour: the glowing eyes are now (0.2, 0.65, 1.0) (… places written)` next to the fire line; if it says it cannot find `4866`, cast the spell once and run `eldendisk write --flame-color` by hand | [ ] |
 | EY3 | Cast the spell, look at the face (camera in front) | while the buff lasts (20 s) both eyes glow blue, on the eyes (not the chest); they stop when it ends | [x] 2026-10-12 (after `write --flame-color` painted every copy by hand) |
 | EY4 | Remove `color`, quit, `run` | no rebuild; the eyes glow the game's red | [ ] |
 | EY5 | Quit the game | everything as before: save and `regulation.bin` restored byte for byte | [ ] |
+
+## SB. The structure of a spell (spec 1.7.1 section 1b; accepted by the author 2026-10-13: a new build of the design in this structure through `run`, cast, the eyes blue)
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| SB1 | With a secured build of `reverse_cursed_technique` from before section 1b, the new `extension.json` (exe of this version), `run` | no build: `unchanged since it was secured` (the same spell, written in the new structure) | [ ] |
+| SB2 | Load a character, cast it, visit Kalé | the same as before: blue fire, purple ring, blue eyes while the buff lasts, the name and the texts, 34,590 runes, stock 1 | [ ] |
+| SB3 | Change `locations.kale.price` to 40000, `run` (no `-v`, Windows Terminal) | one block `╭─ design · innovate-items spells`: the reason, `└─ reverse_cursed_technique.locations.kale.price  34590 -> 40000`, the build line with its time, the spell's rows (status, cost, sold, fire and eyes with coloured squares, `game  goods 2230000 · ...`), `╰─ ✓ wrote ...`; Kalé asks 40,000 | [ ] |
+| SB4 | Open `<vault>\extension\innovate-items\spells\spells.resolved.json` | the spell under `"2230000"`, its label, slot 1, its rows and its design | [ ] |
+| SB5 | Write a mistake (`"customs": {"basik": {}}`), `run` | exit 1 before the game starts; the block shows the place in cyan once and ends `╰─ ✖ stopped` | [ ] |
+| SB6 | `run -v` | no block; the log lines as before, with ids and addresses coloured | [ ] |
 
 ## IC. Icon (an existing icon reused)
 

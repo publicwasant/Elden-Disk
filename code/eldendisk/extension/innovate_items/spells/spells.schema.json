@@ -51,12 +51,15 @@
   },
   "$defs": {
     "spell": {
-      "oneOf": [
+      "anyOf": [
         {
           "$ref": "#/$defs/buff"
         },
         {
           "$ref": "#/$defs/template"
+        },
+        {
+          "$ref": "#/$defs/design"
         }
       ]
     },
@@ -212,7 +215,7 @@
             "maximum": 2
           }
         },
-        "golden_eyes": {
+        "positive_curse_energy_eyes": {
           "description": "while the buff lasts both of the caster's eyes glow (SpEffectVfx 20090050 and 20090051, effect 4866, added to the buff's SpEffect row)",
           "type": "object",
           "additionalProperties": false,
@@ -364,7 +367,7 @@
             "maximum": 2
           }
         },
-        "golden_eyes": {
+        "positive_curse_energy_eyes": {
           "description": "while the buff lasts both of the caster's eyes glow (SpEffectVfx 20090050 and 20090051, effect 4866, added to the copied SpEffect row `on`)",
           "type": "object",
           "additionalProperties": false,
@@ -427,6 +430,267 @@
           "flame_color"
         ]
       }
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "__info__": {
+          "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "attack",
+            "buff",
+            "clone",
+            "enchant",
+            "projectile"
+          ]
+        },
+        "from": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "type": {
+          "enum": [
+            "incantation",
+            "sorcery"
+          ]
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "__info__": {
+              "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+              "type": "string"
+            },
+            "status": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "__info__": {
+                  "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                  "type": "string"
+                },
+                "intelligence": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 99
+                },
+                "faith": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 99
+                },
+                "arcane": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 99
+                }
+              }
+            },
+            "cost": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "__info__": {
+                  "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                  "type": "string"
+                },
+                "focus_point": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 999
+                },
+                "stamina": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 999
+                }
+              }
+            }
+          },
+          "description": "status: the attributes the character needs; cost: what casting takes"
+        },
+        "locations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "__info__": {
+              "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+              "type": "string"
+            }
+          },
+          "patternProperties": {
+            "^([Kk]al[eé]|<shop-id-[0-9]+>)$": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "price"
+              ],
+              "properties": {
+                "price": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 99999999
+                },
+                "stock": {
+                  "type": "integer",
+                  "minimum": -1,
+                  "maximum": 99,
+                  "not": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          },
+          "description": "where the spell is sold: this version sells at Kalé only, written \"kale\"; one place"
+        },
+        "customs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "__info__": {
+              "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+              "type": "string"
+            },
+            "basic": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "__info__": {
+                  "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                  "type": "string"
+                }
+              },
+              "patternProperties": {
+                "^(Magic|Goods|SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$": {
+                  "type": "number"
+                }
+              },
+              "description": "numbers written over the copies of the game's rows, <Table>.<row id>.<field> (built into regulation.bin)"
+            },
+            "advanced": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "__info__": {
+                  "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                  "type": "string"
+                },
+                "texts": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "__info__": {
+                      "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                      "type": "string"
+                    },
+                    "goods_name": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "goods_info": {
+                      "type": "string",
+                      "maxLength": 300
+                    },
+                    "goods_caption": {
+                      "type": "string",
+                      "maxLength": 3000
+                    },
+                    "goods_captions": {
+                      "type": "string",
+                      "maxLength": 3000
+                    }
+                  }
+                },
+                "colors": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "__info__": {
+                      "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                      "type": "string"
+                    }
+                  },
+                  "patternProperties": {
+                    "^Magic\\.[0-9]+\\.castSfxId$": {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "minItems": 3,
+                          "maxItems": 3,
+                          "items": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 2
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "main"
+                          ],
+                          "properties": {
+                            "main": {
+                              "type": "array",
+                              "minItems": 3,
+                              "maxItems": 3,
+                              "items": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 2
+                              }
+                            },
+                            "accent": {
+                              "type": "array",
+                              "minItems": 3,
+                              "maxItems": 3,
+                              "items": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 2
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "^SpEffect\\.[0-9]+$": {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "minItems": 3,
+                          "maxItems": 3,
+                          "items": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 2
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "description": "put into the running game after the world loads: the fire (and its accent, the ring of runes) of the effect the spell casts, the eyes while a buff row lasts"
+                }
+              },
+              "description": "Level 3: texts and colours, put into the running game's memory (never built into regulation.bin)"
+            }
+          }
+        }
+      },
+      "required": [
+        "from"
+      ],
+      "description": "A spell made from a game spell, written in the structure of section 1b: requires.status/cost, locations, customs.basic/advanced. The earlier fields (fp_cost, shop, set, text, flame_color, ...) stay valid."
     }
   }
 }

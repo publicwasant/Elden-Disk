@@ -17,7 +17,7 @@ colour of the plan has its bytes at its place.
 The effect files are shared by every spell that uses them (Flame, Grant Me Strength itself too), so the colour is one for the whole
 game session.
 
-The same is done for the glowing eyes (`golden_eyes` of the design): f000004866 (EYES_PLANS), the eyes of a human NPC of the DLC, with
+The same is done for the glowing eyes (`positive_curse_energy_eyes` of the design): f000004866 (EYES_PLANS), the eyes of a human NPC of the DLC, with
 their own colour, in the same look. That file is shared with that NPC too.
 
 This module knows bytes only. The design's colour is read by the command (extension/.../service.py: flame_color); the writer
@@ -77,11 +77,23 @@ def plan_writes(plan: dict, target) -> dict[int, tuple[bytes, bytes]]:
     return {at: (old, new) for at, old, new in colour_states(plan, target) if new != old}
 
 
-def _signature(plan: dict, target) -> tuple[int, bytes, bytes]:
-    """The changing colour that tells the effect apart best: the one with the most different numbers in it."""
+# The colour each look searches the memory for, by effect: the one found quickest in the game's memory. A search is fast when the last
+# byte of what it looks for is rare there: ...3d (an alpha of 0.075 or 0.1) is, ...3f (1.0) and ...00 are everywhere. Measured on 64 MB
+# around where the effects lie (game 1.17.1, 2026-10-13): 22-45 ms a colour instead of 25-79 ms (the colour with the most different numbers,
+# the earlier choice); the copies found are the same (every other colour of the plan is checked at each hit). An effect not named here,
+# or a colour the design does not change, falls back to the earlier choice.
+FIND_AT = {"524400": 0x463C, "524401": 0xACF8, "4866": 0x5B74, "515000": 0x39EC, "515001": 0x5120}
+
+
+def _signature(plan: dict, target, at: int | None = None) -> tuple[int, bytes, bytes]:
+    """The changing colour the look searches for: the one at `at` (FIND_AT) when it changes, else the one with the most different
+    numbers in it."""
     changing = [s for s in colour_states(plan, target) if s[1] != s[2]]
     if not changing:
         raise FlameError("this colour changes nothing in the effect")
+    for s in changing:
+        if s[0] == at:
+            return s
     return max(changing, key=lambda s: len(set(struct.unpack("<4f", s[1]))))
 
 
@@ -100,6 +112,8 @@ def _target(target, eid):
 
 EFFECTS_AT = 1312 * 1024 * 1024      # where every log of 1.17.1 saw the effect files: this far into the game's biggest private block
 EFFECTS_BLOCK = 2048 * 1024 * 1024   # (2560 MB): the fire 1312 MB in, the eyes 1327 MB, the ring 1300 MB; blocks at least this big
+EFFECTS_REACH = 160 * 1024 * 1024   # how far each way around EFFECTS_AT the first look reads: the copy of the eyes the game drew from
+                                    # lay 1400 MB in on 2026-10-13 (a second copy, 1327 MB in, was painted; 64 MB each way missed it)
 
 
 def _joined(looks: list) -> scan.Walked:
@@ -116,12 +130,12 @@ def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = Tru
 
     `everything`: every copy, not only the first (the game holds the file of the eyes two and three times and draws from a copy a look
     that stops at the first one did not reach, 2026-10-12). The copies the game draws from lie together, 1300-1330 MB into its biggest
-    private block in every log, so the look goes there first (NEAR bytes each way around EFFECTS_AT), then around every copy it found
-    (they may lie further on in another game), and stops: about 200 MB instead of all the memory (7 GB, two minutes while the world
+    private block in every log, so the look goes there first (EFFECTS_REACH each way around EFFECTS_AT), then around every copy it found
+    (they may lie further on in another game), and stops: about 350 MB instead of all the memory (7 GB, two minutes while the world
     loads). Only when an effect of `required` (default: all of `eids`) is not found there is all the memory read, as before."""
     patterns, sig, states = {}, {}, {}
     for eid in eids:
-        at, old, new = _signature(_ALL[eid], _target(target, eid))
+        at, old, new = _signature(_ALL[eid], _target(target, eid), FIND_AT.get(eid))
         patterns[(eid, False)], sig[eid], states[eid] = old, at, colour_states(_ALL[eid], _target(target, eid))
         if painted:
             patterns[(eid, True)] = new
@@ -144,9 +158,9 @@ def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = Tru
         return Found(own, changed, scan.walk(mem, visit, overlap=overlap, budget=budget))
     regions = mem.regions(True)
     hint = [b + EFFECTS_AT for b, n in regions if n >= EFFECTS_BLOCK]
-    looks = [scan.walk(mem, visit, overlap=overlap, budget=budget, near=hint, only_near=True, regions=regions)]
+    looks = [scan.walk(mem, visit, overlap=overlap, budget=budget, near=hint, only_near=True, regions=regions, reach=EFFECTS_REACH)]
     if all(own[e] or changed[e] for e in (required if required is not None else eids)):
-        read = [w for w in (scan._window(regions, a) for a in hint) if w]
+        read = [w for w in (scan._window(regions, a, EFFECTS_REACH) for a in hint) if w]
         found = [b for bs in (*own.values(), *changed.values()) for b in bs]
         looks.append(scan.walk(mem, visit, overlap=overlap, budget=budget, near=found, only_near=True, skip=read, regions=regions))
     else:
@@ -160,7 +174,7 @@ def effect_ids() -> tuple[str, ...]:
 
 
 def eyes_ids() -> tuple[str, ...]:
-    """The golden eyes."""
+    """The positive curse energy eyes."""
     return tuple(EYES_PLANS)
 
 

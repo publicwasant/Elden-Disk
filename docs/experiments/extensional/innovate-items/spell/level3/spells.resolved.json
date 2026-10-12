@@ -1,0 +1,94 @@
+{
+  "kind": "innovate-items.spells resolved",
+  "format": 1,
+  "built_at": "2026-10-13 03:16:41",
+  "base_sha256": "766521f9508de3a3532df61c45a1c2d93340f1ff7ed8306ab20df761712ca2ab",
+  "bin": {
+    "file": "regulation.bin",
+    "sha256": "8ec4701830b5f7c96713ae88a1be6c1ee188e7148c76d52e59974c80b8dd0aef"
+  },
+  "spells": {
+    "2230000": {
+      "id": "reverse_cursed_technique",
+      "slot": 1,
+      "rows": {
+        "goods": 2230000,
+        "magic": 2230000,
+        "sp_effect": [
+          21951000,
+          21951001
+        ],
+        "bullet": [
+          500000000,
+          500000001
+        ],
+        "atk": [
+          710000000,
+          710000001
+        ],
+        "shop": 100508
+      },
+      "design": {
+        "kind": "projectile",
+        "from": 6421,
+        "requires": {
+          "status": {
+            "intelligence": 0,
+            "faith": 60,
+            "arcane": 10
+          },
+          "cost": {
+            "focus_point": 120
+          }
+        },
+        "locations": {
+          "kale": {
+            "price": 34590,
+            "stock": 1
+          }
+        },
+        "customs": {
+          "basic": {
+            "SpEffect.1642100.effectEndurance": 20.0,
+            "SpEffect.1642100.motionInterval": 0.5,
+            "SpEffect.1642100.changeHpPoint": -45,
+            "SpEffect.1642100.changeMpPoint": -15,
+            "SpEffect.1642100.staminaRecoverChangeSpeed": 100,
+            "SpEffect.1642100.vfxId": -1,
+            "Magic.6421.refType": 32,
+            "Magic.6421.castSfxId": 524400,
+            "Magic.6421.fireSfxId": 524401,
+            "Bullet.10642100.sfxId_Bullet": -1,
+            "Goods.6421.iconId": 6806
+          },
+          "advanced": {
+            "texts": {
+              "goods_name": "Reverse Cursed Technique",
+              "goods_info": "An anomalous art left behind by an Unknown Sorcerer from another reality. Forces the concept of ruin to consume itself, commanding shattered flesh to remember its whole and unbroken state.",
+              "goods_caption": "The nature of a curse is to erode, corrupt, and destroy. Yet, this paradox dictates a terrifying truth: when two currents of profound malice are forced to violently collide and multiply, they do not bring absolute ruin. Instead, the multiplied negativity gives birth to a vibrant, positive spark of life capable of reversing death's approach.\n\nThis alien logic was introduced to the Lands Between by an Unknown Sorcerer—a wanderer who fell through the cracks of reality from a universe entirely unalike our own. They wore strange garments, swore fealty to no sovereign, and manipulated an unseen energy that defied every natural law of this world. To them, the impossible was merely a matter of calculation.\n\nThe sorcerer lingered only briefly before the fabric of space swallowed them once more, returning them to their distant home. In their wake, they left nothing but the formula for this absolute contradiction. Perhaps it was a deliberate miracle gifted to those who suffer, or perhaps, to a being who walks between dimensions, rewriting the rules of mortality was simply a fleeting whim."
+            },
+            "colors": {
+              "Magic.6421.castSfxId": {
+                "main": [
+                  0.2,
+                  0.65,
+                  1.0
+                ],
+                "accent": [
+                  0.5,
+                  0.06,
+                  0.36
+                ]
+              },
+              "SpEffect.1642100": [
+                0.2,
+                0.65,
+                1.0
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

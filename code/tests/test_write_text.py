@@ -512,7 +512,7 @@ def test_no_colour_in_the_design_means_nothing_is_touched(rig, monkeypatch):
     assert all(fg.mem[b] == untouched.mem[b] for b in fg.mem)
 
 
-def test_the_eyes_colour_of_the_design_reaches_the_golden_eyes_even_without_a_fire_colour(rig, monkeypatch):
+def test_the_eyes_colour_of_the_design_reaches_the_positive_curse_energy_eyes_even_without_a_fire_colour(rig, monkeypatch):
     from tests.test_write_flame import BASES, Game as FlameGame
     from eldendisk.writer import fxr
     rig.open_session()

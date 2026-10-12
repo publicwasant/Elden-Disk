@@ -90,7 +90,7 @@ def test_a_build_goes_through_the_gate_and_then_replaces_regulation_bin(ci):
     assert ci.output_path.read_bytes().startswith(b"BUILT") and len(ci.state["verified"]) == 1
     assert ci.state["verified"][0][0] == ci.output_path.read_bytes()
     assert not list(ci.dir.glob("*.tmp"))
-    assert sorted(p.name for p in ci.ext.rglob("*") if p.is_file()) == ["regulation.bin", "spells.build.json"]     # nothing secured by a build
+    assert sorted(p.name for p in ci.ext.rglob("*") if p.is_file()) == ["regulation.bin", "spells.build.json", "spells.resolved.json"]     # nothing secured by a build
 
 
 def test_the_gate_judges_the_file_before_it_replaces_the_old_output(ci, monkeypatch):
@@ -215,7 +215,7 @@ def test_our_own_output_is_never_a_base(ci):
 # ---------------- --secure ----------------
 def test_secure_keeps_the_build_and_writes_the_record_last(ci):
     spells = build_and_secure(ci)
-    assert sorted(p.name for p in ci.dir.iterdir()) == ["regulation.bin", "regulation.secured.bin", "spells.build.json", "spells.commit.json"]
+    assert sorted(p.name for p in ci.dir.iterdir()) == ["regulation.bin", "regulation.secured.bin", "spells.build.json", "spells.commit.json", "spells.resolved.json"]
     assert ci.secured_bin.read_bytes() == ci.output_path.read_bytes()
     rec = ci.read_secured()
     assert rec["kind"] == service.SECURED_KIND and rec["recipe_version"] == bases.RECIPE_VERSION
@@ -415,24 +415,24 @@ def test_eyes_color_is_none_without_one_and_the_first_slots_when_there_are_sever
     assert ci.eyes_color("all") == (None, None)
     d = file_of({ID: copy.deepcopy(SPELL), "other": copy.deepcopy(SPELL)})
     a, b = spell_of(d, ID), spell_of(d, "other")
-    a["golden_eyes"], b["golden_eyes"] = {"color": [0.2, 0.65, 1]}, {"color": [1, 0, 0]}
+    a["positive_curse_energy_eyes"], b["positive_curse_energy_eyes"] = {"color": [0.2, 0.65, 1]}, {"color": [1, 0, 0]}
     write_spec(ci, d)
     colour, note = ci.eyes_color("all")
     assert colour == (0.2, 0.65, 1.0) and "slot 1" in note
-    b["golden_eyes"] = {}                                                       # golden eyes without a colour: the game's gold
+    b["positive_curse_energy_eyes"] = {}                                                       # positive curse energy eyes without a colour: the game's gold
     write_spec(ci, d)
     assert ci.eyes_color("all") == ((0.2, 0.65, 1.0), None) and ci.eyes_color(["other"]) == (None, None)
 
 
 def test_the_eyes_colour_is_no_build_change_but_the_eyes_are(ci):
-    write_spec(ci, edited(lambda i: i.update(golden_eyes={})))
+    write_spec(ci, edited(lambda i: i.update(positive_curse_energy_eyes={})))
     build_and_secure(ci)
     base, sha = ci.read_base(ci.game)
-    write_spec(ci, edited(lambda i: i.update(golden_eyes={"color": [0.2, 0.65, 1]})))
+    write_spec(ci, edited(lambda i: i.update(positive_curse_energy_eyes={"color": [0.2, 0.65, 1]})))
     assert ci.decide(ci.items("all"), sha).use_secured
-    write_spec(ci, edited(lambda i: i.pop("golden_eyes", None)))
+    write_spec(ci, edited(lambda i: i.pop("positive_curse_energy_eyes", None)))
     d = ci.decide(ci.items("all"), sha)
-    assert not d.use_secured and any("golden_eyes" in line for line in d.diff)
+    assert not d.use_secured and any("positive_curse_energy_eyes" in line for line in d.diff)
 
 
 def test_the_flame_accent_colour_is_the_one_of_the_spell_that_gives_the_fire_its_colour(ci):

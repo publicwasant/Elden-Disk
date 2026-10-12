@@ -16,7 +16,7 @@ from ..host.host import Hooks, Session, State
 from ..paths import HERE, describe_resource, get_resource_path
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, session_log
-from .extension import ext_dir, prepare_regulation, spec_file
+from .extension import ext_dir, prepare_regulation, say_error, spec_file
 from ..extension.innovate_items.spells.service import ExtensionError, GateFailed
 
 
@@ -55,7 +55,7 @@ def design_has_text(args, vault_path: Path) -> bool:
 
 
 def design_has_flame(args, vault_path: Path) -> bool:
-    """Does a spell of the design name a flame_color, or a colour for its golden_eyes? (Nothing to start otherwise.)"""
+    """Does a spell of the design name a flame_color, or a colour for its positive_curse_energy_eyes? (Nothing to start otherwise.)"""
     try:
         ci = extension.open_spells(ext_dir(args, vault_path), spec_file(args))
         sel, _note = ci.selection()
@@ -140,11 +140,11 @@ def cmd_run(args) -> int:
     try:
         world, mode = _regulation(args, vault, game_dir, protect)
     except GateFailed as exc:
-        book.e("run", str(exc))
+        say_error(exc, "run")
         book.e("run", "the game was not started and nothing was swapped; the game's files are as they were")
         return 1
     except (ExtensionError, FileNotFoundError) as exc:
-        book.e("run", str(exc))
+        say_error(exc, "run")
         return 1
     rows = [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
             ("mode", "vault ON (backup before, restore after)" if protect else "vault OFF (no backup, no restore)")]

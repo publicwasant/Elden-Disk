@@ -23,7 +23,8 @@ from .console import printable
 from .logbook import EXT_TAG, TAG_WIDTH, Event, book, format_line, parse_line
 
 _SYMBOLS = {"ok": ("\u2713", "+"), "info": ("\u00b7", "-"), "warn": ("!", "!"), "error": ("\u2716", "x")}
-_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36", "spell": "35", "file": "38;5;208"}
+_COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36", "spell": "35", "file": "38;5;208",
+           "id": "38;5;179", "addr": "38;5;75", "path": "38;5;110"}
 RULE = "\u2500"
 
 
@@ -93,6 +94,31 @@ _TAIL = re.compile(r"(?<=[\\/])(%s)(?![\w\\/-])" % _FILE_NAME, re.IGNORECASE)
 def paint_tails(text: str, resume: str = "") -> str:
     """The file name at the end of a path (`...\\Game\\regulation.bin`) in orange; the folders stay as they are."""
     return _TAIL.sub(lambda m: paint(m.group(1), "file", True) + resume, text)
+
+
+_ANSI = re.compile(r"(\x1b\[[0-9;]*m)")
+# An id (4 or more digits: 114880, 2230000) or an address (0x7ff3cbbb0000). Not part of a word, a path, a time, a decimal or a date
+# (`20261012-185726`), and never inside an escape sequence.
+_NUMBER = re.compile(r"(?<![\w.:\\/\-])(0x[0-9a-fA-F]{4,}|[0-9]{4,})(?![\w.:\\/\-])")
+
+
+def paint_numbers(text: str, color: bool, resume: str = "") -> str:
+    """On a colour console: ids and addresses (`114880`, `0x7ff3cbbb0000`) each in a colour of their own. `resume` is the colour code
+    of the line the text sits in (a warning, a debug line), put back after each painted number."""
+    if not color:
+        return text
+    parts = _ANSI.split(text)
+    for i in range(0, len(parts), 2):
+        parts[i] = _NUMBER.sub(lambda m: paint(m.group(1), "addr" if m.group(1).startswith("0x") else "id", True) + resume, parts[i])
+    return "".join(parts)
+
+
+def swatch(rgb, color: bool) -> str:
+    """A little square in the colour `rgb` (three numbers, 1 = the full colour; above 1 shines brighter, shown as the full colour)."""
+    if not color:
+        return "\u25a0"
+    r, g, b = (max(0, min(255, round(float(x) * 255))) for x in rgb)
+    return f"\x1b[38;2;{r};{g};{b}m\u25a0\x1b[0m"
 
 
 _SPELL_IDS: re.Pattern | None = None
@@ -261,9 +287,14 @@ class Working:
         color = use_color(self.stream)
         frames = _FRAMES if symbol("ok", getattr(self.stream, "encoding", None)) == _SYMBOLS["ok"][0] else _FRAMES_ASCII
         tail = "  " + seconds(self.elapsed())
+        spin = paint(frames[self._frame % len(frames)], 'cyan', color)
+        if _in_block(self.stream, self.tag):          # inside a block: the gutter instead of the tag column
+            room = max(10, shutil.get_terminal_size((80, 24)).columns - 1 - 7 - len(tail))
+            text = self.short if len(self.short) <= room else self.short[:room - 1] + "\u2026"
+            return f" {paint(chr(0x2502), 'dim', color)}  {spin}  {paint_numbers(emphasize(text, color), color)}{paint(tail, 'dim', color)}"
         room = max(10, shutil.get_terminal_size((80, 24)).columns - 1 - (5 + TAG_WIDTH) - len(tail))
         text = self.short if len(self.short) <= room else self.short[:room - 1] + "\u2026"
-        return (f" {paint(frames[self._frame % len(frames)], 'cyan', color)}  {paint(f'{self.tag:<{TAG_WIDTH}}', 'dim', color)} "
+        return (f" {spin}  {paint(f'{self.tag:<{TAG_WIDTH}}', 'dim', color)} "
                 f"{emphasize(text, color)}{paint(tail, 'dim', color)}")
 
     def draw(self) -> None:
@@ -306,6 +337,96 @@ class Working:
 
 def working(tag: str, text: str, **kw) -> Working:
     return Working(tag, text, **kw)
+
+
+# ---- one block for the whole of `extension innovate-items spells`: what changed, the build, the gate, the ids ----
+_block = None                      # the Block that is open (at most one); the lines of the `design` tag go inside it
+
+
+def _in_block(stream, tag: str) -> bool:
+    return _block is not None and tag == EXT_TAG and _block.stream is stream
+
+
+_PROBLEM = re.compile(r"^((?:\x1b\[[0-9;]*m)?\s*)(\$\.[^\s:]+(?:\[[^\]]*\][^\s:]*)?): (.*)$", re.DOTALL)
+
+
+def _problem_line(msg: str, color: bool, resume: str) -> str:
+    """A problem of the design (`$.innovate_items...customs.basic: unknown field`): the place in cyan, the reason after it."""
+    m = _PROBLEM.match(msg) if color else None
+    return msg if not m else f"{m.group(1)}{paint(m.group(2), 'cyan', True)}{resume}: {m.group(3)}"
+
+
+class Block:
+    """
+
+         \u256d\u2500 design
+         \u2502  \u00b7  building because the design changed (1 field)
+         \u2502     \u2514\u2500 customs.basic.SpEffect.1642100.effectEndurance  20 -> 30
+         \u2502  \u2713  reverse_cursed_technique built, gate passed (26 blocks re-encoded)  (5.8 s)
+         \u2570\u2500 regulation.bin  C:\\...\\regulation.bin
+
+    Every line of the `design` tag between `with Block(...)` and its end goes inside it (see pretty_sink); `rows` and `note` write lines
+    of their own. `active=False` (`-v`, where the console shows the log itself) makes it do nothing at all."""
+
+    def __init__(self, title: str, *, stream=None, active: bool = True, clock=time.monotonic):
+        self.title, self.stream, self.active, self._clock = title, stream or sys.stderr, active, clock
+        self.t0, self.closed = 0.0, False
+
+    def _bar(self, color: bool) -> str:
+        return paint(chr(0x2502), "dim", color)
+
+    def __enter__(self):
+        global _block
+        self.t0 = self._clock()
+        if not self.active or _block is not None:
+            self.active = False
+            return self
+        color = use_color(self.stream)
+        _emit(f" {paint(chr(0x256d) + chr(0x2500), 'dim', color)} {paint(self.title, 'bold', color)}", self.stream)
+        _block = self
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if not self.closed:
+            self.close("stopped" if exc_type is not None else "", "error" if exc_type is not None else "ok")
+        return False
+
+    def close(self, text: str = "", kind: str = "ok") -> None:
+        """The last line: a result, and how long the block took."""
+        global _block
+        if self.closed:
+            return
+        self.closed = True
+        if not self.active:
+            return
+        if _block is self:
+            _block = None
+        color = use_color(self.stream)
+        took = paint(f"  ({seconds(self._clock() - self.t0)})", "dim", color)
+        sym = paint(symbol(kind, getattr(self.stream, "encoding", None)), kind, color) + "  " if text else ""
+        _emit(f" {paint(chr(0x2570) + chr(0x2500), 'dim', color)} {sym}{paint_numbers(emphasize(text, color), color)}{took}", self.stream)
+
+    def note(self, text: str, kind: str = "info") -> None:
+        """A line in the block that is not an event (it is not in the log file): the same look as an event."""
+        if not self.active:
+            return
+        color = use_color(self.stream)
+        sym = paint(symbol(kind, getattr(self.stream, "encoding", None)), kind, color)
+        _emit(f" {self._bar(color)}  {sym}  {paint_numbers(highlight_spells(text, color, EXT_TAG), color)}", self.stream)
+
+    def rows(self, rows: list[tuple[str, str]], indent: int = 5) -> None:
+        """`key  value` rows under the line before them (values may hold colour codes already; ids and addresses get theirs here)."""
+        if not self.active or not rows:
+            return
+        color = use_color(self.stream)
+        key = max(len(k) for k, _ in rows)
+        for k, v in rows:
+            _emit(f" {self._bar(color)}{' ' * (indent - 1)}{paint(k.ljust(key), 'dim', color)}  {paint_numbers(v, color)}", self.stream)
+
+
+def block(title: str, *, verbose: bool = False, stream=None) -> Block:
+    """The block of a command; with `verbose` it is not drawn (the console shows the log itself)."""
+    return Block(title, stream=stream, active=not verbose)
 
 
 def card(title: str, rows: list[tuple[str, str]], stream=None) -> None:
@@ -355,6 +476,11 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
         resume = f"\x1b[{_COLORS[kind]}m" if kind in ("warn", "error") else ""
         msg = (paint(emphasize(e.msg, color, resume, ticks=False), kind, color) if resume
                else emphasize(highlight_spells(e.msg, color, e.tag), color))
+        msg = paint_numbers(msg, color, resume)
+        if _in_block(out, e.tag):                      # a line of the block of `extension innovate-items spells`
+            msg = _problem_line(msg, color, resume)
+            _emit(f" {paint(chr(0x2502), 'dim', color)}  {sym}  {msg}", out, resume)
+            return
         _emit(f" {stamp}{sym}  {tag} {msg}", out, resume)
     return sink
 
@@ -390,7 +516,9 @@ def raw_sink(stream=None) -> Callable[[Event], None]:
         out = stream or sys.stderr
         color = use_color(out)
         kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(e.level)
-        line = format_line(e._replace(msg=highlight_spells(e.msg, color, e.tag)) if kind is None else e)
+        back = {"E": "\x1b[31m", "W": "\x1b[33m", "V": "\x1b[2m", "D": "\x1b[2m"}.get(e.level, "")
+        msg = paint_numbers(e.msg, color, back)
+        line = format_line(e._replace(msg=highlight_spells(msg, color, e.tag)) if kind is None else e._replace(msg=msg))
         text, resume = _line(line, kind, color, e.level)
         _emit(text, out, resume)
     return sink
@@ -402,10 +530,13 @@ def raw_line(line: str, stream=None) -> None:
     got = parse_line(line)
     kind = {"E": "error", "W": "warn", "V": "dim", "D": "dim"}.get(got[1]) if got else None
     color = use_color(out)
-    if got and kind is None:       # the message of an `ext` line, after "ext   : "; the prefix (time, pid, tag) is not touched
-        m = _EXT_LINE.match(line)
-        if m:
-            line = m.group(1) + highlight_spells(m.group(2), color, EXT_TAG)
+    m = _LOG_LINE.match(line) if got else None
+    if m:                          # the message after "tag   : " gets the colours of ids and addresses; the prefix (time, pid, tag) is not touched
+        back = {"E": "\x1b[31m", "W": "\x1b[33m", "V": "\x1b[2m", "D": "\x1b[2m"}.get(got[1], "")
+        msg = paint_numbers(m.group(6), color, back)
+        if kind is None and m.group(5) == EXT_TAG:
+            msg = highlight_spells(msg, color, EXT_TAG)
+        line = line[:len(line) - len(m.group(6))] + msg
     text, resume = _line(line, kind, color, got[1] if got else "I")
     _emit(text, out, resume)
 

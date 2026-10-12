@@ -276,58 +276,58 @@ def test_flame_color_must_be_three_numbers_from_0_to_2(bad):
     assert any("flame_color" in p for p in e.value.problems)
 
 
-# ---- golden_eyes (1.7.1 section 1a) ----
+# ---- positive_curse_energy_eyes (1.7.1 section 1a) ----
 PROJECTILE = {"kind": "projectile", "from": 6421, "set": {"SpEffect.1642100.effectEndurance": 20}}
 
 
-def test_golden_eyes_on_a_spell_made_from_a_game_spell_names_the_buff_row_and_may_have_a_colour():
-    it = spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes={"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})}))["spells"][0]
-    assert it["golden_eyes"] == {"on": "SpEffect.1642100", "color": [0.2, 0.65, 1.0]}
-    gold = spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes={"on": "SpEffect.1642100"})}))["spells"][0]
-    assert gold["golden_eyes"] == {"on": "SpEffect.1642100"}                     # no colour: the game's gold
-    assert "golden_eyes" not in spec.normalise(file_of({"p": PROJECTILE}))["spells"][0]
+def test_positive_curse_energy_eyes_on_a_spell_made_from_a_game_spell_names_the_buff_row_and_may_have_a_colour():
+    it = spec.normalise(file_of({"p": dict(PROJECTILE, positive_curse_energy_eyes={"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})}))["spells"][0]
+    assert it["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100", "color": [0.2, 0.65, 1.0]}
+    gold = spec.normalise(file_of({"p": dict(PROJECTILE, positive_curse_energy_eyes={"on": "SpEffect.1642100"})}))["spells"][0]
+    assert gold["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100"}                     # no colour: the game's gold
+    assert "positive_curse_energy_eyes" not in spec.normalise(file_of({"p": PROJECTILE}))["spells"][0]
 
 
-def test_golden_eyes_on_a_heal_over_time_buff_has_no_on():
-    assert spec.normalise(mutated(lambda i: i.update(golden_eyes={})))["spells"][0]["golden_eyes"] == {}
-    assert spec.normalise(mutated(lambda i: i.update(golden_eyes={"color": [1, 0, 0]})))["spells"][0]["golden_eyes"] == {"color": [1.0, 0.0, 0.0]}
+def test_positive_curse_energy_eyes_on_a_heal_over_time_buff_has_no_on():
+    assert spec.normalise(mutated(lambda i: i.update(positive_curse_energy_eyes={})))["spells"][0]["positive_curse_energy_eyes"] == {}
+    assert spec.normalise(mutated(lambda i: i.update(positive_curse_energy_eyes={"color": [1, 0, 0]})))["spells"][0]["positive_curse_energy_eyes"] == {"color": [1.0, 0.0, 0.0]}
     with pytest.raises(spec.SpecError) as e:
-        spec.normalise(mutated(lambda i: i.update(golden_eyes={"on": "SpEffect.1642100"})))
-    assert any("golden_eyes.on" in p and "leave `on` out" in p for p in e.value.problems)
+        spec.normalise(mutated(lambda i: i.update(positive_curse_energy_eyes={"on": "SpEffect.1642100"})))
+    assert any("positive_curse_energy_eyes.on" in p and "leave `on` out" in p for p in e.value.problems)
 
 
 @pytest.mark.parametrize("bad,where", [
-    ({"color": [0.2, 0.65, 1]}, "golden_eyes.on"), ({"on": "Magic.6421"}, "golden_eyes.on"), ({"on": 1642100}, "golden_eyes.on"),
-    ({"on": "SpEffect.1642100", "color": [3, 0, 0]}, "golden_eyes.color"), ({"on": "SpEffect.1642100", "colour": [1, 1, 1]}, "golden_eyes.colour"),
-    (True, "golden_eyes"), ([0.2, 0.65, 1], "golden_eyes")])
-def test_golden_eyes_must_name_the_buff_row_and_a_colour_from_0_to_2(bad, where):
+    ({"color": [0.2, 0.65, 1]}, "positive_curse_energy_eyes.on"), ({"on": "Magic.6421"}, "positive_curse_energy_eyes.on"), ({"on": 1642100}, "positive_curse_energy_eyes.on"),
+    ({"on": "SpEffect.1642100", "color": [3, 0, 0]}, "positive_curse_energy_eyes.color"), ({"on": "SpEffect.1642100", "colour": [1, 1, 1]}, "positive_curse_energy_eyes.colour"),
+    (True, "positive_curse_energy_eyes"), ([0.2, 0.65, 1], "positive_curse_energy_eyes")])
+def test_positive_curse_energy_eyes_must_name_the_buff_row_and_a_colour_from_0_to_2(bad, where):
     with pytest.raises(spec.SpecError) as e:
-        spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes=bad)}))
+        spec.normalise(file_of({"p": dict(PROJECTILE, positive_curse_energy_eyes=bad)}))
     assert any(where + ":" in p for p in e.value.problems), e.value.problems
 
 
-def test_a_clone_cannot_have_golden_eyes():
+def test_a_clone_cannot_have_positive_curse_energy_eyes():
     with pytest.raises(spec.SpecError) as e:
-        spec.normalise(file_of({"c": {"kind": "clone", "from": 6421, "golden_eyes": {"on": "SpEffect.1642100"}}}))
-    assert any("golden_eyes" in p and "clone" in p for p in e.value.problems)
+        spec.normalise(file_of({"c": {"kind": "clone", "from": 6421, "positive_curse_energy_eyes": {"on": "SpEffect.1642100"}}}))
+    assert any("positive_curse_energy_eyes" in p and "clone" in p for p in e.value.problems)
 
 
 def test_the_eyes_are_built_but_their_colour_is_not():
     def view(eyes):
-        return spec.build_view(spec.normalise(file_of({"p": dict(PROJECTILE, **({"golden_eyes": eyes} if eyes else {}))})))
+        return spec.build_view(spec.normalise(file_of({"p": dict(PROJECTILE, **({"positive_curse_energy_eyes": eyes} if eyes else {}))})))
     blue = view({"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})
     assert blue == view({"on": "SpEffect.1642100", "color": [1, 0, 0]}) == view({"on": "SpEffect.1642100"})
     assert blue != view(None) and blue != view({"on": "SpEffect.1642101"})
-    n = spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes={"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})}))
+    n = spec.normalise(file_of({"p": dict(PROJECTILE, positive_curse_energy_eyes={"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})}))
     assert spec.normalise(spec.as_file(n)) == n
 
 
-def test_the_schema_and_the_validator_agree_on_golden_eyes():
+def test_the_schema_and_the_validator_agree_on_positive_curse_energy_eyes():
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((PKG / "spells.schema.json").read_text(encoding="utf-8"))
-    cases = [mutated(lambda i, v=v: i.update(golden_eyes=v)) for v in ({}, {"color": [0.2, 0.65, 1]}, {"color": [3, 0, 0]},
+    cases = [mutated(lambda i, v=v: i.update(positive_curse_energy_eyes=v)) for v in ({}, {"color": [0.2, 0.65, 1]}, {"color": [3, 0, 0]},
                                                                       {"on": "SpEffect.1"}, {"x": 1}, True)]
-    cases += [file_of({"p": dict(PROJECTILE, golden_eyes=v)}) for v in ({"on": "SpEffect.1642100"}, {"on": "SpEffect.1642100", "color": [1, 1, 1]},
+    cases += [file_of({"p": dict(PROJECTILE, positive_curse_energy_eyes=v)}) for v in ({"on": "SpEffect.1642100"}, {"on": "SpEffect.1642100", "color": [1, 1, 1]},
                                                                       {"color": [1, 1, 1]}, {"on": "Magic.1"}, {"on": "SpEffect.1", "color": [1, 1]}, [])]
     for d in cases:
         ok_schema = jsonschema.Draft202012Validator(schema).is_valid(d)

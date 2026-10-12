@@ -390,7 +390,7 @@ def test_the_rest_is_owed_in_small_shares_and_slept_in_lumps(monkeypatch):
     assert abs(walked.slept - sum(sleeps)) < 1e-9 and walked.slowest >= 0.004
 
 
-# ------------------------------------------------------------------------------------------------------ the golden eyes
+# ------------------------------------------------------------------------------------------------------ the positive curse energy eyes
 def test_the_eyes_plan_is_sane_and_turns_the_red_blue():
     assert tuple(EYES_PLANS) == ("4866",) == fxr.eyes_ids() and not set(EYES_PLANS) & set(PLANS)
     plan = EYES_PLANS["4866"]
@@ -505,8 +505,9 @@ def test_the_ring_takes_the_accent_colour_and_is_not_required(monkeypatch, quiet
 @pytest.fixture
 def small_world(monkeypatch):
     """The game's layout shrunk: a big private block of 3 MB whose effect files lie 1 MB in (as 1312 MB into 2560 MB in the game),
-    windows of 64 KB around an address, pieces of 16 KB."""
+    windows of 64 KB around an address (160 KB around where the effects lie, as 160 MB and 64 MB in the game), pieces of 16 KB."""
     monkeypatch.setattr(fxr, "EFFECTS_AT", 0x100000)
+    monkeypatch.setattr(fxr, "EFFECTS_REACH", 0x28000)
     monkeypatch.setattr(fxr, "EFFECTS_BLOCK", 0x200000)
     monkeypatch.setattr(scan, "NEAR", 0x10000)
     monkeypatch.setattr(scan, "CHUNK", 0x4000)
@@ -537,9 +538,19 @@ def test_every_copy_lying_where_the_effects_are_is_found_without_reading_all_the
 
 
 def test_copies_beyond_the_first_window_are_found_around_the_ones_found(small_world):
-    g = big_block(("524400", 0x100000), ("524401", 0x10C000), ("4866", 0x114000))             # the eyes past the first window: the second look
+    g = big_block(("524400", 0x100000), ("524401", 0x126000), ("4866", 0x130000))             # the eyes past the first window: the second look
     found = fxr.find_all(g, ["524400", "524401", "4866"], BLUE, everything=True)
-    assert found.own["4866"] == [0x60000000 + 0x114000]
+    assert found.own["4866"] == [0x60000000 + 0x130000]
+
+
+def test_the_copy_of_the_eyes_far_from_the_other_is_in_the_first_look(small_world):
+    """2026-10-13: the eyes the game drew from lay 1400 MB in, 73 MB past a painted copy at 1327 MB and 88 MB past where the effects lie:
+    a first look of 64 MB each way missed it and the eyes stayed red."""
+    g = big_block(("524400", 0x100000), ("524401", 0x100800), ("4866", 0x103000), ("4866", 0x116000))
+    found = fxr.find_all(g, ["524400", "524401", "4866"], BLUE, everything=True)
+    assert found.own["4866"] == [0x60000000 + 0x103000, 0x60000000 + 0x116000]
+    assert all(addr < 0x70000000 for addr, _size in g.reads)
+    assert found.walked.complete and found.walked.tier == "near"          # the log says "around where the effect files lie", not "the whole memory"
 
 
 def test_when_an_effect_is_not_where_they_lie_all_the_memory_is_read(small_world):
@@ -553,3 +564,49 @@ def test_an_optional_ring_that_is_not_there_does_not_make_the_look_read_everythi
     found = fxr.find_all(g, ["524400", "524401", "4866", "515000"], BLUE, everything=True, required=["524400", "524401", "4866"])
     assert found.own["515000"] == [] and all(addr < 0x70000000 for addr, _size in g.reads)
 
+
+
+# ------------------------------------------------------------------------------------------------------ a quicker look (2026-10-13)
+def test_the_rest_is_owed_for_the_reading_only_not_for_looking_through_our_copy(monkeypatch):
+    monkeypatch.setattr(scan, "CHUNK", 100)
+    monkeypatch.setattr(scan, "LUMP", 0.0)
+    clock, sleeps = [0.0], []
+    monkeypatch.setattr(scan, "_clock", lambda: clock[0])
+    monkeypatch.setattr(scan, "_sleep", lambda s: (sleeps.append(s), clock.__setitem__(0, clock[0] + s)))
+    g = Game(effects=())
+    g.mem[0x60000000] = bytearray(1000)
+    real = g.read
+
+    def slow(a, s):
+        clock[0] += 0.004                                                                        # a read costs 4 ms
+        return real(a, s)
+    g.read = slow
+
+    def visit(a, d, n):
+        clock[0] += 0.1                                                                          # looking through it costs 100 ms
+        return False
+    walked = scan.walk(g, visit, overlap=3)
+    assert walked.complete and abs(sum(sleeps) - 10 * 0.004 * scan.REST) < 1e-9                  # not 10 * 0.104 * REST
+    assert walked.slowest >= 0.104                                                               # the slowest piece still counts both
+
+
+def test_each_effect_is_looked_for_by_the_colour_that_is_quickest_to_find():
+    for eid, at in fxr.FIND_AT.items():
+        colour = PURPLE if eid in fxr.ring_ids() else BLUE
+        assert fxr._signature(fxr._ALL[eid], colour, at)[0] == at, eid
+    plan = {"colours": [(0x10, "0000803f0000803f0000803f0000803f", False), (0x20, "0000803f0000003f0000803e9a99993d", False)]}
+    assert fxr._signature(plan, BLUE, 0x10)[0] == 0x20                     # white stays white: a colour that does not change is not looked for
+
+
+def test_the_step_run_starts_looks_only_for_the_games_own_colours(monkeypatch, quiet_where):
+    seen = []
+    real = fxr.paint_many
+
+    def spy(*a, **kw):
+        seen.append(kw.get("painted", True))
+        return real(*a, **kw)
+    monkeypatch.setattr(fxr, "paint_many", spy)
+    both = ("524400", "524401", "4866")
+    assert wcmd._put_flame(Game(effects=both), open_gate(), BLUE, eyes=RED, fresh=True) == 0
+    assert wcmd._put_flame(Game(effects=both), open_gate(), BLUE, eyes=RED) == 0
+    assert seen == [False, True]                                          # by hand: a copy painted before is still recognised

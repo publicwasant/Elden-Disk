@@ -35,6 +35,7 @@ CODE_DIR = PKG_DIR.parents[3]                             # code/: where extensi
 SPEC_FILE, SCHEMA_FILE = "extension.json", "spells.schema.json"
 OUTPUT_FILE, SECURED_BIN, SECURED_FILE = "regulation.bin", "regulation.secured.bin", "spells.commit.json"
 BUILD_FILE, BUILD_KIND, BUILD_FORMAT = "spells.build.json", "innovate-items.spells build", 1
+RESOLVED_FILE, RESOLVED_KIND, RESOLVED_FORMAT = "spells.resolved.json", "innovate-items.spells resolved", 1
 SECURED_KIND = "innovate-items.spells commit"
 COMMIT_FORMAT = 2
 
@@ -70,7 +71,7 @@ def _write_atomic(path: Path, data: bytes) -> None:
 
 # ---------------- the field-by-field diff ----------------
 def _flatten(v, prefix: str, out: dict) -> None:
-    if isinstance(v, dict) and (v or not prefix):      # an empty object is a value (golden_eyes {}: the eyes, in the game's gold)
+    if isinstance(v, dict) and (v or not prefix):      # an empty object is a value (positive_curse_energy_eyes {}: the eyes, in the game's gold)
         for k in v:
             _flatten(v[k], f"{prefix}.{k}" if prefix else str(k), out)
     else:
@@ -134,6 +135,7 @@ class Report:
     notes: list = field(default_factory=list)
     output: Path | None = None
     spells: list = field(default_factory=list)
+    rows: dict = field(default_factory=dict)       # spell id -> recipes.spell_rows(...): the ids the game really uses
 
 
 def _tables_dropped(fn):
@@ -157,6 +159,7 @@ class Spells:
         self.secured_bin = self.dir / SECURED_BIN
         self.secured_path = self.dir / SECURED_FILE
         self.build_path = self.dir / BUILD_FILE
+        self.resolved_path = self.dir / RESOLVED_FILE
 
     # ---------------- the design ----------------
     def load_spec(self) -> dict:
@@ -209,15 +212,15 @@ class Spells:
         return first, note
 
     def eyes_color(self, which="all") -> tuple:
-        """(the colour of the golden eyes as (r, g, b), note) or (None, None) when no spell in `which` has golden_eyes with a `color`
+        """(the colour of the positive curse energy eyes as (r, g, b), note) or (None, None) when no spell in `which` has positive_curse_energy_eyes with a `color`
         (without one the eyes stay the game's gold). The effect is the game's own and shared, so there is one colour: the first spell's
         (by slot) that names one, with a note when others name another. `write --flame-color` puts it into the game with the fire."""
-        named = [(s["slot"], tuple(s["golden_eyes"]["color"])) for s in self.items(which) if "color" in s.get("golden_eyes", {})]
+        named = [(s["slot"], tuple(s["positive_curse_energy_eyes"]["color"])) for s in self.items(which) if "color" in s.get("positive_curse_energy_eyes", {})]
         if not named:
             return None, None
         first = named[0][1]
         other = {c for _, c in named[1:] if c != first}
-        note = (f"the spells name {len(other) + 1} different colours for the golden eyes; the effect is shared, so only slot {named[0][0]}'s is used"
+        note = (f"the spells name {len(other) + 1} different colours for the positive curse energy eyes; the effect is shared, so only slot {named[0][0]}'s is used"
                 if other else None)
         return first, note
 
@@ -306,7 +309,7 @@ class Spells:
             reasons.append(f"the recipes changed (built with version {rec['recipe_version']}, now {bases.RECIPE_VERSION})")
         if rec["base_sha256"] != base_sha:
             reasons.append("the game's regulation.bin is not the file the last build was made on")
-        diff = diff_specs(specmod.build_view(rec["spec"]), specmod.build_view({"format": specmod.FORMAT, "spells": spells}))
+        diff = diff_specs(specmod.design_view(rec["spec"]), specmod.design_view({"format": specmod.FORMAT, "spells": spells}))
         if diff and not reasons:
             reasons.append(f"the design changed since the last build ({len(diff)} field{'s' if len(diff) != 1 else ''})")
         if not self.output_path.is_file():
@@ -332,7 +335,7 @@ class Spells:
         if rec["base_sha256"] != base_sha:
             reasons.append("the game's regulation.bin is not the file the secured build was made on")
         held, now = [i["id"] for i in rec["spec"]["spells"]], [i["id"] for i in spells]
-        diff = diff_specs(specmod.build_view(rec["spec"]), specmod.build_view(want))
+        diff = diff_specs(specmod.design_view(rec["spec"]), specmod.design_view(want))
         if set(held) != set(now):
             reasons.append("the secured build holds %s, this run builds %s" % (_ids_text(held), _ids_text(now)))
         elif diff:
@@ -381,9 +384,37 @@ class Spells:
                    "bin": {"file": OUTPUT_FILE, "sha256": res.sha256, "size": len(res.data)},
                    "selection": selection, "spec": {"format": specmod.FORMAT, "spells": spells}}
             _write_atomic(self.build_path, (json.dumps(rec, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8"))
+        rows = self._rows(spells, res)
+        if not dry_run:
+            self._write_resolved(spells, rows, res, base)
         return Report(not dry_run, dry_run, "built and checked" if not dry_run else "dry run: built in memory and checked, nothing written",
                       res.sha256, res.decrypted_sha256, v.stats.get("changed_blocks", 0), list(v.notes), self.output_path,
-                      [i["id"] for i in spells])
+                      [i["id"] for i in spells], rows)
+
+    @staticmethod
+    def _rows(spells: list, res) -> dict:
+        """spell id -> the ids the game really uses (recipes.spell_rows), from the rows the build added."""
+        fp = getattr(res, "footprint", None)
+        added = fp.added if fp is not None else {}
+        return {s["id"]: recipes.spell_rows(s["slot"], added) for s in spells}
+
+    def _write_resolved(self, spells: list, rows: dict, res, base: bytes) -> None:
+        """`spells.resolved.json`: the design as it became in the game. The key of a spell in extension.json (`<id-1>`, or any name the
+        user chose) is only a label; the game knows it by its Goods id (2230000 + slot - 1), so here every spell is keyed by that id,
+        with the rows it owns and its design with the values that were built."""
+        out = {"kind": RESOLVED_KIND, "format": RESOLVED_FORMAT, "built_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+               "base_sha256": hashlib.sha256(base).hexdigest(), "bin": {"file": OUTPUT_FILE, "sha256": res.sha256},
+               "spells": {str(rows[s["id"]]["goods"]): {"id": s["id"], "slot": s["slot"], "rows": rows[s["id"]],
+                                                         "design": specmod.design_of(s)} for s in spells}}
+        _write_atomic(self.resolved_path, (json.dumps(out, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+
+    def read_resolved(self) -> dict | None:
+        """The record of spells.resolved.json (the ids of the last build), or None when there is none or it cannot be read."""
+        try:
+            rec = json.loads(self.resolved_path.read_text(encoding="utf-8"))
+            return rec if isinstance(rec, dict) and rec.get("kind") == RESOLVED_KIND and isinstance(rec.get("spells"), dict) else None
+        except (OSError, ValueError):
+            return None
 
     @_tables_dropped
     def secure(self, spells: list, game_file: Path | None) -> Report:

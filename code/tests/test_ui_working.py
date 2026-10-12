@@ -98,11 +98,28 @@ def test_the_diff_is_a_tree_and_says_how_many_more(lines, monkeypatch):
     assert lines[0] == "I design:   ├─ a  1 -> 2" and lines[1].startswith("I design:   └─ … and 2 more")
 
 
-def test_a_spell_card_holds_only_what_the_design_says():
-    rows = dict(ext._facts({"id": "x", "slot": 3, "text": {"goods_name": "X"}, "fp_cost": 90, "requires": {"faith": 15, "arcane": 0},
-                            "shop": {"price": 100, "stock": 1}, "flame_color": [0.2, 0.65, 1]}))
-    assert rows == {"name": "X", "cost": "FP 90 · faith 15", "shop": "100 runes, stock 1", "fire": "0.2 0.65 1", "slot": "3"}
+def test_the_rows_of_a_spell_hold_only_what_the_design_says_in_its_own_words():
+    sp = {"id": "x", "slot": 3, "text": {"goods_name": "X"}, "fp_cost": 90, "requires": {"faith": 15, "arcane": 0},
+          "shop": {"price": 100, "stock": 1}, "flame_color": [0.2, 0.65, 1], "flame_accent_color": [0.55, 0.2, 1],
+          "positive_curse_energy_eyes": {"on": "SpEffect.1", "color": [0.2, 0.65, 1]}}
+    rows = dict(ext._facts(sp))
+    assert rows == {"name": "X", "status": "faith 15", "cost": "focus point 90", "sold": "Kal\u00e9 \u00b7 100 runes, stock 1",
+                    "fire": "\u25a0 0.2 0.65 1   accent \u25a0 0.55 0.2 1", "eyes": "\u25a0 0.2 0.65 1", "slot": "3"}
+    assert dict(ext._facts({"id": "y", "slot": 1, "positive_curse_energy_eyes": {"on": "SpEffect.1"}})) == {"eyes": "the game's own", "slot": "1"}
     assert dict(ext._facts({"id": "y", "slot": 1})) == {"slot": "1"}
+
+
+def test_the_rows_name_the_ids_the_game_really_uses_once_the_spell_is_built():
+    rows = {"goods": 2230000, "magic": 2230000, "sp_effect": [21951000, 21951001], "bullet": [500000000], "atk": [], "shop": 100508}
+    got = dict(ext._facts({"id": "x", "slot": 1}, rows))
+    assert got["game"] == "goods 2230000 \u00b7 magic 2230000 \u00b7 SpEffect 21951000, 21951001 \u00b7 Bullet 500000000 \u00b7 shop line 100508"
+
+
+
+def test_a_colour_swatch_is_a_square_in_the_colour_of_the_design(monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    assert ui.swatch([0.2, 0.65, 2], True) == "\x1b[38;2;51;166;255m\u25a0\x1b[0m"           # above 1 is shown as the full colour
+    assert ui.swatch([0.2, 0.65, 1], False) == "\u25a0"
 
 
 # ---- the progress of the other processes of a run ----

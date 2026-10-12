@@ -447,7 +447,7 @@ This is the workshop for a spell that is truly yours. It is a **regenerating inc
 | `text` | An object: `goods_name` (the name), `goods_info` (the short line under it), `goods_captions` (the long description). Shown in the game (6.1b) | 80 / 120 / 1000 characters | empty |
 | `flame_color` | `[red, green, blue]`: the colour of the fire of Flame, Grant Me Strength while casting and in the burst. One colour for the whole design (6.1c) | each 0–2 (1 = full colour, above 1 shines brighter) | the game's own orange |
 | `flame_accent_color` | `[red, green, blue]`, with `flame_color`: the second colour of the fire, for what flame_color does not reach, and the ring of runes at the hand (6.1c) | each 0–2 | the game's own red |
-| `golden_eyes` | `{}` or `{"color": [red, green, blue]}`: both of the caster's eyes glow while the effect lasts (6.1d) | each 0–2 | no glow |
+| `positive_curse_energy_eyes` | `{}` or `{"color": [red, green, blue]}`: both of the caster's eyes glow while the effect lasts (6.1d) | each 0–2 | no glow |
 
 ### 6.1b The text of your spell (since 1.7.1)
 
@@ -491,17 +491,17 @@ Three numbers, red, green, blue, each from 0 to 2 (1 = the full colour; above 1 
 - It colours **Flame, Grant Me Strength itself**, not only your spell: the game's own spell has the new colour while the game runs. It lasts until the game closes and is not saved anywhere.
 - Editing `flame_color` does not rebuild anything and does not un-secure a secured build.
 - White stays white and black stays black: the colour is applied the way a tint is, so the shape and brightness of the fire are kept.
-- A second colour: `"flame_accent_color": [0.54, 0.4, 0.8]` next to `flame_color` colours the parts of the fire the first colour does not reach and the **ring of runes** at the hand (purple with these numbers). Seen in the game on 2026-10-12. If the ring stays red, cast once and run `eldendisk write --flame-color` (the game had not loaded it yet).
+- A second colour: `"flame_accent_color": [0.54, 0.4, 0.8]` next to `flame_color` colours the parts of the fire the first colour does not reach and the **ring of runes** at the hand (purple with these numbers; the author's design uses `[0.5, 0.06, 0.36]` since 2026-10-13, a deep red-purple for the negative curse energy, against the blue of the positive). Seen in the game on 2026-10-12. If the ring stays red, cast once and run `eldendisk write --flame-color` (the game had not loaded it yet).
 
-### 6.1d Golden eyes (since 1.7.1, seen in the game 2026-10-12)
+### 6.1d Positive Curse Energy Eyes (since 1.7.1, seen in the game 2026-10-12)
 
 While the buff of your spell lasts, both of your character's eyes glow, in any colour (the game's own glowing eyes of a human NPC of the DLC; the gold eyes of the enemies that give five times the runes need points on the model that the player does not have):
 
 ```json
-"golden_eyes": { "on": "SpEffect.1642100", "color": [0.2, 0.65, 1] }
+"positive_curse_energy_eyes": { "on": "SpEffect.1642100", "color": [0.2, 0.65, 1] }
 ```
 
-- `on` is the buff: for a spell made from a game spell, the SpEffect row (the template's number, as in `set`) that you have while the spell lasts. A heal-over-time buff made from scratch has only one, so it has no `on`: `"golden_eyes": {}`.
+- `on` is the buff: for a spell made from a game spell, the SpEffect row (the template's number, as in `set`) that you have while the spell lasts. A heal-over-time buff made from scratch has only one, so it has no `on`: `"positive_curse_energy_eyes": {}`.
 - `color` is optional: without it the eyes are the game's red. It is put into the running game by the same step as `flame_color`, so that NPC's eyes have the colour too while the game runs.
 - Adding or removing the eyes (or changing `on`) builds again; changing only `color` does not.
 
@@ -584,6 +584,51 @@ It makes **incantations that give HP, FP and stamina**, and nothing else. It can
 ---
 
 ## Chapter 7 — Remixing a game spell
+
+### 7.0 The structure since 1.7.1 (section 1b): one place for each thing
+
+Since 1.7.1 a remixed spell can be written so that each part answers one question. The older fields (7.3, 7.5, 6.1b-6.1d) still work, and the same spell written either way builds **the same file**.
+
+```json
+"reverse_cursed_technique": {
+  "__info__": "Your notes: what the spell is, why the numbers are what they are.",
+  "kind": "projectile",
+  "from": 6421,
+  "requires": {
+    "status": { "intelligence": 0, "faith": 60, "arcane": 10 },
+    "cost":   { "focus_point": 120 }
+  },
+  "locations": { "kale": { "price": 34590, "stock": 1 } },
+  "customs": {
+    "basic":    { "SpEffect.1642100.effectEndurance": 20, "Magic.6421.refType": 32 },
+    "advanced": {
+      "texts":  { "goods_name": "Reverse Cursed Technique", "goods_info": "One short line", "goods_caption": "The long story." },
+      "colors": { "Magic.6421.castSfxId": { "main": [0.2, 0.65, 1], "accent": [0.5, 0.06, 0.36] },
+                  "SpEffect.1642100": [0.2, 0.65, 1] }
+    }
+  }
+}
+```
+
+| Question | Where | Same as |
+|:--|:--|:--|
+| What is it? | `__info__`, `kind`, `from` | (`__info__` is a note for you; the tool skips it, and you can put one in every `{ }`) |
+| What does it need? | `requires.status` (to learn it), `requires.cost` (to cast it) | `requires`, `fp_cost`, `stamina_cost` |
+| Where is it sold? | `locations.kale` | `shop` (Kalé only for now; shelves 1-7) |
+| What numbers change? | `customs.basic` | `set` (7.5): built into regulation.bin |
+| What does the game not have a row for? | `customs.advanced.texts`, `customs.advanced.colors` | `text`, `flame_color` + `flame_accent_color`, `positive_curse_energy_eyes`: written into the running game, never a rebuild |
+
+`colors` has two kinds of keys. `"Magic.<from>.castSfxId"` is the fire of the cast: one colour `[r, g, b]`, or `main` (the fire) and `accent` (the ring of runes at the hand, and what the main colour does not reach). It only works when the spell casts `524400`, the fire of Flame, Grant Me Strength (set `Magic.<from>.castSfxId: 524400` in `customs.basic`). `"SpEffect.<id>"` is a buff row: while it lasts, the eyes glow in that colour (`null`: the game's own red).
+
+**Your spell's real id.** The name you give it (`reverse_cursed_technique`) is a label. The game knows it by the ids of its shelf: after a build, `<vault>\extension\innovate-items\spells\spells.resolved.json` lists every spell under its Goods id (`2230000` for shelf 1, `2230001` for shelf 2, ...) with all the rows it owns. The console shows the same under the spell (`game  goods 2230000 · magic 2230000 · ...`).
+
+**Editing later: a checklist.**
+
+1. Change one thing at a time, and keep the old value in `__info__` if you might want it back.
+2. Numbers of the game's rows go in `customs.basic` with the key you would use in `set` (3.3, 7.5); look the row up in the Row Finder first (Appendix B) and read the original value (7.9).
+3. A change in `customs.basic`, `requires` or `locations` builds regulation.bin again (a few seconds); a change in `customs.advanced` does not, it is written into the game after the world loads.
+4. The message of a mistake names the exact place (`...customs.basic.Magic.6422.mp: ...`): fix that line only.
+5. After `run` builds, read the block on the console: the changes (`└─ ...  34590 -> 40000`), then each spell with what the design says. When it works in the game, close it and run `extension innovate-items spells --secure`.
 
 ### 7.1 The two words that matter: `from` and `set`
 
@@ -1018,7 +1063,23 @@ Required: `type`, `requires`, `fp_cost`. Everything else can be left out.
 }
 ```
 
-Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` or `buff`. Delete the lines you do not need. (`6100` is the id of Giantsflame Take Thee, a 2-slot spell; look yours up in the Spell Finder.)
+Required: `kind`, `from`. `kind` is `clone`, `enchant`, `projectile`, `attack` or `buff`. Delete the lines you do not need.
+
+The same spell in the structure of 1.7.1 (7.0; both build the same file):
+
+```json
+"my_remix_id": {
+  "__info__": "my notes",
+  "kind": "clone",
+  "from": 6100,
+  "requires":  { "status": { "intelligence": 0, "faith": 0 }, "cost": { "focus_point": 5, "stamina": 0 } },
+  "locations": { "kale": { "price": 1000, "stock": -1 } },
+  "customs": {
+    "basic":    { "Magic.6100.slotLength": 1 },
+    "advanced": { "texts": { "goods_name": "My Remix", "goods_info": "One short line", "goods_caption": "What it does." } }
+  }
+}
+``` (`6100` is the id of Giantsflame Take Thee, a 2-slot spell; look yours up in the Spell Finder.)
 
 ### 12.4 All the limits on one page
 

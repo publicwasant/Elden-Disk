@@ -4,7 +4,7 @@ effect library's own reader (the offsets are those of the ORIGINAL file bytes; t
 the file, `colours` = [(offset, the 16 bytes of the game's own RGBA floats as hex, is it a bloom colour)]. The third effect (524402, the fire on
 the body) is left as the game has it. `accent` = the places of the same files that `colours` leaves out (found by tools/fxr_places.py:
 the smallest and biggest values and some first keys of the linear colours, pink and red in the game's file); they keep the game's own
-colour unless the design gives `flame_accent_color`. EYES_PLANS: the same for the golden eyes (`golden_eyes`, below). Data only:
+colour unless the design gives `flame_accent_color`. EYES_PLANS: the same for the positive curse energy eyes (`positive_curse_energy_eyes`, below). Data only:
 writer/fxr.py uses it."""
 
 PLANS = {
@@ -129,7 +129,7 @@ PLANS = {
 }
 
 
-# The glowing eyes (`golden_eyes`): f000004866, which the game shows on both eyes of a human NPC of the DLC (SpEffectVfx 20090050 and
+# The glowing eyes (`positive_curse_energy_eyes`): f000004866, which the game shows on both eyes of a human NPC of the DLC (SpEffectVfx 20090050 and
 # 20090051, DummyPoly 845 and 846; red in the game's own file). Made with tools/fxr_places.py from the file of the common effect archive
 # (tools/dump_sfx.py --sfx 4866), game 1.17.1; the same reading finds 71 of the 72 places of the two plans above. Not tried in the game yet.
 EYES_PLANS = {

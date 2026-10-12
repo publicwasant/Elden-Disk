@@ -28,7 +28,7 @@ CAST_FROM = 6050             # Magic row cloned: Flame, Grant Me Strength (cast 
 SHOP_CLONE = 100507
 # effect.visual -> SpEffect.vfxId (spec.VISUAL_VFX): flame = the burning body of Flame! Grant Me Strength, flask = Heal's glow, none = no lingering visual
 HEAL_GOODS, HEAL_SP, FLAME_SP, ENDURE_SP, ICON_GOODS = 6421, 1642100, 1605000, 1650, 6424
-# golden_eyes: glowing eyes, the effect f000004866 the game puts on both eyes of a human NPC of the DLC (NpcParam 150000002): SpEffectVfx
+# positive_curse_energy_eyes: glowing eyes, the effect f000004866 the game puts on both eyes of a human NPC of the DLC (NpcParam 150000002): SpEffectVfx
 # 20090050 on DummyPoly 845 (the left eye of the human model, which the player has too) and 20090051 on 846 (the right eye), shown by
 # that NPC's SpEffects 20018100 and 20018101
 EYES_VFX = (20090050, 20090051)
@@ -64,6 +64,19 @@ def slot_rows(slot: int) -> dict:
             "bullet_copy_base": COPY_BULLET_BASE + (slot - 1) * COPY_BULLET_BLOCK,
             "atk_copy_base": COPY_ATK_BASE + (slot - 1) * COPY_ATK_BLOCK, "shop_line": line,
             "shop_flag": None if line is None else 150000 + (line - 100500) * 10}      # the game's own pattern for this group
+
+
+def spell_rows(slot: int, added: dict) -> dict:
+    """The ids the game really uses for the spell of slot `slot`: the rows of `added` (Footprint.added, key -> ids) that lie in the
+    blocks the slot owns. -> {"goods": id, "magic": id, "sp_effect": [ids], "bullet": [ids], "atk": [ids], "shop": id | None}; the
+    id of a spell is its Goods id (2230000 + slot - 1), not the key the user gave it in extension.json."""
+    ids = slot_rows(slot)
+    sp = [r for r in sorted(added.get("sp", ())) if r in (ids["sp_effect"], ids["poise_sp_effect"])
+          or ids["sp_copy_base"] <= r < ids["sp_copy_base"] + COPY_SP_BLOCK]
+    bullet = [r for r in sorted(added.get("bullet", ())) if ids["bullet_copy_base"] <= r < ids["bullet_copy_base"] + COPY_BULLET_BLOCK]
+    atk = [r for r in sorted(added.get("atk", ())) if ids["atk_copy_base"] <= r < ids["atk_copy_base"] + COPY_ATK_BLOCK]
+    return {"goods": ids["goods"], "magic": ids["magic"], "sp_effect": sp, "bullet": bullet, "atk": atk,
+            "shop": ids["shop_line"] if ids["shop_line"] in added.get("shop", ()) else None}
 
 
 @dataclass
@@ -116,7 +129,7 @@ def _eyes_vfx(P: dict, D: dict, who: str) -> tuple:
     for sp, vfx in zip(EYES_FROM_SP, EYES_VFX):
         r = P["sp"].find(sp)
         if r is None or D["sp"].get(r[2], "vfxId") != vfx:
-            raise RecipeError("%s: golden_eyes: SpEffect %d does not show SpEffectVfx %d in this file, so this is not the 1.17.1 "
+            raise RecipeError("%s: positive_curse_energy_eyes: SpEffect %d does not show SpEffectVfx %d in this file, so this is not the 1.17.1 "
                               "regulation.bin" % (who, sp, vfx))
     return EYES_VFX
 
@@ -133,7 +146,7 @@ def add_eyes(d: Def, data: bytearray, who: str, vfx: tuple = EYES_VFX) -> None:
             continue
         free = [n for n in EYES_SLOTS if d.get(data, n) == -1]
         if not free:
-            raise RecipeError("%s: golden_eyes: the buff's SpEffect row has no free visual field for both eyes (vfxId1-vfxId7)" % who)
+            raise RecipeError("%s: positive_curse_energy_eyes: the buff's SpEffect row has no free visual field for both eyes (vfxId1-vfxId7)" % who)
         d.set(data, free[0], v)
 
 
@@ -231,10 +244,10 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
                 raise RecipeError("%s: set %s: %s %s %s (copied %s rows: %s)" % (who, key, table, rid, why, table, ", ".join(map(str, own[t])) or "none"))
             sets[t].setdefault(int(rid), []).append((name, v))
         eyes_on = None
-        if "golden_eyes" in spell:
-            eyes_on = int(spell["golden_eyes"]["on"].split(".", 1)[1])
+        if "positive_curse_energy_eyes" in spell:
+            eyes_on = int(spell["positive_curse_energy_eyes"]["on"].split(".", 1)[1])
             if eyes_on not in own["sp"]:
-                raise RecipeError("%s: golden_eyes.on: SpEffect %d is not one of the copied SpEffect rows (copied: %s)"
+                raise RecipeError("%s: positive_curse_energy_eyes.on: SpEffect %d is not one of the copied SpEffect rows (copied: %s)"
                                   % (who, eyes_on, ", ".join(map(str, own["sp"])) or "none"))
             eyes_vfx = _eyes_vfx(P, D, who)
         for t, rows, links in (("sp", sp_rows, chainmod.SP_PAIRS), ("bullet", bullet_rows, chainmod.BULLET_LINKS),
@@ -298,7 +311,7 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
             f[n] = D["sp"].get(flame, n)
         for n, v in f.items():
             D["sp"].set(data, n, v)
-        if "golden_eyes" in spell:
+        if "positive_curse_energy_eyes" in spell:
             add_eyes(D["sp"], data, "%s (slot %d)" % (spell["id"], spell["slot"]), _eyes_vfx(P, D, spell["id"]))
         rows["sp"].append((ids["sp_effect"], bytes(data)))
         # Poise: Endure's poise buff cloned into a row of its own, damage reduction stripped, no vfx/icon, short life.
@@ -421,8 +434,8 @@ def check_incantation(P: dict, D: dict, spell: dict) -> list:
         for name, want in (("staminaRecoverChangeSpeed", e["stamina_regen_speed"]), ("effectEndurance", e["duration_seconds"]),
                            ("motionInterval", e["tick_seconds"]), ("vfxId", visual_number(e["visual"]))):
             need("sp", sp, name, want, sname, "G5")
-        if "golden_eyes" in spell and not has_eyes(D["sp"], sp):
-            bad.append("G5: %s: %s has no golden eyes (SpEffectVfx %s in vfxId1-vfxId7), the spec has golden_eyes"
+        if "positive_curse_energy_eyes" in spell and not has_eyes(D["sp"], sp):
+            bad.append("G5: %s: %s has no positive curse energy eyes (SpEffectVfx %s in vfxId1-vfxId7), the spec has positive_curse_energy_eyes"
                        % (who, sname, " and ".join(map(str, EYES_VFX))))
     _check_shop(P, D, spell, ids, who, row, need, bad)
     if goods is None and magic is not None:

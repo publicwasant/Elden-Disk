@@ -1,7 +1,7 @@
 > [!NOTE]
 > **Version:** `1.7.1`  
 > **Status:** IMPLEMENTED (unit tests); in the real game on 2026-10-11 `run` put the text and the fire colour in by itself in three sessions (written and read back every time); what is seen in the game is in manual plan 1.7.1  
-> **Last Updated:** _2026-10-12_ (section 1a: golden eyes, unit tests only)
+> **Last Updated:** _2026-10-13_ (section 1b: the structure of a spell, the vault's real ids and the console block; accepted by the author in the game the same day)
 
 # Elden-Disk spec 1.7.1: the text and the fire colour of a spell (Item Customization Level 3, steps 1 and 3)
 
@@ -13,26 +13,101 @@ A new spell has a name, a short line and a long description in the game. The gam
 
 Both steps find what they change by **looking through the game's memory** (section 5). No fixed address from the exe is used: the pointer chain that was measured for the text held the right object in 3 of 5 runs of the same game.
 
-## 1a. Golden eyes (`golden_eyes`)
+## 1a. Positive Curse Energy Eyes (`positive_curse_energy_eyes`)
 
 While the buff of a spell lasts, both of the caster's eyes glow, in the design's colour.
 
 ```json
-"golden_eyes": { "on": "SpEffect.1642100", "color": [0.2, 0.65, 1] }
+"positive_curse_energy_eyes": { "on": "SpEffect.1642100", "color": [0.2, 0.65, 1] }
 ```
 
 | Key | Meaning |
 |:--|:--|
-| `on` | The copied SpEffect row that is the buff, `SpEffect.<id>` with the template's id as in `set`. Required for a spell made from a game spell (kinds `buff` with `from`, `enchant`, `projectile`, `attack`); refused on a heal-over-time buff made from scratch, which has one buff row (it gets the eyes). A `clone` copies no SpEffect row and cannot have `golden_eyes` |
+| `on` | The copied SpEffect row that is the buff, `SpEffect.<id>` with the template's id as in `set`. Required for a spell made from a game spell (kinds `buff` with `from`, `enchant`, `projectile`, `attack`); refused on a heal-over-time buff made from scratch, which has one buff row (it gets the eyes). A `clone` copies no SpEffect row and cannot have `positive_curse_energy_eyes` |
 | `color` | Optional, three numbers as `flame_color` (0 to 2). Without it the eyes are the game's own red |
 
-Which eyes (read in the game's own files 1.17.1, not assumed). The glowing eyes of an enemy are put on the eyes of the enemy's model: the gold eyes of the enemies that give five times the runes (SpEffect `5250`, `haveSoulRate` 5) are effect `71` on DummyPoly `199`, which the enemy model `c5250` has twice, once on each eye. The player's model `c0000` has no `199`; its eyes are DummyPoly `845` (left) and `846` (right), on the bone `Head` (`220`, where the first version put the eyes of Gold-Pickled Fowl Foot, is on `Spine2`, the chest). Of all SpEffectVfx rows of the game, only two put a lasting effect on `845` and `846`: `20090050` and `20090051`, the effect `f000004866` (glowing red eyes with a light), which the game shows on a human NPC of the DLC (NpcParam `150000002`, SpEffects `20018100` and `20018101`, which never end). That is what `golden_eyes` uses. (`f000004225` on `845` is a flash of 1-1.5 s that some NPC attacks show.)
+Which eyes (read in the game's own files 1.17.1, not assumed). The glowing eyes of an enemy are put on the eyes of the enemy's model: the gold eyes of the enemies that give five times the runes (SpEffect `5250`, `haveSoulRate` 5) are effect `71` on DummyPoly `199`, which the enemy model `c5250` has twice, once on each eye. The player's model `c0000` has no `199`; its eyes are DummyPoly `845` (left) and `846` (right), on the bone `Head` (`220`, where the first version put the eyes of Gold-Pickled Fowl Foot, is on `Spine2`, the chest). Of all SpEffectVfx rows of the game, only two put a lasting effect on `845` and `846`: `20090050` and `20090051`, the effect `f000004866` (glowing red eyes with a light), which the game shows on a human NPC of the DLC (NpcParam `150000002`, SpEffects `20018100` and `20018101`, which never end). That is what `positive_curse_energy_eyes` uses. (`f000004225` on `845` is a flash of 1-1.5 s that some NPC attacks show.)
 
-**Build.** The buff's SpEffect row gets `20090050` and `20090051` in the first two of `vfxId1`-`vfxId7` that are `-1` (nothing is overwritten; `vfxId` is left to the design, the author's spell sets it to `-1`), unless a visual field already holds them. The build refuses `on` when it is not one of the copied rows, and a file whose SpEffects `20018100` / `20018101` do not show those rows. The gate sees it: a template spell's copied row must equal the template's with the design's fields **and** the eyes (`G11 ... differs in: vfxId1, vfxId2`), and a buff made from scratch must hold both (`G5 ... has no golden eyes`). `on` is part of the build (adding, moving or removing the eyes builds again); `color` is not. `bases.RECIPE_VERSION` is 2 since this change: a build or a secured file made by version 1 (the first version of the eyes put SpEffectVfx 5364 on DummyPoly 220, the chest) is built again.
+**Build.** The buff's SpEffect row gets `20090050` and `20090051` in the first two of `vfxId1`-`vfxId7` that are `-1` (nothing is overwritten; `vfxId` is left to the design, the author's spell sets it to `-1`), unless a visual field already holds them. The build refuses `on` when it is not one of the copied rows, and a file whose SpEffects `20018100` / `20018101` do not show those rows. The gate sees it: a template spell's copied row must equal the template's with the design's fields **and** the eyes (`G11 ... differs in: vfxId1, vfxId2`), and a buff made from scratch must hold both (`G5 ... has no positive curse energy eyes`). `on` is part of the build (adding, moving or removing the eyes builds again); `color` is not. `bases.RECIPE_VERSION` is 2 since this change: a build or a secured file made by version 1 (the first version of the eyes put SpEffectVfx 5364 on DummyPoly 220, the chest) is built again.
 
-**Colour.** `write --flame-color` (section 4, started by `run`) recolours the glow in the same look as the fire, with its own colour: `Spells.eyes_color(selection)` gives the colour of the first spell (by slot) that names one, with a note when others differ. The places of the colours are in `writer/fxr_plans.py: EYES_PLANS`, made by `tools/fxr_places.py` from the file itself; that reading of FXR version 5 finds 71 of the 72 places of the fire's plans that were tried in the game (the one left is a black curve tangent, which a recolouring leaves black). The effect file is shared with that NPC, so its eyes have the colour too while the game runs. The game holds the file of the eyes more than once (two and three copies were seen, only one of them with the file's header) and draws from a copy that a look stopping at the first one did not reach, so when the eyes or the ring have a colour every copy is painted (`find_all(..., everything=True)`): the look reads first the 128 MB around where every log saw the effect files (1312 MB into the game's biggest private block, 2560 MB: the fire 1312 MB in, the eyes 1327 MB, the ring 1300 MB), then the surroundings of every copy it found, and stops (`fxr.EFFECTS_AT`); all the memory is read only when the fire or the eyes are not there. The first version read all the memory (7 GB): two minutes after the character appeared, while the world was still loading; this one reads about 200 MB. Output: `✓ write  eyes colour: the glowing eyes are now (0.2, 0.65, 1.0) (N places written); it lasts until the game closes`.
+**Colour.** `write --flame-color` (section 4, started by `run`) recolours the glow in the same look as the fire, with its own colour: `Spells.eyes_color(selection)` gives the colour of the first spell (by slot) that names one, with a note when others differ. The places of the colours are in `writer/fxr_plans.py: EYES_PLANS`, made by `tools/fxr_places.py` from the file itself; that reading of FXR version 5 finds 71 of the 72 places of the fire's plans that were tried in the game (the one left is a black curve tangent, which a recolouring leaves black). The effect file is shared with that NPC, so its eyes have the colour too while the game runs. The game holds the file of the eyes more than once (two and three copies were seen, only one of them with the file's header) and draws from a copy that a look stopping at the first one did not reach, so when the eyes or the ring have a colour every copy is painted (`find_all(..., everything=True)`): the look reads first the 320 MB around where every log saw the effect files (160 MB each way; 64 MB each way, the first version of this look, missed the copy of the eyes the game drew from on 2026-10-13: it lay 1400 MB in, the copy that was painted 1327 MB in, and the eyes stayed red) (1312 MB into the game's biggest private block, 2560 MB: the fire 1312 MB in, the eyes 1327 MB, the ring 1300 MB), then the surroundings of every copy it found, and stops (`fxr.EFFECTS_AT`); all the memory is read only when the fire or the eyes are not there. The first version read all the memory (7 GB): two minutes after the character appeared, while the world was still loading; this one reads about 350 MB (3.4 s in the game of 2026-10-13, both copies of the eyes found). Made quicker the same day, the same copies found (measured on the running game, read only: 3.7 s → 1.1 s for the step `run` starts, 1.7 s by hand): (a) each effect is searched for by the colour of its plan that is quickest to find (`fxr.FIND_AT`: a colour whose last byte is rare in the game's memory, `...3d`, not `...3f` or `...00`; 22-45 ms per 64 MB instead of 25-79 ms), every other colour is checked at each hit as before; (b) the step `run` starts (`--when-loaded`) searches only for the game's own colours, since nothing can be painted yet in a game just started (by hand, a copy painted before is still recognised); (c) the rest is owed for the reading only, as section 5 says, not for the time our process spends looking through its own copy of the bytes (it slept 1.2 s, now 0.1 s); this applies to the text step's look too. Output: `✓ write  eyes colour: the glowing eyes are now (0.2, 0.65, 1.0) (N places written); it lasts until the game closes`.
 
 **Seen in the game on 2026-10-12** (manual plan 1.7.1, EY): both eyes glow while the buff lasts, on the eyes, and they turned blue once every copy was painted (32 places in two copies, a third already done). Not tried yet: a whole `run` where the step started by `run` (which now looks through all the memory) is the only one; if the eyes are red, cast once and run `write --flame-color` by hand.
+
+## 1b. The structure of a spell (`requires.status/cost`, `locations`, `customs.basic/advanced`)
+
+A spell made from a game spell (`from`) can be written in one structure that says, in this order, what the spell is, what it needs, where it is sold and what is changed, with a comment (`__info__`) on every part. The fields of 1.7.0 and of sections 1a-2b stay valid: both are read into the same canonical form (`spec.upgrade_spell`), so **the same spell written either way builds the same file** and a secured build stays secured after the design is rewritten. `code/extension.json` is written this way since this section; `reverse_cursed_technique` is the same spell as before (blue fire with a purple ring, blue eyes; proven by a test that compares the canonical forms).
+
+```json
+"reverse_cursed_technique": {
+  "__info__": "what the spell is and how each part works (any text; the tool does not read it)",
+  "kind": "projectile",
+  "from": 6421,
+  "requires": {
+    "status": { "intelligence": 0, "faith": 60, "arcane": 10 },
+    "cost":   { "focus_point": 120 }
+  },
+  "locations": { "kale": { "price": 34590, "stock": 1 } },
+  "customs": {
+    "basic": {
+      "__info__": "...",
+      "SpEffect.1642100.effectEndurance": 20,
+      "Magic.6421.castSfxId": 524400,
+      "Goods.6421.iconId": 6806
+    },
+    "advanced": {
+      "__info__": "...",
+      "texts":  { "goods_name": "...", "goods_info": "...", "goods_caption": "..." },
+      "colors": {
+        "Magic.6421.castSfxId": { "main": [0.2, 0.65, 1], "accent": [0.5, 0.06, 0.36] },
+        "SpEffect.1642100": [0.2, 0.65, 1]
+      }
+    }
+  }
+}
+```
+
+| Key | Level | Same as (canonical form) | Rules |
+|:--|:-:|:--|:--|
+| `__info__` | - | (dropped) | Any text, allowed on the spell and on every object below it. A comment for people: what the spell is, what each field does |
+| `kind`, `from` | 2 | `kind`, `from` | As in 1.7.0; `from` is required for this structure (a heal-over-time buff made from scratch keeps its own fields) |
+| `requires.status` | 2 | `requires` | `intelligence`, `faith`, `arcane`, each 0-99; the ones left out keep the template's |
+| `requires.cost` | 2 | `fp_cost`, `stamina_cost` | `focus_point` and `stamina`, each 0-999 |
+| `locations` | 2 | `shop` | One place. This version sells at **Kalé** only, written `kale` (`Kalé`, `Kale` and the template's `<shop-id-1>` are read as Kalé too); `price` 1-99,999,999, `stock` -1 (unlimited) or 1-99. Shelves 1-7 only (Chapter 8 of the handbook) |
+| `customs.basic` | 2 | `set` | `<Table>.<row id>.<field>: number` over the copies of the game's rows (Magic, Goods, SpEffect, Bullet, AtkParam_Pc), exactly as `set` (spells handbook 7.5). Built into regulation.bin |
+| `customs.advanced.texts` | 3 | `text` | `goods_name` (80), `goods_info` (300), `goods_caption` (3000; `goods_captions` is accepted too). Put into the running game (section 3) |
+| `customs.advanced.colors` `"Magic.<from>.castSfxId"` | 3 | `flame_color`, `flame_accent_color` | `[r, g, b]` (the fire only) or `{"main": [r, g, b], "accent": [r, g, b]}` (accent: the ring of runes at the hand and the parts of the fire the main colour leaves out, section 2a). Each number 0-2. The id must be the spell's `from`; the spell must cast `524400` (the only effect with a colour plan): a `customs.basic` that sets `Magic.<from>.castSfxId` to another effect is an error |
+| `customs.advanced.colors` `"SpEffect.<id>"` | 3 | `positive_curse_energy_eyes` `{on, color}` | The buff row whose eyes glow (section 1a). `[r, g, b]`, or `null` for the game's own red |
+
+The levels: **1** is `write --set` on a running game (1.6), **2** is regulation.bin built from the game's own rows (copied and changed: `customs.basic`, `requires`, `locations`), **3** is what the game has no row for and is written into its memory after the world loads (`customs.advanced`, sections 3-5). A change in `customs.advanced` never builds again and never un-secures.
+
+**Checked by the tool** (exit 1, nothing built; every message names the place the user wrote, e.g. `$.innovate_items.spells.slots[x].customs.basic.Magic.6422.mp: ...`): a field that does not exist at any level; a number out of its range; `stock` 0; a place other than Kalé or more than one place; a `customs.basic` key that is not `<Table>.<row id>.<field>` or names a row the template does not copy; a text too long; a colour that is not three numbers 0-2; a `castSfxId` colour whose id is not `from`, or a spell that casts an effect without a colour plan; this structure without `from`. `spells.schema.json` (`$defs.design`) says the same for an editor; a test checks that the schema and the tool agree on the same designs.
+
+**The key of a spell** (`reverse_cursed_technique`, written `<id-1>` in the template) is a label the user chooses: unique, 1-40 characters, lower-case letters, digits, `_` and `-` (a literal `<id-1>` is refused with that message; an empty slot may keep it, as `null`). The game knows the spell by the ids of its slot. **After every build** the vault keeps `spells.resolved.json` next to `spells.build.json`: each spell under its **real Goods id** (`2230000` + slot - 1) with the label, the slot, the rows it owns in the game (`goods`, `magic`, the copied `sp_effect`, `bullet`, `atk` rows, the `shop` line) and its design in this structure with the values that were built. A dry run writes nothing.
+
+**The diff** that says why `run` builds (and `extension --list`) names the places of this structure: `reverse_cursed_technique.locations.kale.price  34590 -> 40000`, `....customs.basic.SpEffect.1642100.effectEndurance  20.0 -> 30.0`.
+
+**The console** (no `-v`): the whole of `extension innovate-items spells` (and its part of `run`) is **one block**:
+
+```
+ ╭─ design · innovate-items spells
+ │  ·  building because the design changed since the last build (1 field)
+ │     └─ reverse_cursed_technique.locations.kale.price  34590 -> 40000
+ │  ✓  reverse_cursed_technique built, gate passed (26 blocks re-encoded)  (5.8 s)
+ │  ·  reverse_cursed_technique  slot 1 · projectile of 6421
+ │       name    Reverse Cursed Technique
+ │       status  faith 60 · arcane 10
+ │       cost    focus point 120
+ │       sold    Kalé · 40000 runes, stock 1
+ │       fire    ■ 0.2 0.65 1   accent ■ 0.54 0.4 0.8
+ │       eyes    ■ 0.2 0.65 1
+ │       game    goods 2230000 · magic 2230000 · SpEffect ... · shop line 100508
+ ╰─ ✓  wrote C:\...\regulation.bin  (6.1 s)
+```
+
+The squares are drawn in the design's colours on a colour console. Everywhere on the console (every tag, with and without `-v`), an id of four digits or more (`114880`) and an address (`0x7ff3cbbb0000`) have colours of their own; a date, a time, a version and a number inside a path are left alone. A mistake in the design is in the block once, with its place in cyan, and the block ends `╰─ ✖ stopped`. With `-v` there is no block: the log lines, as before. The log file stays plain text.
+
+**Accepted by the author on 2026-10-13** (a new build of the shipped design in this structure through `run`, cast, the eyes blue). Not checked one by one: a `run` with the design in this structure (it must build nothing new when a secured build of the same spell exists, and look the same in the game: blue fire, purple ring, blue eyes, the text, Kalé's price); `spells.resolved.json` next to a real build; the block in Windows Terminal and in the IDE run window.
 
 ## 2. The design: `text` and `flame_color`
 
@@ -94,7 +169,7 @@ Not idempotent across calls in the same game: after the first `write --text` the
 
 ## 4. `write --flame-color [--wait [SEC] | --when-loaded] [--spec FILE] [--extension-dir DIR]`
 
-The same rules as section 3 for the options, the authorisation and the wait. The design gives the colour (`Spells.flame_color`) and, since section 1a, the colour of the golden eyes (`Spells.eyes_color`), which is recoloured in the same look with its own colour; either may be absent. With neither: `no spell of the design names a flame_color or a golden_eyes color: nothing to do`, exit `0`.
+The same rules as section 3 for the options, the authorisation and the wait. The design gives the colour (`Spells.flame_color`) and, since section 1a, the colour of the positive curse energy eyes (`Spells.eyes_color`), which is recoloured in the same look with its own colour; either may be absent. With neither: `no spell of the design names a flame_color or a positive_curse_energy_eyes color: nothing to do`, exit `0`.
 
 1. Two effect files make the fire that is recoloured: `524400` (the fire while casting; 18 colours) and `524401` (the burst when the cast ends; 54 colours). The third (`524402`, the fire on the body) is left alone. `writer/fxr_plans.py` lists, for each file, where every colour (four little-endian floats, RGBA) sits and whether it is a bloom colour.
 2. **New colour.** With v = the biggest of R, G, B and w = 1 − (v − the smallest) / v: new RGB = v × (w + (1 − w) × target). White stays white, black stays black, alpha is never touched. A bloom colour becomes v × target.
@@ -156,8 +231,8 @@ The earlier chain from the exe gave the right object in 3 of 5 runs and memory g
 
 ## 10. Not done (open)
 
-Thai and other scripts (glyphs in the game's font untested); a game language other than English (the profile holds the English sizes); the colour of the fire on the body (`524402`); the golden eyes in the game (section 1a); a new icon picture (Level 3 step 2; reusing an existing icon is 2b); a faster look for the array (it is found by a look through all the memory, ~72 s; it lies near the tables); a second `write --text` in the same game.
+Thai and other scripts (glyphs in the game's font untested); a game language other than English (the profile holds the English sizes); the colour of the fire on the body (`524402`); the positive curse energy eyes in the game (section 1a); a new icon picture (Level 3 step 2; reusing an existing icon is 2b); a faster look for the array (it is found by a look through all the memory, ~72 s; it lies near the tables); a second `write --text` in the same game.
 
 ## 11. Tests
 
-`tests/test_write_text.py` (writer/text.py against a fake game memory: the shape of a table, `find_tables` and `find_arrays` with decoys, a second copy of the array, the look around the tables and the fall back to all the memory, swap and every failure of it; the command: three tables, idempotent, emptying, no session, other process, no profile block, waits and gives up with the sizes it saw, the game putting its tables back, command-line rules), `tests/test_write_flame.py` (the golden eyes: their plan, their own colour in the same look, the step with only the eyes or both; `scan.walk`: borders, rest in proportion to the time and the budget, rests slept in lumps, the near tier read once, the head tier, unreadable parts; `find_all`; `paint_many`; the command step), `test_fxr_places.py` (tools/fxr_places.py on a small FXR file), `test_ext_golden.py` (golden eyes built on the real file and seen by the gate), additions to `test_ext_spec.py` (the object, limits, renamed keys, `flame_color`, `golden_eyes`), `test_ext_service.py` (`texts`, `flame_color`, an edit of either decides nothing), `test_host.py` (`on_running`), `test_run_command.py` (the command lines, when the steps start, stopping them), `test_profile_policy.py` (the `text` block: files and sizes), `test_disk.py` (the one allocation), `test_gamearchive.py` and `test_ext_fmg.py` (tools/gamearchive.py, the FMG), `test_probe_text.py` (the research tool).
+`tests/test_write_text.py` (writer/text.py against a fake game memory: the shape of a table, `find_tables` and `find_arrays` with decoys, a second copy of the array, the look around the tables and the fall back to all the memory, swap and every failure of it; the command: three tables, idempotent, emptying, no session, other process, no profile block, waits and gives up with the sizes it saw, the game putting its tables back, command-line rules), `tests/test_write_flame.py` (the positive curse energy eyes: their plan, their own colour in the same look, the step with only the eyes or both; `scan.walk`: borders, rest in proportion to the time and the budget, rests slept in lumps, the near tier read once, the head tier, unreadable parts; `find_all`; `paint_many`; the command step), `test_fxr_places.py` (tools/fxr_places.py on a small FXR file), `test_ext_design.py` (section 1b: the structure and the earlier fields give the same spell, `design_of` and back, every mistake named where it is written, the diff in its words, the schema and the tool agree, the real ids, `spells.resolved.json`, the block through the CLI), additions to `test_ui.py` (ids and addresses, the block), `test_ext_golden.py` (positive curse energy eyes built on the real file and seen by the gate), additions to `test_ext_spec.py` (the object, limits, renamed keys, `flame_color`, `positive_curse_energy_eyes`), `test_ext_service.py` (`texts`, `flame_color`, an edit of either decides nothing), `test_host.py` (`on_running`), `test_run_command.py` (the command lines, when the steps start, stopping them), `test_profile_policy.py` (the `text` block: files and sizes), `test_disk.py` (the one allocation), `test_gamearchive.py` and `test_ext_fmg.py` (tools/gamearchive.py, the FMG), `test_probe_text.py` (the research tool).

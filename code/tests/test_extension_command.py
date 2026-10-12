@@ -55,7 +55,7 @@ def test_add_builds_every_time_and_secures_nothing(world, capsys):
     assert (world.ext / "innovate-items" / "spells" / "regulation.bin").read_bytes().startswith(b"BUILT")
     assert cli.main(args_for(world, "--add", "all")) == 0
     assert len(world.builds) == 2 and not any(world.ext.rglob("*.tmp"))
-    assert sorted(p.name for p in world.ext.rglob("*") if p.is_file()) == ["regulation.bin", "spells.build.json"]
+    assert sorted(p.name for p in world.ext.rglob("*") if p.is_file()) == ["regulation.bin", "spells.build.json", "spells.resolved.json"]
     assert (world.game / "regulation.bin").read_bytes() == BASE                                 # the game's file is only read
 
 
@@ -75,7 +75,7 @@ def test_secure_keeps_the_build_and_list_shows_it(world, capsys):
     assert cli.main(args_for(world, "--secure")) == 0
     out = "".join(capsys.readouterr())
     assert "secured" in out and sorted(p.name for p in (world.ext / "innovate-items" / "spells").iterdir()) == \
-        ["regulation.bin", "regulation.secured.bin", "spells.build.json", "spells.commit.json"]
+        ["regulation.bin", "regulation.secured.bin", "spells.build.json", "spells.commit.json", "spells.resolved.json"]
     base = ["extension", "--list", "--extension-dir", str(world.ext), "--spec", str(world.spec)]
     assert cli.main(base) == 0
     assert "same: `run` swaps the secured file" in capsys.readouterr().out

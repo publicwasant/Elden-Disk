@@ -604,15 +604,15 @@ def test_the_envelope_test_tool_with_no_copies_builds_exactly_the_design(tmp_pat
     assert P["bullet"].count == 15475 and P["atk"].count == 11017 and P["sp"].count == 11354 + 2      # no unreferenced Bullet / Atk rows
 
 
-# ---- golden_eyes (1.7.1 section 1a): both eyes glow (effect 4866) while the buff lasts ----
+# ---- positive_curse_energy_eyes (1.7.1 section 1a): both eyes glow (effect 4866) while the buff lasts ----
 def _eyes_design(eyes):
     spell = {"kind": "projectile", "from": 6421, "set": {"SpEffect.1642100.effectEndurance": 20, "SpEffect.1642100.vfxId": -1}}
     if eyes is not None:
-        spell["golden_eyes"] = eyes
+        spell["positive_curse_energy_eyes"] = eyes
     return spec.normalise(file_of({"rct": spell}, maximum=7))["spells"]
 
 
-def test_golden_eyes_are_added_to_the_copied_buff_row_and_nothing_else(base, src):
+def test_positive_curse_energy_eyes_are_added_to_the_copied_buff_row_and_nothing_else(base, src):
     with_eyes = build.build(base, _eyes_design({"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]}), src)    # the gate runs
     without = build.build(base, _eyes_design(None), src)
     P, D = _tables(with_eyes.data)
@@ -626,29 +626,29 @@ def test_golden_eyes_are_added_to_the_copied_buff_row_and_nothing_else(base, src
     assert gold.data == with_eyes.data                                           # the colour is not in the file: it is put into the game
 
 
-def test_golden_eyes_on_a_heal_over_time_buff_go_on_its_buff_row(base, src):
+def test_positive_curse_energy_eyes_on_a_heal_over_time_buff_go_on_its_buff_row(base, src):
     spells = copy.deepcopy(Z4["spells"])
-    spells[0]["golden_eyes"] = {}
+    spells[0]["positive_curse_energy_eyes"] = {}
     res = build.build(base, spells, src)
     P, D = _tables(res.data)
     row = P["sp"].find(SLOT1["sp_effect"])[2]
     assert (D["sp"].get(row, "vfxId1"), D["sp"].get(row, "vfxId2")) == (20090050, 20090051) and D["sp"].get(row, "vfxId") == 1605000   # the body fire stays
 
 
-def test_golden_eyes_on_a_row_that_is_not_copied_is_refused(src):
+def test_positive_curse_energy_eyes_on_a_row_that_is_not_copied_is_refused(src):
     with pytest.raises(build.BuildError) as e:
         build.make(src, _eyes_design({"on": "SpEffect.1605000"}))
-    assert "golden_eyes.on" in str(e.value) and "1605000" in str(e.value)
+    assert "positive_curse_energy_eyes.on" in str(e.value) and "1605000" in str(e.value)
 
 
-def test_the_gate_notices_a_file_without_the_golden_eyes_the_design_asks_for(base, src):
+def test_the_gate_notices_a_file_without_the_positive_curse_energy_eyes_the_design_asks_for(base, src):
     from eldendisk.extension.innovate_items.spells import gate
     plain = build.make(src, _eyes_design(None))
     v = gate.verify(plain.data, src, _eyes_design({"on": "SpEffect.1642100"}))
     assert not v.ok and any("vfxId1" in p for p in v.problems)
     z4 = build.make(src, Z4["spells"])
     spells = copy.deepcopy(Z4["spells"])
-    spells[0]["golden_eyes"] = {}
+    spells[0]["positive_curse_energy_eyes"] = {}
     v = gate.verify(z4.data, src, spells)
-    assert not v.ok and any("golden eyes" in p for p in v.problems)
+    assert not v.ok and any("positive curse energy eyes" in p for p in v.problems)
 

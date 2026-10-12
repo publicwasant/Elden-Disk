@@ -41,10 +41,11 @@ class Walked:
     slept: float = 0.0      # seconds spent resting
 
 
-def _window(regions, addr: int) -> tuple[int, int] | None:
+def _window(regions, addr: int, reach: int | None = None) -> tuple[int, int] | None:
+    reach = NEAR if reach is None else reach
     for b, n in regions:
         if b <= addr < b + n:
-            return max(b, addr - NEAR), min(b + n, addr + NEAR)
+            return max(b, addr - reach), min(b + n, addr + reach)
     return None
 
 
@@ -76,11 +77,11 @@ def _minus(places: list[tuple[int, int]], taken: list[tuple[int, int]], overlap:
 
 
 def plan(mem, overlap: int, heads: bool = True, near=(), only_near: bool = False, skip=(),
-         regions=None) -> list[tuple[str, list[tuple[int, int]]]]:
+         regions=None, reach: int | None = None) -> list[tuple[str, list[tuple[int, int]]]]:
     """[(tier, [(start, size)])] in the order the look goes: NEAR bytes each way around the addresses `near`; the first HEAD bytes of
     each big private block (the biggest first); then all the rest, the biggest first. Nothing is read twice. Pieces of the rest start
     `overlap` bytes early, so nothing on the border is missed. `only_near`: the near tier alone. `skip`: spans [(start, end)] already
-    read by an earlier look (left out of the near tier)."""
+    read by an earlier look (left out of the near tier). `reach`: how far each way from a `near` address (NEAR by default)."""
     regions = mem.regions(True) if regions is None else regions
     big = [(b, n) for b, n in regions if n >= BIG] if heads else []
     if big:
@@ -88,7 +89,7 @@ def plan(mem, overlap: int, heads: bool = True, near=(), only_near: bool = False
         tiers = [("head", [(b, min(n, HEAD)) for b, n in sorted(big, key=lambda r: -r[1])]), ("rest", sorted(rest, key=lambda r: -r[1]))]
     else:
         tiers = [("rest", sorted(regions, key=lambda r: -r[1]))]
-    spans = _merge([w for w in (_window(regions, a) for a in near) if w])
+    spans = _merge([w for w in (_window(regions, a, reach) for a in near) if w])
     if not spans:
         return [] if only_near else tiers
     first = [(s, e - s) for s, e in spans]
@@ -113,7 +114,7 @@ def _pieces(mem, addr: int, want: int, n: int):
 
 
 def walk(mem, visit, overlap: int = 64, budget: float = BUDGET, heads: bool = True, near=(), only_near: bool = False, skip=(),
-         regions=None) -> Walked:
+         regions=None, reach: int | None = None) -> Walked:
     """Read the game's private memory piece by piece (see the module text) and give each piece to `visit(address, data, n)`: `data` holds
     the piece (n bytes) and up to `overlap` bytes of the next one, so something that begins in the piece but ends after it is seen
     whole; only what BEGINS in the first n bytes is the piece's own."""
@@ -122,31 +123,34 @@ def walk(mem, visit, overlap: int = 64, budget: float = BUDGET, heads: bool = Tr
     def done(stopped: bool, complete: bool, tier: str) -> Walked:
         return Walked(stopped, complete, read >> 20, _clock() - t0, tier, pieces, slowest, slept)
 
-    for tier, places in plan(mem, overlap, heads, near, only_near, skip, regions):
+    tier = "near"
+    for tier, places in plan(mem, overlap, heads, near, only_near, skip, regions, reach):
         for base, size in places:
             pos = 0
             while pos < size:
                 n = min(CHUNK, size - pos)
-                t = _clock()
+                t, looked = _clock(), 0.0
                 for addr, data, own in _pieces(mem, base + pos, n + overlap if pos + n < size else n, n):
                     read += own
+                    v = _clock()
                     if visit(addr, data, own):
                         pieces += 1
                         return done(True, True, tier)
+                    looked += _clock() - v
                 pos += n
                 pieces += 1
                 took = _clock() - t
                 slowest = max(slowest, took)
                 if _clock() - t0 > budget:
                     return done(False, False, tier)
-                debt += took * REST
+                debt += max(0.0, took - looked) * REST                  # owed for the reading: looking through our copy costs the game nothing
                 if debt >= LUMP:
                     s0 = _clock()
                     _sleep(debt)
                     nap = _clock() - s0
                     slept += max(nap, 0.0)
                     debt = 0.0 if nap <= 0 else max(-0.05, debt - nap)       # a sleep that ran long is paid back by the reads after it
-    return done(False, True, "rest")
+    return done(False, True, tier if only_near else "rest")      # a look of the near tier alone ended there, not after all the memory
 
 
 def go_easy() -> str:
