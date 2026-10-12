@@ -98,11 +98,27 @@ def _target(target, eid):
     return target[eid] if isinstance(target, dict) else target
 
 
-def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = True, everything: bool = False) -> Found:
+EFFECTS_AT = 1312 * 1024 * 1024      # where every log of 1.17.1 saw the effect files: this far into the game's biggest private block
+EFFECTS_BLOCK = 2048 * 1024 * 1024   # (2560 MB): the fire 1312 MB in, the eyes 1327 MB, the ring 1300 MB; blocks at least this big
+
+
+def _joined(looks: list) -> scan.Walked:
+    """One Walked for several looks made one after the other."""
+    return scan.Walked(any(w.stopped for w in looks), all(w.complete for w in looks), sum(w.megabytes for w in looks),
+                       sum(w.seconds for w in looks), looks[-1].tier, sum(w.pieces for w in looks),
+                       max(w.slowest for w in looks), sum(w.slept for w in looks))
+
+
+def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = True, everything: bool = False,
+             required=None) -> Found:
     """One look through the game's memory for all of `eids`; it ends when every one has a copy (own colours, or already changed when
-    `painted`), or, with `everything`, at the end of the memory: every copy is found (the game can hold an effect file twice and draw
-    from the copy found last; seen for the eyes, 2026-10-12). A copy counts only when EVERY colour of the plan has its bytes at its
-    place. `target`: one colour, or {effect: colour}."""
+    `painted`). A copy counts only when EVERY colour of the plan has its bytes at its place. `target`: one colour, or {effect: colour}.
+
+    `everything`: every copy, not only the first (the game holds the file of the eyes two and three times and draws from a copy a look
+    that stops at the first one did not reach, 2026-10-12). The copies the game draws from lie together, 1300-1330 MB into its biggest
+    private block in every log, so the look goes there first (NEAR bytes each way around EFFECTS_AT), then around every copy it found
+    (they may lie further on in another game), and stops: about 200 MB instead of all the memory (7 GB, two minutes while the world
+    loads). Only when an effect of `required` (default: all of `eids`) is not found there is all the memory read, as before."""
     patterns, sig, states = {}, {}, {}
     for eid in eids:
         at, old, new = _signature(_ALL[eid], _target(target, eid))
@@ -123,8 +139,19 @@ def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = Tru
                 i = data.find(pattern, i + 1)
         return not everything and all(own[e] or changed[e] for e in eids)
 
-    walked = scan.walk(mem, visit, overlap=max(len(p) for p in patterns.values()) - 1, budget=budget)
-    return Found(own, changed, walked)
+    overlap = max(len(p) for p in patterns.values()) - 1
+    if not everything:
+        return Found(own, changed, scan.walk(mem, visit, overlap=overlap, budget=budget))
+    regions = mem.regions(True)
+    hint = [b + EFFECTS_AT for b, n in regions if n >= EFFECTS_BLOCK]
+    looks = [scan.walk(mem, visit, overlap=overlap, budget=budget, near=hint, only_near=True, regions=regions)]
+    if all(own[e] or changed[e] for e in (required if required is not None else eids)):
+        read = [w for w in (scan._window(regions, a) for a in hint) if w]
+        found = [b for bs in (*own.values(), *changed.values()) for b in bs]
+        looks.append(scan.walk(mem, visit, overlap=overlap, budget=budget, near=found, only_near=True, skip=read, regions=regions))
+    else:
+        looks.append(scan.walk(mem, visit, overlap=overlap, budget=budget, regions=regions))
+    return Found(own, changed, _joined(looks))
 
 
 def effect_ids() -> tuple[str, ...]:
@@ -153,14 +180,14 @@ class Painted:
 
 
 def paint_many(mem, gate, eids, target, budget: float = scan.BUDGET, painted: bool = True, everything: bool = False,
-               accent=None) -> tuple[dict, Found]:
+               accent=None, required=None) -> tuple[dict, Found]:
     """Change the game's copies of `eids` after ONE look through its memory (find_all). -> ({effect: Painted, only those the game holds},
     what the look found). An effect the game does not hold (yet) is not in the result. A copy is written only when EVERY place still holds the game's
     own bytes; a write that does not stick is an error. `accent` (one colour, or {effect: colour}): the plan's `accent` places of every
     copy found (painted now or before) are given that colour too, each place only while it holds the game's own bytes."""
     if not gate.allowed:
         raise FlameError(f"writes are not allowed ({gate.reason})")
-    found = find_all(mem, eids, target, budget, painted, everything)
+    found = find_all(mem, eids, target, budget, painted, everything, required)
     out = {}
     for eid in eids:
         bases, done = found.own[eid], found.changed[eid]

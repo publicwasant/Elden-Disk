@@ -286,17 +286,20 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None) -> int:
             book.d("write", f"{what}: the game does not hold {', '.join(todo)} yet; looking again in {rest:g} s")
             _sleep(rest)
         try:
-            # the eyes: through ALL the memory, every copy (the game holds their file twice and draws from the one found last)
+            # the eyes and the ring: every copy (the game holds the eyes' file more than once and draws from one a first find missed)
             got, found = wfxr.paint_many(mem, gate, todo, {e: targets[e] for e in todo},
                                          everything=any(e in wfxr.eyes_ids() or e in optional for e in todo),
-                                         accent=accent if colour is not None else None)
+                                         accent=accent if colour is not None else None,
+                                         required=[e for e in todo if e not in optional])
         except wfxr.FlameError as exc:
             book.e("write", f"{what}: {exc}")
             return 1
         w = found.walked
         book.d("write", f"{what}: look {number}/{len(passes)}: {w.megabytes} MB read in {w.seconds:.1f} s ("
-                        + (f"stopped in the {w.tier} of the blocks, all found" if w.stopped else "the whole memory" if w.complete
-                           else "ran out of time before the end") + f"; {_cost(w)}); found {', '.join(got) or 'nothing'}")
+                        + (f"stopped in the {w.tier} of the blocks, all found" if w.stopped
+                           else "around where the effect files lie" if w.complete and w.tier == "near"
+                           else "the whole memory" if w.complete else "ran out of time before the end")
+                        + f"; {_cost(w)}); found {', '.join(got) or 'nothing'}")
         for eid, p in got.items():
             done[eid] = p
             where = f" at {p.bases[0]:#x}, {wscan.where(mem, p.bases[0])}" if p.bases else ""

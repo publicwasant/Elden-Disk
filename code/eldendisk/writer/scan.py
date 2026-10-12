@@ -75,11 +75,13 @@ def _minus(places: list[tuple[int, int]], taken: list[tuple[int, int]], overlap:
     return out
 
 
-def plan(mem, overlap: int, heads: bool = True, near=()) -> list[tuple[str, list[tuple[int, int]]]]:
+def plan(mem, overlap: int, heads: bool = True, near=(), only_near: bool = False, skip=(),
+         regions=None) -> list[tuple[str, list[tuple[int, int]]]]:
     """[(tier, [(start, size)])] in the order the look goes: NEAR bytes each way around the addresses `near`; the first HEAD bytes of
     each big private block (the biggest first); then all the rest, the biggest first. Nothing is read twice. Pieces of the rest start
-    `overlap` bytes early, so nothing on the border is missed."""
-    regions = mem.regions(True)
+    `overlap` bytes early, so nothing on the border is missed. `only_near`: the near tier alone. `skip`: spans [(start, end)] already
+    read by an earlier look (left out of the near tier)."""
+    regions = mem.regions(True) if regions is None else regions
     big = [(b, n) for b, n in regions if n >= BIG] if heads else []
     if big:
         rest = [(b + HEAD - overlap, n - HEAD + overlap) for b, n in big if n > HEAD] + [(b, n) for b, n in regions if n < BIG]
@@ -88,9 +90,12 @@ def plan(mem, overlap: int, heads: bool = True, near=()) -> list[tuple[str, list
         tiers = [("rest", sorted(regions, key=lambda r: -r[1]))]
     spans = _merge([w for w in (_window(regions, a) for a in near) if w])
     if not spans:
-        return tiers
+        return [] if only_near else tiers
     first = [(s, e - s) for s, e in spans]
-    return [("near", sorted(first, key=lambda r: -r[1]))] + [(t, _minus(places, spans, overlap)) for t, places in tiers]
+    if skip:
+        first = [p for p in _minus(first, _merge(list(skip)), overlap) if p[1] > overlap]
+    near_tier = [("near", sorted(first, key=lambda r: -r[1]))]
+    return near_tier if only_near else near_tier + [(t, _minus(places, spans, overlap)) for t, places in tiers]
 
 
 def _pieces(mem, addr: int, want: int, n: int):
@@ -107,7 +112,8 @@ def _pieces(mem, addr: int, want: int, n: int):
             yield addr + off, part, size
 
 
-def walk(mem, visit, overlap: int = 64, budget: float = BUDGET, heads: bool = True, near=()) -> Walked:
+def walk(mem, visit, overlap: int = 64, budget: float = BUDGET, heads: bool = True, near=(), only_near: bool = False, skip=(),
+         regions=None) -> Walked:
     """Read the game's private memory piece by piece (see the module text) and give each piece to `visit(address, data, n)`: `data` holds
     the piece (n bytes) and up to `overlap` bytes of the next one, so something that begins in the piece but ends after it is seen
     whole; only what BEGINS in the first n bytes is the piece's own."""
@@ -116,7 +122,7 @@ def walk(mem, visit, overlap: int = 64, budget: float = BUDGET, heads: bool = Tr
     def done(stopped: bool, complete: bool, tier: str) -> Walked:
         return Walked(stopped, complete, read >> 20, _clock() - t0, tier, pieces, slowest, slept)
 
-    for tier, places in plan(mem, overlap, heads, near):
+    for tier, places in plan(mem, overlap, heads, near, only_near, skip, regions):
         for base, size in places:
             pos = 0
             while pos < size:

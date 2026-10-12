@@ -500,3 +500,56 @@ def test_the_ring_takes_the_accent_colour_and_is_not_required(monkeypatch, quiet
     assert wcmd._put_flame(plain, open_gate(), BLUE) == 0                                  # no accent: the ring stays the game's red
     assert bytes(plain.mem[BASES["515000"]]) == bytes(Game(effects=("515000",)).mem[BASES["515000"]])
 
+
+# ------------------------------------------------------------------------------------------------------ where the effects lie
+@pytest.fixture
+def small_world(monkeypatch):
+    """The game's layout shrunk: a big private block of 3 MB whose effect files lie 1 MB in (as 1312 MB into 2560 MB in the game),
+    windows of 64 KB around an address, pieces of 16 KB."""
+    monkeypatch.setattr(fxr, "EFFECTS_AT", 0x100000)
+    monkeypatch.setattr(fxr, "EFFECTS_BLOCK", 0x200000)
+    monkeypatch.setattr(scan, "NEAR", 0x10000)
+    monkeypatch.setattr(scan, "CHUNK", 0x4000)
+    monkeypatch.setattr(scan, "BIG", 0x1000000)          # no head tier in so small a world
+
+
+def big_block(*files):
+    """A Game of one 3 MB block (and a small block elsewhere) with these (effect id, offset into the block) copies in it."""
+    g = Game(effects=())
+    block, other = bytearray(0x300000), bytearray(0x40000)
+    for eid, at in files:
+        plan = ALL[eid]
+        for off, hexa, _bloom in (*plan["colours"], *plan.get("accent", ())):
+            target = other if at < 0 else block
+            pos = (-at if at < 0 else at) + off
+            target[pos:pos + 16] = bytes.fromhex(hexa)
+    g.mem[0x60000000] = block
+    g.mem[0x70000000] = other
+    return g
+
+
+def test_every_copy_lying_where_the_effects_are_is_found_without_reading_all_the_memory(small_world):
+    g = big_block(("524400", 0xF0000), ("524401", 0x100000), ("4866", 0x100800), ("4866", 0x10A000), ("515000", 0xF4000))
+    found = fxr.find_all(g, ["524400", "524401", "4866", "515000"], BLUE, everything=True, required=["524400", "524401", "4866"])
+    assert found.own["4866"] == [0x60000000 + 0x100800, 0x60000000 + 0x10A000] and found.own["515000"] == [0x60000000 + 0xF4000]
+    assert found.walked.megabytes == 0 and found.walked.pieces < 0x300000 // 0x4000 // 2        # a fraction of the block, nothing else
+    assert all(addr < 0x70000000 for addr, _size in g.reads)                                   # the small block was never read
+
+
+def test_copies_beyond_the_first_window_are_found_around_the_ones_found(small_world):
+    g = big_block(("524400", 0x100000), ("524401", 0x10C000), ("4866", 0x114000))             # the eyes past the first window: the second look
+    found = fxr.find_all(g, ["524400", "524401", "4866"], BLUE, everything=True)
+    assert found.own["4866"] == [0x60000000 + 0x114000]
+
+
+def test_when_an_effect_is_not_where_they_lie_all_the_memory_is_read(small_world):
+    g = big_block(("524400", 0x100000), ("524401", 0x100800), ("4866", -0x1000))               # the eyes in the other block
+    found = fxr.find_all(g, ["524400", "524401", "4866"], BLUE, everything=True)
+    assert found.own["4866"] == [0x70000000 + 0x1000] and any(addr >= 0x70000000 for addr, _size in g.reads)
+
+
+def test_an_optional_ring_that_is_not_there_does_not_make_the_look_read_everything(small_world):
+    g = big_block(("524400", 0x100000), ("524401", 0x100800), ("4866", 0x108000))
+    found = fxr.find_all(g, ["524400", "524401", "4866", "515000"], BLUE, everything=True, required=["524400", "524401", "4866"])
+    assert found.own["515000"] == [] and all(addr < 0x70000000 for addr, _size in g.reads)
+
