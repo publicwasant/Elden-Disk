@@ -59,7 +59,7 @@ A spell made from a game spell (`from`) can be written in one structure that say
       "__info__": "...",
       "texts":  { "goods_name": "...", "goods_info": "...", "goods_caption": "..." },
       "colors": {
-        "Magic.6421.castSfxId": { "main": [0.2, 0.65, 1], "accent": [0.5, 0.06, 0.36] },
+        "Magic.6421.castSfxId": { "main": [0.2, 0.65, 1], "accent": [1.0, 1.0, 1.0] },
         "SpEffect.1642100": [0.2, 0.65, 1]
       }
     }

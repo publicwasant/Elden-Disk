@@ -491,7 +491,7 @@ Three numbers, red, green, blue, each from 0 to 2 (1 = the full colour; above 1 
 - It colours **Flame, Grant Me Strength itself**, not only your spell: the game's own spell has the new colour while the game runs. It lasts until the game closes and is not saved anywhere.
 - Editing `flame_color` does not rebuild anything and does not un-secure a secured build.
 - White stays white and black stays black: the colour is applied the way a tint is, so the shape and brightness of the fire are kept.
-- A second colour: `"flame_accent_color": [0.54, 0.4, 0.8]` next to `flame_color` colours the parts of the fire the first colour does not reach and the **ring of runes** at the hand (purple with these numbers; the author's design uses `[0.5, 0.06, 0.36]` since 2026-10-13, a deep red-purple for the negative curse energy, against the blue of the positive). Seen in the game on 2026-10-12. If the ring stays red, cast once and run `eldendisk write --flame-color` (the game had not loaded it yet).
+- A second colour: `"flame_accent_color": [0.54, 0.4, 0.8]` next to `flame_color` colours the parts of the fire the first colour does not reach and the **ring of runes** at the hand (purple with these numbers; the author's design uses `[1.0, 1.0, 1.0]` since 2026-10-13, a deep red-purple for the negative curse energy, against the blue of the positive). Seen in the game on 2026-10-12. If the ring stays red, cast once and run `eldendisk write --flame-color` (the game had not loaded it yet).
 
 ### 6.1d Positive Curse Energy Eyes (since 1.7.1, seen in the game 2026-10-12)
 
@@ -603,7 +603,7 @@ Since 1.7.1 a remixed spell can be written so that each part answers one questio
     "basic":    { "SpEffect.1642100.effectEndurance": 20, "Magic.6421.refType": 32 },
     "advanced": {
       "texts":  { "goods_name": "Reverse Cursed Technique", "goods_info": "One short line", "goods_caption": "The long story." },
-      "colors": { "Magic.6421.castSfxId": { "main": [0.2, 0.65, 1], "accent": [0.5, 0.06, 0.36] },
+      "colors": { "Magic.6421.castSfxId": { "main": [0.2, 0.65, 1], "accent": [1.0, 1.0, 1.0] },
                   "SpEffect.1642100": [0.2, 0.65, 1] }
     }
   }

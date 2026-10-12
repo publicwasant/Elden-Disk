@@ -75,7 +75,10 @@ __(Still in 1.7.1)__
 - The `id` field should be unique for each spell and should follow the format `<id-1>`, `<id-2>`, ETC. And In `extentions.json` user can add whatever ids but after buit `regulation.bin` the `<id-n>` should be replace with actual id in the **Vault**.
 - THe Logging Console, redesign and replace, log representation should be more clear and readable, with a focus on the changes made to the spell design and any errors encountered during the restructuring process. (Modern CLI Console UX Design รวมระบวนการ extension innovate-items spells ให้อยู่ใน block ลักษณะ pacing เดียวกัน, ตัว ids และ addresses เช่น 114880, 0x7ff3cbbb0000 มีสีเฉพาะของมันเอง)
 
-
 ### Additional Considerations:
 - The IDs that appear in the template: __6421__, __1642100__, __524400__, __524401__, __6806__ are specific to the game and should be used as-is, and the user can find out what the meaning of it in `spells-innovation-handbook.md` and `spells-row-finder.md`.
 - Meaning of **Level N** (มาจากแนวคิดที่ผมเขียนไว้เองของเรื่อง Items Customization): Level-1: Basic design can run `eldendisk.exe write --set [NAME]=[VALUES]` to set parameters, Level-2: คือการหยิบเขาของที่มีอยู่แล้วในเกมมา "เล่นแร่แปรธาตุ" (Restructure) จับมา ดัดแปลง คัดลอก และ ประกอบกันเป็นของชิ้นใหม่, Level-3: เหมือนกับ Level-2 แต่มีการหยิบเข้าสิ่งที่ไม่เคยมีอยู่ในเกมมาก่อน "สร้างใหม่" แล้วยัดเข้าไปด้วยการ scan memory (write scanner) ตัวอย่างก็เช่น Item's text หรือ Item's effect color; (Level-3) นั้นยากที่สุด เพราะเราเคยลอง scan หา pointer-chain แล้วตั้งเป็น settled pointer-chain in offsets.json ได้ผลแบบสุม หมายความ pointer-chain กลุ่มนีไม่สามารถ settle ได้ จึงต้องทำการ scan memory และ write สดตอนเกมเข้าโลก (ซึ่งเราทำสำเร็จไปแล้ว และหาวิธี opimize ให้เร็วขึ้นอยู่ตลอด)
+
+
+### White
+feat: change innovate-items spells Reverse Cursed Technique accent-color to white (RGB: 1.0, 1.0, 1.0) 

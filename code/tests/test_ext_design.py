@@ -120,7 +120,7 @@ def test_the_shipped_design_is_written_in_the_new_structure_and_holds_the_blue_p
     raw = doc["innovate_items"]["spells"]["slots"]["reverse_cursed_technique"]
     assert {"__info__", "requires", "locations", "customs"} <= set(raw) and {"basic", "advanced"} == set(raw["customs"])
     got = spec.normalise(doc)["spells"][0]
-    assert got["flame_color"] == BLUE and got["flame_accent_color"] == [0.5, 0.06, 0.36] and got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100", "color": BLUE}
+    assert got["flame_color"] == BLUE and got["flame_accent_color"] == [1.0, 1.0, 1.0] and got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100", "color": BLUE}
     assert got["requires"] == {"intelligence": 0, "faith": 60, "arcane": 10} and got["fp_cost"] == 120 and got["shop"] == {"price": 34590, "stock": 1}
 
 
