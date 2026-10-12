@@ -23,7 +23,20 @@ def hb(x):
     return x.bit_length() - 1
 
 
+_FSE_CACHE = {}
+
+
 def build_fse(norm, acc):
+    """-> (cells, acc). The same table comes back for the same counts (most blocks share them): the cells are a tuple, never
+    changed by a caller."""
+    key = (tuple(norm), acc)
+    hit = _FSE_CACHE.get(key)
+    if hit is None:
+        hit = _FSE_CACHE[key] = (tuple(_build_fse(norm, acc)), acc)
+    return hit
+
+
+def _build_fse(norm, acc):
     size = 1 << acc
     sym = [0] * size
     high = size - 1
@@ -48,7 +61,7 @@ def build_fse(norm, acc):
         nxt[s] += 1
         nb = acc - hb(ns)
         cells.append((s, nb, (ns << nb) - size))
-    return cells, acc
+    return cells
 
 
 def read_ncount(data, p, max_sym):
@@ -200,19 +213,26 @@ def huff_table(weights):
 def huff_stream(data, n, table, mb):
     br = RBits(data)
     out = bytearray()
+    append, from_bytes = out.append, int.from_bytes
+    mask = (1 << mb) - 1
+    pos = br.pos
+    wbase, win = pos + 1, 0           # `win` holds the stream's bits from bit `wbase` up (to at least `pos`): read 32 bytes at a time
     for _ in range(n):
-        br.pos -= mb
-        if br.pos >= 0:
-            lo = br.pos >> 3
-            hi = (br.pos + mb - 1) >> 3
-            v = (int.from_bytes(data[lo:hi + 1], "little") >> (br.pos & 7)) & ((1 << mb) - 1)
+        pos -= mb
+        if pos >= wbase:
+            v = (win >> (pos - wbase)) & mask
+        elif pos >= 0:
+            lo = max((pos >> 3) - 31, 0)
+            win = from_bytes(data[lo:((pos + mb - 1) >> 3) + 1], "little")
+            wbase = lo << 3
+            v = (win >> (pos - wbase)) & mask
         else:
-            k = -br.pos
-            hi = (br.pos + mb - 1) >> 3
-            v = (int.from_bytes(data[0:hi + 1], "little") & ((1 << (mb - k)) - 1)) << k
+            k = -pos
+            hi = (pos + mb - 1) >> 3
+            v = (from_bytes(data[0:hi + 1], "little") & ((1 << (mb - k)) - 1)) << k
         s, nb = table[v]
-        br.pos += mb - nb
-        out.append(s)
+        pos += mb - nb
+        append(s)
     return bytes(out)
 
 
@@ -320,46 +340,74 @@ class Dec:
         sof = br.read(ofacc)
         sml = br.read(mlacc)
         rep = self.rep
+        r0, r1, r2 = rep               # the repeat offsets live in locals during the loop and go back into self.rep after it
         lp = 0
+        bits, from_bytes = br.d, int.from_bytes
+        last = nseq - 1
         for i in range(nseq):
             ofs, ofnb, ofbase = ofc[sof]
             mls, mlnb, mlbase = mlc[sml]
             lls, llnb, llbase = llc[sll]
-            ofv = (1 << ofs) + br.read(ofs)
-            ml = ML_BASE[mls] + br.read(ML_BITS[mls])
-            ll = LL_BASE[lls] + br.read(LL_BITS[lls])
-            if i != nseq - 1:
-                sll = llbase + br.read(llnb)
-                sml = mlbase + br.read(mlnb)
-                sof = ofbase + br.read(ofnb)
+            mlb, llb = ML_BITS[mls], LL_BITS[lls]
+            # the six fields of a sequence lie next to each other in the stream: read them with one slice instead of six
+            # br.read calls (same bits, same order); near the start of the stream, where br.read pads with zeros, read one by one
+            r = ofs + mlb + llb + (llnb + mlnb + ofnb if i != last else 0)
+            pos = br.pos - r
+            if pos >= 0:
+                br.pos = pos
+                v = from_bytes(bits[pos >> 3:((pos + r - 1) >> 3) + 1], "little") >> (pos & 7) if r else 0
+                r -= ofs
+                ofv = (1 << ofs) + ((v >> r) & ((1 << ofs) - 1))
+                r -= mlb
+                ml = ML_BASE[mls] + ((v >> r) & ((1 << mlb) - 1))
+                r -= llb
+                ll = LL_BASE[lls] + ((v >> r) & ((1 << llb) - 1))
+                if i != last:
+                    r -= llnb
+                    sll = llbase + ((v >> r) & ((1 << llnb) - 1))
+                    r -= mlnb
+                    sml = mlbase + ((v >> r) & ((1 << mlnb) - 1))
+                    sof = ofbase + (v & ((1 << ofnb) - 1))
+            else:
+                ofv = (1 << ofs) + br.read(ofs)
+                ml = ML_BASE[mls] + br.read(mlb)
+                ll = LL_BASE[lls] + br.read(llb)
+                if i != last:
+                    sll = llbase + br.read(llnb)
+                    sml = mlbase + br.read(mlnb)
+                    sof = ofbase + br.read(ofnb)
             if ofv > 3:
                 off = ofv - 3
-                rep[2] = rep[1]
-                rep[1] = rep[0]
-                rep[0] = off
+                r2 = r1
+                r1 = r0
+                r0 = off
             else:
                 idx = ofv - 1 + (1 if ll == 0 else 0)
                 if idx == 0:
-                    off = rep[0]
+                    off = r0
                 else:
-                    off = rep[0] - 1 if idx == 3 else rep[idx]
+                    off = r0 - 1 if idx == 3 else (r1 if idx == 1 else r2)
                     if idx >= 2:
-                        rep[2] = rep[1]
-                    rep[1] = rep[0]
-                    rep[0] = off
+                        r2 = r1
+                    r1 = r0
+                    r0 = off
             if off <= 0:
+                rep[:] = [r0, r1, r2]
                 raise ZErr("zero offset")
             out += lit[lp:lp + ll]
             lp += ll
-            if off > len(out):
+            olen = len(out)
+            if off > olen:
+                rep[:] = [r0, r1, r2]
                 raise ZErr("offset beyond start seq %d (ll=%d ml=%d ofv=%d ofcode=%d mlcode=%d llcode=%d off=%d rep=%s nseq=%d)" % (i, ll, ml, ofv, ofs, mls, lls, off, rep, nseq))
-            st = len(out) - off
+            st = olen - off
             if off >= ml:
                 out += out[st:st + ml]
             else:
                 chunk = bytes(out[st:])
                 reps = ml // off + 1
                 out += (chunk * reps)[:ml]
+        rep[:] = [r0, r1, r2]
         out += lit[lp:]
 
     def stored(self, data):

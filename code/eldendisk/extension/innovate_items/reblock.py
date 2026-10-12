@@ -14,6 +14,7 @@ encoder (handbook Chapters 9-11). So an edit is made like this:
 """
 from __future__ import annotations
 
+import importlib
 import random
 import struct
 
@@ -226,6 +227,19 @@ def resegment(info: dict, start: int, newbody: bytes, rep_start=None, flex=False
     return bytes(lits), encode_offsets(out, rep_start, info["rep1"])
 
 
+def _decoded(frame: bytes, want: bytes) -> bytes:
+    """What `frame` decodes to, for the builder's own check after a rewrite. When this Python has compression.zstd (3.14+, C)
+    and it gives `want`, that is the answer (in milliseconds); otherwise our decoder decodes it, so a frame that does not decode to
+    `want` is judged exactly as before. The gate decodes the finished file again with BOTH decoders, whatever happens here."""
+    try:
+        got = importlib.import_module("compression.zstd").decompress(frame)
+        if got == want:
+            return got
+    except Exception:            # not available, or it cannot decode the frame: our decoder decides
+        pass
+    return zstd.decode_frame(frame)
+
+
 # ---------------------------------------------------------------- frame assembly
 def _lit_header_form(n: int, form: int) -> bytes:
     """Raw-literals section header for n bytes; form 0 is the minimal one, 1 and 2 are longer but equally legal."""
@@ -329,7 +343,7 @@ def rewrite(src: Source, newbody: bytes, max_iter: int = 12):
                 lit, q = d.literals(c, 0)
                 res[i] = (lit, bytes(c[q:]))
         frame = _pack(src, res)
-        got = zstd.decode_frame(frame)
+        got = _decoded(frame, newbody)
         if got == newbody:
             return frame, edit, set(res) - edit
         bad = next(k for k in range(len(newbody)) if got[k:k + 1] != newbody[k:k + 1]) // BS if len(got) == len(newbody) else None
@@ -392,7 +406,7 @@ def rewrite_grow(src: Source, newbody: bytes, max_iter: int = 12):
         if grew:
             continue
         frame = _pack(src, res, appended=appended)
-        got = zstd.decode_frame(frame)
+        got = _decoded(frame, newbody)
         if got == newbody:
             return frame, edit, set(res) - edit, len(appended)
         bad = next((k for k in range(min(len(got), len(newbody))) if got[k] != newbody[k]), None)

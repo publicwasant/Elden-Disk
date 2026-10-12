@@ -1,7 +1,10 @@
 """AES-256 in CBC mode, standard library only (the game's regulation.bin is AES-256-CBC, IV = first 16 bytes).
 
-A table-driven implementation: slow next to a C library (about a dozen seconds for the 2 MB file), but it needs
-nothing outside the standard library and behaves the same on every platform, which is what the tests rely on.
+A table-driven implementation: slow next to a C library (a few seconds for the 2 MB file), but it needs nothing outside
+the standard library and behaves the same on every platform, which is what the tests rely on. On Windows `cbc_encrypt` and
+`cbc_decrypt` hand the work to Windows' own AES (CNG, bcrypt.dll, through ctypes), which takes milliseconds; it is used only after
+it gave the same bytes as this implementation on a known block, and anything unexpected falls back here. AES is exact, so the
+result is the same bytes either way.
 """
 from __future__ import annotations
 
@@ -129,7 +132,7 @@ def _decrypt_block(dk, s0, s1, s2, s3):
     return r0, r1, r2, r3
 
 
-def cbc_encrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
+def py_cbc_encrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
     """CBC without padding: len(data) must be a multiple of 16."""
     if len(iv) != 16 or len(data) % 16:
         raise ValueError("IV must be 16 bytes and data a multiple of 16")
@@ -145,7 +148,7 @@ def cbc_encrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
     return struct.pack(">%dI" % n, *out)
 
 
-def cbc_decrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
+def py_cbc_decrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
     if len(iv) != 16 or len(data) % 16:
         raise ValueError("IV must be 16 bytes and data a multiple of 16")
     dk = _decrypt_keys(_expand_key(key))
@@ -160,3 +163,97 @@ def cbc_decrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
         out += (r0 ^ p0, r1 ^ p1, r2 ^ p2, r3 ^ p3)
         p0, p1, p2, p3 = c0, c1, c2, c3
     return struct.pack(">%dI" % n, *out)
+
+
+# ---------------- Windows' own AES (CNG), when there is one ----------------
+class _Cng:
+    """AES-CBC without padding through bcrypt.dll. Raises OSError when a call fails."""
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes
+        self.ct = ctypes
+        b = self.bcrypt = ctypes.WinDLL("bcrypt")
+        b.BCryptOpenAlgorithmProvider.argtypes = [ctypes.POINTER(ctypes.c_void_p), wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.ULONG]
+        b.BCryptSetProperty.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR, ctypes.c_void_p, wintypes.ULONG, wintypes.ULONG]
+        b.BCryptGenerateSymmetricKey.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p, wintypes.ULONG,
+                                                 ctypes.c_char_p, wintypes.ULONG, wintypes.ULONG]
+        for f in (b.BCryptEncrypt, b.BCryptDecrypt):
+            f.argtypes = [ctypes.c_void_p, ctypes.c_char_p, wintypes.ULONG, ctypes.c_void_p, ctypes.c_void_p, wintypes.ULONG,
+                          ctypes.c_void_p, wintypes.ULONG, ctypes.POINTER(wintypes.ULONG), wintypes.ULONG]
+        b.BCryptDestroyKey.argtypes = [ctypes.c_void_p]
+        for f in (b.BCryptOpenAlgorithmProvider, b.BCryptSetProperty, b.BCryptGenerateSymmetricKey, b.BCryptEncrypt,
+                  b.BCryptDecrypt, b.BCryptDestroyKey):
+            f.restype = ctypes.c_long
+        self.alg = ctypes.c_void_p()
+        self._ok(b.BCryptOpenAlgorithmProvider(ctypes.byref(self.alg), "AES", None, 0))
+        mode = ctypes.create_unicode_buffer("ChainingModeCBC")
+        self._ok(b.BCryptSetProperty(self.alg, "ChainingMode", mode, ctypes.sizeof(mode), 0))
+
+    @staticmethod
+    def _ok(status):
+        if status != 0:
+            raise OSError("bcrypt status 0x%08X" % (status & 0xFFFFFFFF))
+
+    def run(self, encrypt: bool, key: bytes, iv: bytes, data: bytes) -> bytes:
+        ct, b = self.ct, self.bcrypt
+        hkey = ct.c_void_p()
+        self._ok(b.BCryptGenerateSymmetricKey(self.alg, ct.byref(hkey), None, 0, key, len(key), 0))
+        try:
+            ivbuf = ct.create_string_buffer(iv, 16)            # CNG updates the IV in place: give it a copy
+            out = ct.create_string_buffer(len(data))
+            got = ct.c_ulong()
+            f = b.BCryptEncrypt if encrypt else b.BCryptDecrypt
+            self._ok(f(hkey, data, len(data), None, ivbuf, 16, out, len(data), ct.byref(got), 0))
+            if got.value != len(data):
+                raise OSError("bcrypt returned %d bytes, expected %d" % (got.value, len(data)))
+            return out.raw
+        finally:
+            b.BCryptDestroyKey(hkey)
+
+
+_cng = None            # None: not tried yet; False: not available (or it disagreed with py_cbc_*)
+
+
+def _native():
+    global _cng
+    if _cng is None:
+        _cng = False
+        try:
+            c = _Cng()
+            key, iv = bytes(range(32)), bytes(range(16, 32))
+            data = bytes(range(256)) * 2
+            ct = py_cbc_encrypt(key, iv, data)
+            if c.run(True, key, iv, data) == ct and c.run(False, key, iv, ct) == data:
+                _cng = c
+        except (OSError, AttributeError, ImportError, ValueError):     # not Windows, or no bcrypt.dll
+            pass
+    return _cng or None
+
+
+def _check(iv: bytes, data: bytes) -> None:
+    if len(iv) != 16 or len(data) % 16:
+        raise ValueError("IV must be 16 bytes and data a multiple of 16")
+
+
+def cbc_encrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
+    """CBC without padding: len(data) must be a multiple of 16."""
+    _check(iv, data)
+    c = _native() if len(key) == 32 else None
+    if c and data:
+        try:
+            return c.run(True, bytes(key), bytes(iv), bytes(data))
+        except OSError:
+            pass
+    return py_cbc_encrypt(key, iv, data)
+
+
+def cbc_decrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
+    _check(iv, data)
+    c = _native() if len(key) == 32 else None
+    if c and data:
+        try:
+            return c.run(False, bytes(key), bytes(iv), bytes(data))
+        except OSError:
+            pass
+    return py_cbc_decrypt(key, iv, data)

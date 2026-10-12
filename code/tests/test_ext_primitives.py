@@ -28,6 +28,16 @@ def test_aes_cbc_matches_the_cryptography_library_and_roundtrips():
     assert aes.cbc_encrypt(key, iv, data) == ref and aes.cbc_decrypt(key, iv, ref) == data
 
 
+def test_aes_windows_cng_and_the_pure_python_code_give_the_same_bytes():
+    rnd = random.Random(5)
+    key, iv, data = (bytes(rnd.randrange(256) for _ in range(n)) for n in (32, 16, 16 * 300))
+    ct = aes.py_cbc_encrypt(key, iv, data)
+    assert aes.cbc_encrypt(key, iv, data) == ct                     # CNG on Windows, else the same pure code
+    assert aes.cbc_decrypt(key, iv, ct) == data == aes.py_cbc_decrypt(key, iv, ct)
+    assert aes.cbc_encrypt(key, iv, b"") == b"" and aes.cbc_decrypt(key, iv, b"") == b""
+    with pytest.raises(ValueError):
+        aes.cbc_encrypt(key, iv, data[:15])
+
 # ---------------- FSE sequence coding ----------------
 def test_sequence_section_roundtrips_and_decodes_like_a_real_zstd():
     rnd = random.Random(11)
