@@ -98,7 +98,7 @@ def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
     """-> (the regulation.bin to swap in for this session or None, mode). mode: "none" | "file" (--regulation) | "secured"
     (the confirmed copy, nothing built) | "last" (the latest build, unchanged since, nothing built) | "built" (a new build the gate
     passed). `--regulation FILE` wins. Otherwise, with the vault ON, the extension swaps the secured file, or the latest build, when
-    the design is unchanged and builds (about 20 s) when it is not: the spells the last `--add` chose, every spell without one. The vault
+    the design is unchanged and builds (a few seconds) when it is not: the spells the last `--add` chose, every spell without one. The vault
     is what makes that safe: it puts the game's file back. With the vault OFF the extension does not run. A build error or a
     failed gate stops `run` (ExtensionError / GateFailed): nothing is swapped, the game is not started.
     The 1.6.4 place `<vault>/regulation/regulation.bin` is not read any more."""

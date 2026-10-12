@@ -214,9 +214,9 @@ def seconds(s: float) -> str:
 
 
 class Working:
-    """A step that takes a while (the build of the regulation, about 20 s):
+    """A step that takes a while (the build of the regulation, a few seconds):
 
-        with ui.working("extension", "building ...") as w:
+        with ui.working("design", "building ...") as w:
             ...
             w.done("built")                       # -> a check-mark line that ends with the time it took
 

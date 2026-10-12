@@ -398,10 +398,10 @@ def test_the_raw_view_colours_the_message_not_the_prefix(spells, monkeypatch):
     buf = Stream()
     ui.raw_sink(stream=buf)(ev(tag=EXT_TAG, msg="building black_flame_copy"))
     line = buf.getvalue()
-    assert line.startswith("10-07 23:41:02.123  4242 I extension: building ") and PURPLE.format("black_flame_copy") in line
+    assert line.startswith("10-07 23:41:02.123  4242 I design   : building ") and PURPLE.format("black_flame_copy") in line
     buf2 = Stream()
-    ui.raw_line("10-07 23:41:02.123  4242 I extension: built black_flame_copy", buf2)
-    assert PURPLE.format("black_flame_copy") in buf2.getvalue() and buf2.getvalue().startswith("10-07 23:41:02.123  4242 I extension: built ")
+    ui.raw_line("10-07 23:41:02.123  4242 I design   : built black_flame_copy", buf2)
+    assert PURPLE.format("black_flame_copy") in buf2.getvalue() and buf2.getvalue().startswith("10-07 23:41:02.123  4242 I design   : built ")
 
 
 def test_an_error_stays_red_and_clearing_the_ids_stops_the_colour(spells, monkeypatch):

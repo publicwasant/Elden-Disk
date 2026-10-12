@@ -335,7 +335,7 @@ You will start from the spell that is already there: **Reverse Cursed Technique*
 eldendisk extension innovate-items spells --add all --dry-run
 ```
 
-It builds in memory (about 20 seconds) and prints whether the **gate passed**. Nothing is written.
+It builds in memory (a few seconds) and prints whether the **gate passed**. Nothing is written.
 
 **Step 5. Play.**
 
@@ -467,7 +467,7 @@ A spell has three pieces of text, all in the object `text` (all optional; an emp
 
 What to know:
 
-- ✓ You do nothing extra. `eldendisk run` waits until a character is in the world, then puts the text in by itself, once (you will see `text: 1 spell named in the game …`; it takes about a minute and a half after the character appears, because the tool looks through the game's memory for the game's text without freezing the game). Tried in the real game 2026-10-11: the name and short line in the merchant's list, the long description in the inventory.
+- ✓ You do nothing extra. `eldendisk run` waits until a character is in the world, then puts the text in by itself, once (you will see `goods text: 1 spell named in the game …`; it takes about a minute and a half after the character appears, because the tool looks through the game's memory for the game's text without freezing the game). Tried in the real game 2026-10-11: the name and short line in the merchant's list, the long description in the inventory.
 - It lasts until the game closes and is not saved anywhere. Every `run` does it again.
 - Changing only the text **does not rebuild** anything and does not un-secure a secured build. The text is put in once per game: to see a new text, close the game and `run` again. (A second `eldendisk write --text` in the same game is refused with `the text was set already in this session`: the tool finds the game's own tables by their shape, and the game no longer points at them.)
 - Words in `text` are only for the spells that are built (the `--add` choice, Chapter 11); a spell that is not built shows nothing.
@@ -892,7 +892,7 @@ What fits (measured offline, and checked in the game for the last row):
 ### 11.1 The loop
 
 ```commandline
-eldendisk extension innovate-items spells --add all --dry-run    # 1. rehearse (about 20 s, writes nothing)
+eldendisk extension innovate-items spells --add all --dry-run    # 1. rehearse (a few seconds, writes nothing)
 eldendisk run                                                    # 2. build, check, play
 eldendisk extension innovate-items spells --secure               # 3. after it worked, game closed: keep this build
 ```
@@ -927,7 +927,7 @@ The tool lists **every** problem it finds at once.
 | `slot N has no shop line` | A `shop` on shelf 8 or higher. | Remove `shop`, or use shelves 1–7. |
 | `GATE FAILED … nothing was swapped` | The suitcase is too heavy. | Fewer or lighter spells (Chapter 10). |
 | `.name: renamed in 1.7.1: use text.goods_name` (also `description`) | A 1.7.0 field. | Move the words into the `text` object (6.1b). |
-| `text: N spell(s) named in the game …` | The text was put into the running game. | Nothing; open the merchant or the inventory. |
+| `goods text: N spell(s) named in the game …` | The text was put into the running game. | Nothing; open the merchant or the inventory. |
 | `the game's text tables were not found (…)` | The tool looked through the game's memory and did not find them: the game is not fully loaded, or it is another version or language of the game (the profile holds the sizes of the English tables). | Run `eldendisk write --text` once a character is in the world. |
 | `the game replaced its text tables again after they were set` | The game reloaded its text while the tool was done. | Run `eldendisk write --text` again. |
 

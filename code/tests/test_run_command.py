@@ -107,8 +107,8 @@ def test_run_without_v_shows_the_progress_of_the_text_and_flame_steps_only(tmp_p
 
         def run(self):
             with open(log, "a", encoding="utf-8") as fh:
-                for level, tag, msg in (("D", "cli", "eldendisk write --set level=150"), ("D", "write", "text: debug detail"),
-                                        ("I", "vault", "other tag"), ("I", "write", "text: waiting for a character to be in the world")):
+                for level, tag, msg in (("D", "cli", "eldendisk write --set level=150"), ("D", "write", "goods text: debug detail"),
+                                        ("I", "vault", "other tag"), ("I", "write", "goods text: waiting for a character to be in the world")):
                     fh.write(format_line(Event(datetime.now(), 99999, level, tag, msg)) + "\n")
             book.i("host", "own line")
             seen["ran"] = True
@@ -126,7 +126,7 @@ def test_run_without_v_shows_the_progress_of_the_text_and_flame_steps_only(tmp_p
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
     assert run_cmd.cmd_run(args) == 0 and seen["ran"]
     err = capsys.readouterr().err
-    assert "text: waiting for a character to be in the world" in err
+    assert "goods text: waiting for a character to be in the world" in err
     assert "level=150" not in err and "debug detail" not in err and "other tag" not in err
     book.close()
 
@@ -244,7 +244,7 @@ def test_the_log_line_of_a_started_step_is_the_short_command(tmp_path, monkeypat
     monkeypatch.setattr(book, "d", lambda tag, msg: seen.append((tag, msg)))
     default = str(run_cmd.get_resource_path("offsets.json", default_dir=run_cmd.HERE))
     run_cmd.start_text(_args(tmp_path, vault=None, offsets=default), tmp_path / "vault", spawn=lambda *a, **k: None)
-    assert seen == [("extension", "starting: eldendisk write --text --when-loaded")]
+    assert seen == [("design", "starting: eldendisk write --text --when-loaded")]
 
 
 def test_the_frozen_exe_runs_itself(tmp_path, monkeypatch):

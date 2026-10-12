@@ -36,6 +36,12 @@ def build_fse(norm, acc):
     return hit
 
 
+def forget_tables():
+    """Drop the kept tables (about 60 MB after the game's whole file). A build keeps them from its first decode to the gate's; the
+    process that goes on after it (`run`, for the whole game) does not need them."""
+    _FSE_CACHE.clear()
+
+
 def _build_fse(norm, acc):
     size = 1 << acc
     sym = [0] * size

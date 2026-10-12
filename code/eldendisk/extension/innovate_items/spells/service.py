@@ -16,6 +16,7 @@ FILE (read back from disk) before it may replace regulation.bin. A failed gate r
 No printing here (the commands print). Never imports the vault, the host or the game."""
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -23,7 +24,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .. import bases
+from .. import bases, zstd
 from . import gate, recipes, spec as specmod
 from .build import make, prepare
 from ..reblock import BuildError
@@ -133,6 +134,18 @@ class Report:
     notes: list = field(default_factory=list)
     output: Path | None = None
     spells: list = field(default_factory=list)
+
+
+def _tables_dropped(fn):
+    """The decoder's tables are kept for the length of a build or a secure (the gate decodes what the build decoded) and dropped
+    after it: `run` goes on for the whole game."""
+    @functools.wraps(fn)
+    def run(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            zstd.forget_tables()
+    return run
 
 
 class Spells:
@@ -306,6 +319,7 @@ class Spells:
         return Decision(not reasons, reasons, diff)
 
     # ---------------- the build ----------------
+    @_tables_dropped
     def build(self, spells: list, base: bytes, dry_run: bool = False, selection="all") -> Report:
         """Build `spells` on the game's original file; the gate judges the bytes READ BACK from disk; only then does the result
         replace regulation.bin, and the build record (which spells it holds: `selection` is "all" or their ids; `run` builds the
@@ -346,6 +360,7 @@ class Spells:
                       res.sha256, res.decrypted_sha256, v.stats.get("changed_blocks", 0), list(v.notes), self.output_path,
                       [i["id"] for i in spells])
 
+    @_tables_dropped
     def secure(self, spells: list, game_file: Path | None) -> Report:
         """Commit the current regulation.bin: the gate judges it against the CURRENT design, then it is copied to
         regulation.secured.bin and the record is written (the bin first, the record last, so a half-done secure is just 'not secured')."""

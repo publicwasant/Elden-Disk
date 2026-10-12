@@ -83,8 +83,9 @@ class Enc:
         return d, v - base, nb
 
 def codes(ll, ml, ofv):
-    lc = max(i for i in range(len(zdec.LL_BASE)) if zdec.LL_BASE[i] <= ll)
-    mc = max(i for i in range(len(zdec.ML_BASE)) if zdec.ML_BASE[i] <= ml)
+    # the last code whose base is <= the value (the bases rise: a bisection finds the same code as a scan of all of them)
+    lc = bisect.bisect_right(zdec.LL_BASE, ll) - 1
+    mc = bisect.bisect_right(zdec.ML_BASE, ml) - 1
     oc = ofv.bit_length() - 1
     return lc, mc, oc, ll - zdec.LL_BASE[lc], ml - zdec.ML_BASE[mc], ofv - (1 << oc)
 

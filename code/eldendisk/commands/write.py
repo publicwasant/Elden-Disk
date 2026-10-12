@@ -77,7 +77,7 @@ def _look_for_tables(mem, text) -> tuple[list, str]:
     (there can be a second copy of a table), and the array is looked for again."""
     seen = wtext.find_tables(mem, text)
     walked = seen.walked
-    book.d("write", f"text: looked for the tables: {walked.megabytes} MB read in {walked.seconds:.1f} s ({walked.tier}; {_cost(walked)}); "
+    book.d("write", f"goods text: looked for the tables: {walked.megabytes} MB read in {walked.seconds:.1f} s ({walked.tier}; {_cost(walked)}); "
            + ", ".join(f"{n}: " + (", ".join(f"{b:#x}" for b in bs) or "not seen") for n, bs in seen.found.items()))
     if not all(seen.found.values()):
         missing = [n for n, bs in seen.found.items() if not bs]
@@ -85,12 +85,12 @@ def _look_for_tables(mem, text) -> tuple[list, str]:
                     + _sizes_line(seen) + " - the game is still starting, or it is played in another language than offsets.json describes")
     arrays = wtext.find_arrays(mem, text, seen.found)
     walked = arrays.walked
-    book.d("write", f"text: looked for the array that points at them: {walked.megabytes} MB read in {walked.seconds:.1f} s "
+    book.d("write", f"goods text: looked for the array that points at them: {walked.megabytes} MB read in {walked.seconds:.1f} s "
            f"({walked.tier}; {_cost(walked)}); {arrays.pointers} pointer(s) to the first table seen, {len(arrays.found)} array(s)")
     if not arrays.found and seen.walked.stopped:
         more = wtext.find_tables(mem, text, everything=True)
         if sum(map(len, more.found.values())) > sum(map(len, seen.found.values())):
-            book.d("write", "text: more tables seen in the whole memory: " + ", ".join(f"{n}: {len(bs)}" for n, bs in more.found.items()))
+            book.d("write", "goods text: more tables seen in the whole memory: " + ", ".join(f"{n}: {len(bs)}" for n, bs in more.found.items()))
             arrays = wtext.find_arrays(mem, text, more.found)
     if not arrays.found:
         return [], ("the tables were seen but nothing points at all three of them at the places the file numbers say: the text was set already "
@@ -103,7 +103,7 @@ def _look_for_tables(mem, text) -> tuple[list, str]:
             if table is None:
                 return [], f"{name}: {why}"
             tables[name] = table
-        book.d("write", f"text: array at {array:#x} ({wscan.where(mem, array)}): " + ", ".join(f"{n} -> {t.base:#x}" for n, t in tables.items()))
+        book.d("write", f"goods text: array at {array:#x} ({wscan.where(mem, array)}): " + ", ".join(f"{n} -> {t.base:#x}" for n, t in tables.items()))
         out.append(tables)
     return out, ""
 
@@ -114,7 +114,7 @@ def _find_tables(mem, target: Target, passes):
     why = ""
     for number, rest in enumerate(passes, 1):
         if rest:
-            book.d("write", f"text: not found yet ({why}); looking again in {rest:g} s")
+            book.d("write", f"goods text: not found yet ({why}); looking again in {rest:g} s")
             _sleep(rest)
         found, why = _look_for_tables(mem, target.profile.text)
         if found:
@@ -138,14 +138,14 @@ def _put_text(mem, gate, target: Target, texts: dict, passes) -> int:
                     new = new_table(old, {gid: t[field] for gid, t in texts.items()})
                     if new is None:
                         after[old.slot_at] = old.data
-                        book.d("write", f"text {name}: already as the design says")
+                        book.d("write", f"goods text {name}: already as the design says")
                         continue
                     base = wtext.swap(mem, gate, old, new)
                 except (FmgError, wtext.TextError) as exc:
-                    book.e("write", f"text {name}: {exc}")
+                    book.e("write", f"goods text {name}: {exc}")
                     return 1
                 after[old.slot_at] = new
-                book.d("write", f"text {name}: {len(old.data)} -> {len(new)} bytes, now at {base:#x}")
+                book.d("write", f"goods text {name}: {len(old.data)} -> {len(new)} bytes, now at {base:#x}")
         if len(passes) <= 1:
             break
         _sleep(SETTLE)
@@ -157,7 +157,7 @@ def _put_text(mem, gate, target: Target, texts: dict, passes) -> int:
             return 1
         book.w("write", "the game replaced its text tables after they were set (it was still loading); setting them once more")
     shown = sum(1 for t in texts.values() if any(t.values()))
-    book.ok("write", f"text: {shown} spell{'s' if shown != 1 else ''} named in the game (name, short line, description); "
+    book.ok("write", f"goods text: {shown} spell{'s' if shown != 1 else ''} named in the game (name, short line, description); "
                      "it lasts until the game closes")
     return 0
 
@@ -258,8 +258,8 @@ def cmd_write_text(args) -> int:
         gate = WriteGate()
         gate.open()   # only after the session, anti-cheat and profile checks above
         if when_loaded:
-            if not _wait_world(mem, target, "text"):
-                book.i("write", "text: the game closed before a character was in the world; nothing was written")
+            if not _wait_world(mem, target, "goods text"):
+                book.i("write", "goods text: the game closed before a character was in the world; nothing was written")
                 return 0
             return _put_text(mem, gate, target, texts, LOOKS)
         return _put_text(mem, gate, target, texts, LOOKS if wait > 0 else ONCE)

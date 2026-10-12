@@ -130,6 +130,22 @@ def test_a_failed_gate_on_a_first_build_leaves_no_file(ci):
     assert not list(ci.dir.glob("*"))
 
 
+def test_the_decoder_tables_are_dropped_after_a_build_and_a_secure_whatever_the_gate_says(ci):
+    """`run` goes on for the whole game after it built: the tables the build decoded with (tens of MB) are not kept."""
+    from eldendisk.extension.innovate_items import zstd
+    base, _ = ci.read_base(ci.game)
+    for problems, call in (([], lambda: ci.build(ci.items("all"), base)), ([], lambda: ci.secure(ci.items("all"), ci.game)),
+                           (["G1: no"], lambda: ci.build(ci.items("all"), base))):
+        zstd.build_fse(*zstd.LL_DEF)
+        assert zstd._FSE_CACHE
+        ci.state["problems"] = problems
+        try:
+            call()
+        except service.GateFailed:
+            assert problems
+        assert not zstd._FSE_CACHE
+
+
 def test_dry_run_verifies_in_memory_and_writes_nothing(ci):
     base, _ = ci.read_base(ci.game)
     rep = ci.build(ci.items("all"), base, dry_run=True)

@@ -140,8 +140,8 @@ def prepare_regulation(args, game_dir_file: Path | None, which=None, dry_run: bo
         for r in d.reasons + [r for r in last.reasons if r != "no build yet"]:
             book.i(EXT_TAG, f"innovate-items spells: building because {r}")
         _show_diff(d.diff or last.diff)
-    with ui.working(EXT_TAG, f"innovate-items spells: building {names} on {game_dir_file} and checking (about 20 s)",
-                    short=f"building {names} (about 20 s)") as step:
+    with ui.working(EXT_TAG, f"innovate-items spells: building {names} on {game_dir_file} and checking",
+                    short=f"building {names}") as step:
         rep = ci.build(spells, base, dry_run, selection=sel)
         for n in rep.notes:
             book.d(EXT_TAG, f"gate: {n}")

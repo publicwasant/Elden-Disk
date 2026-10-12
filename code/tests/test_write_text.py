@@ -426,9 +426,9 @@ def test_the_log_says_what_each_look_did(rig, monkeypatch):
     seen = []
     monkeypatch.setattr(wcmd.book, "d", lambda tag, msg: seen.append(msg))
     wcmd.cmd_write(rig.args())
-    assert any(m.startswith("text: looked for the tables:") and "MB read" in m and f"{table_base(0):#x}" in m for m in seen)
-    assert any(m.startswith("text: looked for the array") and "1 pointer(s)" in m and "1 array(s)" in m and "the slowest" in m for m in seen)
-    assert any(m.startswith("text: array at") and "GoodsName ->" in m for m in seen)
+    assert any(m.startswith("goods text: looked for the tables:") and "MB read" in m and f"{table_base(0):#x}" in m for m in seen)
+    assert any(m.startswith("goods text: looked for the array") and "1 pointer(s)" in m and "1 array(s)" in m and "the slowest" in m for m in seen)
+    assert any(m.startswith("goods text: array at") and "GoodsName ->" in m for m in seen)
 
 
 def test_wait_retries_while_the_game_cannot_be_attached_yet_but_not_when_it_is_not_running(rig):

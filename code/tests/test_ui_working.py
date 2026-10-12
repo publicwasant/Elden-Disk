@@ -33,7 +33,7 @@ def lines(monkeypatch):
 def test_without_animation_a_step_is_a_start_line_and_an_end_line_with_the_time(lines):
     with ui.working(EXT_TAG, "building", animate=False) as w:
         w.done("built")
-    assert lines[0] == "I extension: building" and re.fullmatch(r"I\+extension: built  \(\d+\.\d s\)", lines[1])
+    assert lines[0] == "I design: building" and re.fullmatch(r"I\+design: built  \(\d+\.\d s\)", lines[1])
 
 
 def test_a_step_that_fails_leaves_no_end_line_and_no_status_line(lines):
@@ -41,7 +41,7 @@ def test_a_step_that_fails_leaves_no_end_line_and_no_status_line(lines):
     with pytest.raises(ValueError):
         with ui.working(EXT_TAG, "building", stream=err, animate=True):
             raise ValueError("boom")
-    assert ui._live is None and lines == ["D extension: building"]          # only the file line; no end line
+    assert ui._live is None and lines == ["D design: building"]          # only the file line; no end line
     assert err.getvalue().endswith("\r\x1b[2K")                    # the status line is wiped
 
 
@@ -58,8 +58,8 @@ def test_the_status_line_spins_counts_the_seconds_and_lets_other_lines_through_a
         i = out.index(" other line")
         assert out[:i].endswith("\r\x1b[2K") and out[i:].count("building x") >= 1      # wiped, the line, then the status line again
         w.done("built")
-    assert ui._live is None and lines[0] == "D extension: the long text goes to the log"      # the file has the long text; not on the console
-    assert lines[-1].startswith("I+extension: built  (12.3 s)")
+    assert ui._live is None and lines[0] == "D design: the long text goes to the log"      # the file has the long text; not on the console
+    assert lines[-1].startswith("I+design: built  (12.3 s)")
 
 
 def test_only_one_status_line_at_a_time(lines):
@@ -91,11 +91,11 @@ def test_a_card_shows_the_rows_and_has_an_ascii_fallback(monkeypatch):
 
 def test_the_diff_is_a_tree_and_says_how_many_more(lines, monkeypatch):
     ext._show_diff(["a  1 -> 2", "b  3 -> 4"])
-    assert lines == ["I extension:   ├─ a  1 -> 2", "I extension:   └─ b  3 -> 4"]
+    assert lines == ["I design:   ├─ a  1 -> 2", "I design:   └─ b  3 -> 4"]
     lines.clear()
     monkeypatch.setattr(ext, "MAX_DIFF_LINES", 1)
     ext._show_diff(["a  1 -> 2", "b  3 -> 4", "c  5 -> 6"])
-    assert lines[0] == "I extension:   ├─ a  1 -> 2" and lines[1].startswith("I extension:   └─ … and 2 more")
+    assert lines[0] == "I design:   ├─ a  1 -> 2" and lines[1].startswith("I design:   └─ … and 2 more")
 
 
 def test_a_spell_card_holds_only_what_the_design_says():
@@ -112,15 +112,15 @@ def line(level, tag, msg):
 
 def test_a_child_step_shows_its_progress_and_marks_what_it_finished():
     err = Stream()
-    ui.child_line(line("I", "write", "text: waiting for a character to be in the world"), err)
-    ui.child_line(line("I", "write", f"text: 1 spell named in the game; {ui.CHILD_DONE}"), err)
-    ui.child_line(line("W", "write", "text: slow"), err)
-    ui.child_line(line("D", "write", "text: looked for the tables"), err)           # debug stays in the file
+    ui.child_line(line("I", "write", "goods text: waiting for a character to be in the world"), err)
+    ui.child_line(line("I", "write", f"goods text: 1 spell named in the game; {ui.CHILD_DONE}"), err)
+    ui.child_line(line("W", "write", "goods text: slow"), err)
+    ui.child_line(line("D", "write", "goods text: looked for the tables"), err)           # debug stays in the file
     ui.child_line(line("I", "vault", "something else"), err)                        # so does every other tag
     ui.child_line("not a log line", err)
-    assert err.getvalue().splitlines() == [" 01:02:03  ·  write     text: waiting for a character to be in the world",
-                                           f" 01:02:03  ✓  write     text: 1 spell named in the game; {ui.CHILD_DONE}",
-                                           " 01:02:03  !  write     text: slow"]
+    assert err.getvalue().splitlines() == [" 01:02:03  ·  write     goods text: waiting for a character to be in the world",
+                                           f" 01:02:03  ✓  write     goods text: 1 spell named in the game; {ui.CHILD_DONE}",
+                                           " 01:02:03  !  write     goods text: slow"]
 
 
 def test_the_closing_words_are_what_both_write_steps_really_say():

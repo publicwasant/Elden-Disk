@@ -123,20 +123,23 @@ def _options(state, x, ll):
     """All (ofv, new_state) that decode to offset x from the repeat-offset state `state` with literal length ll."""
     r0, r1, r2 = state
     res = [(x + 3, (x, r0, r1))]
-    for ofv in (1, 2, 3):
-        idx = ofv - 1 + (1 if ll == 0 else 0)
-        off = r0 if idx == 0 else (r1 if idx == 1 else (r2 if idx == 2 else r0 - 1))
-        if off != x or off <= 0:
-            continue
-        if idx == 0:
-            ns = (r0, r1, r2)
-        elif idx == 1:
-            ns = (r1, r0, r2)
-        elif idx == 2:
-            ns = (r2, r0, r1)
-        else:
-            ns = (off, r0, r1)
-        res.append((ofv, ns))
+    if x <= 0:
+        return res
+    # ofv 1..3 name a repeat offset: with literals r0, r1, r2; without (ll == 0) r1, r2, r0 - 1 (the order of the list is kept)
+    if ll:
+        if r0 == x:
+            res.append((1, (r0, r1, r2)))
+        if r1 == x:
+            res.append((2, (r1, r0, r2)))
+        if r2 == x:
+            res.append((3, (r2, r0, r1)))
+    else:
+        if r1 == x:
+            res.append((1, (r1, r0, r2)))
+        if r2 == x:
+            res.append((2, (r2, r0, r1)))
+        if r0 - 1 == x:
+            res.append((3, (x, r0, r1)))
     return res
 
 
@@ -304,12 +307,26 @@ def _pack(src: Source, edited: dict, free_knobs: int = 20, appended=()) -> bytes
         base[i] = (lit, rest)
     idx = sorted(base)
     rnd = random.Random(1)              # fixed seed: the same input always gives the same file
+    sizes = {i: len(base[i][0]) + len(base[i][1]) for i in idx}
+    fixed = None                        # the length of the frame without the blocks of `base`
     for attempt in range(20000):
         forms = [0] * len(idx) if attempt == 0 else [rnd.choice((0, 0, 1, 2)) for _ in idx]
-        nc = {i: _lit_header_form(len(base[i][0]), f) + base[i][0] + base[i][1] for i, f in zip(idx, forms)}
-        fr = _assemble(src, nc, appended)
-        if (0x4C + len(fr)) % 16 == 16 - TAIL_ZEROS:
-            return fr
+        if fixed is None:
+            nc = {i: _lit_header_form(len(base[i][0]), f) + base[i][0] + base[i][1] for i, f in zip(idx, forms)}
+            fr = _assemble(src, nc, appended)
+            if (0x4C + len(fr)) % 16 == 16 - TAIL_ZEROS:
+                return fr
+            fixed = len(fr) - sum(map(len, nc.values()))
+            continue
+        # only the length of a try decides: the frame is assembled once, for the forms that give the right length (the same frame
+        # and the same error as assembling every try)
+        lens = [len(_lit_header_form(len(base[i][0]), f)) + sizes[i] for i, f in zip(idx, forms)]
+        for i, n in zip(idx, lens):
+            if n >= 1 << 17:
+                raise BuildError("block %d would exceed the 128 KiB block limit" % i)
+        if (0x4C + fixed + sum(lens)) % 16 == 16 - TAIL_ZEROS:
+            nc = {i: _lit_header_form(len(base[i][0]), f) + base[i][0] + base[i][1] for i, f in zip(idx, forms)}
+            return _assemble(src, nc, appended)
     raise BuildError("could not bring the file tail to the original shape")
 
 
