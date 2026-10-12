@@ -4,7 +4,8 @@ from __future__ import annotations
 import struct
 import sys
 
-_ASCII = {"\u2713": "OK", "\u2716\ufe0f": "FAILED", "\u2716": "FAILED", "\u2014": "-", "\u2192": "->"}
+_ASCII = {"\u2713": "OK", "\u2716\ufe0f": "FAILED", "\u2716": "FAILED", "\u2014": "-", "\u2192": "->",
+          "\u2500": "-", "\u2502": "|", "\u256d": "+", "\u2570": "+", "\u251c": "+", "\u2514": "+", "\u2026": "..."}
 
 
 def printable(msg: str, encoding: str | None) -> str:

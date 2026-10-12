@@ -90,6 +90,47 @@ def test_run_v_shows_the_lines_other_terminals_log(tmp_path, monkeypatch, capsys
     book.close()
 
 
+def test_run_without_v_shows_the_progress_of_the_text_and_flame_steps_only(tmp_path, monkeypatch, capsys):
+    """Without -v `run` still tails the shared log, but shows only the information of the `write` steps (the text and the flame)."""
+    import argparse
+    from eldendisk.logbook import Event, book, format_line
+    from datetime import datetime
+
+    log = tmp_path / "vault" / "eldendisk.log"
+    book.configure(file=log)
+    seen = {}
+
+    class FakeSession:
+        history = []
+
+        def __init__(self, *a, **k): pass
+
+        def run(self):
+            with open(log, "a", encoding="utf-8") as fh:
+                for level, tag, msg in (("D", "cli", "eldendisk write --set level=150"), ("D", "write", "text: debug detail"),
+                                        ("I", "vault", "other tag"), ("I", "write", "text: waiting for a character to be in the world")):
+                    fh.write(format_line(Event(datetime.now(), 99999, level, tag, msg)) + "\n")
+            book.i("host", "own line")
+            seen["ran"] = True
+            return 0
+
+    monkeypatch.setattr(run_cmd, "Session", FakeSession)
+    monkeypatch.setattr(run_cmd, "require_windows_x64", lambda: None)
+    monkeypatch.setattr(run_cmd.launcher, "find_game_dir", lambda d: tmp_path / "game")
+    monkeypatch.setattr(run_cmd, "sha256_file", lambda p: "ab" * 32)
+    monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
+    monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
+    monkeypatch.setattr(run_cmd, "session_log", lambda: None)
+    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (None, "none"))       # not what this test is about (it would build)
+    args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x",
+                              no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
+    assert run_cmd.cmd_run(args) == 0 and seen["ran"]
+    err = capsys.readouterr().err
+    assert "text: waiting for a character to be in the world" in err
+    assert "level=150" not in err and "debug detail" not in err and "other tag" not in err
+    book.close()
+
+
 # ---- the regulation.bin swap (spec 1.6.4) ----
 def _run_with_world(tmp_path, monkeypatch, capsys, *, protect):
     import argparse
@@ -184,6 +225,26 @@ def test_the_text_command_is_write_text_when_loaded_with_the_same_vault_offsets_
     assert cwd and (run_cmd.Path(cwd) / "eldendisk").is_dir()
     plain, _ = run_cmd.text_command(_args(tmp_path), tmp_path / "vault")
     assert "--spec" not in plain and "--extension-dir" not in plain
+
+
+def test_the_text_command_names_the_vault_and_offsets_only_when_the_user_chose_them(tmp_path, monkeypatch):
+    """The default vault and the default offsets.json are what the step finds by itself: the command line and the log stay short."""
+    monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
+    default = str(run_cmd.get_resource_path("offsets.json", default_dir=run_cmd.HERE))
+    cmd, _ = run_cmd.text_command(_args(tmp_path, vault=None, offsets=default), tmp_path / "vault")
+    assert cmd[3:] == ["write", "--text", "--when-loaded"]
+    cmd, _ = run_cmd.text_command(_args(tmp_path, vault=None, offsets="mine.json"), tmp_path / "vault")
+    assert "--vault" not in cmd and cmd[cmd.index("--offsets") + 1] == "mine.json"
+
+
+def test_the_log_line_of_a_started_step_is_the_short_command(tmp_path, monkeypatch):
+    from eldendisk.logbook import book
+    monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
+    seen = []
+    monkeypatch.setattr(book, "d", lambda tag, msg: seen.append((tag, msg)))
+    default = str(run_cmd.get_resource_path("offsets.json", default_dir=run_cmd.HERE))
+    run_cmd.start_text(_args(tmp_path, vault=None, offsets=default), tmp_path / "vault", spawn=lambda *a, **k: None)
+    assert seen == [("extension", "starting: eldendisk write --text --when-loaded")]
 
 
 def test_the_frozen_exe_runs_itself(tmp_path, monkeypatch):

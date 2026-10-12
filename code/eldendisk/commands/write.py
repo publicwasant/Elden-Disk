@@ -66,13 +66,18 @@ def _sizes_line(seen) -> str:
     return f"{sum(seen.sizes.values())} text tables of the game were seen; the biggest sizes: " + ", ".join(f"{k} (x{seen.sizes[k]})" for k in big)
 
 
+def _cost(w) -> str:
+    """For the log: what a look cost the game: the pieces read, the longest one, the time spent resting."""
+    return f"{w.pieces} pieces, the slowest {w.slowest * 1000:.0f} ms, {w.slept:.1f} s resting"
+
+
 def _look_for_tables(mem, text) -> tuple[list, str]:
     """One look for the three tables and the array that points at them. -> ([{table name: Table}] one per array found, "") or ([], why
     not). The look for the tables ends when each has been seen; if no array points at them it is made again through ALL the memory
     (there can be a second copy of a table), and the array is looked for again."""
     seen = wtext.find_tables(mem, text)
     walked = seen.walked
-    book.d("write", f"text: looked for the tables: {walked.megabytes} MB read in {walked.seconds:.1f} s ({walked.tier}); "
+    book.d("write", f"text: looked for the tables: {walked.megabytes} MB read in {walked.seconds:.1f} s ({walked.tier}; {_cost(walked)}); "
            + ", ".join(f"{n}: " + (", ".join(f"{b:#x}" for b in bs) or "not seen") for n, bs in seen.found.items()))
     if not all(seen.found.values()):
         missing = [n for n, bs in seen.found.items() if not bs]
@@ -80,8 +85,8 @@ def _look_for_tables(mem, text) -> tuple[list, str]:
                     + _sizes_line(seen) + " - the game is still starting, or it is played in another language than offsets.json describes")
     arrays = wtext.find_arrays(mem, text, seen.found)
     walked = arrays.walked
-    book.d("write", f"text: looked for the array that points at them: {walked.megabytes} MB read in {walked.seconds:.1f} s; "
-           f"{arrays.pointers} pointers to the tables seen, {len(arrays.found)} array(s)")
+    book.d("write", f"text: looked for the array that points at them: {walked.megabytes} MB read in {walked.seconds:.1f} s "
+           f"({walked.tier}; {_cost(walked)}); {arrays.pointers} pointer(s) to the first table seen, {len(arrays.found)} array(s)")
     if not arrays.found and seen.walked.stopped:
         more = wtext.find_tables(mem, text, everything=True)
         if sum(map(len, more.found.values())) > sum(map(len, seen.found.values())):
@@ -248,6 +253,7 @@ def cmd_write_text(args) -> int:
     if not _authorised(target, record):
         return EXIT_NO_SESSION
     mem = WritableProcessMemory(target.pid)
+    book.d("write", "scan: " + (wscan.go_easy() or "ordinary priority"))
     try:
         gate = WriteGate()
         gate.open()   # only after the session, anti-cheat and profile checks above
@@ -277,7 +283,7 @@ def _put_flame(mem, gate, colour, passes=ONCE) -> int:
         w = found.walked
         book.d("write", f"flame colour: look {number}/{len(passes)}: {w.megabytes} MB read in {w.seconds:.1f} s ("
                         + (f"stopped in the {w.tier} of the blocks, all found" if w.stopped else "the whole memory" if w.complete
-                           else "ran out of time before the end") + f"); found {', '.join(got) or 'nothing'}")
+                           else "ran out of time before the end") + f"; {_cost(w)}); found {', '.join(got) or 'nothing'}")
         for eid, p in got.items():
             done[eid] = p
             where = f" at {p.bases[0]:#x}, {wscan.where(mem, p.bases[0])}" if p.bases else ""
@@ -319,6 +325,7 @@ def cmd_write_flame(args) -> int:
     if not _authorised(target, record):
         return EXIT_NO_SESSION
     mem = WritableProcessMemory(target.pid)
+    book.d("write", "scan: " + (wscan.go_easy() or "ordinary priority"))
     try:
         gate = WriteGate()
         gate.open()   # only after the session and anti-cheat checks above

@@ -12,12 +12,15 @@ import os
 import re
 import shutil
 import sys
+import threading
+import time
+from datetime import datetime
 from urllib.parse import quote
 from typing import Callable
 
 from . import __version__
 from .console import printable
-from .logbook import Event, format_line, parse_line
+from .logbook import EXT_TAG, TAG_WIDTH, Event, book, format_line, parse_line
 
 _SYMBOLS = {"ok": ("\u2713", "+"), "info": ("\u00b7", "-"), "warn": ("!", "!"), "error": ("\u2716", "x")}
 _COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36", "spell": "35", "file": "38;5;208"}
@@ -105,7 +108,7 @@ def mark_spell_ids(ids) -> None:
 
 
 def highlight_spells(text: str, color: bool, tag: str) -> str:
-    if not color or tag != "ext" or _SPELL_IDS is None:
+    if not color or tag != EXT_TAG or _SPELL_IDS is None:
         return text
     return _SPELL_IDS.sub(lambda m: paint(m.group(1), "spell", True), text)
 
@@ -188,7 +191,154 @@ def _emit(text: str, stream=None, resume: str = "") -> None:
         text = linkify(text, color=color, resume=resume)
     elif color:
         text = paint_tails(text, resume)
-    print(printable(text, getattr(stream, "encoding", None)), file=stream, flush=True)
+    line = printable(text, getattr(stream, "encoding", None))
+    with _screen:
+        live = _live if _live is not None and _live.stream is stream else None
+        if live is not None:
+            live.wipe()
+        print(line, file=stream, flush=True)
+        if live is not None:
+            live.draw()
+
+
+# ---- a step that takes a while: one status line redrawn in place ----
+_screen = threading.RLock()        # taken for every write to the console that a status line may share
+_live = None                       # the Working that is drawn now (at most one)
+_FRAMES = "\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f"
+_FRAMES_ASCII = "|/-\\"
+
+
+def seconds(s: float) -> str:
+    """12.3 s, then 1:05 from a minute on."""
+    return f"{s:.1f} s" if s < 60 else f"{int(s // 60)}:{int(s % 60):02d}"
+
+
+class Working:
+    """A step that takes a while (the build of the regulation, about 20 s):
+
+        with ui.working("extension", "building ...") as w:
+            ...
+            w.done("built")                       # -> a check-mark line that ends with the time it took
+
+    On a real terminal with colour the step shows one line that spins and counts the seconds, redrawn in place; the lines of other
+    events appear above it. Anywhere else (a pipe, an IDE run window, NO_COLOR, `-v`) there is no animation: the step is the plain
+    start line, then the plain end line, as before (`short` is only for the spinning line). The log file gets the same two lines in both cases, never an escape."""
+
+    def __init__(self, tag: str, text: str, *, short: str | None = None, stream=None, animate: bool | None = None, clock=time.monotonic,
+                 interval: float = 0.1):
+        self.tag, self.text, self.stream = tag, text, stream or sys.stderr
+        self.short = short or text          # what the spinning line says (the log has `text`)
+        self._clock, self._interval = clock, interval
+        self.animated = (can_redraw(self.stream) and use_color(self.stream)) if animate is None else animate
+        self.t0, self._frame, self._drawn, self._closed = 0.0, 0, False, False
+        self._stop, self._thread = threading.Event(), None
+
+    def elapsed(self) -> float:
+        return self._clock() - self.t0
+
+    def __enter__(self):
+        global _live
+        self.t0 = self._clock()
+        with _screen:
+            if _live is not None:
+                self.animated = False            # one status line at a time
+            elif self.animated:
+                _live = self
+        if self.animated:
+            book.d(self.tag, self.text)          # the file has the line; the console has the spinner
+            self.draw()
+            self._thread = threading.Thread(target=self._spin, name="working", daemon=True)
+            self._thread.start()
+        else:
+            book.i(self.tag, self.text)
+        return self
+
+    def __exit__(self, *exc):
+        self._finish()
+        return False
+
+    def line(self) -> str:
+        color = use_color(self.stream)
+        frames = _FRAMES if symbol("ok", getattr(self.stream, "encoding", None)) == _SYMBOLS["ok"][0] else _FRAMES_ASCII
+        tail = "  " + seconds(self.elapsed())
+        room = max(10, shutil.get_terminal_size((80, 24)).columns - 1 - (5 + TAG_WIDTH) - len(tail))
+        text = self.short if len(self.short) <= room else self.short[:room - 1] + "\u2026"
+        return (f" {paint(frames[self._frame % len(frames)], 'cyan', color)}  {paint(f'{self.tag:<{TAG_WIDTH}}', 'dim', color)} "
+                f"{emphasize(text, color)}{paint(tail, 'dim', color)}")
+
+    def draw(self) -> None:
+        enc = getattr(self.stream, "encoding", None)
+        self.stream.write("\r\x1b[2K" + printable(self.line(), enc))
+        self.stream.flush()
+        self._drawn = True
+
+    def wipe(self) -> None:
+        if self._drawn:
+            self.stream.write("\r\x1b[2K")
+            self.stream.flush()
+            self._drawn = False
+
+    def _spin(self) -> None:
+        while not self._stop.wait(self._interval):
+            with _screen:
+                if _live is self:
+                    self._frame += 1
+                    self.draw()
+
+    def _finish(self) -> None:
+        global _live
+        if self._closed:
+            return
+        self._closed = True
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1)
+        with _screen:
+            self.wipe()
+            if _live is self:
+                _live = None
+
+    def done(self, msg: str) -> None:
+        took = self.elapsed()
+        self._finish()
+        book.ok(self.tag, f"{msg}  ({seconds(took)})")
+
+
+def working(tag: str, text: str, **kw) -> Working:
+    return Working(tag, text, **kw)
+
+
+def card(title: str, rows: list[tuple[str, str]], stream=None) -> None:
+    """A small block for one thing the command made (a spell), on the console only:
+
+         \u256d reverse_cursed_technique
+         \u2502 name   Reverse Cursed Technique
+         \u2570"""
+    stream = stream or sys.stderr
+    color = use_color(stream)
+    key = max((len(k) for k, _ in rows), default=0)
+    _emit(f" {paint(chr(0x256d), 'dim', color)} {paint(title, 'spell', color)}", stream)
+    for k, v in rows:
+        _emit(f" {paint(chr(0x2502), 'dim', color)} {paint(k.ljust(key), 'dim', color)}  {v}", stream)
+    _emit(f" {paint(chr(0x2570), 'dim', color)}", stream)
+
+
+# ---- what the other processes of a `run` did (read back from the log file) ----
+_LOG_LINE = re.compile(r"^\d\d-\d\d (\d\d):(\d\d):(\d\d)\.\d{3} +\d+ ([VDIWE]) (\S+) *: (.*)$")
+CHILD_TAGS = ("write",)
+CHILD_DONE = "it lasts until the game closes"     # the end of the line a `write` step ends with when it has done its work
+
+
+def child_line(line: str, stream=None, show_time: bool = True) -> None:
+    """A line another process of this `run` (the text and the flame step) wrote to the log file, shown in the concise layout. Only its
+    information, warnings and errors; a line that ends the step's work gets the check mark."""
+    m = _LOG_LINE.match(line)
+    if not m or m.group(4) in "VD" or m.group(5) not in CHILD_TAGS:
+        return
+    h, mi, s, level, tag, msg = m.groups()
+    when = datetime.now().replace(hour=int(h), minute=int(mi), second=int(s), microsecond=0)
+    ok = level == "I" and CHILD_DONE in msg
+    pretty_sink(show_time=show_time, stream=stream)(Event(when, 0, level, tag, msg, ok))
 
 
 def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], None]:
@@ -201,7 +351,7 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
         kind = kind_of(e)
         sym = paint(symbol(kind, getattr(out, "encoding", None)), kind, color)
         stamp = paint(f"{e.when:%H:%M:%S}", "dim", color) + "  " if show_time else ""
-        tag = paint(f"{e.tag:<6}", "dim", color)
+        tag = paint(f"{e.tag:<{TAG_WIDTH}}", "dim", color)
         resume = f"\x1b[{_COLORS[kind]}m" if kind in ("warn", "error") else ""
         msg = (paint(emphasize(e.msg, color, resume, ticks=False), kind, color) if resume
                else emphasize(highlight_spells(e.msg, color, e.tag), color))
@@ -231,7 +381,7 @@ def _line(line: str, kind: str | None, color: bool, level: str) -> tuple[str, st
     return emphasize(line, color), ""
 
 
-_EXT_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ [VDIWE] ext +: )(.*)$")
+_EXT_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ [VDIWE] %s *: )(.*)$" % EXT_TAG)
 
 
 def raw_sink(stream=None) -> Callable[[Event], None]:
@@ -255,7 +405,7 @@ def raw_line(line: str, stream=None) -> None:
     if got and kind is None:       # the message of an `ext` line, after "ext   : "; the prefix (time, pid, tag) is not touched
         m = _EXT_LINE.match(line)
         if m:
-            line = m.group(1) + highlight_spells(m.group(2), color, "ext")
+            line = m.group(1) + highlight_spells(m.group(2), color, EXT_TAG)
     text, resume = _line(line, kind, color, got[1] if got else "I")
     _emit(text, out, resume)
 

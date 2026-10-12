@@ -335,3 +335,54 @@ def test_a_flame_error_is_reported_and_stops():
     g = Game()
     g.fail_writes = True
     assert wcmd._put_flame(g, open_gate(), BLUE) == 1
+
+
+# ---------------------------------------------------------------------------------------------------- writer/scan.py: near, rests
+def test_near_is_read_first_and_nothing_is_read_twice(monkeypatch):
+    monkeypatch.setattr(scan, "CHUNK", 100)
+    monkeypatch.setattr(scan, "NEAR", 250)
+    g = Game(effects=())
+    g.mem[0x60000000] = bytearray(2000)
+    g.mem[0x60000000][1000:1004] = b"ABCD"
+    g.mem[0x60000000][1248:1252] = b"WXYZ"                                                    # across the border of the near span (1250)
+    g.mem[0x60000000][50:54] = b"EFGH"
+    order, owned = [], []
+
+    def visit(addr, data, n):
+        order.append(addr)
+        owned.append((addr, addr + n))
+        return False
+    walked = scan.walk(g, visit, overlap=3, near=[0x60000000 + 1000])
+    assert order[0] == 0x60000000 + 750 and walked.complete
+    hits, v = finder({"a": b"ABCD", "b": b"WXYZ", "c": b"EFGH"})
+    scan.walk(g, v, overlap=3, near=[0x60000000 + 1000])
+    assert sorted(set(hits)) == [("a", 0x60000000 + 1000), ("b", 0x60000000 + 1248), ("c", 0x60000000 + 50)]
+    covered = sum(e - s for s, e in owned)
+    assert 2000 <= covered <= 2000 + 2 * 3 + 100                                              # the near span once, plus only the overlaps
+
+
+def test_minus_keeps_what_lies_across_the_border():
+    out = scan._minus([(0, 1000)], [(400, 600)], overlap=4)
+    assert out == [(0, 404), (596, 404)]
+    assert scan._minus([(0, 100)], [(500, 600)], overlap=4) == [(0, 100)]
+    assert scan._minus([(100, 100)], [(0, 1000)], overlap=4) == []
+
+
+def test_the_rest_is_owed_in_small_shares_and_slept_in_lumps(monkeypatch):
+    monkeypatch.setattr(scan, "CHUNK", 100)
+    monkeypatch.setattr(scan, "LUMP", 0.01)
+    clock, sleeps = [0.0], []
+    monkeypatch.setattr(scan, "_clock", lambda: clock[0])
+    monkeypatch.setattr(scan, "_sleep", lambda s: (sleeps.append(s), clock.__setitem__(0, clock[0] + s)))
+    g = Game(effects=())
+    g.mem[0x60000000] = bytearray(1000)
+    real = g.read
+
+    def slow(a, s):
+        clock[0] += 0.004                                                                        # a read costs 4 ms
+        return real(a, s)
+    g.read = slow
+    walked = scan.walk(g, lambda a, d, n: False, overlap=3)
+    assert walked.pieces == 10 and walked.complete
+    assert len(sleeps) == 2 and all(s >= 0.01 for s in sleeps)                                    # not ten sleeps of 2 ms
+    assert abs(walked.slept - sum(sleeps)) < 1e-9 and walked.slowest >= 0.004

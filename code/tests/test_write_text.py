@@ -154,7 +154,7 @@ def test_find_arrays_finds_the_pointers_that_lie_at_the_distances_of_the_file_nu
     g = game_with_tables()
     seen = wt.find_tables(g, TEXT)
     arrays = wt.find_arrays(g, TEXT, seen.found)
-    assert arrays.found == [(OBJ + ARRAY, {n: table_base(i) for i, n in enumerate(FILES)})] and arrays.pointers == 3
+    assert arrays.found == [(OBJ + ARRAY, {n: table_base(i) for i, n in enumerate(FILES)})] and arrays.pointers == 1
 
 
 def test_pointers_that_are_not_at_those_distances_are_no_array():
@@ -167,11 +167,55 @@ def test_pointers_that_are_not_at_those_distances_are_no_array():
     assert wt.find_arrays(g, TEXT, seen.found).found == []
 
 
-def test_a_second_copy_of_the_array_is_found_too():
+def test_the_look_for_the_array_ends_at_the_first_whole_one():
     g = game_with_tables()
     g.mem[0x50000000] = bytearray(g.mem[OBJ])
     seen = wt.find_tables(g, TEXT)
-    assert sorted(a for a, _t in wt.find_arrays(g, TEXT, seen.found).found) == [OBJ + ARRAY, 0x50000000 + ARRAY]
+    arrays = wt.find_arrays(g, TEXT, seen.found)
+    assert [a for a, _t in arrays.found] == [OBJ + ARRAY] and arrays.walked.stopped
+
+
+def test_a_pointer_to_the_first_table_without_the_other_two_is_passed_by():
+    g = game_with_tables()
+    g.mem[0x50000000] = bytearray(0x200)
+    struct.pack_into("<Q", g.mem[0x50000000], 0x40 + FILES["GoodsName"] * 8, table_base(0))     # right distance, but nothing else there
+    g.mem[0x48000000] = bytearray(g.mem[OBJ])
+    seen = wt.find_tables(g, TEXT)
+    arrays = wt.find_arrays(g, TEXT, seen.found)
+    assert [a for a, _t in arrays.found] == [OBJ + ARRAY] or [a for a, _t in arrays.found] == [0x48000000 + ARRAY]
+    assert arrays.pointers >= 2
+
+
+def test_the_array_is_looked_for_around_the_tables_first(monkeypatch):
+    monkeypatch.setattr(scan, "NEAR", 0x2000)
+    g = Game()
+    base = 0x30000000
+    g.mem[base] = bytearray(0x100000)                                    # a block with the three tables and the array inside it
+    offsets = {}
+    at = 0x1000
+    for i, name in enumerate(FILES):
+        blob = Fmg(GAME_ENTRIES[name]).write()
+        offsets[name] = base + at
+        g.mem[base][at:at + len(blob)] = wt.live_form(blob, base + at)
+        at += (len(blob) + 15) & ~15
+    array = base + at + 0x100
+    for name, number in FILES.items():
+        struct.pack_into("<Q", g.mem[base], array - base + 8 * number, offsets[name])
+    g.mem[0x70000000] = bytearray(0x400000)                              # a block that must not be read at all
+    reads = []
+    real = g.read
+    g.read = lambda a, s: (reads.append(a), real(a, s))[1]
+    arrays = wt.find_arrays(g, TEXT, {n: [b] for n, b in offsets.items()})
+    assert [a for a, _t in arrays.found] == [array] and arrays.walked.tier == "near"
+    assert not any(a >= 0x70000000 for a in reads)
+
+
+def test_the_look_goes_on_through_all_the_memory_when_the_array_is_not_near(monkeypatch):
+    monkeypatch.setattr(scan, "NEAR", 0x2000)
+    g = game_with_tables()
+    seen = wt.find_tables(g, TEXT)
+    arrays = wt.find_arrays(g, TEXT, seen.found)
+    assert [a for a, _t in arrays.found] == [OBJ + ARRAY] and arrays.walked.tier != "near"
 
 
 def test_read_table_gives_the_table_as_in_its_file_and_says_why_when_it_is_none():
@@ -369,13 +413,12 @@ def test_a_copy_of_a_table_that_nothing_points_at_does_not_stop_the_command(rig)
     assert entries(rig.game, "GoodsName")[G1] == "Reverse Curse Technique"
 
 
-def test_a_copy_of_the_array_that_the_game_no_longer_uses_is_changed_too(rig):
+def test_a_second_copy_of_the_array_is_left_alone_when_the_first_one_is_whole(rig):
     rig.open_session()
     rig.game.mem[0x50000000] = bytearray(rig.game.mem[OBJ])
     assert wcmd.cmd_write(rig.args()) == 0
-    for obj in (OBJ, 0x50000000):
-        assert entries(rig.game, "GoodsName", obj)[G1] == "Reverse Curse Technique"
-    assert rig.game.allocs == 6
+    assert entries(rig.game, "GoodsName", OBJ)[G1] == "Reverse Curse Technique"
+    assert rig.game.allocs == 3
 
 
 def test_the_log_says_what_each_look_did(rig, monkeypatch):
@@ -384,7 +427,7 @@ def test_the_log_says_what_each_look_did(rig, monkeypatch):
     monkeypatch.setattr(wcmd.book, "d", lambda tag, msg: seen.append(msg))
     wcmd.cmd_write(rig.args())
     assert any(m.startswith("text: looked for the tables:") and "MB read" in m and f"{table_base(0):#x}" in m for m in seen)
-    assert any(m.startswith("text: looked for the array") and "3 pointers" in m and "1 array(s)" in m for m in seen)
+    assert any(m.startswith("text: looked for the array") and "1 pointer(s)" in m and "1 array(s)" in m and "the slowest" in m for m in seen)
     assert any(m.startswith("text: array at") and "GoodsName ->" in m for m in seen)
 
 

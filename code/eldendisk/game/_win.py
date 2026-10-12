@@ -10,6 +10,7 @@ PROCESS_VM_READ = 0x0010
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 PROCESS_QUERY_INFORMATION = 0x0400      # VirtualQueryEx (only the writer asks for it, to list the game's memory regions)
 STILL_ACTIVE = 259
+PROCESS_MODE_BACKGROUND_BEGIN = 0x00100000      # SetPriorityClass: low CPU, I/O and memory priority for this process
 TH32CS_SNAPPROCESS = 0x2
 TH32CS_SNAPMODULE = 0x8
 TH32CS_SNAPMODULE32 = 0x10
@@ -97,3 +98,27 @@ def snapshot(flags: int, pid: int):
     if h is None or h == INVALID_HANDLE_VALUE:
         return None
     return h
+
+
+def go_easy() -> str:
+    """Ask Windows to treat THIS process as background work (it then gives way to the game for CPU, disk and memory) and to wake it from
+    a sleep after about a millisecond instead of about fifteen. Only for the short-lived process that scans the game. -> what was
+    granted, for the log ("" when nothing, or not Windows). Never raises: it is a courtesy, not a need."""
+    if not IS_WINDOWS:
+        return ""
+    got = []
+    try:
+        k32.GetCurrentProcess.restype = wintypes.HANDLE
+        k32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        k32.SetPriorityClass.restype = wintypes.BOOL
+        if k32.SetPriorityClass(k32.GetCurrentProcess(), PROCESS_MODE_BACKGROUND_BEGIN):
+            got.append("background priority")
+    except Exception:
+        pass
+    try:
+        winmm = ctypes.WinDLL("winmm")
+        if winmm.timeBeginPeriod(1) == 0:
+            got.append("1 ms timer")
+    except Exception:
+        pass
+    return " and ".join(got)

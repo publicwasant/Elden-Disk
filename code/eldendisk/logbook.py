@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ LEVELS = "VDIWE"            # verbose, debug, info, warning, error (logcat lette
 LOG_NAME = "eldendisk.log"
 MAX_BYTES = 2 * 1024 * 1024
 KEEP_FILES = 3              # eldendisk.log, .1, .2
+EXT_TAG = "extension"       # the tag of the extension's lines (the longest tag: it sets the width of the column)
+TAG_WIDTH = len(EXT_TAG)    # the tag column, so the colon is in the same place in every line
 
 
 class Event(NamedTuple):
@@ -32,7 +35,30 @@ class Event(NamedTuple):
 
 def format_line(e: Event) -> str:
     """The logcat line (file and `-v`)."""
-    return f"{e.when:%m-%d %H:%M:%S}.{e.when.microsecond // 1000:03d} {e.pid:>5} {e.level} {e.tag:<6}: {e.msg}"
+    return f"{e.when:%m-%d %H:%M:%S}.{e.when.microsecond // 1000:03d} {e.pid:>5} {e.level} {e.tag:<{TAG_WIDTH}}: {e.msg}"
+
+
+def _open_append(path: Path) -> int:
+    """A file descriptor whose every write goes to the END of the file in one step, even when other processes write to the same file
+    (the text and the flame step run beside `run`). Python's own append mode on Windows seeks to the end and then writes, which lets
+    two processes write over each other (lines lost, a torn line). On Windows the file is opened with the right to APPEND only: the
+    system then adds every write at the end, whatever the others do. Sharing stays read+write, no delete, so a rotation by a process
+    that does not hold the file open still fails as before."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            import msvcrt
+            from ctypes import wintypes
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD,
+                                        wintypes.DWORD, wintypes.HANDLE]
+            k32.CreateFileW.restype = wintypes.HANDLE
+            handle = k32.CreateFileW(str(path), 0x0004 | 0x00100000, 0x1 | 0x2, None, 4, 0x80, None)   # FILE_APPEND_DATA | SYNCHRONIZE
+            if handle not in (None, ctypes.c_void_p(-1).value):
+                return msvcrt.open_osfhandle(handle, os.O_APPEND | os.O_WRONLY)
+        except Exception:
+            pass
+    return os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o666)
 
 
 class _FileSink:
@@ -40,20 +66,19 @@ class _FileSink:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._size = self.path.stat().st_size if self.path.exists() else 0
-        self._fh = open(self.path, "a", encoding="utf-8", buffering=1)
+        self._fd = _open_append(self.path)
 
     def write(self, line: str) -> None:
-        data = line + "\n"
+        data = (line + "\n").replace("\n", os.linesep).encode("utf-8")      # one line, one write
         if self._size + len(data) > MAX_BYTES:
             self._rotate()
-        self._fh.write(data)
-        self._fh.flush()
-        self._size += len(data.encode("utf-8"))
+        os.write(self._fd, data)
+        self._size += len(data)
 
     def _rotate(self) -> None:
         """Move the log aside. Several commands append to this file at once (one per terminal), and Windows will not
         rename a file another process holds open: then the file simply keeps growing."""
-        self._fh.close()
+        self.close()
         try:
             for i in range(KEEP_FILES - 1, 0, -1):
                 src = self.path if i == 1 else self.path.with_name(f"{self.path.name}.{i - 1}")
@@ -62,12 +87,12 @@ class _FileSink:
                     os.replace(src, dst)
         except OSError:
             pass
-        self._fh = open(self.path, "a", encoding="utf-8", buffering=1)
+        self._fd = _open_append(self.path)
         self._size = self.path.stat().st_size if self.path.exists() else 0
 
     def close(self) -> None:
         try:
-            self._fh.close()
+            os.close(self._fd)
         except OSError:
             pass
 

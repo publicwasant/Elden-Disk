@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 
 from eldendisk import ui
-from eldendisk.logbook import Event, Logbook, format_line
+from eldendisk.logbook import EXT_TAG, Event, Logbook, format_line
 
 WHEN = datetime(2026, 10, 7, 23, 41, 2, 123000)
 
@@ -31,12 +31,12 @@ def err(monkeypatch):
 
 def test_pretty_line_with_time_symbol_and_tag(err):
     ui.pretty_sink(show_time=True, stream=err)(ev(ok=True))
-    assert err.getvalue() == " 23:41:02  \u2713  vault  snapshot ready\n"
+    assert err.getvalue() == " 23:41:02  \u2713  vault     snapshot ready\n"
 
 
 def test_short_commands_have_no_time_column(err):
     ui.pretty_sink(stream=err)(ev(level="E", tag="write", msg="not applied"))
-    assert err.getvalue() == " \u2716  write  not applied\n"
+    assert err.getvalue() == " \u2716  write     not applied\n"
 
 
 def test_debug_and_verbose_events_are_hidden_in_the_concise_view(err):
@@ -67,7 +67,7 @@ def test_colour_only_when_asked_and_never_with_no_color(err, monkeypatch):
 def test_raw_view_prints_the_log_lines_including_debug(err):
     ui.raw_sink(err)(ev(level="D", msg="state PREFLIGHT"))
     line = err.getvalue()
-    assert line.startswith("10-07 23:41:02.123  4242 D vault : state PREFLIGHT")
+    assert line.startswith("10-07 23:41:02.123  4242 D vault    : state PREFLIGHT")
 
 
 def test_raw_view_colours_the_command_line_only_on_the_console(err, monkeypatch):
@@ -117,7 +117,7 @@ def test_a_bare_file_name_is_orange(err, monkeypatch):
 
 def test_the_file_name_at_the_end_of_a_path_is_orange_and_the_folders_are_not(err, monkeypatch):
     monkeypatch.setenv("FORCE_COLOR", "1")
-    ui.pretty_sink(stream=err)(ev(tag="ext", msg="building x on D:\\SteamLibrary\\ELDEN RING\\Game\\regulation.bin and checking"))
+    ui.pretty_sink(stream=err)(ev(tag=EXT_TAG, msg="building x on D:\\SteamLibrary\\ELDEN RING\\Game\\regulation.bin and checking"))
     assert "D:\\SteamLibrary\\ELDEN RING\\Game\\" + ORANGE.format("regulation.bin") + " and checking" in err.getvalue()
     err.truncate(0); err.seek(0)
     ui.pretty_sink(stream=err)(ev(msg="folder C:\\Users\\x\\EldenDisk\\vault and C:\\a\\b.v2"))
@@ -364,7 +364,7 @@ def colour(monkeypatch):
 def test_spell_ids_are_purple_in_an_ext_line(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="innovate-items spells: building reverse_curse_technique, black_flame_copy on D:\\x"))
+    ui.pretty_sink(stream=buf)(ev(tag=EXT_TAG, msg="innovate-items spells: building reverse_curse_technique, black_flame_copy on D:\\x"))
     out = buf.getvalue()
     assert PURPLE.format("reverse_curse_technique") in out and PURPLE.format("black_flame_copy") in out
 
@@ -372,7 +372,7 @@ def test_spell_ids_are_purple_in_an_ext_line(spells, monkeypatch):
 def test_a_diff_line_colours_only_the_id_part(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="  black_flame_copy.shop.price  1000 -> 2000"))
+    ui.pretty_sink(stream=buf)(ev(tag=EXT_TAG, msg="  black_flame_copy.shop.price  1000 -> 2000"))
     assert PURPLE.format("black_flame_copy") + ".shop.price  1000 -> 2000" in buf.getvalue()
 
 
@@ -381,35 +381,35 @@ def test_other_tags_paths_and_longer_words_are_left_alone(spells, monkeypatch):
     buf = Stream()
     sink = ui.pretty_sink(stream=buf)
     sink(ev(tag="vault", msg="black_flame_copy"))
-    sink(ev(tag="ext", msg="in D:\\x\\black_flame_copy\\a.json and black_flame_copy2 and my-black_flame_copy"))
+    sink(ev(tag=EXT_TAG, msg="in D:\\x\\black_flame_copy\\a.json and black_flame_copy2 and my-black_flame_copy"))
     assert "\x1b[35m" not in buf.getvalue()
 
 
 def test_no_colour_no_change_and_the_log_file_line_stays_plain(spells, monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="built black_flame_copy"))
+    ui.pretty_sink(stream=buf)(ev(tag=EXT_TAG, msg="built black_flame_copy"))
     assert "\x1b" not in buf.getvalue() and "built black_flame_copy" in buf.getvalue()
-    assert "\x1b" not in format_line(ev(tag="ext", msg="built black_flame_copy"))
+    assert "\x1b" not in format_line(ev(tag=EXT_TAG, msg="built black_flame_copy"))
 
 
 def test_the_raw_view_colours_the_message_not_the_prefix(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.raw_sink(stream=buf)(ev(tag="ext", msg="building black_flame_copy"))
+    ui.raw_sink(stream=buf)(ev(tag=EXT_TAG, msg="building black_flame_copy"))
     line = buf.getvalue()
-    assert line.startswith("10-07 23:41:02.123  4242 I ext   : building ") and PURPLE.format("black_flame_copy") in line
+    assert line.startswith("10-07 23:41:02.123  4242 I extension: building ") and PURPLE.format("black_flame_copy") in line
     buf2 = Stream()
-    ui.raw_line("10-07 23:41:02.123  4242 I ext   : built black_flame_copy", buf2)
-    assert PURPLE.format("black_flame_copy") in buf2.getvalue() and buf2.getvalue().startswith("10-07 23:41:02.123  4242 I ext   : built ")
+    ui.raw_line("10-07 23:41:02.123  4242 I extension: built black_flame_copy", buf2)
+    assert PURPLE.format("black_flame_copy") in buf2.getvalue() and buf2.getvalue().startswith("10-07 23:41:02.123  4242 I extension: built ")
 
 
 def test_an_error_stays_red_and_clearing_the_ids_stops_the_colour(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(level="E", tag="ext", msg="black_flame_copy failed"))
+    ui.pretty_sink(stream=buf)(ev(level="E", tag=EXT_TAG, msg="black_flame_copy failed"))
     assert "\x1b[35m" not in buf.getvalue()
     ui.mark_spell_ids([])
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag="ext", msg="built black_flame_copy"))
+    ui.pretty_sink(stream=buf)(ev(tag=EXT_TAG, msg="built black_flame_copy"))
     assert "\x1b[35m" not in buf.getvalue()

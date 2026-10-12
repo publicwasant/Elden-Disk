@@ -14,7 +14,8 @@ the tables and the array are FOUND, by what they are (writer/scan.py does the lo
     size of the game's own file of that table, in the language the game is played in).
  2. The array is where those tables are pointed at from the places the profile's text file numbers give: the pointer to GoodsName at
     A + 10 * 8, to GoodsInfo at A + 20 * 8, to GoodsCaption at A + 24 * 8. Three pointers at exactly these distances do not happen
-    by chance.
+    by chance. Only the first is searched for; the other two slots are read where one is seen. The search starts around the tables
+    (scan.py `near`) and ends at the first whole array.
 
 This module knows bytes only. Building the new table (ids -> text) is done by the command with extension/innovate_items/fmg.py:
 the writer package may not import the extension package, and the extension knows nothing of the game.
@@ -114,40 +115,50 @@ def find_tables(mem, text: TextProfile, everything: bool = False, budget: float 
 class Arrays:
     """What the look for the array saw: where it is, and which table each of our files leads to there."""
     found: list = field(default_factory=list)      # [(address of the array, {table name: base of the table it points at})]
-    pointers: int = 0                              # pointers to our tables seen anywhere
+    pointers: int = 0                              # pointers to the first table seen (each one is checked for the other two)
     walked: scan.Walked | None = None
 
 
 def find_arrays(mem, text: TextProfile, bases: dict, budget: float = scan.BUDGET) -> Arrays:
-    """Look through the game's memory for the places that point at the tables `bases` (name -> list of bases), and take the ones where
-    the pointers to our tables lie at the distances of the profile's file numbers: an array. Goes through all the memory (a copy of
-    the array that the game no longer uses is harmless to change, but the one it uses must not be missed)."""
-    patterns = {(name, base): struct.pack("<Q", base) for name, bs in bases.items() for base in bs}
-    hits: dict[tuple, set] = {key: set() for key in patterns}
+    """Look through the game's memory for the array that points at the tables `bases` (name -> list of bases) from the places the
+    profile's file numbers say. Only the pointer to the FIRST table (GoodsName) is looked for; where one is seen, the other two slots
+    are read and must hold the other tables: three pointers at exactly these distances do not happen by chance. The look starts
+    around the tables (in the logs the array lay within 20 MB of them), ends at the first array that is whole, and goes on through the
+    rest of the memory only if there is none. Three runs of the whole memory saw exactly one array, so one is what is taken."""
+    first = min(text.files, key=text.files.get)
+    anchors = {struct.pack("<Q", base): base for base in bases.get(first, ())}
+    out = Arrays()
+    seen: set[int] = set()
+
+    def whole(array: int, base: int) -> dict | None:
+        tables = {first: base}
+        for name, number in text.files.items():
+            if name == first:
+                continue
+            raw = mem.read(array + 8 * number, 8) if array > 0 else None
+            point = struct.unpack("<Q", raw)[0] if raw else 0
+            if point not in bases.get(name, ()):
+                return None
+            tables[name] = point
+        return tables
 
     def visit(addr: int, data: bytes, n: int) -> bool:
-        for key, pattern in patterns.items():
+        for pattern, base in anchors.items():
             i = data.find(pattern)
             while i != -1:
-                if i < n and (addr + i) % 8 == 0:
-                    hits[key].add(addr + i)
+                at = addr + i
+                if i < n and at % 8 == 0 and at not in seen:
+                    seen.add(at)
+                    tables = whole(at - 8 * text.files[first], base)
+                    if tables:
+                        out.found.append((at - 8 * text.files[first], tables))
+                        return True
                 i = data.find(pattern, i + 1)
         return False
 
-    out = Arrays(walked=scan.walk(mem, visit, overlap=7, budget=budget), pointers=sum(len(h) for h in hits.values()))
-    first = min(text.files, key=text.files.get)
-    for (name, base), at_list in hits.items():
-        if name != first:
-            continue
-        for at in sorted(at_list):
-            array = at - 8 * text.files[first]
-            tables = {first: base}
-            for other, number in text.files.items():
-                match = [b for (nm, b), hs in hits.items() if nm == other and array + 8 * number in hs]
-                if match:
-                    tables[other] = match[0]
-            if len(tables) == len(text.files):
-                out.found.append((array, tables))
+    near = [b for bs in bases.values() for b in bs]
+    out.walked = scan.walk(mem, visit, overlap=7, budget=budget, near=near) if anchors else scan.Walked(False, True, 0, 0.0, "near")
+    out.pointers = len(seen)
     return out
 
 

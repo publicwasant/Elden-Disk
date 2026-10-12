@@ -14,7 +14,7 @@ def test_line_format_is_logcat_like(tmp_path):
     b.configure(file=tmp_path / "x.log")
     b.i("host", "game running")
     b.close()
-    assert re.fullmatch(r"\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ I host  : game running", lines(tmp_path / "x.log")[0])
+    assert re.fullmatch(r"\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ I host     : game running", lines(tmp_path / "x.log")[0])
 
 
 def test_the_file_gets_every_level_and_the_console_gets_the_events(tmp_path):
@@ -144,3 +144,32 @@ def test_a_log_another_process_holds_is_not_rotated_but_keeps_working(tmp_path, 
     monkeypatch.setattr(lb.os, "replace", real)
     text = (tmp_path / "x.log").read_text()
     assert "event 000" in text and "event 029" in text
+
+
+def test_every_tag_keeps_the_colon_in_the_same_column():
+    from datetime import datetime
+    from eldendisk.logbook import EXT_TAG, TAG_WIDTH, Event, format_line
+    got = [format_line(Event(datetime(2026, 10, 12, 1, 2, 3), 7, "I", tag, "m")) for tag in ("host", "client", "vault", "write", EXT_TAG)]
+    assert len({l.index(": m") for l in got}) == 1 and TAG_WIDTH >= len("extension")
+
+
+def _writer(path, name, n):
+    from eldendisk.logbook import Logbook
+    book = Logbook()
+    book.configure(file=path)
+    for i in range(n):
+        book.i("write", f"{name} line {i} " + "x" * 200)
+    book.close()
+
+
+def test_processes_writing_one_log_do_not_lose_or_tear_lines(tmp_path):
+    """The text and the flame step log to the file `run` logs to, at the same time: every line must arrive whole."""
+    import multiprocessing as mp
+    path = tmp_path / "shared.log"
+    procs = [mp.Process(target=_writer, args=(path, f"p{k}", 300)) for k in range(4)]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(30)
+    got = path.read_text(encoding="utf-8").splitlines()
+    assert len(got) == 1200 and all(lb.parse_line(l) and l.endswith("x" * 200) for l in got)

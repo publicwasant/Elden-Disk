@@ -11,7 +11,7 @@ Only what is new in 1.7.1; everything else is [manual-test-plan-1.7.0](../experi
 
 | ID | Do | Expect | |
 |:--|:--|:--|:-:|
-| TX1 | `run -v` (vault ON), load a character | `text: waiting for a character to be in the world`, then `a character is in the world`, then `text: looked for the tables: … MB read in … s`, `looked for the array …`, `text: array at …`, three `text Goods…: … bytes, now at …` lines and `text: 1 spell named in the game …`; the whole takes about 75 s after the character appears; no extra window | [ ] |
+| TX1 | `run -v` (vault ON), load a character | `text: waiting for a character to be in the world`, then `a character is in the world`, then `text: looked for the tables: … MB read in … s`, `looked for the array …`, `text: array at …`, three `text Goods…: … bytes, now at …` lines and `text: 1 spell named in the game …`; the 2026-10-11 runs (16 MB pieces, whole-memory array look) took about 75 s after the character appears; the lighter look (seen on 2026-10-12: tables 1.6 s, array 0.3 s) ends in a few seconds, with `(near; N pieces, the slowest … ms, … s resting)` in the log; no extra window | [ ] |
 | TX2 | Visit Kalé; look at the new spell in the list | the name is `goods_name` of the design, the short line `goods_info` (not `?GoodsName?`) | [ ] |
 | TX3 | Buy it; Inventory → select it → controller square button | the long description is `goods_captions`; `\n` is a new line | [ ] |
 | TX4 | Other items' text (e.g. the name of Flame, Grant Me Strength, a weapon) | unchanged | [ ] |
@@ -25,7 +25,7 @@ Only what is new in 1.7.1; everything else is [manual-test-plan-1.7.0](../experi
 | TX12 | `write --text` in a game started from Steam (anti-cheat) | refused, exit `3` | [ ] |
 | TX13 | Load the character, then Quit to Title and load it again | the text is still there (the game does not reload its text) — note what you see | [ ] |
 | TX14 | Optional: Thai in `goods_captions` | write what the game shows (boxes, blanks, or Thai) | [ ] |
-| TX15 | Optional: `read --live` while the text step runs | not disturbed; the game does not stutter during the ~75 s look | [ ] |
+| TX15 | Optional: `read --live` while the text step runs | not disturbed; the game does not stutter during the look (the log says the slowest piece; ~75 s before the lighter look); also `scan: background priority and 1 ms timer` in the log | [ ] |
 
 ## FL. Fire colour
 
@@ -48,6 +48,15 @@ Only what is new in 1.7.1; everything else is [manual-test-plan-1.7.0](../experi
 | IC1 | `run` with `"Goods.6421.iconId": 6806` in the spell's `set`; visit Kalé | the spell's line in the shop list shows the icon of Gravitational Missile (not Heal's) | [ ] |
 | IC2 | Buy it; open the Inventory and the memory (spells) menu | the same icon in the inventory list and in the memory-slot list; if the memory screen still shows Heal's, note it (then `Magic.6421.iconId` is the one to set) | [ ] |
 | IC3 | A game without the DLC (or an `iconId` the game has no picture for) | the icon is blank or missing, nothing else breaks — note what you see | [ ] |
+
+## Console (seen in a real terminal, Windows Terminal or the IDE run window)
+
+| # | Do | Expect | Seen |
+|---|---|---|---|
+| UX1 | Change one number in the design, `eldendisk run` (no `-v`) in Windows Terminal | the reason for the build, the changes as a `├─ └─` tree, a spinning line with the seconds while it builds, then one `✓` line with the time, then a card per spell | [ ] |
+| UX2 | The same in the IDE run window (`FORCE_COLOR`) and with `> file` (a pipe) | no spinner: a start line and an end line; nothing garbled | [ ] |
+| UX3 | `run` (no `-v`) to the point where a character is in the world | the lines `write  text: waiting …`, `a character is in the world` and the `✓` lines of the text and the flame step appear in the same console | [ ] |
+| UX4 | The log file after UX1 | plain text only (no escape codes); the build lines are there with their times | [ ] |
 
 ## Automated tests (no game)
 

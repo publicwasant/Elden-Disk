@@ -8,12 +8,12 @@ from pathlib import Path
 import eldendisk
 from ..console import require_windows_x64
 from .. import extension, ui
-from ..logbook import Tail, book
+from ..logbook import EXT_TAG, Tail, book
 from ..game.processes import GAME_EXE, anticheat_processes, find_pid, list_process_names, process_started, sha256_file
 from ..game.profile import load_profile
 from ..host import launcher
 from ..host.host import Hooks, Session, State
-from ..paths import describe_resource
+from ..paths import HERE, describe_resource, get_resource_path
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, session_log
 from .extension import ext_dir, prepare_regulation, spec_file
@@ -70,7 +70,11 @@ def text_command(args, vault_path: Path, flag: str = "--text") -> tuple[list[str
     if you typed it in another terminal."""
     frozen = getattr(sys, "frozen", False)
     cmd = [sys.executable] if frozen else [sys.executable, "-m", "eldendisk"]
-    cmd += ["write", flag, "--when-loaded", "--vault", str(vault_path), "--offsets", str(args.offsets)]
+    cmd += ["write", flag, "--when-loaded"]
+    if getattr(args, "vault", None):                 # the vault `run` was told is remembered, so the step finds the same one without being told
+        cmd += ["--vault", str(vault_path)]
+    if str(args.offsets) != str(get_resource_path("offsets.json", default_dir=HERE)):      # only an offsets.json the user chose
+        cmd += ["--offsets", str(args.offsets)]
     for flag, value in (("--spec", getattr(args, "spec", None)), ("--extension-dir", getattr(args, "extension_dir", None))):
         if value:
             cmd += [flag, str(value)]
@@ -81,7 +85,7 @@ def start_text(args, vault_path: Path, spawn=subprocess.Popen, flag: str = "--te
     """Start the text step (or, with flag --flame-color, the fire colour step) in the background. Its lines appear in this console
     and in the log; if it fails the game goes on."""
     cmd, cwd = text_command(args, vault_path, flag)
-    book.d("ext", "starting: " + " ".join(cmd))
+    book.d(EXT_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}   # -v shows its log lines
     return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), **quiet)
 
@@ -111,10 +115,10 @@ def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
             return None, "none"
         return f, "file"
     if not protect:
-        book.i("ext", "vault OFF: the extension is not run (it changes the game's files; only the vault can put them back)")
+        book.i(EXT_TAG, "vault OFF: the extension is not run (it changes the game's files; only the vault can put them back)")
         return None, "none"
     if vault.read_session() is not None:
-        book.d("ext", "the vault owes a restore from an earlier session: not building; the session will say what to do")
+        book.d(EXT_TAG, "the vault owes a restore from an earlier session: not building; the session will say what to do")
         return None, "none"
     prep = prepare_regulation(args, game_dir / "regulation.bin", allow_secured=True, vault_dir=vault.root)
     return prep.path, prep.mode
@@ -187,8 +191,9 @@ def cmd_run(args) -> int:
     session = Session(vault, live, hooks, archive_contaminated=not args.no_archive_contaminated,
                       log=session_log(), protect=protect)
     tail = None
-    if getattr(args, "verbose", False) and book.path is not None:   # -v shows what the other terminals do, too
-        tail = Tail(book.path, lambda line: book.locked(ui.raw_line, line), book.pid)
+    if book.path is not None:       # what the other processes do: the text and flame steps (all lines with -v, their progress without)
+        show = ui.raw_line if getattr(args, "verbose", False) else ui.child_line
+        tail = Tail(book.path, lambda line: book.locked(show, line), book.pid)
         tail.start()
     try:
         rc = session.run()
@@ -201,6 +206,6 @@ def cmd_run(args) -> int:
     if State.RESTORING in session.history:   # a session really ran; never prune a vault that still owes a restore
         auto_prune(vault, args.keep)
         if mode in ("built", "last"):
-            book.i("ext", "this regulation.bin is a build that is not secured yet. If it worked in the game, keep it for next time: "
+            book.i(EXT_TAG, "this regulation.bin is a build that is not secured yet. If it worked in the game, keep it for next time: "
                                 "eldendisk extension innovate-items spells --secure   (game closed)")
     return rc
