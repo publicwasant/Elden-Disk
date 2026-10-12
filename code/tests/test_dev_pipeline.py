@@ -117,8 +117,10 @@ def test_the_build_always_cleans_and_embeds_unless_told_not_to(monkeypatch, tmp_
     monkeypatch.setattr(dev_pipeline, "run_build", lambda **kw: got.append(kw) or False)
     dev_pipeline.main([])
     dev_pipeline.main(["--no-embed", "--engine", "nuitka"])
-    assert got == [dict(clean=True, embed=True, engine="pyinstaller", icon=None),
-                   dict(clean=True, embed=False, engine="nuitka", icon=None)]
+    dev_pipeline.main(["--keep-app-data"])
+    assert got == [dict(clean=True, embed=True, engine="pyinstaller", icon=None, app_data=True),
+                   dict(clean=True, embed=False, engine="nuitka", icon=None, app_data=True),
+                   dict(clean=True, embed=True, engine="pyinstaller", icon=None, app_data=False)]
 
 
 # ---------- the build itself (the compiler is faked) ----------
@@ -246,3 +248,65 @@ def test_the_real_docs_make_a_readme():
     assert text and "# Command reference" in text and "## 1. `run` (host)" in text and "{version}" not in text
     assert "Standalone Executable CLI Commands Reference" not in text    # the reference's own title is replaced
     assert "`build`" not in text.split("# Command reference", 1)[1].split("## 1.")[0]
+
+
+def test_the_tests_run_with_a_temporary_folder_of_their_own_outside_the_build(monkeypatch, tmp_path):
+    """No numbered folders and no `pytest-current` link in %TEMP% (Windows may refuse to remove that link when pytest ends), and not
+    inside ./build: the tests leave vaults that owe a restore, which the build's clean must refuse to remove."""
+    seen = []
+    monkeypatch.setattr(dev_pipeline, "ROOT_DIR", tmp_path)
+    monkeypatch.setattr(dev_pipeline.subprocess, "run", lambda cmd, cwd=None: seen.append(cmd) or type("R", (), {"returncode": 0})())
+    assert dev_pipeline.run_precheck()
+    temp = dev_pipeline.tests_temp_dir()
+    assert seen[0][1:3] == ["-m", "pytest"] and f"--basetemp={temp}" in seen[0]
+    assert temp.name == "eldendisk-pytest" and dev_pipeline.build_layout()["build_root"] not in temp.parents
+
+
+# ---------- %LOCALAPPDATA%\EldenDisk (LOCALAPPDATA points into tmp_path in every test: conftest) ----------
+@pytest.fixture
+def app_data(monkeypatch):
+    monkeypatch.setattr(dev_pipeline, "find_pid", lambda exe: None)
+    d = dev_pipeline.app_data_dir()
+    (d / "vault" / "20261012-185726").mkdir(parents=True)
+    (d / "vault" / "eldendisk.log").write_text("x")
+    (d / "output" / "disk-state.json").parent.mkdir(parents=True)
+    (d / "output" / "disk-state.json").write_text("{}")
+    return d
+
+
+def test_the_tools_own_folder_is_removed_before_the_build(project, monkeypatch, app_data):
+    ok, calls = build(monkeypatch, app_data=True)
+    assert ok and calls and not app_data.exists()
+    assert app_data.parent.exists()                                              # only EldenDisk, not %LOCALAPPDATA%
+
+
+def test_without_app_data_the_tools_folder_stays(project, monkeypatch, app_data):
+    ok, _ = build(monkeypatch)
+    assert ok and (app_data / "vault" / "eldendisk.log").exists()
+
+
+def test_a_vault_that_owes_a_restore_stops_the_build_and_nothing_is_removed(project, monkeypatch, app_data, capsys):
+    (app_data / "vault" / "session.json").write_text("{}")
+    stale = project / "build" / "work" / "stale.txt"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("x")
+    ok, calls = build(monkeypatch, app_data=True)
+    out = capsys.readouterr().out
+    assert not ok and not calls and (app_data / "vault" / "session.json").exists() and stale.exists()
+    assert "vault restore" in out and "--keep-app-data" in out
+
+
+@pytest.mark.parametrize("running", ["eldenring.exe", "eldendisk.exe"])
+def test_nothing_is_removed_while_the_game_or_the_tool_runs(project, monkeypatch, app_data, capsys, running):
+    monkeypatch.setattr(dev_pipeline, "find_pid", lambda exe: 4242 if exe == running else None)
+    ok, calls = build(monkeypatch, app_data=True)
+    assert not ok and not calls and (app_data / "vault" / "eldendisk.log").exists()
+    assert running + " is running" in capsys.readouterr().out
+
+
+def test_only_the_exact_folder_may_be_removed(tmp_path, monkeypatch):
+    monkeypatch.setattr(dev_pipeline, "find_pid", lambda exe: None)
+    assert dev_pipeline.app_data_problems(dev_pipeline.app_data_dir()) == []
+    for other in (tmp_path / "EldenDisk", dev_pipeline.app_data_dir() / "vault", dev_pipeline.app_data_dir().parent):
+        assert dev_pipeline.app_data_problems(other)
+

@@ -267,41 +267,68 @@ def cmd_write_text(args) -> int:
         mem.close()
 
 
-def _put_flame(mem, gate, colour, passes=ONCE) -> int:
-    """Recolour the two effects: one look through the game's memory for the effect files not done yet (both in the same look), as the
-    schedule `passes` says (the rest in seconds before each look). A look is only made while something is missing."""
-    todo, done = list(wfxr.effect_ids()), {}
+def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None) -> int:
+    """Recolour the fire (`colour`, the two effects) and the golden eyes (`eyes`, when the design gives them a colour): one look
+    through the game's memory for the effect files not done yet (all in the same look), as the schedule `passes` says (the rest in
+    seconds before each look). A look is only made while something is missing. Either colour may be None. `accent`: the second colour
+    of the fire (the places the fire's plan leaves out, writer/fxr_plans.py `accent`), with `colour` only."""
+    ring = accent if colour is not None else None          # the ring of runes at the hand takes the fire's second colour
+    targets = {**({e: colour for e in wfxr.effect_ids()} if colour is not None else {}),
+               **({e: eyes for e in wfxr.eyes_ids()} if eyes is not None else {}),
+               **({e: ring for e in wfxr.ring_ids()} if ring is not None else {})}
+    label = {**{e: "flame colour" for e in wfxr.effect_ids()}, **{e: "eyes colour" for e in wfxr.eyes_ids()},
+             **{e: "ring colour" for e in wfxr.ring_ids()}}
+    optional = set(wfxr.ring_ids())                        # the game may hold no ring: it is painted when it is there
+    what = "flame colour" if eyes is None else "eyes colour" if colour is None else "flame and eyes colour"
+    todo, done = list(targets), {}
     for number, rest in enumerate(passes, 1):
         if rest:
-            book.d("write", f"flame colour: the game does not hold {', '.join(todo)} yet; looking again in {rest:g} s")
+            book.d("write", f"{what}: the game does not hold {', '.join(todo)} yet; looking again in {rest:g} s")
             _sleep(rest)
         try:
-            got, found = wfxr.paint_many(mem, gate, todo, colour)
+            # the eyes: through ALL the memory, every copy (the game holds their file twice and draws from the one found last)
+            got, found = wfxr.paint_many(mem, gate, todo, {e: targets[e] for e in todo},
+                                         everything=any(e in wfxr.eyes_ids() or e in optional for e in todo),
+                                         accent=accent if colour is not None else None)
         except wfxr.FlameError as exc:
-            book.e("write", f"flame colour: {exc}")
+            book.e("write", f"{what}: {exc}")
             return 1
         w = found.walked
-        book.d("write", f"flame colour: look {number}/{len(passes)}: {w.megabytes} MB read in {w.seconds:.1f} s ("
+        book.d("write", f"{what}: look {number}/{len(passes)}: {w.megabytes} MB read in {w.seconds:.1f} s ("
                         + (f"stopped in the {w.tier} of the blocks, all found" if w.stopped else "the whole memory" if w.complete
                            else "ran out of time before the end") + f"; {_cost(w)}); found {', '.join(got) or 'nothing'}")
         for eid, p in got.items():
             done[eid] = p
             where = f" at {p.bases[0]:#x}, {wscan.where(mem, p.bases[0])}" if p.bases else ""
-            book.d("write", f"flame colour {eid}: {p.copies} copy(ies) changed ({p.places} places), {p.already} already changed{where}")
+            book.d("write", f"{label[eid]} {eid}: {p.copies} copy(ies) changed ({p.places} places), {p.already} already changed{where}")
         todo = [e for e in todo if e not in done]
-        if not todo:
+        if not [e for e in todo if e not in optional]:
             break
+    for e in [e for e in todo if e in optional]:
+        book.d("write", f"{label[e]}: the game does not hold {e} (the ring of runes) now; left as it is")
+    todo = [e for e in todo if e not in optional]
     if todo:
-        book.e("write", f"flame colour: the game does not hold the effect file(s) {', '.join(todo)} after {len(passes)} look(s)"
+        book.e("write", f"{what}: the game does not hold the effect file(s) {', '.join(todo)} after {len(passes)} look(s)"
                + ": the game is still starting (use --wait), or it is not the version this was made for")
         return 1
-    book.ok("write", f"flame colour: the fire of Flame, Grant Me Strength is now {tuple(round(c, 3) for c in colour)} in {len(done)} effects "
-                     f"({sum(g.places for g in done.values())} places written); it lasts until the game closes")
+    fire = [done[e] for e in wfxr.effect_ids() if e in done]
+    if fire:
+        second = f" and {tuple(round(c, 3) for c in accent)}" if accent is not None else ""
+        book.ok("write", f"flame colour: the fire of Flame, Grant Me Strength is now {tuple(round(c, 3) for c in colour)}{second} in {len(fire)} "
+                         f"effects ({sum(g.places for g in fire)} places written); it lasts until the game closes")
+    rings = [done[e] for e in wfxr.ring_ids() if e in done]
+    if rings:
+        book.ok("write", f"ring colour: the ring of runes at the hand is now {tuple(round(c, 3) for c in ring)} ({sum(g.places for g in rings)} "
+                         "places written); it lasts until the game closes")
+    glow = [done[e] for e in wfxr.eyes_ids() if e in done]
+    if glow:
+        book.ok("write", f"eyes colour: the glowing eyes are now {tuple(round(c, 3) for c in eyes)} ({sum(g.places for g in glow)} places "
+                         "written); it lasts until the game closes")
     return 0
 
 
 def cmd_write_flame(args) -> int:
-    """`write --flame-color [--wait [SEC] | --when-loaded]`: see the module text."""
+    """`write --flame-color [--wait [SEC] | --when-loaded]`: see the module text. The golden eyes get their colour in the same step."""
     require_windows_x64()
     when_loaded = bool(getattr(args, "when_loaded", False))
     wait = ATTACH_WAIT if when_loaded else float(getattr(args, "wait", 0) or 0)
@@ -311,13 +338,16 @@ def cmd_write_flame(args) -> int:
         if note:
             book.w("write", f"innovate-items spells: {note}")
         colour, cnote = ci.flame_color(sel)
+        eyes, enote = ci.eyes_color(sel)
+        accent, anote = ci.flame_accent_color(sel)
     except ExtensionError as exc:
         book.e("write", str(exc))
         return 1
-    if cnote:
-        book.w("write", cnote)
-    if colour is None:
-        book.i("write", "no spell of the design names a flame_color: nothing to do")
+    for n in (cnote, enote, anote):
+        if n:
+            book.w("write", n)
+    if colour is None and eyes is None:
+        book.i("write", "no spell of the design names a flame_color or a golden_eyes color: nothing to do")
         return 0
     target, code, record = _attach(args, wait)
     if target is None:
@@ -333,8 +363,8 @@ def cmd_write_flame(args) -> int:
             if not _wait_world(mem, target, "flame colour"):
                 book.i("write", "flame colour: the game closed before a character was in the world; nothing was written")
                 return 0
-            return _put_flame(mem, gate, colour, LOOKS)
-        return _put_flame(mem, gate, colour, LOOKS if wait > 0 else ONCE)
+            return _put_flame(mem, gate, colour, LOOKS, eyes, accent)
+        return _put_flame(mem, gate, colour, LOOKS if wait > 0 else ONCE, eyes, accent)
     finally:
         mem.close()
 

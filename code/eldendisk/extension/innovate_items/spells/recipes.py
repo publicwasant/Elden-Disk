@@ -28,6 +28,12 @@ CAST_FROM = 6050             # Magic row cloned: Flame, Grant Me Strength (cast 
 SHOP_CLONE = 100507
 # effect.visual -> SpEffect.vfxId (spec.VISUAL_VFX): flame = the burning body of Flame! Grant Me Strength, flask = Heal's glow, none = no lingering visual
 HEAL_GOODS, HEAL_SP, FLAME_SP, ENDURE_SP, ICON_GOODS = 6421, 1642100, 1605000, 1650, 6424
+# golden_eyes: glowing eyes, the effect f000004866 the game puts on both eyes of a human NPC of the DLC (NpcParam 150000002): SpEffectVfx
+# 20090050 on DummyPoly 845 (the left eye of the human model, which the player has too) and 20090051 on 846 (the right eye), shown by
+# that NPC's SpEffects 20018100 and 20018101
+EYES_VFX = (20090050, 20090051)
+EYES_FROM_SP = (20018100, 20018101)
+EYES_SLOTS = tuple("vfxId%d" % k for k in range(1, 8))      # the extra visual fields of a SpEffect row; vfxId itself is the design's
 
 KEYS = ("goods", "magic", "sp", "shop", "bullet", "atk")      # the tables a recipe may add rows to
 NAME_FROM = {"goods": DUMMY, "magic": DUMMY, "sp": DUMMY, "shop": SHOP_DUMMY, "bullet": DUMMY, "atk": DUMMY}   # the row whose name pointer new rows share
@@ -103,6 +109,36 @@ def _shop_row(P: dict, D: dict, spell: dict, ids: dict):
                      eventFlag_forStock=ids["shop_flag"], eventFlag_forRelease=0, equipType=3).items():
         D["shop"].set(data, n, v)
     return bytes(data)
+
+
+def _eyes_vfx(P: dict, D: dict, who: str) -> tuple:
+    """The SpEffectVfx rows of the eyes, checked against the file: the NPC's own SpEffect rows must still show them."""
+    for sp, vfx in zip(EYES_FROM_SP, EYES_VFX):
+        r = P["sp"].find(sp)
+        if r is None or D["sp"].get(r[2], "vfxId") != vfx:
+            raise RecipeError("%s: golden_eyes: SpEffect %d does not show SpEffectVfx %d in this file, so this is not the 1.17.1 "
+                              "regulation.bin" % (who, sp, vfx))
+    return EYES_VFX
+
+
+def _visuals(d: Def, data) -> list:
+    return [d.get(data, n) for n in ("vfxId",) + EYES_SLOTS]
+
+
+def add_eyes(d: Def, data: bytearray, who: str, vfx: tuple = EYES_VFX) -> None:
+    """Give a SpEffect row the eyes: each of `vfx` (left eye, right eye) in the first of vfxId1-vfxId7 that is free (-1), unless a
+    visual field already holds it."""
+    for v in vfx:
+        if v in _visuals(d, data):
+            continue
+        free = [n for n in EYES_SLOTS if d.get(data, n) == -1]
+        if not free:
+            raise RecipeError("%s: golden_eyes: the buff's SpEffect row has no free visual field for both eyes (vfxId1-vfxId7)" % who)
+        d.set(data, free[0], v)
+
+
+def has_eyes(d: Def, data: bytes, vfx: tuple = EYES_VFX) -> bool:
+    return all(v in _visuals(d, data) for v in vfx)
 
 
 class Built(NamedTuple):
@@ -194,6 +230,13 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
                     else "is not part of the chain of %d that is copied" % src
                 raise RecipeError("%s: set %s: %s %s %s (copied %s rows: %s)" % (who, key, table, rid, why, table, ", ".join(map(str, own[t])) or "none"))
             sets[t].setdefault(int(rid), []).append((name, v))
+        eyes_on = None
+        if "golden_eyes" in spell:
+            eyes_on = int(spell["golden_eyes"]["on"].split(".", 1)[1])
+            if eyes_on not in own["sp"]:
+                raise RecipeError("%s: golden_eyes.on: SpEffect %d is not one of the copied SpEffect rows (copied: %s)"
+                                  % (who, eyes_on, ", ".join(map(str, own["sp"])) or "none"))
+            eyes_vfx = _eyes_vfx(P, D, who)
         for t, rows, links in (("sp", sp_rows, chainmod.SP_PAIRS), ("bullet", bullet_rows, chainmod.BULLET_LINKS),
                                ("atk", atk_rows, chainmod.ATK_PAIRS)):
             for old, new in own[t].items():
@@ -204,6 +247,8 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
                         D[t].set(data, link, own[table][target])
                 for name, v in sets[t].get(old, []):
                     D[t].set(data, name, v)
+                if t == "sp" and old == eyes_on:
+                    add_eyes(D["sp"], data, who, eyes_vfx)
                 rows.append((new, bytes(data)))
     r = spell.get("requires", {})
     friendly = {"mp": spell.get("fp_cost"), "stamina": spell.get("stamina_cost"), "requirementIntellect": r.get("intelligence"),
@@ -253,6 +298,8 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
             f[n] = D["sp"].get(flame, n)
         for n, v in f.items():
             D["sp"].set(data, n, v)
+        if "golden_eyes" in spell:
+            add_eyes(D["sp"], data, "%s (slot %d)" % (spell["id"], spell["slot"]), _eyes_vfx(P, D, spell["id"]))
         rows["sp"].append((ids["sp_effect"], bytes(data)))
         # Poise: Endure's poise buff cloned into a row of its own, damage reduction stripped, no vfx/icon, short life.
         if poise:
@@ -374,6 +421,9 @@ def check_incantation(P: dict, D: dict, spell: dict) -> list:
         for name, want in (("staminaRecoverChangeSpeed", e["stamina_regen_speed"]), ("effectEndurance", e["duration_seconds"]),
                            ("motionInterval", e["tick_seconds"]), ("vfxId", visual_number(e["visual"]))):
             need("sp", sp, name, want, sname, "G5")
+        if "golden_eyes" in spell and not has_eyes(D["sp"], sp):
+            bad.append("G5: %s: %s has no golden eyes (SpEffectVfx %s in vfxId1-vfxId7), the spec has golden_eyes"
+                       % (who, sname, " and ".join(map(str, EYES_VFX))))
     _check_shop(P, D, spell, ids, who, row, need, bad)
     if goods is None and magic is not None:
         bad.append("G11: %s: Magic %d exists but its Goods row does not" % (who, ids["magic"]))

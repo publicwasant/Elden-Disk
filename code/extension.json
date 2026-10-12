@@ -7,6 +7,11 @@
           "kind": "projectile",
           "from": 6421,
           "flame_color": [0.2, 0.65, 1],
+          "flame_accent_color": [0.54, 0.4, 0.8],
+          "golden_eyes": {
+            "on": "SpEffect.1642100",
+            "color": [0.2, 0.65, 1]
+          },
           "text": {
             "goods_name": "Reverse Cursed Technique",
             "goods_info": "An anomalous art left behind by an Unknown Sorcerer from another reality. Forces the concept of ruin to consume itself, commanding shattered flesh to remember its whole and unbroken state.",

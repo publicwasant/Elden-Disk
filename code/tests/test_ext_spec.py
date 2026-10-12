@@ -274,3 +274,95 @@ def test_flame_color_must_be_three_numbers_from_0_to_2(bad):
     with pytest.raises(spec.SpecError) as e:
         spec.normalise(mutated(lambda i: i.update(flame_color=bad)))
     assert any("flame_color" in p for p in e.value.problems)
+
+
+# ---- golden_eyes (1.7.1 section 1a) ----
+PROJECTILE = {"kind": "projectile", "from": 6421, "set": {"SpEffect.1642100.effectEndurance": 20}}
+
+
+def test_golden_eyes_on_a_spell_made_from_a_game_spell_names_the_buff_row_and_may_have_a_colour():
+    it = spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes={"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})}))["spells"][0]
+    assert it["golden_eyes"] == {"on": "SpEffect.1642100", "color": [0.2, 0.65, 1.0]}
+    gold = spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes={"on": "SpEffect.1642100"})}))["spells"][0]
+    assert gold["golden_eyes"] == {"on": "SpEffect.1642100"}                     # no colour: the game's gold
+    assert "golden_eyes" not in spec.normalise(file_of({"p": PROJECTILE}))["spells"][0]
+
+
+def test_golden_eyes_on_a_heal_over_time_buff_has_no_on():
+    assert spec.normalise(mutated(lambda i: i.update(golden_eyes={})))["spells"][0]["golden_eyes"] == {}
+    assert spec.normalise(mutated(lambda i: i.update(golden_eyes={"color": [1, 0, 0]})))["spells"][0]["golden_eyes"] == {"color": [1.0, 0.0, 0.0]}
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(mutated(lambda i: i.update(golden_eyes={"on": "SpEffect.1642100"})))
+    assert any("golden_eyes.on" in p and "leave `on` out" in p for p in e.value.problems)
+
+
+@pytest.mark.parametrize("bad,where", [
+    ({"color": [0.2, 0.65, 1]}, "golden_eyes.on"), ({"on": "Magic.6421"}, "golden_eyes.on"), ({"on": 1642100}, "golden_eyes.on"),
+    ({"on": "SpEffect.1642100", "color": [3, 0, 0]}, "golden_eyes.color"), ({"on": "SpEffect.1642100", "colour": [1, 1, 1]}, "golden_eyes.colour"),
+    (True, "golden_eyes"), ([0.2, 0.65, 1], "golden_eyes")])
+def test_golden_eyes_must_name_the_buff_row_and_a_colour_from_0_to_2(bad, where):
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes=bad)}))
+    assert any(where + ":" in p for p in e.value.problems), e.value.problems
+
+
+def test_a_clone_cannot_have_golden_eyes():
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(file_of({"c": {"kind": "clone", "from": 6421, "golden_eyes": {"on": "SpEffect.1642100"}}}))
+    assert any("golden_eyes" in p and "clone" in p for p in e.value.problems)
+
+
+def test_the_eyes_are_built_but_their_colour_is_not():
+    def view(eyes):
+        return spec.build_view(spec.normalise(file_of({"p": dict(PROJECTILE, **({"golden_eyes": eyes} if eyes else {}))})))
+    blue = view({"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})
+    assert blue == view({"on": "SpEffect.1642100", "color": [1, 0, 0]}) == view({"on": "SpEffect.1642100"})
+    assert blue != view(None) and blue != view({"on": "SpEffect.1642101"})
+    n = spec.normalise(file_of({"p": dict(PROJECTILE, golden_eyes={"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]})}))
+    assert spec.normalise(spec.as_file(n)) == n
+
+
+def test_the_schema_and_the_validator_agree_on_golden_eyes():
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((PKG / "spells.schema.json").read_text(encoding="utf-8"))
+    cases = [mutated(lambda i, v=v: i.update(golden_eyes=v)) for v in ({}, {"color": [0.2, 0.65, 1]}, {"color": [3, 0, 0]},
+                                                                      {"on": "SpEffect.1"}, {"x": 1}, True)]
+    cases += [file_of({"p": dict(PROJECTILE, golden_eyes=v)}) for v in ({"on": "SpEffect.1642100"}, {"on": "SpEffect.1642100", "color": [1, 1, 1]},
+                                                                      {"color": [1, 1, 1]}, {"on": "Magic.1"}, {"on": "SpEffect.1", "color": [1, 1]}, [])]
+    for d in cases:
+        ok_schema = jsonschema.Draft202012Validator(schema).is_valid(d)
+        try:
+            spec.normalise(d)
+            ok_code = True
+        except spec.SpecError:
+            ok_code = False
+        assert ok_schema == ok_code, d
+
+
+# ---- flame_accent_color: the second colour of the fire ----
+def test_a_flame_accent_colour_goes_with_a_flame_colour_and_is_not_part_of_the_build():
+    it = spec.normalise(mutated(lambda i: i.update(flame_color=[0.2, 0.65, 1], flame_accent_color=[0.55, 0.2, 1])))["spells"][0]
+    assert it["flame_accent_color"] == [0.55, 0.2, 1.0]
+    a = spec.normalise(mutated(lambda i: i.update(flame_color=[0.2, 0.65, 1], flame_accent_color=[0.55, 0.2, 1])))
+    assert spec.build_view(a) == spec.build_view(spec.normalise(Z4)) and spec.normalise(spec.as_file(a)) == a
+    for bad, where in (({"flame_accent_color": [1, 0, 0]}, "goes with flame_color"),
+                       ({"flame_color": [1, 1, 1], "flame_accent_color": [3, 0, 0]}, "three numbers")):
+        with pytest.raises(spec.SpecError) as e:
+            spec.normalise(mutated(lambda i, b=bad: i.update(b)))
+        assert any("flame_accent_color" in p and where in p for p in e.value.problems)
+
+
+def test_the_schema_and_the_validator_agree_on_the_flame_accent_colour():
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((PKG / "spells.schema.json").read_text(encoding="utf-8"))
+    for extra in ({"flame_color": [1, 1, 1], "flame_accent_color": [0.5, 0.2, 1]}, {"flame_accent_color": [0.5, 0.2, 1]},
+                  {"flame_color": [1, 1, 1], "flame_accent_color": [0.5, 0.2]}):
+        for d in (mutated(lambda i, x=extra: i.update(x)), file_of({"p": dict(PROJECTILE, **extra)})):
+            ok_schema = jsonschema.Draft202012Validator(schema).is_valid(d)
+            try:
+                spec.normalise(d)
+                ok_code = True
+            except spec.SpecError:
+                ok_code = False
+            assert ok_schema == ok_code, d
+

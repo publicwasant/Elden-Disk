@@ -83,6 +83,9 @@ def _facts(s: dict) -> list[tuple[str, str]]:
         rows.append(("shop", f"{shop.get('price')} runes" + (f", stock {shop['stock']}" if shop.get("stock") is not None else "")))
     if s.get("flame_color"):
         rows.append(("fire", " ".join(f"{c:g}" for c in s["flame_color"])))
+    if "golden_eyes" in s:
+        eyes = s["golden_eyes"]
+        rows.append(("eyes", " ".join(f"{c:g}" for c in eyes["color"]) if "color" in eyes else "gold"))
     rows.append(("slot", str(s.get("slot"))))
     return rows
 

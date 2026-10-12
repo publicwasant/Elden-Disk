@@ -1,7 +1,7 @@
 > [!NOTE]
 > **Version:** `1.7.1`  
 > **Status:** IMPLEMENTED (unit tests); in the real game on 2026-10-11 `run` put the text and the fire colour in by itself in three sessions (written and read back every time); what is seen in the game is in manual plan 1.7.1  
-> **Last Updated:** _2026-10-11_
+> **Last Updated:** _2026-10-12_ (section 1a: golden eyes, unit tests only)
 
 # Elden-Disk spec 1.7.1: the text and the fire colour of a spell (Item Customization Level 3, steps 1 and 3)
 
@@ -12,6 +12,27 @@ Reads on top of [spec 1.7.0](elden-disk-spec-v1.7.0.md). Only what changes is wr
 A new spell has a name, a short line and a long description in the game. The game reads them from FMG tables inside its archives; a loose file is not read and rewriting `Data0.bdt` is out of scope. So the text is given to the **running** game: after a character is in the world, the tool finds the game's three item-text tables in memory, rebuilds them with the spells' entries added and points the game at the new tables. The fire of *Flame, Grant Me Strength* is made of effect files the game keeps in memory as they are in the file; the tool finds them and writes new colours into the colour fields. Nothing is written to the game folder. Both last until the game closes, and both are done **once**: nothing watches the game afterwards.
 
 Both steps find what they change by **looking through the game's memory** (section 5). No fixed address from the exe is used: the pointer chain that was measured for the text held the right object in 3 of 5 runs of the same game.
+
+## 1a. Golden eyes (`golden_eyes`)
+
+While the buff of a spell lasts, both of the caster's eyes glow, in the design's colour.
+
+```json
+"golden_eyes": { "on": "SpEffect.1642100", "color": [0.2, 0.65, 1] }
+```
+
+| Key | Meaning |
+|:--|:--|
+| `on` | The copied SpEffect row that is the buff, `SpEffect.<id>` with the template's id as in `set`. Required for a spell made from a game spell (kinds `buff` with `from`, `enchant`, `projectile`, `attack`); refused on a heal-over-time buff made from scratch, which has one buff row (it gets the eyes). A `clone` copies no SpEffect row and cannot have `golden_eyes` |
+| `color` | Optional, three numbers as `flame_color` (0 to 2). Without it the eyes are the game's own red |
+
+Which eyes (read in the game's own files 1.17.1, not assumed). The glowing eyes of an enemy are put on the eyes of the enemy's model: the gold eyes of the enemies that give five times the runes (SpEffect `5250`, `haveSoulRate` 5) are effect `71` on DummyPoly `199`, which the enemy model `c5250` has twice, once on each eye. The player's model `c0000` has no `199`; its eyes are DummyPoly `845` (left) and `846` (right), on the bone `Head` (`220`, where the first version put the eyes of Gold-Pickled Fowl Foot, is on `Spine2`, the chest). Of all SpEffectVfx rows of the game, only two put a lasting effect on `845` and `846`: `20090050` and `20090051`, the effect `f000004866` (glowing red eyes with a light), which the game shows on a human NPC of the DLC (NpcParam `150000002`, SpEffects `20018100` and `20018101`, which never end). That is what `golden_eyes` uses. (`f000004225` on `845` is a flash of 1-1.5 s that some NPC attacks show.)
+
+**Build.** The buff's SpEffect row gets `20090050` and `20090051` in the first two of `vfxId1`-`vfxId7` that are `-1` (nothing is overwritten; `vfxId` is left to the design, the author's spell sets it to `-1`), unless a visual field already holds them. The build refuses `on` when it is not one of the copied rows, and a file whose SpEffects `20018100` / `20018101` do not show those rows. The gate sees it: a template spell's copied row must equal the template's with the design's fields **and** the eyes (`G11 ... differs in: vfxId1, vfxId2`), and a buff made from scratch must hold both (`G5 ... has no golden eyes`). `on` is part of the build (adding, moving or removing the eyes builds again); `color` is not. `bases.RECIPE_VERSION` is 2 since this change: a build or a secured file made by version 1 (the first version of the eyes put SpEffectVfx 5364 on DummyPoly 220, the chest) is built again.
+
+**Colour.** `write --flame-color` (section 4, started by `run`) recolours the glow in the same look as the fire, with its own colour: `Spells.eyes_color(selection)` gives the colour of the first spell (by slot) that names one, with a note when others differ. The places of the colours are in `writer/fxr_plans.py: EYES_PLANS`, made by `tools/fxr_places.py` from the file itself; that reading of FXR version 5 finds 71 of the 72 places of the fire's plans that were tried in the game (the one left is a black curve tangent, which a recolouring leaves black). The effect file is shared with that NPC, so its eyes have the colour too while the game runs. The game holds the file of the eyes more than once (two and three copies were seen, only one of them with the file's header) and draws from a copy that a look stopping at the first one did not reach, so when the eyes have a colour the look goes through **all** the memory (about a minute) and paints every copy (`find_all(..., everything=True)`). Output: `✓ write  eyes colour: the glowing eyes are now (0.2, 0.65, 1.0) (N places written); it lasts until the game closes`.
+
+**Seen in the game on 2026-10-12** (manual plan 1.7.1, EY): both eyes glow while the buff lasts, on the eyes, and they turned blue once every copy was painted (32 places in two copies, a third already done). Not tried yet: a whole `run` where the step started by `run` (which now looks through all the memory) is the only one; if the eyes are red, cast once and run `write --flame-color` by hand.
 
 ## 2. The design: `text` and `flame_color`
 
@@ -39,6 +60,19 @@ three numbers, red, green, blue, each from 0 to 2 (1 = the full colour, above 1 
 
 `build_view` leaves `text` and `flame_color` (and the 1.7.0 `name`/`description` of old records) out: an edit of either never changes the build, the gate, `decide` or `decide_last`, and never un-secures a secured build. `Spells.texts(selection)` gives `{goods id: text}` for **every** slot (the Goods id is `2230000 + slot - 1`), empty for a slot with no spell or a spell outside the selection.
 
+### 2a. A second colour for the fire: `flame_accent_color`
+
+```json
+"flame_color": [0.2, 0.65, 1], "flame_accent_color": [0.54, 0.4, 0.8]
+```
+
+With `flame_color` only (it is an error without it), the same three numbers. It colours what `flame_color` does not reach, so the cast has two colours:
+
+- the places of the two fire files that the plan of section 4 leaves out (`writer/fxr_plans.py`, `accent` of each plan: the smallest and biggest values and some first keys of the linear colours, pink and red in the game's file; 4 in `524400`, 28 in `524401`, of which those that are not white or black change), found with `tools/fxr_places.py`;
+- the **ring of runes** at the hand (the circle seen while Flame, Grant Me Strength is cast): `f000515000` (the game has the same file as 515010, 515020, 515030 and 515060) and `f000515001` (the ring with a burst; also 515011), the effects that use the ring texture `s60110`, red in the game's file (`ACCENT_PLANS`). The game may not hold them yet: they are painted when they are there, never required.
+
+`Spells.flame_accent_color(selection)` gives the second colour of the spell that gives the fire its colour. Not part of the build. The author's design: blue fire with a purple ring, `[0.54, 0.4, 0.8]` (the hue of the gravity sorceries' effects, Magic 4700 and 4720: `(0.67, 0.5, 1.0)`, at 80 % brightness). Seen in the game on 2026-10-12: the ring of runes purple, the fire blue.
+
 ### 2b. Icons: an icon the game already has
 
 A new picture is not possible (it lives in the game's menu texture archives), but a spell made from a game spell can show the icon of **any item the game has**, with the `set` it already has: `"Goods.<from>.iconId": N` (`<from>` is the template's Magic id, as in 1.7.0 section 4b; `N` is the `iconId` of the Goods row of the item whose picture is wanted). The Goods row of the copy gets `N`; the Magic row keeps the template's `iconId` (`Magic.<from>.iconId` can be set the same way if the memory screen needs it). The picture must be in an icon sheet the game loads: the sheet of `MENU_ItemIcon_06806` is `SB_Icon_07_dlc`, so a DLC icon needs the DLC installed. Example of the author's design: `reverse_cursed_technique` (a copy of Heal, 6421) with `"Goods.6421.iconId": 6806`, the icon of Gravitational Missile (Goods 2004710); built on the original `regulation.bin` the gate passes and the new Goods row (2230000) holds 6806. Seen in the game on 2026-10-12 (the author's check: the icon fits the spell); the screens one by one are in manual plan 1.7.1, IC.
@@ -60,7 +94,7 @@ Not idempotent across calls in the same game: after the first `write --text` the
 
 ## 4. `write --flame-color [--wait [SEC] | --when-loaded] [--spec FILE] [--extension-dir DIR]`
 
-The same rules as section 3 for the options, the authorisation and the wait. The design gives the colour (`Spells.flame_color`); with no colour in the design: `no spell of the design names a flame_color: nothing to do`, exit `0`.
+The same rules as section 3 for the options, the authorisation and the wait. The design gives the colour (`Spells.flame_color`) and, since section 1a, the colour of the golden eyes (`Spells.eyes_color`), which is recoloured in the same look with its own colour; either may be absent. With neither: `no spell of the design names a flame_color or a golden_eyes color: nothing to do`, exit `0`.
 
 1. Two effect files make the fire that is recoloured: `524400` (the fire while casting; 18 colours) and `524401` (the burst when the cast ends; 54 colours). The third (`524402`, the fire on the body) is left alone. `writer/fxr_plans.py` lists, for each file, where every colour (four little-endian floats, RGBA) sits and whether it is a bloom colour.
 2. **New colour.** With v = the biggest of R, G, B and w = 1 − (v − the smallest) / v: new RGB = v × (w + (1 − w) × target). White stays white, black stays black, alpha is never touched. A bloom colour becomes v × target.
@@ -68,7 +102,7 @@ The same rules as section 3 for the options, the authorisation and the wait. The
 4. Each copy is written at its listed places and read back. A place that would not change (black) is not written. `already` counts the copies that were painted before.
 5. If an effect is not found the look is made again after 10, 20, 40 and 60 s of rest (with `--when-loaded` or `--wait`); at the end: `the game does not hold the effect file(s) … : the game is still starting (use --wait), or it is not the version this was made for`, exit `1`.
 
-Output: `✓ write  flame colour: the fire of Flame, Grant Me Strength is now (0.2, 0.65, 1.0) in 2 effects (68 places written); it lasts until the game closes`. The effect files are shared by every spell that uses them, so the game's own Flame, Grant Me Strength has the colour too while the game runs.
+Output: `✓ write  flame colour: the fire of Flame, Grant Me Strength is now (0.2, 0.65, 1.0) in 2 effects (68 places written); it lasts until the game closes`; with `flame_accent_color` the line names both colours and `✓ write  ring colour: the ring of runes at the hand is now (…)` follows when the game holds the ring (section 2a). The effect files are shared by every spell that uses them, so the game's own Flame, Grant Me Strength has the colour too while the game runs.
 
 ## 5. The look: `writer/scan.py`
 
@@ -122,8 +156,8 @@ The earlier chain from the exe gave the right object in 3 of 5 runs and memory g
 
 ## 10. Not done (open)
 
-Thai and other scripts (glyphs in the game's font untested); a game language other than English (the profile holds the English sizes); the colour of the fire on the body (`524402`); a new icon picture (Level 3 step 2; reusing an existing icon is 2b); a faster look for the array (it is found by a look through all the memory, ~72 s; it lies near the tables); a second `write --text` in the same game.
+Thai and other scripts (glyphs in the game's font untested); a game language other than English (the profile holds the English sizes); the colour of the fire on the body (`524402`); the golden eyes in the game (section 1a); a new icon picture (Level 3 step 2; reusing an existing icon is 2b); a faster look for the array (it is found by a look through all the memory, ~72 s; it lies near the tables); a second `write --text` in the same game.
 
 ## 11. Tests
 
-`tests/test_write_text.py` (writer/text.py against a fake game memory: the shape of a table, `find_tables` and `find_arrays` with decoys, a second copy of the array, the look around the tables and the fall back to all the memory, swap and every failure of it; the command: three tables, idempotent, emptying, no session, other process, no profile block, waits and gives up with the sizes it saw, the game putting its tables back, command-line rules), `tests/test_write_flame.py` (`scan.walk`: borders, rest in proportion to the time and the budget, rests slept in lumps, the near tier read once, the head tier, unreadable parts; `find_all`; `paint_many`; the command step), additions to `test_ext_spec.py` (the object, limits, renamed keys, `flame_color`), `test_ext_service.py` (`texts`, `flame_color`, an edit of either decides nothing), `test_host.py` (`on_running`), `test_run_command.py` (the command lines, when the steps start, stopping them), `test_profile_policy.py` (the `text` block: files and sizes), `test_disk.py` (the one allocation), `test_gamearchive.py` and `test_ext_fmg.py` (tools/gamearchive.py, the FMG), `test_probe_text.py` (the research tool).
+`tests/test_write_text.py` (writer/text.py against a fake game memory: the shape of a table, `find_tables` and `find_arrays` with decoys, a second copy of the array, the look around the tables and the fall back to all the memory, swap and every failure of it; the command: three tables, idempotent, emptying, no session, other process, no profile block, waits and gives up with the sizes it saw, the game putting its tables back, command-line rules), `tests/test_write_flame.py` (the golden eyes: their plan, their own colour in the same look, the step with only the eyes or both; `scan.walk`: borders, rest in proportion to the time and the budget, rests slept in lumps, the near tier read once, the head tier, unreadable parts; `find_all`; `paint_many`; the command step), `test_fxr_places.py` (tools/fxr_places.py on a small FXR file), `test_ext_golden.py` (golden eyes built on the real file and seen by the gate), additions to `test_ext_spec.py` (the object, limits, renamed keys, `flame_color`, `golden_eyes`), `test_ext_service.py` (`texts`, `flame_color`, an edit of either decides nothing), `test_host.py` (`on_running`), `test_run_command.py` (the command lines, when the steps start, stopping them), `test_profile_policy.py` (the `text` block: files and sizes), `test_disk.py` (the one allocation), `test_gamearchive.py` and `test_ext_fmg.py` (tools/gamearchive.py, the FMG), `test_probe_text.py` (the research tool).

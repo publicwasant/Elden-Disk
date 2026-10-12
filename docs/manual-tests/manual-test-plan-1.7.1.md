@@ -41,6 +41,24 @@ Only what is new in 1.7.1; everything else is [manual-test-plan-1.7.0](../experi
 | FL8 | `write --flame-color` with no game running / with anti-cheat | `eldenring.exe is not running` exit `1` / refused exit `3` | [ ] |
 | FL9 | Quit the game; `run` again | the fire is coloured again (it is done at every start) | [ ] |
 
+## FA. Second colour of the fire
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| FA1 | `flame_color` blue and `flame_accent_color` purple; `run`, load a character | the fire line names both colours; `✓ ring colour: the ring of runes at the hand is now (…)` when the game holds the ring | [ ] |
+| FA2 | Hold L1 to cast | the fire in the hand blue, the ring of runes purple | [x] 2026-10-12 (by hand: `write --flame-color` after a cast) |
+| FA3 | `flame_accent_color` without `flame_color` | the design is refused (`goes with flame_color`) | [ ] |
+
+## EY. Golden eyes (not tried yet)
+
+| ID | Do | Expect | |
+|:--|:--|:--|:-:|
+| EY1 | Design with `golden_eyes: {"on": "SpEffect.1642100", "color": [0.2, 0.65, 1]}` on `reverse_cursed_technique`, `run -v` | it builds again (the eyes changed), gate passed; the card shows `eyes  0.2 0.65 1` | [ ] |
+| EY2 | Load a character | the colour step logs `look 1/5: … (the whole memory …); found 524400, 524401, 4866` and `✓ … eyes colour: the glowing eyes are now (0.2, 0.65, 1.0) (… places written)` next to the fire line; if it says it cannot find `4866`, cast the spell once and run `eldendisk write --flame-color` by hand | [ ] |
+| EY3 | Cast the spell, look at the face (camera in front) | while the buff lasts (20 s) both eyes glow blue, on the eyes (not the chest); they stop when it ends | [x] 2026-10-12 (after `write --flame-color` painted every copy by hand) |
+| EY4 | Remove `color`, quit, `run` | no rebuild; the eyes glow the game's red | [ ] |
+| EY5 | Quit the game | everything as before: save and `regulation.bin` restored byte for byte | [ ] |
+
 ## IC. Icon (an existing icon reused)
 
 | ID | Do | Expect | |

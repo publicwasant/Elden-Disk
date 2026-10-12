@@ -300,7 +300,9 @@ def rig(tmp_path, monkeypatch):
     profile = replace(make_profile(), text=TEXT)
     target = Target(GAME_PID, GAME_STARTED, Module("eldenring.exe", BASE, str(tmp_path / "eldenring.exe")), EXE_SHA, profile)
     box["locate"] = lambda offsets: target
-    design = SimpleNamespace(selection=lambda: ("all", None), texts=lambda sel: box["texts"], flame_color=lambda sel: box.get("flame", (None, None)))
+    design = SimpleNamespace(selection=lambda: ("all", None), texts=lambda sel: box["texts"], flame_color=lambda sel: box.get("flame", (None, None)),
+                             eyes_color=lambda sel: box.get("eyes", (None, None)),
+                             flame_accent_color=lambda sel: box.get("accent", (None, None)))
 
     def sleep(s):
         clock["t"] += s
@@ -510,6 +512,18 @@ def test_no_colour_in_the_design_means_nothing_is_touched(rig, monkeypatch):
     assert all(fg.mem[b] == untouched.mem[b] for b in fg.mem)
 
 
+def test_the_eyes_colour_of_the_design_reaches_the_golden_eyes_even_without_a_fire_colour(rig, monkeypatch):
+    from tests.test_write_flame import BASES, Game as FlameGame
+    from eldendisk.writer import fxr
+    rig.open_session()
+    fg = FlameGame(effects=("524400", "524401", "4866"))
+    monkeypatch.setattr(wcmd, "WritableProcessMemory", lambda pid: fg)
+    rig.box["flame"], rig.box["eyes"] = (None, None), ((0.2, 0.65, 1.0), None)
+    assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == 0
+    assert fxr.find_all(fg, ["4866"], (0.2, 0.65, 1.0)).changed["4866"] == [BASES["4866"]]
+    assert bytes(fg.mem[BASES["524400"]]) == bytes(FlameGame().mem[BASES["524400"]])
+
+
 def test_no_session_no_flame_colour(rig, monkeypatch):
     fg, untouched = _flame_rig(rig, monkeypatch)
     assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == EXIT_NO_SESSION
@@ -619,4 +633,17 @@ def test_when_loaded_goes_with_text_or_flame_colour_only_and_not_with_wait():
         with pytest.raises(SystemExit):
             cli.main(bad)
 
+
+def test_the_second_fire_colour_reaches_the_places_the_first_leaves_out(rig, monkeypatch):
+    from tests.test_write_flame import BASES, Game as FlameGame
+    from eldendisk.writer import fxr
+    from eldendisk.writer.fxr_plans import PLANS
+    rig.open_session()
+    fg = FlameGame()
+    monkeypatch.setattr(wcmd, "WritableProcessMemory", lambda pid: fg)
+    rig.box["flame"], rig.box["accent"] = ((0.2, 0.65, 1.0), None), ((0.55, 0.2, 1.0), None)
+    assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == 0
+    for eid in ("524400", "524401"):
+        for at, (_old, new) in fxr.accent_writes(PLANS[eid], (0.55, 0.2, 1.0)).items():
+            assert bytes(fg.mem[BASES[eid]][at:at + 16]) == new
 

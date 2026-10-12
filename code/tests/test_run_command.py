@@ -353,3 +353,19 @@ def test_a_text_step_still_running_when_the_session_ends_is_stopped(tmp_path, mo
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
     assert run_cmd.cmd_run(args) == 0 and stopped == [1]
     book.close()
+
+
+@pytest.mark.parametrize("eyes,flame,expect", [({"color": [0.2, 0.65, 1]}, None, True), ({}, None, False), (None, [1, 0, 0], True), (None, None, False)])
+def test_the_colour_step_starts_for_a_fire_colour_or_a_colour_of_the_golden_eyes(tmp_path, eyes, flame, expect):
+    import copy
+    import json
+    from tests.z4 import ID, SPELL, file_of
+    spell = copy.deepcopy(SPELL)
+    if eyes is not None:
+        spell["golden_eyes"] = eyes
+    if flame is not None:
+        spell["flame_color"] = flame
+    design = tmp_path / "extension.json"
+    design.write_text(json.dumps(file_of({ID: spell})), encoding="utf-8")
+    assert run_cmd.design_has_flame(_args(tmp_path, spec=str(design)), tmp_path / "vault") is expect
+

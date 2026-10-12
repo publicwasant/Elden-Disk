@@ -409,3 +409,38 @@ def test_a_flame_color_change_is_not_a_build_change_for_any_of_the_decisions(ci)
     changed = ci.items("all")
     base, sha = ci.read_base(ci.game)
     assert ci.decide(changed, sha).use_secured and ci.decide_last(changed, "all", sha).use_secured
+
+
+def test_eyes_color_is_none_without_one_and_the_first_slots_when_there_are_several(ci):
+    assert ci.eyes_color("all") == (None, None)
+    d = file_of({ID: copy.deepcopy(SPELL), "other": copy.deepcopy(SPELL)})
+    a, b = spell_of(d, ID), spell_of(d, "other")
+    a["golden_eyes"], b["golden_eyes"] = {"color": [0.2, 0.65, 1]}, {"color": [1, 0, 0]}
+    write_spec(ci, d)
+    colour, note = ci.eyes_color("all")
+    assert colour == (0.2, 0.65, 1.0) and "slot 1" in note
+    b["golden_eyes"] = {}                                                       # golden eyes without a colour: the game's gold
+    write_spec(ci, d)
+    assert ci.eyes_color("all") == ((0.2, 0.65, 1.0), None) and ci.eyes_color(["other"]) == (None, None)
+
+
+def test_the_eyes_colour_is_no_build_change_but_the_eyes_are(ci):
+    write_spec(ci, edited(lambda i: i.update(golden_eyes={})))
+    build_and_secure(ci)
+    base, sha = ci.read_base(ci.game)
+    write_spec(ci, edited(lambda i: i.update(golden_eyes={"color": [0.2, 0.65, 1]})))
+    assert ci.decide(ci.items("all"), sha).use_secured
+    write_spec(ci, edited(lambda i: i.pop("golden_eyes", None)))
+    d = ci.decide(ci.items("all"), sha)
+    assert not d.use_secured and any("golden_eyes" in line for line in d.diff)
+
+
+def test_the_flame_accent_colour_is_the_one_of_the_spell_that_gives_the_fire_its_colour(ci):
+    assert ci.flame_accent_color("all") == (None, None)
+    d = file_of({ID: copy.deepcopy(SPELL), "other": copy.deepcopy(SPELL)})
+    spell_of(d, ID).update(flame_color=[0.2, 0.65, 1], flame_accent_color=[0.55, 0.2, 1])
+    spell_of(d, "other").update(flame_color=[0.2, 0.65, 1], flame_accent_color=[1, 0, 0])
+    write_spec(ci, d)
+    colour, note = ci.flame_accent_color("all")
+    assert colour == (0.55, 0.2, 1.0) and "slot 1" in note
+

@@ -2,7 +2,8 @@
 unknown file is refused instead of guessed at."""
 from __future__ import annotations
 
-RECIPE_VERSION = 1
+RECIPE_VERSION = 2          # raise it whenever the same design gives other rows: a build or a secured file of an older version is built again
+                            # (2: golden_eyes moved from the Fowl Foot's SpEffectVfx 5364, on the chest, to 20090050/20090051 on the eyes)
 
 # base version -> sha256 of the game's original (untouched) regulation.bin file
 BASES = {

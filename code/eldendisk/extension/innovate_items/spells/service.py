@@ -70,7 +70,7 @@ def _write_atomic(path: Path, data: bytes) -> None:
 
 # ---------------- the field-by-field diff ----------------
 def _flatten(v, prefix: str, out: dict) -> None:
-    if isinstance(v, dict):
+    if isinstance(v, dict) and (v or not prefix):      # an empty object is a value (golden_eyes {}: the eyes, in the game's gold)
         for k in v:
             _flatten(v[k], f"{prefix}.{k}" if prefix else str(k), out)
     else:
@@ -193,6 +193,31 @@ class Spells:
         first = named[0][1]
         other = sorted({c for _slot, c in named if c != first})
         note = (f"the spells name {len(other) + 1} different flame colours; the fire effects are shared, so only slot {named[0][0]}'s is used"
+                if other else None)
+        return first, note
+
+    def flame_accent_color(self, which="all") -> tuple:
+        """(the second colour of the fire as (r, g, b), note) or (None, None): `flame_accent_color` of the spell that gives the fire its
+        colour (flame_color: the first by slot that names one); a note when other spells name another. `write --flame-color` puts
+        it into the game with the fire."""
+        named = [s for s in self.items(which) if "flame_color" in s]
+        if not named or "flame_accent_color" not in named[0]:
+            return None, None
+        first = tuple(named[0]["flame_accent_color"])
+        other = {tuple(s["flame_accent_color"]) for s in named[1:] if "flame_accent_color" in s} - {first}
+        note = (f"the spells name {len(other) + 1} different flame accent colours; only slot {named[0]['slot']}'s is used" if other else None)
+        return first, note
+
+    def eyes_color(self, which="all") -> tuple:
+        """(the colour of the golden eyes as (r, g, b), note) or (None, None) when no spell in `which` has golden_eyes with a `color`
+        (without one the eyes stay the game's gold). The effect is the game's own and shared, so there is one colour: the first spell's
+        (by slot) that names one, with a note when others name another. `write --flame-color` puts it into the game with the fire."""
+        named = [(s["slot"], tuple(s["golden_eyes"]["color"])) for s in self.items(which) if "color" in s.get("golden_eyes", {})]
+        if not named:
+            return None, None
+        first = named[0][1]
+        other = {c for _, c in named[1:] if c != first}
+        note = (f"the spells name {len(other) + 1} different colours for the golden eyes; the effect is shared, so only slot {named[0][0]}'s is used"
                 if other else None)
         return first, note
 

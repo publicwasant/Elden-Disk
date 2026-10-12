@@ -1,11 +1,13 @@
 """Development pipeline for EldenDisk: tests -> build `./build/dist/eldendisk.exe` -> status. It ends there; it does not start the game.
 
-    python code/tools/dev_pipeline.py [--skip-tests] [--no-embed] [--engine pyinstaller|nuitka] [--icon ICO]
+    python code/tools/dev_pipeline.py [--skip-tests] [--no-embed] [--engine pyinstaller|nuitka] [--icon ICO] [--keep-app-data]
 
 1. Tests: runs the whole test suite (pytest); a failure stops the pipeline.
 2. Build: compiles `./build/dist/eldendisk.exe` (PyInstaller; `--engine nuitka` for Nuitka). The build always starts clean
    (`./build` is removed first) and embeds offsets.json, chr_state_ids.json and extension.json in the exe; `--no-embed` leaves
-   them next to the exe instead. A README.md (quick start + the exe's command reference, from `docs/guilde/`) is written next to
+   them next to the exe instead. It also removes the tool's own folder `%LOCALAPPDATA%\\EldenDisk` (the vault and its save
+   snapshots, the extensions' files, the exports), never while a vault in it owes a restore or the game or the tool runs;
+   `--keep-app-data` keeps it. A README.md (quick start + the exe's command reference, from `docs/guilde/`) is written next to
    the exe. Building the exe is a developer's job, so it lives here and not in the `eldendisk` command line.
 3. Status: where the exe is, its size and SHA-256, the version, what was embedded, how long each step took, and the command
    that starts it. Everything the exe produces goes to `%LOCALAPPDATA%\\EldenDisk`, so the exe can be copied anywhere.
@@ -15,10 +17,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -32,6 +36,7 @@ else:
 
 sys.path.insert(0, str(CODE_DIR))
 from eldendisk import __version__, ui
+from eldendisk.game.processes import find_pid
 from eldendisk.paths import app_data_dir
 from eldendisk.vault.session import LEGACY_MARKER_NAME, SESSION_NAME
 
@@ -61,9 +66,17 @@ def log(msg: str) -> None:
     print(f"{ui.paint('[E2E Pipeline]', 'dim', color)} {_tint(msg, color)}", flush=True)
 
 
+def tests_temp_dir() -> Path:
+    """The tests' temporary files: a folder of their own in the system's temp folder (pytest clears it at the start of each run).
+    Without it pytest keeps numbered folders and a `pytest-current` link in %TEMP%/pytest-of-<user>, and Windows may refuse to
+    remove that link at exit ("Exception ignored in atexit callback ... PermissionError"). Not inside ./build: the tests make vaults
+    that owe a restore on purpose, and the build's clean refuses to remove a folder that holds one."""
+    return Path(tempfile.gettempdir()) / "eldendisk-pytest"
+
+
 def run_precheck() -> bool:
     log("Step 1/2: Running the tests (pytest)...")
-    cmd = [sys.executable, "-m", "pytest"]
+    cmd = [sys.executable, "-m", "pytest", f"--basetemp={tests_temp_dir()}"]
     res = subprocess.run(cmd, cwd=str(CODE_DIR))
     if res.returncode != 0:
         log("ERROR: the tests failed. Aborting pipeline.")
@@ -93,6 +106,28 @@ def unresolved_sessions(build_root: Path) -> list[Path]:
         return []
     names = (SESSION_NAME, LEGACY_MARKER_NAME)
     return sorted({f.parent for n in names for f in build_root.rglob(n) if f.is_file()})
+
+
+GAME_EXE, TOOL_EXE = "eldenring.exe", "eldendisk.exe"
+
+
+def _local_app_data() -> Path:
+    base = os.environ.get("LOCALAPPDATA")
+    return Path(base) if base else Path.home() / "AppData" / "Local"
+
+
+def app_data_problems(target: Path) -> list[str]:
+    """Why `target` (the tool's folder %LOCALAPPDATA%\\EldenDisk: the vault with its save snapshots, the extensions' files, the exports)
+    must not be removed now; [] when it may. Only that exact folder is ever removed; nothing while a vault in it owes a restore or
+    while the game or the tool runs (a session in progress keeps the only clean copy of the save there)."""
+    if target.name != "EldenDisk" or target.parent != _local_app_data() or target.is_symlink():
+        return [f"{target} is not %LOCALAPPDATA%\\EldenDisk: not removed"]
+    out = [f'unresolved session in {v}; run `eldendisk vault restore --vault "{v}"` first (or build with --keep-app-data)'
+           for v in unresolved_sessions(target)]
+    for exe in (GAME_EXE, TOOL_EXE):
+        if find_pid(exe) is not None:
+            out.append(f"{exe} is running: close it first (or build with --keep-app-data)")
+    return out
 
 
 def config_files(layout: dict) -> list[Path]:
@@ -147,9 +182,12 @@ def exe_readme(layout: dict) -> str | None:
     return intro.replace("{version}", __version__).rstrip("\n") + "\n\n" + reference.rstrip("\n") + "\n"
 
 
-def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller", icon: str | None = None) -> bool:
+def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller", icon: str | None = None,
+              app_data: bool = False) -> bool:
     """Compile ./build/dist/eldendisk.exe. `clean` (the default) removes ./build first, except while a vault inside it still
-    owes a restore."""
+    owes a restore. `app_data` (with `clean`; what the pipeline does unless --keep-app-data) also removes %LOCALAPPDATA%\\EldenDisk,
+    the tool's own folder (the vault and its save snapshots, the extensions' files, the exports), except while a vault in it owes a
+    restore or the game or the tool runs; nothing is removed when either check fails."""
     log(f"Step 2/2: Building standalone {EXE_NAME} for version {__version__} ({engine}, onefile; this takes a while)...")
     if engine not in ENGINES:
         log(f"ERROR: unsupported build engine '{engine}' (use one of: {', '.join(ENGINES)})")
@@ -163,6 +201,19 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
             for v in owed:
                 log(f'ERROR: unresolved session in {v}; run `eldendisk vault restore --vault "{v}"` before cleaning')
             return False
+        target = app_data_dir()
+        if app_data and target.exists():
+            problems = app_data_problems(target)
+            if problems:
+                for p in problems:
+                    log(f"ERROR: {p}")
+                return False
+            log(f"cleaning the tool's own folder {target} (vault, save snapshots, extension files, exports)")
+            try:
+                shutil.rmtree(target)
+            except OSError as exc:
+                log(f"ERROR: could not remove all of {target}: {exc}")
+                return False
         if layout["build_root"].exists():
             log("cleaning previous build artifacts")
             shutil.rmtree(layout["build_root"], ignore_errors=True)
@@ -260,6 +311,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="do not embed offsets.json, chr_state_ids.json and extension.json in the exe (copy them next to it)")
     parser.add_argument("--engine", choices=ENGINES, default="pyinstaller", help="compiler for the exe (default: pyinstaller)")
     parser.add_argument("--icon", metavar="ICO", default=None, help="icon file (.ico) for the exe")
+    parser.add_argument("--keep-app-data", action="store_true",
+                        help="do not remove %%LOCALAPPDATA%%\\EldenDisk (the vault and its save snapshots, the extensions' files, the "
+                             "exports) before the build; by default it is removed, never while a vault in it owes a restore or the game runs")
     args = parser.parse_args(argv)
 
     started = time.monotonic()
@@ -272,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
         log("Step 1/2: tests skipped (--skip-tests)")
 
     t0 = time.monotonic()
-    if not run_build(clean=True, embed=not args.no_embed, engine=args.engine, icon=args.icon):
+    if not run_build(clean=True, embed=not args.no_embed, engine=args.engine, icon=args.icon, app_data=not args.keep_app_data):
         return 1
     build_s = time.monotonic() - t0
 

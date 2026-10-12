@@ -55,11 +55,11 @@ def design_has_text(args, vault_path: Path) -> bool:
 
 
 def design_has_flame(args, vault_path: Path) -> bool:
-    """Does a spell of the design name a flame_color? (Nothing to start otherwise.)"""
+    """Does a spell of the design name a flame_color, or a colour for its golden_eyes? (Nothing to start otherwise.)"""
     try:
         ci = extension.open_spells(ext_dir(args, vault_path), spec_file(args))
         sel, _note = ci.selection()
-        return ci.flame_color(sel)[0] is not None
+        return ci.flame_color(sel)[0] is not None or ci.eyes_color(sel)[0] is not None
     except ExtensionError:
         return False
 

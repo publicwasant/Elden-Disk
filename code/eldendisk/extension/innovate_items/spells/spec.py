@@ -64,6 +64,7 @@ ID_FIELDS = {
 }
 LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "model"}
 FLAME_COLOR_MAX = 2.0     # a colour channel: 0..1 is the colour, up to 2 shines brighter
+EYES_ON_RE = re.compile(r"SpEffect\.(\d+)")    # golden_eyes.on: the copied SpEffect row the caster has while the buff lasts
 TEXT_FIELDS = {"goods_name": 80, "goods_info": 300, "goods_captions": 3000}   # field -> most characters (name; the short line under it; the long description). A loose guard, not a game limit: the game's own longest are 43 / 86 / 462
 RENAMED = {"name": "text.goods_name", "description": "text.goods_info (the long description is text.goods_captions)"}   # 1.7.0 -> 1.7.1
 
@@ -180,20 +181,74 @@ def _shop(c, it, p):
 def _flame_color(c, it, p, o):
     """`flame_color`: [red, green, blue], each 0..2 (1 = full colour, above 1 shines brighter). The fire of Flame, Grant Me Strength
     (the fire while casting and the burst; the fire on the body is left alone) is recoloured in the running game by `write --flame-color`; the effects are the game's own and
-    shared by every spell that uses them, so the colour belongs to the whole design (see service.flame_color). Not part of the build."""
+    shared by every spell that uses them, so the colour belongs to the whole design (see service.flame_color). Not part of the build.
+    `flame_accent_color` (with flame_color): the colour of the parts of those files that flame_color leaves out (writer/fxr_plans.py
+    `accent`: pink and red in the game's file), so the fire has two colours."""
     if "flame_color" not in it:
+        if "flame_accent_color" in it:
+            c.bad(p + ".flame_accent_color", "goes with flame_color (it colours the parts of the fire flame_color leaves out)")
         return
     v = it["flame_color"]
-    if not (isinstance(v, list) and len(v) == 3 and all(_num(x) and 0 <= x <= FLAME_COLOR_MAX for x in v)):
+    if not _colour(v):
         c.bad(p + ".flame_color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
         return
     o["flame_color"] = [float(x) for x in v]
+    if "flame_accent_color" in it:
+        a = it["flame_accent_color"]
+        if not _colour(a):
+            c.bad(p + ".flame_accent_color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
+        else:
+            o["flame_accent_color"] = [float(x) for x in a]
+
+
+def _colour(v) -> bool:
+    return isinstance(v, list) and len(v) == 3 and all(_num(x) and 0 <= x <= FLAME_COLOR_MAX for x in v)
+
+
+def _golden_eyes(c, it, p, o, template):
+    """`golden_eyes`: {"on": "SpEffect.<id>", "color": [red, green, blue]}. While the buff lasts both of the caster's eyes glow (the
+    game's own effect 4866 of a human NPC of the DLC, SpEffectVfx 20090050 and 20090051 on the eyes, added to the buff's SpEffect row by
+    the build). `on` names the copied SpEffect row that is the buff (a spell made from a game spell; the template's id, as in `set`); a
+    heal-over-time buff made from scratch has one buff row and no `on`. `color` (optional, as flame_color) recolours the glow in the
+    running game (`write --flame-color` does both); without it the eyes are the game's red. The effect file is shared with that NPC, so
+    the colour belongs to the whole design (service.eyes_color). `on` is part of the build, `color` is not."""
+    if "golden_eyes" not in it:
+        return
+    v, q = it["golden_eyes"], p + ".golden_eyes"
+    if o.get("kind") == "clone":
+        c.bad(q, "a clone shares the template's SpEffect rows with the game's own spell: use kind buff (with `from`), enchant, "
+                 "projectile or attack, which copy them")
+        return
+    if not isinstance(v, dict):
+        c.bad(q, 'must be an object: {"on": "SpEffect.<id>", "color": [red, green, blue]}' if template else
+                 'must be an object: {} or {"color": [red, green, blue]}')
+        return
+    allowed = ("on", "color") if template else ("color",)
+    for k in v:
+        if k not in allowed:
+            c.bad("%s.%s" % (q, k), "unknown field" if k != "on" else
+                  "a heal-over-time buff made from scratch has one buff row: leave `on` out")
+    e = {}
+    if template:
+        m = EYES_ON_RE.fullmatch(v["on"]) if isinstance(v.get("on"), str) else None
+        if "on" not in v:
+            c.bad(q + ".on", "missing: the copied SpEffect row that is the buff, as SpEffect.<id> (the template's id, as in `set`)")
+        elif not m:
+            c.bad(q + ".on", "must be SpEffect.<id> (the template's id of the copied SpEffect row, as in `set`)")
+        else:
+            e["on"] = "SpEffect.%d" % int(m.group(1))
+    if "color" in v:
+        if _colour(v["color"]):
+            e["color"] = [float(x) for x in v["color"]]
+        else:
+            c.bad(q + ".color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
+    o["golden_eyes"] = e
 
 
 def _buff(c, it, p, n, iid):
     """A heal-over-time buff built from Flame, Grant Me Strength (the canonical form has no `kind`: it is the default)."""
     c.keys(it, p, ["type", "requires", "fp_cost"],
-           ["kind", "text", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop", "flame_color"])
+           ["kind", "text", "stamina_cost", "cast_motion", "effect", "poise_while_casting_seconds", "shop", "flame_color", "flame_accent_color", "golden_eyes"])
     if it.get("type") != "incantation":
         c.bad(p + ".type", 'only "incantation" is supported')
     o = {"slot": n, "id": iid, "type": "incantation", "text": _text_object(c, it, p)}
@@ -232,6 +287,7 @@ def _buff(c, it, p, n, iid):
     if "shop" in it:
         o["shop"] = _shop(c, it, p)
     _flame_color(c, it, p, o)
+    _golden_eyes(c, it, p, o, False)
     return o
 
 
@@ -239,7 +295,7 @@ def _template(c, it, p, n, iid, kind):
     """A spell made from a game spell: `clone` (copy of the Goods and Magic rows, it keeps calling the template's own chain),
     `buff` with `from` and `enchant` (the same, and the template's own SpEffect rows are copied too, so they can be tuned with
     `set`). What is not named stays the template's, so the canonical form holds only what the design says."""
-    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set", "flame_color"])
+    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set", "flame_color", "flame_accent_color", "golden_eyes"])
     o = {"slot": n, "id": iid, "kind": kind, "text": _text_object(c, it, p)}
     src = c.integer(it, "from", p, 1, 2**31 - 1)
     if src is not None:
@@ -260,6 +316,7 @@ def _template(c, it, p, n, iid, kind):
     if "set" in it:
         o["set"] = _set(c, it["set"], p + ".set", o)
     _flame_color(c, it, p, o)
+    _golden_eyes(c, it, p, o, True)
     return o
 
 
@@ -397,9 +454,14 @@ def as_file(spec: dict) -> dict:
 
 
 def build_view(spec: dict) -> dict:
-    """What decides the bytes of the build (the text fields and the flame colour do not: they are put into the running game)."""
-    return {"format": spec["format"],
-            "spells": [{k: v for k, v in it.items() if k not in ("text", "name", "description", "flame_color")} for it in spec["spells"]]}
+    """What decides the bytes of the build (the text fields and the colours do not: they are put into the running game; the golden
+    eyes themselves are built, their colour is not)."""
+    def view(it):
+        out = {k: v for k, v in it.items() if k not in ("text", "name", "description", "flame_color", "flame_accent_color")}
+        if "golden_eyes" in out:
+            out["golden_eyes"] = {k: v for k, v in out["golden_eyes"].items() if k != "color"}
+        return out
+    return {"format": spec["format"], "spells": [view(it) for it in spec["spells"]]}
 
 
 def dumps(spec: dict) -> str:

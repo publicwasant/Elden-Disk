@@ -5,11 +5,13 @@ import pytest
 
 import eldendisk.commands.write as wcmd
 from eldendisk.writer import fxr, scan
-from eldendisk.writer.fxr_plans import PLANS
+from eldendisk.writer.fxr_plans import ACCENT_PLANS, EYES_PLANS, PLANS
 from eldendisk.writer.writer import WriteGate
 
 BLUE = (0.2, 0.65, 1.0)
-BASES = {"524400": 0x10000000, "524401": 0x20000000}
+RED = (1.0, 0.1, 0.1)
+BASES = {"524400": 0x10000000, "524401": 0x20000000, "4866": 0x30000000, "515000": 0x50000000, "515001": 0x58000000}
+ALL = {**PLANS, **EYES_PLANS, **ACCENT_PLANS}
 
 
 class Game:
@@ -19,9 +21,9 @@ class Game:
         self.mem, self.fail_writes, self.passes, self.reads, self.holes, self.tick = {}, False, 0, [], [], 0.0
         self.clock = None
         for eid in effects:
-            plan = PLANS[eid]
+            plan = ALL[eid]
             buf = bytearray(plan["size"])
-            for at, hexa, _bloom in plan["colours"]:
+            for at, hexa, _bloom in (*plan["colours"], *plan.get("accent", ())):
                 buf[at:at + 16] = bytes.fromhex(hexa)
             self.mem[BASES[eid]] = buf
 
@@ -386,3 +388,115 @@ def test_the_rest_is_owed_in_small_shares_and_slept_in_lumps(monkeypatch):
     assert walked.pieces == 10 and walked.complete
     assert len(sleeps) == 2 and all(s >= 0.01 for s in sleeps)                                    # not ten sleeps of 2 ms
     assert abs(walked.slept - sum(sleeps)) < 1e-9 and walked.slowest >= 0.004
+
+
+# ------------------------------------------------------------------------------------------------------ the golden eyes
+def test_the_eyes_plan_is_sane_and_turns_the_red_blue():
+    assert tuple(EYES_PLANS) == ("4866",) == fxr.eyes_ids() and not set(EYES_PLANS) & set(PLANS)
+    plan = EYES_PLANS["4866"]
+    ats = [c[0] for c in plan["colours"]]
+    assert ats == sorted(set(ats)) and all(0 <= a and a + 16 <= plan["size"] for a in ats)
+    own = [struct.unpack("<4f", bytes.fromhex(h)) for _a, h, bloom in plan["colours"] if not bloom]
+    assert all(r > max(g, b) for r, g, b, _a in own)                                       # the glow is red ...
+    for old, new in fxr.plan_writes(plan, BLUE).values():
+        r, g, b, a = struct.unpack("<4f", new)
+        assert b > r and a == struct.unpack("<4f", old)[3]                                 # ... and becomes blue, alpha untouched
+    assert sum(bloom for *_x, bloom in plan["colours"]) == 3
+
+
+def test_one_look_gives_the_fire_and_the_eyes_their_own_colour():
+    g = Game(effects=("524400", "524401", "4866"))
+    got, found = fxr.paint_many(g, open_gate(), ["524400", "524401", "4866"], {"524400": BLUE, "524401": BLUE, "4866": RED})
+    assert set(got) == {"524400", "524401", "4866"} and g.passes == 1
+    assert fxr.find_all(g, ["4866"], RED).changed["4866"] == [BASES["4866"]]
+    assert fxr.find_all(g, ["4866"], BLUE).changed["4866"] == []                      # the eyes have their own colour
+    assert painted(g, "524400") == [BASES["524400"]]
+
+
+def test_put_flame_paints_the_eyes_alone_when_the_design_has_no_fire_colour(monkeypatch, quiet_where):
+    g = Game(effects=("524400", "524401", "4866"))
+    ok = []
+    monkeypatch.setattr(wcmd.book, "ok", lambda tag, msg: ok.append(msg))
+    assert wcmd._put_flame(g, open_gate(), None, eyes=RED) == 0
+    assert fxr.find_all(g, ["4866"], RED).changed["4866"] == [BASES["4866"]]
+    assert bytes(g.mem[BASES["524400"]]) == bytes(Game().mem[BASES["524400"]])            # the fire is left alone
+    assert len(ok) == 1 and ok[0].startswith("eyes colour: the glowing eyes are now (1.0, 0.1, 0.1)")
+
+
+def test_put_flame_does_both_in_one_look_and_says_so_twice(monkeypatch, quiet_where):
+    g = Game(effects=("524400", "524401", "4866"))
+    ok = []
+    monkeypatch.setattr(wcmd.book, "ok", lambda tag, msg: ok.append(msg))
+    assert wcmd._put_flame(g, open_gate(), BLUE, eyes=RED) == 0 and g.passes == 1
+    assert [m.split(":")[0] for m in ok] == ["flame colour", "eyes colour"] and all(m.endswith("it lasts until the game closes") for m in ok)
+
+
+def test_put_flame_says_when_the_game_does_not_hold_the_eyes(monkeypatch, quiet_where):
+    errors = []
+    monkeypatch.setattr(wcmd.book, "e", lambda tag, msg: errors.append(msg))
+    assert wcmd._put_flame(Game(), open_gate(), BLUE, eyes=RED) == 1
+    assert errors and "4866" in errors[-1] and "524400" not in errors[-1]
+
+
+def test_the_eyes_are_painted_in_every_copy_the_game_holds(monkeypatch, quiet_where):
+    """The game held the file of the eyes two and three times (2026-10-12) and drew them from a copy a look that stops at the first
+    one never reached: the eyes are looked for through all the memory and every copy is painted."""
+    g = Game(effects=("524400", "524401", "4866"))
+    g.mem[0x40000000] = bytearray(g.mem[BASES["4866"]])                                   # a second copy, after the first
+    assert wcmd._put_flame(g, open_gate(), BLUE, eyes=RED) == 0
+    assert fxr.find_all(g, ["4866"], RED, everything=True).changed["4866"] == [BASES["4866"], 0x40000000]
+    assert fxr.find_all(g, ["4866"], RED, everything=True).own["4866"] == []
+    one = Game(effects=("4866",))
+    one.mem[0x40000000] = bytearray(one.mem[BASES["4866"]])
+    got, _ = fxr.paint_many(one, open_gate(), ["4866"], RED)                               # without `everything`: the first copy only
+    assert got["4866"].copies == 1
+
+
+# ------------------------------------------------------------------------------------------------------ the second colour of the fire
+PURPLE = (0.55, 0.2, 1.0)
+
+
+def test_the_accent_places_are_the_ones_the_plan_leaves_out_and_turn_purple():
+    for eid, plan in PLANS.items():
+        main = [(a, a + 16) for a, _h, _b in plan["colours"]]
+        acc = plan["accent"]
+        assert acc and all(e <= a or a + 16 <= s for a, _h, _b in acc for s, e in main), eid     # never inside a place of the plan
+        w = fxr.accent_writes(plan, PURPLE)
+        assert w and all(struct.unpack("<4f", new)[2] >= struct.unpack("<4f", new)[1] for _old, new in w.values())
+    assert not fxr.accent_writes(EYES_PLANS["4866"], PURPLE)                                # the eyes have no accent
+
+
+def test_the_accent_is_painted_on_new_and_already_painted_copies_once(monkeypatch, quiet_where):
+    g = Game()
+    fxr.paint_many(g, open_gate(), ["524400"], BLUE)                                      # blue from an earlier run
+    got, _ = fxr.paint_many(g, open_gate(), ["524400", "524401"], BLUE, accent=PURPLE)
+    n400, n401 = (len(fxr.accent_writes(PLANS[e], PURPLE)) for e in ("524400", "524401"))
+    assert got["524400"].already == 1 and got["524400"].places == n400
+    assert got["524401"].places == len(fxr.plan_writes(PLANS["524401"], BLUE)) + n401
+    again, _ = fxr.paint_many(g, open_gate(), ["524400", "524401"], BLUE, accent=PURPLE)
+    assert again["524400"].places == again["524401"].places == 0                           # nothing twice
+    for eid in ("524400", "524401"):
+        for at, (_old, new) in fxr.accent_writes(PLANS[eid], PURPLE).items():
+            assert bytes(g.mem[BASES[eid]][at:at + 16]) == new
+
+
+def test_without_an_accent_the_rest_of_the_fire_keeps_the_games_colour():
+    g = Game()
+    fxr.paint_many(g, open_gate(), ["524400"], BLUE)
+    for at, (old, _new) in fxr.accent_writes(PLANS["524400"], PURPLE).items():
+        assert bytes(g.mem[BASES["524400"]][at:at + 16]) == old
+
+
+# ------------------------------------------------------------------------------------------------------ the ring of runes at the hand
+def test_the_ring_takes_the_accent_colour_and_is_not_required(monkeypatch, quiet_where):
+    assert tuple(ACCENT_PLANS) == ("515000", "515001") == fxr.ring_ids()
+    g = Game(effects=("524400", "524401", "515000"))                                       # one ring held, the other not
+    ok = []
+    monkeypatch.setattr(wcmd.book, "ok", lambda tag, msg: ok.append(msg))
+    assert wcmd._put_flame(g, open_gate(), BLUE, accent=PURPLE) == 0
+    assert fxr.find_all(g, ["515000"], PURPLE, everything=True).changed["515000"] == [BASES["515000"]]
+    assert any(m.startswith("ring colour: the ring of runes at the hand is now (0.55, 0.2, 1.0)") for m in ok)
+    plain = Game(effects=("524400", "524401", "515000"))
+    assert wcmd._put_flame(plain, open_gate(), BLUE) == 0                                  # no accent: the ring stays the game's red
+    assert bytes(plain.mem[BASES["515000"]]) == bytes(Game(effects=("515000",)).mem[BASES["515000"]])
+
