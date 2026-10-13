@@ -108,7 +108,7 @@ def test_a_header_that_does_not_add_up_is_refused(kw, why):
         store(m).resolve(KEY)
 
 
-def test_a_file_grown_by_an_extension_has_a_gap_before_its_data_and_is_still_read():
+def test_a_file_grown_by_a_design_has_a_gap_before_its_data_and_is_still_read():
     m = small_world(data_start_field=0x40 + 30 * 24 + 1824)           # two rows' worth of space after the descriptors (SpEffect rows are 912 bytes)
     assert store(m).resolve(KEY).head == pf.HEAD
 

@@ -1,11 +1,11 @@
-"""Synthetic files for the extension tests: a zstd frame of compressed blocks, a BND4 with PARAM tables, a DCX wrapper.
+"""Synthetic files for the design tests: a zstd frame of compressed blocks, a BND4 with PARAM tables, a DCX wrapper.
 No game data needed; the encoders under test are the project's own, the decoders used as a second opinion are the project's
 decoder and (when installed) the `zstandard` library."""
 import random
 import struct
 
-from eldendisk.extension.innovate_items import fse, zstd
-from eldendisk.extension.innovate_items.reblock import BS
+from eldendisk.design.innovate_items import fse, zstd
+from eldendisk.design.innovate_items.reblock import BS
 
 FRAME_HEADER = bytes([0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x80])
 

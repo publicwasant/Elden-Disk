@@ -1,6 +1,6 @@
-"""The extension's spells as `read` shows them and `write --set` changes them in the running game (1.7.2). Pure: names and ids only.
+"""The design's spells as `read` shows them and `write --set` changes them in the running game (1.7.2). Pure: names and ids only.
 
-The document gets a block `extension.innovate_items.spells.<goods id>`: what spells.resolved.json says of each spell of the last build
+The document gets a block `design.innovate_items.spells.<goods id>`: what spells.resolved.json says of each spell of the last build
 (its label `id`, `slot`, the `rows` it owns), with its design in the structure of section 1b (`kind`, `from`, `requires`, `locations`,
 `customs`) and the values the game holds now. Every value of it that is a value of the game can be written back:
 
@@ -62,7 +62,7 @@ def target(goods: str, rec: dict, parts) -> tuple:
     p = split(parts)
     rows = rec["rows"]
     design = rec.get("design", {})
-    where = "extension.innovate_items.spells.%s.%s" % (goods, ".".join(p))
+    where = "design.innovate_items.spells.%s.%s" % (goods, ".".join(p))
     if not p or p[0] in FIXED:
         raise Locked(f"{where}: made by the build, not a value of the game (change the design and build again)")
     if p[:2] == ["requires", "status"] and len(p) == 3 and p[2] in STATUS:

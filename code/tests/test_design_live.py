@@ -1,4 +1,4 @@
-"""1.7.2: the `extension` block of read / write: what each name is in the game (live.py), the memory cache, a repaint and a rewrite of
+"""1.7.2: the `design` block of read / write: what each name is in the game (live.py), the memory cache, a repaint and a rewrite of
 the text without a look through the memory, and the routing of a snapshot's changes (backend.py)."""
 import json
 from types import SimpleNamespace
@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import pytest
 
 import eldendisk.commands.write as wcmd
-from eldendisk.extension.external_scripts import backend
-from eldendisk.extension.innovate_items.fmg import Fmg
-from eldendisk.extension.innovate_items.spells import live, recipes
+from eldendisk.design.external_scripts import backend
+from eldendisk.design.innovate_items.fmg import Fmg
+from eldendisk.design.innovate_items.spells import live, recipes
 from eldendisk.writer import fxr
 from eldendisk.writer.cache import CACHE_NAME, MemoryCache
 from tests import test_write_flame as tf
@@ -176,7 +176,7 @@ def live_on(mem, tmp_path, cache_setup):
     cache_setup(cache)
     cache.save()
     said = []
-    ext = backend.ExtensionLive(mem, target, tmp_path, resolved, gate=tf.open_gate(), say=lambda l, m: said.append((l, m)))
+    ext = backend.DesignLive(mem, target, tmp_path, resolved, gate=tf.open_gate(), say=lambda l, m: said.append((l, m)))
     return ext, said
 
 
@@ -243,11 +243,11 @@ def test_a_snapshots_changes_go_where_they_belong(monkeypatch, tmp_path):
         __import__("threading").Lock(), None
     b._checked_at, b._clock = 0.0, (lambda: 0.5)
     applied, plain = [], []
-    b.extension = SimpleNamespace(apply=lambda goods, parts, value: applied.append((goods, parts, value)) or {"x": value},
+    b.design = SimpleNamespace(apply=lambda goods, parts, value: applied.append((goods, parts, value)) or {"x": value},
                                   table_index=lambda: None)
     monkeypatch.setattr(backend, "write_values", lambda mem, t, gate, snap, values, say, *rest: plain.append(values) or dict(values))
     done, problems = b.write({("character", "attributes", "vigor"): 60, ("systems", "status", "pid"): 3,
-                              ("extension", "innovate_items", "spells", "2230000", "customs", "advanced", "colors", "SpEffect.1642100"): "#FF909E",
+                              ("design", "innovate_items", "spells", "2230000", "customs", "advanced", "colors", "SpEffect.1642100"): "#FF909E",
                               ("params", "effects", "1621000", "effectEndurance"): 5.0})
     assert plain == [{"character.attributes.vigor": 60}, {"params.effects.1621000.effectEndurance": 5.0}]
     assert applied == [("2230000", ["customs", "advanced", "colors", "SpEffect.1642100"], "#FF909E")]
@@ -261,9 +261,9 @@ def test_the_colours_a_write_changed_are_one_short_info_line():
     said = []
     b.gate, b.say, b._write_lock, b._read_lock, b._doc = tf.open_gate(), (lambda l, m: said.append((l, m))),         __import__("threading").Lock(), __import__("threading").Lock(), None
     b._checked_at, b._clock = 0.0, (lambda: 0.5)
-    b.extension = SimpleNamespace(apply=lambda goods, parts, value: {f"colour.{parts[-1]}": value or "the game's own"},
+    b.design = SimpleNamespace(apply=lambda goods, parts, value: {f"colour.{parts[-1]}": value or "the game's own"},
                                   spells=lambda: {"2230000": {"id": "reverse_cursed_technique"}})
-    key = ("extension", "innovate_items", "spells", "2230000", "customs", "advanced", "colors", "Magic.6421.castSfxId")
+    key = ("design", "innovate_items", "spells", "2230000", "customs", "advanced", "colors", "Magic.6421.castSfxId")
     b.write({key + ("main",): "#90D5FF", key + ("accent",): None})
     assert said == [("I", "reverse_cursed_technique colours: main #90D5FF, accent the game's own")]
 
@@ -271,36 +271,36 @@ def test_the_colours_a_write_changed_are_one_short_info_line():
 # ------------------------------------------------------------------------------------------------------------------------ write --set
 @pytest.mark.parametrize("raw, value", [('"#90D5FF"', "#90D5FF"), ("#90D5FF", "#90D5FF"), ("30", 30), ("0.5", 0.5), ("null", None),
                                         ("'Reverse Cursed'", "Reverse Cursed"), ("1_000", 1000)])
-def test_the_value_of_an_extension_name_is_read_as_typed(raw, value):
+def test_the_value_of_a_design_name_is_read_as_typed(raw, value):
     assert wcmd.ext_value(raw) == value
 
 
-def test_a_wrong_extension_name_is_refused_before_anything(monkeypatch):
+def test_a_wrong_design_name_is_refused_before_anything(monkeypatch):
     monkeypatch.setattr(wcmd, "require_windows_x64", lambda: None)
-    args = SimpleNamespace(text=False, flame_color=False, set=["extension.innovate_items.spells=3"], refill=None, reset=None)
+    args = SimpleNamespace(text=False, flame_color=False, set=["design.innovate_items.spells=3"], refill=None, reset=None)
     assert wcmd.cmd_write(args) == 1
 
 
 # ------------------------------------------------------------------------------------------------------------------------ read --query
-def test_extension_names_are_typed_in_full_and_in_any_case_and_keys_with_dots_are_found():
+def test_design_names_are_typed_in_full_and_in_any_case_and_keys_with_dots_are_found():
     from eldendisk.game.values import normalize
     from eldendisk.reader import view
     from tests.fake_tools import DOC
-    assert normalize("extension.*") == "extension.*"                                # not character.extension
-    assert view.select(DOC, "extension.*")[0] == ("extension.innovate_items.spells.2230000.id", "reverse_cursed_technique")
-    got = view.select(DOC, "extension.innovate_items.spells.2230000.customs.basic.spEffect.1642100.EFFECTENDURANCE")
-    assert got == [("extension.innovate_items.spells.2230000.customs.basic.SpEffect.1642100.effectEndurance", 20.0)]
-    both = view.select(DOC, "extension.innovate_items.spells.2230000.customs.advanced.colors.Magic.6421.castSfxId")
+    assert normalize("design.*") == "design.*"                                # not character.design
+    assert view.select(DOC, "design.*")[0] == ("design.innovate_items.spells.2230000.id", "reverse_cursed_technique")
+    got = view.select(DOC, "design.innovate_items.spells.2230000.customs.basic.spEffect.1642100.EFFECTENDURANCE")
+    assert got == [("design.innovate_items.spells.2230000.customs.basic.SpEffect.1642100.effectEndurance", 20.0)]
+    both = view.select(DOC, "design.innovate_items.spells.2230000.customs.advanced.colors.Magic.6421.castSfxId")
     assert [v for _p, v in both] == ["#90D5FF", "#FF909E"]
-    assert view.fmt("goods", 2230000, "extension.innovate_items.spells.2230000.rows.goods") == "2230000"      # an id: no commas
+    assert view.fmt("goods", 2230000, "design.innovate_items.spells.2230000.rows.goods") == "2230000"      # an id: no commas
 
 
 def test_read_names_a_spell_by_its_label_too_and_ids_in_a_list_have_no_commas():
     from eldendisk.reader import view
     from tests.fake_tools import DOC
-    assert view.select(DOC, "extension.innovate_items.spells.reverse_cursed_technique.slot") == [
-        ("extension.innovate_items.spells.2230000.slot", 1)]
-    rows = view.rows(view.select(DOC, "extension.innovate_items.spells.2230000.rows.sp_effect"))
+    assert view.select(DOC, "design.innovate_items.spells.reverse_cursed_technique.slot") == [
+        ("design.innovate_items.spells.2230000.slot", 1)]
+    rows = view.rows(view.select(DOC, "design.innovate_items.spells.2230000.rows.sp_effect"))
     assert any(r.value == "21951000" for r in rows)
 
 
@@ -316,9 +316,9 @@ def test_read_names_are_the_document_as_it_is_and_star_is_all_of_it():
     from eldendisk.game.values import UnknownName, normalize
     from eldendisk.reader import view
     from tests.fake_tools import DOC
-    assert normalize("*") == "*" and normalize("extension.*") == "extension.*" and normalize("foo.bar") == "foo.bar"
+    assert normalize("*") == "*" and normalize("design.*") == "design.*" and normalize("foo.bar") == "foo.bar"
     assert normalize("hp") == "character.vitals.hit_point" and normalize("vigor") == "character.attributes.vigor"   # the short forms stay
     roots = {p.split(".")[0] for p, _v in view.select(DOC, "*")}
-    assert roots == {"systems", "character", "params", "extension"}
+    assert roots == {"systems", "character", "params", "design"}
     with pytest.raises(UnknownName):
         view.select(DOC, "nothing.here")

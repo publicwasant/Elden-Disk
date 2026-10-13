@@ -13,7 +13,7 @@ evicted entries left; the old rows and the old strings are not touched at all (s
 game's own). Every pointer in the table moves by the same amount X (the size of the added records and rows, rounded to 16).
 
 Order matters in exactly one place: the evicted entries must be COPIED before the space they leave is overwritten (the first
-version of this code did it the other way round and corrupted the copies; tests/test_ext_grow.py keeps that case)."""
+version of this code did it the other way round and corrupted the copies; tests/test_design_grow.py keeps that case)."""
 from __future__ import annotations
 
 import struct

@@ -6,8 +6,8 @@ import json
 import pytest
 
 import eldendisk.__main__ as cli
-from eldendisk.extension.innovate_items.spells import recipes, service, spec
-from tests.test_extension_command import args_for, world  # noqa: F401  (fixture)
+from eldendisk.design.innovate_items.spells import recipes, service, spec
+from tests.test_design_command import args_for, world  # noqa: F401  (fixture)
 from tests.z4 import file_of
 
 BLUE, PURPLE = [0.2, 0.65, 1.0], [0.54, 0.4, 0.8]
@@ -116,7 +116,7 @@ def test_the_diff_names_the_places_the_user_edits():
 
 
 def test_the_shipped_design_is_written_in_the_new_structure_and_holds_its_hex_colours():
-    doc = json.loads((service.CODE_DIR / "extension.json").read_text(encoding="utf-8"))
+    doc = json.loads((service.CODE_DIR / "design.json").read_text(encoding="utf-8"))
     raw = doc["innovate_items"]["spells"]["slots"]["reverse_cursed_technique"]
     assert {"__info__", "requires", "locations", "customs"} <= set(raw) and {"basic", "advanced"} == set(raw["customs"])
     got = spec.normalise(doc)["spells"][0]
@@ -147,7 +147,7 @@ def test_the_schema_and_the_validator_agree_on_the_new_structure():
         except spec.SpecError:
             ok_code = False
         assert ok_schema == ok_code, spell
-    assert jsonschema.Draft202012Validator(schema).is_valid(json.loads((service.CODE_DIR / "extension.json").read_text(encoding="utf-8")))
+    assert jsonschema.Draft202012Validator(schema).is_valid(json.loads((service.CODE_DIR / "design.json").read_text(encoding="utf-8")))
 
 
 def test_the_ids_the_game_uses_are_those_of_the_slot_and_only_what_the_build_added():

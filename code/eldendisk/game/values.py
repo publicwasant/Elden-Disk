@@ -30,8 +30,8 @@ _SEGMENTS = {"attrs": "attributes", "rune": "runes", "animation": "animations", 
              "max": "maximum"}
 _ROOTS = ("character", "systems", "params")
 PARAMS = "params"   # the third block of the document: tables of the game itself, always typed in full (`params.effects...`)
-EXTENSION = "extension"   # the fourth (1.7.2): the extension's spells, always typed in full (`extension.innovate_items.spells...`)
-FULL_ROOTS = (PARAMS, EXTENSION)
+DESIGN = "design"   # the fourth (1.7.2): the design's spells, always typed in full (`design.innovate_items.spells...`)
+FULL_ROOTS = (PARAMS, DESIGN)
 _READ_ONLY_WHY = (
     ("character.vitals.", ("maximum", "base"),
      "computed by the game from your stats (set the attribute, or use hp/fp/stamina for the current value)"),
@@ -52,12 +52,12 @@ CHARACTER_HEADS = ("level", "runes", "vitals", "attributes", "buffs", "animation
 def normalize(name: str) -> str:
     """The canonical dotted path of `name` (wildcards pass through). Does not check that the path exists.
 
-    A name is a path of the document as it is (`systems...`, `character...`, `params...`, `extension...`, `*` for all of it). The
+    A name is a path of the document as it is (`systems...`, `character...`, `params...`, `design...`, `*` for all of it). The
     only shortening: a name that starts with a value of the character (`hp`, `vigor`, `attrs.faith`, `runes`, `buffs`...) may leave
     `character.` out. Nothing else is assumed: a name that names nothing is an unknown name, never quietly read as another."""
     n = name.strip().lower()
     parts = [s for s in n.split(".") if s != ""]
-    if not parts or parts[0] in FULL_ROOTS or parts[0] == "systems":   # below `params` / `extension` the names are the game's
+    if not parts or parts[0] in FULL_ROOTS or parts[0] == "systems":   # below `params` / `design` the names are the game's
         return ".".join(parts)
     segs = [_SEGMENTS.get(s, s) for s in parts]
     if segs[0] == "character":

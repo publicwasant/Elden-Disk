@@ -45,7 +45,7 @@ def test_a_high_index_does_not_leak_into_the_offset():
 def test_every_file_of_a_real_binder_is_where_the_reader_says():
     """regulation.bin's own BND4 is built by container.Bnd4; the reader here must find each file at the same place."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from ext_helpers import bnd4_blob
+    from design_helpers import bnd4_blob
     blob = bnd4_blob([("A.param", b"x" * 40), ("B.param", b"y" * 55), ("C.param", b"z" * 9)])
     items = dm.bhf4_items(blob, (b"BND4",))
     assert [blob[i.offset:i.offset + i.size] for i in items] == [b"x" * 40, b"y" * 55, b"z" * 9]

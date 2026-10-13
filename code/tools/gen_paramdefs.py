@@ -1,4 +1,4 @@
-"""Generate eldendisk/extension/innovate_items/paramdefs.py from a Paramdex checkout (developer tool, not shipped).
+"""Generate eldendisk/design/innovate_items/paramdefs.py from a Paramdex checkout (developer tool, not shipped).
 
     python tools/gen_paramdefs.py <Paramdex>/ER/Defs
 
@@ -60,7 +60,7 @@ def main(defs_dir: str, out: str) -> None:
     Path(out).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-# The running-game reader (eldendisk/game) may not import the extension package, so it gets its own generated file with the
+# The running-game reader (eldendisk/game) may not import the design package, so it gets its own generated file with the
 # six tables of the params workbench. Names are the ones typed on the command line (`params.Magic.6230.mp`).
 GAME_TABLES = {"Goods": ("EquipParamGoods", "EquipParamGoods"), "Magic": ("Magic", "MagicParam"),
                "SpEffect": ("SpEffectParam", "SpEffect"), "Bullet": ("BulletParam", "BulletParam"),
@@ -85,5 +85,5 @@ def main_game(defs_dir: str, out: str) -> None:
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent.parent / "eldendisk"
-    main(sys.argv[1], str(root / "extension/innovate_items/paramdefs.py"))
+    main(sys.argv[1], str(root / "design/innovate_items/paramdefs.py"))
     main_game(sys.argv[1], str(root / "game/paramlayouts.py"))

@@ -72,7 +72,7 @@ COPY_TABLES = {"sp": "SpEffect", "bullet": "Bullet", "atk": "AtkParam_Pc"}
 def spell_rows(slot: int, added: dict, copies: dict | None = None) -> dict:
     """The ids the game really uses for the spell of slot `slot`: the rows of `added` (Footprint.added, key -> ids) that lie in the
     blocks the slot owns. -> {"goods": id, "magic": id, "sp_effect": [ids], "bullet": [ids], "atk": [ids], "shop": id | None}; the
-    id of a spell is its Goods id (2230000 + slot - 1), not the key the user gave it in extension.json."""
+    id of a spell is its Goods id (2230000 + slot - 1), not the key the user gave it in design.json."""
     ids = slot_rows(slot)
     sp = [r for r in sorted(added.get("sp", ())) if r in (ids["sp_effect"], ids["poise_sp_effect"])
           or ids["sp_copy_base"] <= r < ids["sp_copy_base"] + COPY_SP_BLOCK]

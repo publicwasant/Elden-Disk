@@ -167,7 +167,7 @@ class ExportWriter:
         self._latest: dict | None = None
         self._busy_warned = False
         self._last_verbose: tuple | None = None
-        self.extension: Callable[[], dict | None] | None = None    # the `extension` block (1.7.2), when the command gives one
+        self.design: Callable[[], dict | None] | None = None    # the `design` block (1.7.2), when the command gives one
 
     def _due(self, doc: dict, now: float) -> bool:
         if self._last_doc is None:
@@ -200,8 +200,8 @@ class ExportWriter:
             sample=sample, last_character=self._last_character, note=note,
             mode="sandbox" if self.sandbox else "telemetry", read_only=True, sandbox=self.sandbox,
         )
-        if self.extension is not None:
-            doc["extension"] = self.extension()
+        if self.design is not None:
+            doc["design"] = self.design()
         return doc
 
     def emit(self, state: str, sample: Sample | None = None, note: str | None = None, now: float | None = None) -> None:

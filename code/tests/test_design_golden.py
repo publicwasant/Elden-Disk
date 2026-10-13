@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_items import bases, container, grow, preflight, reblock, zstd
-from eldendisk.extension.innovate_items.spells import build, recipes, spec
-from eldendisk.extension.innovate_items.container import Bnd4, ParamView
-from eldendisk.extension.innovate_items.defs import TABLE_FILES, Def
-from eldendisk.extension.innovate_items.spells.service import Spells
+from eldendisk.design.innovate_items import bases, container, grow, preflight, reblock, zstd
+from eldendisk.design.innovate_items.spells import build, recipes, spec
+from eldendisk.design.innovate_items.container import Bnd4, ParamView
+from eldendisk.design.innovate_items.defs import TABLE_FILES, Def
+from eldendisk.design.innovate_items.spells.service import Spells
 
 ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 pytestmark = pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
@@ -34,12 +34,12 @@ Z4_ROW_SHA256 = {
     "magic_with_refId2_102006": "ddefca4c8f92b0d1fe89aecd98224860ccb9ec9677eb01c561750503d1dd4b70",
 }
 from tests.z4 import ID as Z4_ID, SPELL as Z4_SPELL, Z4 as _Z4_RAW, file_of   # noqa: E402
-Z4 = spec.normalise(_Z4_RAW)               # a fixed copy, not the user's extension.json
+Z4 = spec.normalise(_Z4_RAW)               # a fixed copy, not the user's design.json
 SLOT1 = recipes.slot_rows(1)
 
 
 def _spells(*slots, poise=True):
-    """Z4-like spells in these slots (1-based positions of extension.json); slots above 7 have no shop."""
+    """Z4-like spells in these slots (1-based positions of design.json); slots above 7 have no shop."""
     d = {}
     for s in range(1, max(slots) + 1):
         if s in slots:
@@ -414,7 +414,7 @@ def test_16_spells_pass_since_t7_raised_the_blocks_and_64_are_stopped_by_the_gro
 
 # ---- the whole flow through the service, with the real build ----
 def _z4_file(tmp_path):
-    p = tmp_path / "extension.json"
+    p = tmp_path / "design.json"
     p.write_text(json.dumps(_Z4_RAW), encoding="utf-8")
     return p
 
@@ -431,7 +431,7 @@ def test_service_builds_on_the_game_file(tmp_path, base):
 
 def test_service_refuses_a_shop_in_a_slot_without_a_shop_line(tmp_path):
     f = file_of({"s%d" % i: (copy.deepcopy(Z4_SPELL) if i < 8 else copy.deepcopy(Z4_SPELL)) for i in range(1, 9)})
-    p = tmp_path / "extension.json"
+    p = tmp_path / "design.json"
     p.write_text(json.dumps(f), encoding="utf-8")
     ci = Spells(tmp_path / "ext", p)
     with pytest.raises(Exception, match="shop"):
@@ -439,7 +439,7 @@ def test_service_refuses_a_shop_in_a_slot_without_a_shop_line(tmp_path):
 
 
 # ---- the gate: the slot-1 file passes, and every kind of damage is noticed ----
-from eldendisk.extension.innovate_items.spells import gate     # noqa: E402
+from eldendisk.design.innovate_items.spells import gate     # noqa: E402
 
 
 def test_the_gate_passes_the_slot_1_file(built, src):
@@ -571,7 +571,7 @@ def test_the_envelope_test_tool_builds_a_file_beyond_the_gate_that_an_independen
     spec_ = importlib.util.spec_from_file_location("envelope_test", Path(__file__).resolve().parent.parent / "tools" / "envelope_test.py")
     tool = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(tool)
-    game, out, design = tmp_path / "game.bin", tmp_path / "t7.bin", tmp_path / "extension.json"
+    game, out, design = tmp_path / "game.bin", tmp_path / "t7.bin", tmp_path / "design.json"
     game.write_bytes(base)
     design.write_text(json.dumps(_Z4_RAW), encoding="utf-8")
     assert tool.main(["--source", str(game), "--out", str(out), "--spec", str(design)]) == 0
@@ -593,7 +593,7 @@ def test_the_envelope_test_tool_with_no_copies_builds_exactly_the_design(tmp_pat
     spec_ = importlib.util.spec_from_file_location("envelope_test", Path(__file__).resolve().parent.parent / "tools" / "envelope_test.py")
     tool = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(tool)
-    game, out, design = tmp_path / "game.bin", tmp_path / "t10.bin", tmp_path / "extension.json"
+    game, out, design = tmp_path / "game.bin", tmp_path / "t10.bin", tmp_path / "design.json"
     game.write_bytes(base)
     design.write_text(json.dumps(_Z4_RAW), encoding="utf-8")
     assert tool.main(["--source", str(game), "--out", str(out), "--spec", str(design), "--no-copies"]) == 0
@@ -642,7 +642,7 @@ def test_positive_curse_energy_eyes_on_a_row_that_is_not_copied_is_refused(src):
 
 
 def test_the_gate_notices_a_file_without_the_positive_curse_energy_eyes_the_design_asks_for(base, src):
-    from eldendisk.extension.innovate_items.spells import gate
+    from eldendisk.design.innovate_items.spells import gate
     plain = build.make(src, _eyes_design(None))
     v = gate.verify(plain.data, src, _eyes_design({"on": "SpEffect.1642100"}))
     assert not v.ok and any("vfxId1" in p for p in v.problems)

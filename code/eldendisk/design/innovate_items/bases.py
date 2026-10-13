@@ -1,4 +1,4 @@
-"""The regulation.bin versions this extension knows. A recipe is written against exact rows of one version, so an
+"""The regulation.bin versions this design knows. A recipe is written against exact rows of one version, so an
 unknown file is refused instead of guessed at."""
 from __future__ import annotations
 

@@ -64,7 +64,7 @@ def test_the_files_behind_the_slots_are_found_and_named_by_row_size_and_count():
     assert by_slot[0x4F8].chain == {"rva": f"0x{Z_RVA:X}", "offsets": ["0x4F8", "0x80", "0x80"]}
 
 
-def test_a_file_an_extension_grew_is_still_named_but_a_wrong_count_is_not():
+def test_a_file_a_design_grew_is_still_named_but_a_wrong_count_is_not():
     res = run(world({SELECTOR: (11354, 912), 0x4F8: (317 + 64, 168), 0x540: (15475 + 5000, 272)}))
     by_slot = {h.slot: h for h in res.hits if h.root_rva == Z_RVA}
     assert by_slot[0x4F8].table == "Magic"
@@ -100,7 +100,7 @@ def test_row_size_is_the_usual_gap_in_any_order():
     assert PR.row_size_of([5]) is None
 
 
-def test_a_row_an_extension_put_before_the_data_does_not_change_the_row_size():
+def test_a_row_a_design_put_before_the_data_does_not_change_the_row_size():
     """ShopLineup of the slot-1 build: a new row (small id, so among the first descriptors) sits in the gap, 56 bytes
     from the old data start; the gcd of the gaps was 4."""
     old = [2000 + 52 * i for i in range(20)]

@@ -1,7 +1,7 @@
 """A backend for edstdlib without the game (tests only): a document, the writes applied to it, the log lines kept."""
 import copy
 
-from eldendisk.extension.external_scripts import edstdlib as ed
+from eldendisk.design.external_scripts import edstdlib as ed
 
 DOC = {
     "systems": {"status": {"pid": 1, "tool_state": "CONNECTED"}},
@@ -13,12 +13,12 @@ DOC = {
         "runes": {"total": 1234, "baseline": 1234, "delta": 0},
         "attributes": {"vigor": 60, "mind": 20, "endurance": 20, "strength": 20, "dexterity": 20, "intelligence": 10, "faith": 60,
                        "arcane": 10},
-        "buffs": {"21951000": {"name": "reverse_cursed_technique", "categories": "EXTENSION"}},
+        "buffs": {"21951000": {"name": "reverse_cursed_technique", "categories": "DESIGN"}},
         "animations": {},
         "equipment": {"magic": {"selected": {"slot": 1, "id": 2230000}, "slots": {"1": 2230000, "2": 6420}}},
     },
     "params": {"effects": {"1621000": {"name": "Black Flame", "effectEndurance": 2.0}}},
-    "extension": {"innovate_items": {"spells": {"2230000": {
+    "design": {"innovate_items": {"spells": {"2230000": {
         "id": "reverse_cursed_technique", "slot": 1,
         "rows": {"goods": 2230000, "magic": 2230000, "sp_effect": [21951000], "bullet": [], "atk": [], "shop": 100508},
         "kind": "projectile", "from": 6421,

@@ -646,7 +646,7 @@ def test_the_export_has_the_params_block_and_it_is_valid(prig):
     assert rcmd.cmd_read(args(export=True)) == 0
     d = doc(tmp)
     valid(d)
-    assert list(d) == ["systems", "character", "params", "extension"] and d["extension"] is None      # 1.7.2: no build in this vault
+    assert list(d) == ["systems", "character", "params", "design"] and d["design"] is None      # 1.7.2: no build in this vault
     assert d["params"]["effects"]["1621000"] == {"name": "Black Flame", "effectEndurance": -1.0, "motionInterval": 0.1, "changeHpRate": 0.1,
                                                       "changeHpPoint": 1, "atkOccurrenceSpEffectId": -1, "vfxId": 9010}
     assert d["params"]["effects"]["1623000"]["effectEndurance"] == 2.0

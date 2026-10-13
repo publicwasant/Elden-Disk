@@ -155,7 +155,7 @@ def _run_with_world(tmp_path, monkeypatch, capsys, *, protect):
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x",
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False, protect=protect,
-                              regulation=str(tmp_path / "mine" / "regulation.bin"), extension_dir=str(tmp_path / "ext"))
+                              regulation=str(tmp_path / "mine" / "regulation.bin"), design_dir=str(tmp_path / "ext"))
     assert run_cmd.cmd_run(args) == 0
     captured = capsys.readouterr()
     book.close()
@@ -202,29 +202,29 @@ def test_run_hints_at_secure_only_after_a_session_that_ran_a_new_build(tmp_path,
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (tmp_path / "r.bin", mode))
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", no_archive_contaminated=False,
-                              keep=0, launch_timeout=1.0, verbose=False, protect=True, regulation=None, extension_dir=None, spec=None)
+                              keep=0, launch_timeout=1.0, verbose=False, protect=True, regulation=None, design_dir=None, spec=None)
     assert run_cmd.cmd_run(args) == 0
     out = capsys.readouterr()
     book.close()
-    assert ("extension innovate-items spells --secure" in out.out + out.err) is hint
+    assert ("innovate-items spells --secure" in out.out + out.err) is hint
 
 
 # ---- 1.7.1: the text step ----
 def _args(tmp_path, **kw):
     import argparse
-    d = dict(vault=str(tmp_path / "vault"), offsets="offsets.json", spec=None, extension_dir=None, verbose=False)
+    d = dict(vault=str(tmp_path / "vault"), offsets="offsets.json", spec=None, design_dir=None, verbose=False)
     return argparse.Namespace(**{**d, **kw})
 
 
 def test_the_text_command_is_write_text_when_loaded_with_the_same_vault_offsets_and_design(tmp_path, monkeypatch):
     monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
-    cmd, cwd = run_cmd.text_command(_args(tmp_path, spec="my.json", extension_dir="ext"), tmp_path / "vault")
+    cmd, cwd = run_cmd.text_command(_args(tmp_path, spec="my.json", design_dir="ext"), tmp_path / "vault")
     assert cmd[:3] == [run_cmd.sys.executable, "-m", "eldendisk"] and cmd[3:6] == ["write", "--text", "--when-loaded"]
     assert cmd[cmd.index("--vault") + 1] == str(tmp_path / "vault") and cmd[cmd.index("--offsets") + 1] == "offsets.json"
-    assert cmd[cmd.index("--spec") + 1] == "my.json" and cmd[cmd.index("--extension-dir") + 1] == "ext"
+    assert cmd[cmd.index("--spec") + 1] == "my.json" and cmd[cmd.index("--design-dir") + 1] == "ext"
     assert cwd and (run_cmd.Path(cwd) / "eldendisk").is_dir()
     plain, _ = run_cmd.text_command(_args(tmp_path), tmp_path / "vault")
-    assert "--spec" not in plain and "--extension-dir" not in plain
+    assert "--spec" not in plain and "--design-dir" not in plain
 
 
 def test_the_text_command_names_the_vault_and_offsets_only_when_the_user_chose_them(tmp_path, monkeypatch):
@@ -299,7 +299,7 @@ def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text, flame=False
 @pytest.mark.parametrize("protect,world,mode,text,expect", [
     (True, "w.bin", "built", True, ["text"]), (True, "w.bin", "secured", True, ["text"]), (True, "w.bin", "last", True, ["text"]),
     (True, "w.bin", "built", False, []),             # no text in the design: nothing to start
-    (True, "w.bin", "file", True, []),               # `--regulation FILE` is not the extension's build
+    (True, "w.bin", "file", True, []),               # `--regulation FILE` is not the design's build
     (True, None, "none", True, []),                  # nothing was swapped
     (False, "w.bin", "built", True, [])])            # vault OFF: `write` is not allowed at all
 def test_run_starts_the_text_step_only_when_it_has_something_to_give(tmp_path, monkeypatch, protect, world, mode, text, expect):
@@ -310,7 +310,7 @@ def test_run_starts_the_text_step_only_when_it_has_something_to_give(tmp_path, m
     (True, "w.bin", "built", False, True, ["flame"]),            # a flame colour without any text still starts its step
     (True, "w.bin", "secured", True, True, ["text", "flame"]),
     (True, "w.bin", "built", False, False, []),
-    (True, "w.bin", "file", True, True, []),                     # not the extension's build
+    (True, "w.bin", "file", True, True, []),                     # not the design's build
     (False, "w.bin", "built", True, True, [])])                  # vault OFF
 def test_run_starts_the_flame_colour_step_only_with_a_colour_in_the_design(tmp_path, monkeypatch, protect, world, mode, text, flame, expect):
     assert _run_hooks(tmp_path, monkeypatch, protect=protect, world=world, mode=mode, text=text, flame=flame) == expect
@@ -420,7 +420,7 @@ def test_the_colour_step_starts_for_a_fire_colour_or_a_colour_of_the_positive_cu
         spell["positive_curse_energy_eyes"] = eyes
     if flame is not None:
         spell["flame_color"] = flame
-    design = tmp_path / "extension.json"
+    design = tmp_path / "design.json"
     design.write_text(json.dumps(file_of({ID: spell})), encoding="utf-8")
     assert run_cmd.design_has_flame(_args(tmp_path, spec=str(design)), tmp_path / "vault") is expect
 

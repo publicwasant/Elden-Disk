@@ -1,7 +1,7 @@
 """Developer tool (not shipped, not used by `run`): build a regulation.bin that goes BEYOND what the gate accepts, to find out in the
 game whether the game accepts it. The gate keeps its numbers (preflight.MAX_*) until a file like this has passed in the game.
 
-    python tools/envelope_test.py --source <game>/regulation.bin --out regulation.envelope-test.bin [--spec extension.json]
+    python tools/envelope_test.py --source <game>/regulation.bin --out regulation.envelope-test.bin [--spec design.json]
 
 T9 = the spells of the design (as in a normal build) + 4 UNREFERENCED copies of Black Flame bullets (as in T7: Bullet rows 10623000,
 10623001, 10623050, 10623051 under the ids 500002000-500002003, outside the 64 slot blocks) + 4 UNREFERENCED copies of attack rows
@@ -25,10 +25,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from eldendisk.extension.innovate_items import bases, container, grow, preflight, reblock
-from eldendisk.extension.innovate_items.spells import build, chain as chainmod, recipes, spec   # noqa: E402
-from eldendisk.extension.innovate_items.container import Bnd4, Param, ParamView                                           # noqa: E402
-from eldendisk.extension.innovate_items.defs import TABLE_FILES, Def                                                       # noqa: E402
+from eldendisk.design.innovate_items import bases, container, grow, preflight, reblock
+from eldendisk.design.innovate_items.spells import build, chain as chainmod, recipes, spec   # noqa: E402
+from eldendisk.design.innovate_items.container import Bnd4, Param, ParamView                                           # noqa: E402
+from eldendisk.design.innovate_items.defs import TABLE_FILES, Def                                                       # noqa: E402
 
 COPIES = {500002000: 10623000, 500002001: 10623001, 500002002: 10623050, 500002003: 10623051}      # new id -> Black Flame bullet it copies
 ATK_COPIES = {710002000: 62101, 710002001: 62106, 710002002: 62502, 710002003: 62503}              # new id -> AtkParam_Pc row it copies
@@ -39,7 +39,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--source", required=True, help="the game's own regulation.bin (1.17.1)")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--spec", default=str(Path(__file__).resolve().parent.parent / "extension.json"))
+    ap.add_argument("--spec", default=str(Path(__file__).resolve().parent.parent / "design.json"))
     ap.add_argument("--no-copies", action="store_true",
                     help="do not add the 8 unreferenced rows: the file is exactly the design (T10: a design too big for the gate, from capacity.py --write-design)")
     a = ap.parse_args(argv)

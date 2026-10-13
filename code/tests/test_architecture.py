@@ -16,14 +16,14 @@ ALLOWED = {
     "host": ["eldendisk.host", "eldendisk.vault", "eldendisk.paths", "eldendisk.game.processes"],
     "reader": ["eldendisk.reader", "eldendisk.game", "eldendisk.paths", "eldendisk.vault.session"],
     "writer": ["eldendisk.writer", "eldendisk.game", "eldendisk.vault.session"],
-    "extension": ["eldendisk.extension"],        # builds files; knows nothing of the vault, the host or the game
+    "design": ["eldendisk.design"],        # builds files; knows nothing of the vault, the host or the game
 }
 
-# the files that may go past their package's boundary, and how far. 1.7.2: the external scripts (extension/external_scripts) run next to
+# the files that may go past their package's boundary, and how far. 1.7.2: the external scripts (design/external_scripts) run next to
 # the game, so ONE file of them touches it: backend.py, which reads through the reader and writes through the writer of `read` and
-# `write` (the same chains, checks, gate and session). edstdlib, the host and the scripts themselves still see only the extension package.
+# `write` (the same chains, checks, gate and session). edstdlib, the host and the scripts themselves still see only the design package.
 EXCEPTIONS = {
-    "extension/external_scripts/backend.py": ["eldendisk.game", "eldendisk.reader", "eldendisk.writer", "eldendisk.vault"],
+    "design/external_scripts/backend.py": ["eldendisk.game", "eldendisk.reader", "eldendisk.writer", "eldendisk.vault"],
 }
 
 
@@ -92,7 +92,7 @@ def test_only_the_write_command_the_scripts_backend_and_the_writer_package_touch
     check, and checks the session again while the scripts run)."""
     users = {p.relative_to(PKG).as_posix() for p in modules()
              if any(under(m, "eldendisk.writer") for m in internal_imports(p)) and "writer" not in p.relative_to(PKG).parts[:1]}
-    assert users == {"commands/write.py", "extension/external_scripts/backend.py"}
+    assert users == {"commands/write.py", "design/external_scripts/backend.py"}
 
 
 def test_the_reader_never_imports_the_writer_and_the_writer_never_imports_the_reader():
@@ -123,13 +123,13 @@ def test_the_engines_never_see_the_console_or_the_logbook():
             assert not bad, f"{f.relative_to(PKG).as_posix()} imports {bad}"
 
 
-def test_the_extension_package_uses_only_the_standard_library():
+def test_the_design_package_uses_only_the_standard_library():
     """The exe is built without third-party packages; cryptography, zstandard and jsonschema are for the dev tests only."""
     import sys
     std = set(sys.stdlib_module_names)
-    for f in (PKG / "extension").rglob("*.py"):
+    for f in (PKG / "design").rglob("*.py"):
         for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
                 [node.module] if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module else []
-            for n in names:     # `edstdlib` is the external scripts' own name for extension/external_scripts/edstdlib.py
+            for n in names:     # `edstdlib` is the external scripts' own name for design/external_scripts/edstdlib.py
                 assert n.split(".")[0] in std | {"eldendisk", "edstdlib"}, f"{f.relative_to(PKG).as_posix()} imports {n}"

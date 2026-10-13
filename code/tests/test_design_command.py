@@ -1,4 +1,4 @@
-"""`extension --list` / `innovate-items spells --add ...` / `--secure` through the CLI, and what `run` builds, swaps and says."""
+"""`design --list` / `innovate-items spells --add ...` / `--secure` through the CLI, and what `run` builds, swaps and says."""
 import argparse
 import hashlib
 import json
@@ -8,10 +8,10 @@ import pytest
 
 import eldendisk.__main__ as cli
 import eldendisk.commands.run as run_cmd
-from eldendisk.extension.innovate_items import bases
-from eldendisk.extension.innovate_items.spells import service, spec
-from eldendisk.extension.innovate_items.spells.build import Result
-from eldendisk.extension.innovate_items.spells.gate import Verdict
+from eldendisk.design.innovate_items import bases
+from eldendisk.design.innovate_items.spells import service, spec
+from eldendisk.design.innovate_items.spells.build import Result
+from eldendisk.design.innovate_items.spells.gate import Verdict
 from eldendisk.vault import SaveVault
 
 BASE = b"pretend this is the game's regulation.bin" * 50
@@ -39,13 +39,13 @@ def world(tmp_path, monkeypatch):
     game.mkdir()
     (game / "eldenring.exe").write_bytes(b"EXE")
     (game / "regulation.bin").write_bytes(BASE)
-    spec_file = tmp_path / "extension.json"
+    spec_file = tmp_path / "design.json"
     spec_file.write_text(Z4_TEXT, encoding="utf-8")
     return argparse.Namespace(ext=tmp_path / "ext", game=game, spec=spec_file, builds=builds, problems=problems)
 
 
 def args_for(w, *more):
-    return ["extension", "innovate-items", "spells", "--extension-dir", str(w.ext), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
+    return ["innovate-items", "spells", "--design-dir", str(w.ext), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
 
 
 def test_add_builds_every_time_and_secures_nothing(world, capsys):
@@ -76,7 +76,7 @@ def test_secure_keeps_the_build_and_list_shows_it(world, capsys):
     out = "".join(capsys.readouterr())
     assert "secured" in out and sorted(p.name for p in (world.ext / "innovate-items" / "spells").iterdir()) == \
         ["regulation.bin", "regulation.secured.bin", "spells.build.json", "spells.commit.json", "spells.resolved.json"]
-    base = ["extension", "--list", "--extension-dir", str(world.ext), "--spec", str(world.spec)]
+    base = ["design", "--list", "--design-dir", str(world.ext), "--spec", str(world.spec)]
     assert cli.main(base) == 0
     assert "same: `run` swaps the secured file" in capsys.readouterr().out
     doc = json.loads(Z4_TEXT)
@@ -129,13 +129,13 @@ def test_a_modified_game_file_gives_exit_1_with_the_restore_hint(world, capsys):
 
 
 def test_without_a_spec_file_the_shipped_one_is_used(world, tmp_path, monkeypatch):
-    import eldendisk.commands.extension as ec
-    assert ec.spec_file(argparse.Namespace(spec=None)) == service.CODE_DIR / "extension.json"
+    import eldendisk.commands.design as ec
+    assert ec.spec_file(argparse.Namespace(spec=None)) == service.CODE_DIR / "design.json"
     assert ec.spec_file(argparse.Namespace(spec=str(world.spec))) == world.spec
 
 
 def test_list_shows_the_spec_and_whether_anything_was_built(world, capsys):
-    base = ["extension", "--list", "--extension-dir", str(world.ext), "--spec", str(world.spec)]
+    base = ["design", "--list", "--design-dir", str(world.ext), "--spec", str(world.spec)]
     assert cli.main(base) == 0
     out = capsys.readouterr().out
     assert "1 spell in the design" in out and "none yet" in out and not world.ext.exists()
@@ -145,24 +145,24 @@ def test_list_shows_the_spec_and_whether_anything_was_built(world, capsys):
     assert "regulation.bin" in capsys.readouterr().out
 
 
-def test_extension_without_anything_to_do_is_a_usage_error():
+def test_innovate_items_without_anything_to_do_is_a_usage_error():
     with pytest.raises(SystemExit) as e:
-        cli.main(["extension"])
+        cli.main(["innovate-items"])                                              # the kind of item is needed
     assert e.value.code == 2
     with pytest.raises(SystemExit):
-        cli.main(["extension", "innovate-items", "spells", "--list"])
+        cli.main(["innovate-items", "spells", "--list"])
     with pytest.raises(SystemExit):
-        cli.main(["extension", "innovate-items", "spells", "--force"])        # gone: it builds every time
+        cli.main(["innovate-items", "spells", "--force"])        # gone: it builds every time
 
 
 def test_innovate_items_spells_without_add_shows_where_things_are(world, capsys):
-    assert cli.main(["extension", "innovate-items", "spells", "--extension-dir", str(world.ext), "--spec", str(world.spec)]) == 0
-    assert "extension.json" in "".join(capsys.readouterr())
+    assert cli.main(["innovate-items", "spells", "--design-dir", str(world.ext), "--spec", str(world.spec)]) == 0
+    assert "design.json" in "".join(capsys.readouterr())
 
 
 # ---- what `run` builds, swaps and says ----
 def run_args(w, **kw):
-    return argparse.Namespace(regulation=kw.get("regulation"), extension_dir=str(w.ext), spec=str(w.spec))
+    return argparse.Namespace(regulation=kw.get("regulation"), design_dir=str(w.ext), spec=str(w.spec))
 
 
 def secure(w):
@@ -203,7 +203,7 @@ def test_run_builds_again_when_the_draft_changed_and_prints_the_diff(world, tmp_
 def test_the_game_file_is_checked_even_when_the_secured_file_would_be_used(world, tmp_path):
     secure(world)
     (world.game / "regulation.bin").write_bytes(BASE + b"x")
-    with pytest.raises(service.ExtensionError):
+    with pytest.raises(service.DesignError):
         run_cmd._regulation(run_args(world), SaveVault(tmp_path / "vault"), world.game, True)
 
 
@@ -217,7 +217,7 @@ def test_a_failed_gate_stops_run_and_says_nothing_was_swapped(world, tmp_path, m
     monkeypatch.setattr(run_cmd, "Session", lambda *a, **k: started.append(1))
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", no_archive_contaminated=False,
                               keep=0, launch_timeout=1.0, verbose=False, protect=True, regulation=None,
-                              extension_dir=str(world.ext), spec=str(world.spec))
+                              design_dir=str(world.ext), spec=str(world.spec))
     assert run_cmd.cmd_run(args) == 1 and not started
     text = " ".join("".join(capsys.readouterr()).split())
     assert "GATE FAILED" in text and "G13" in text and "the game was not started" in text
@@ -230,7 +230,7 @@ def test_run_with_an_empty_spec_swaps_nothing(world, tmp_path):
 
 def test_run_with_the_vault_off_does_not_build(world, tmp_path, capsys):
     assert run_cmd._regulation(run_args(world), SaveVault(tmp_path / "vault"), world.game, False) == (None, "none")
-    assert not world.builds and "vault OFF: the extension is not run" in "".join(capsys.readouterr())
+    assert not world.builds and "vault OFF: the design is not run" in "".join(capsys.readouterr())
 
 
 def test_run_does_not_build_while_the_vault_owes_a_restore(world, tmp_path):
@@ -252,7 +252,7 @@ def test_a_build_error_stops_run_before_anything_starts(world, tmp_path, monkeyp
     monkeypatch.setattr(run_cmd, "Session", lambda *a, **k: started.append(1))
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", no_archive_contaminated=False,
                               keep=0, launch_timeout=1.0, verbose=False, protect=True, regulation=None,
-                              extension_dir=str(world.ext), spec=str(world.spec))
+                              design_dir=str(world.ext), spec=str(world.spec))
     assert run_cmd.cmd_run(args) == 1 and not started
     assert "vault restore" in " ".join("".join(capsys.readouterr()).split())
 
@@ -267,34 +267,48 @@ def test_regulation_flag_overrides_the_build(world, tmp_path):
         run_cmd._regulation(run_args(world, regulation=str(tmp_path / "missing.bin")), v, world.game, True)
 
 
-# ---- the files live in the vault (1.7.0): <vault>\extension\innovate-items\spells ----
+# ---- the files live in the vault (1.7.0): <vault>\design\innovate-items\spells ----
 def vault_args(w, vault, *more):
-    return ["extension", "innovate-items", "spells", "--vault", str(vault), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
+    return ["innovate-items", "spells", "--vault", str(vault), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
 
 
-def test_without_extension_dir_the_files_go_under_the_vault(world, tmp_path):
+def test_without_design_dir_the_files_go_under_the_vault(world, tmp_path):
     vault = tmp_path / "myvault"
     assert cli.main(vault_args(world, vault, "--add", "all")) == 0
-    built = vault / "extension" / "innovate-items" / "spells" / "regulation.bin"
+    built = vault / "design" / "innovate-items" / "spells" / "regulation.bin"
     assert built.read_bytes().startswith(b"BUILT")
-    assert not (tmp_path / "local" / "EldenDisk" / "extension").exists()          # the old place is not used any more
+    assert not (tmp_path / "local" / "EldenDisk" / "design").exists()          # the old place is not used any more
 
 
-def test_extension_dir_still_replaces_the_vault_place(world, tmp_path):
+def test_the_folder_of_an_older_vault_is_renamed_once(world, tmp_path):
+    from eldendisk.commands import design as dcmd
+    vault = tmp_path / "vault"
+    (vault / "extension" / "innovate-items" / "spells").mkdir(parents=True)
+    (vault / "extension" / "innovate-items" / "spells" / "spells.commit.json").write_text("{}", encoding="utf-8")
+    import argparse
+    got = dcmd.design_folder(argparse.Namespace(design_dir=None, vault=str(vault)), vault)
+    assert got == vault / "design" and (got / "innovate-items" / "spells" / "spells.commit.json").is_file()
+    assert not (vault / "extension").exists()
+    (vault / "extension").mkdir()                                                    # both there: nothing is moved
+    assert dcmd.design_folder(argparse.Namespace(design_dir=None, vault=str(vault)), vault) == vault / "design"
+    assert (vault / "extension").is_dir()
+
+
+def test_design_dir_still_replaces_the_vault_place(world, tmp_path):
     vault = tmp_path / "myvault"
-    assert cli.main(vault_args(world, vault, "--extension-dir", str(world.ext), "--add", "all")) == 0
-    assert (world.ext / "innovate-items" / "spells" / "regulation.bin").is_file() and not (vault / "extension").exists()
+    assert cli.main(vault_args(world, vault, "--design-dir", str(world.ext), "--add", "all")) == 0
+    assert (world.ext / "innovate-items" / "spells" / "regulation.bin").is_file() and not (vault / "design").exists()
 
 
 def test_run_puts_the_files_in_the_vault_it_resolved(world, tmp_path):
     vault = SaveVault(tmp_path / "vault")
-    args = argparse.Namespace(regulation=None, spec=str(world.spec), extension_dir=None)
+    args = argparse.Namespace(regulation=None, spec=str(world.spec), design_dir=None)
     out, mode = run_cmd._regulation(args, vault, world.game, True)
-    assert mode == "built" and out == tmp_path / "vault" / "extension" / "innovate-items" / "spells" / "regulation.bin"
+    assert mode == "built" and out == tmp_path / "vault" / "design" / "innovate-items" / "spells" / "regulation.bin"
 
 
-def test_the_vault_does_not_take_the_extension_folder_for_a_snapshot(world, tmp_path):
+def test_the_vault_does_not_take_the_design_folder_for_a_snapshot(world, tmp_path):
     vault = tmp_path / "vault"
     assert cli.main(vault_args(world, vault, "--add", "all")) == 0
     sv = SaveVault(vault)
-    assert sv.list_snapshots(verify=False) == [] and sv.prune(1) == [] and (vault / "extension").is_dir()
+    assert sv.list_snapshots(verify=False) == [] and sv.prune(1) == [] and (vault / "design").is_dir()

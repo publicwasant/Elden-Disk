@@ -36,7 +36,7 @@ def encode(table, **values) -> bytes:
 
 
 def put_table(mem, table, rows, *, new_rows=(), pad=0, size=None, index=0):
-    """Fake file of `table` wired at its catalog chain. rows / new_rows: {id: bytes}. New rows (an extension's) sit in the gap
+    """Fake file of `table` wired at its catalog chain. rows / new_rows: {id: bytes}. New rows (a design's) sit in the gap
     in front of the old data, `pad` bytes after them, like the real grown files."""
     size = size or LAYOUTS[table]["size"]
     ids = sorted({*rows, *new_rows})
@@ -129,7 +129,7 @@ def test_a_row_is_found_by_id_in_the_old_data():
     assert row["mp"] == 21 and row["isEnchant"] == 1
 
 
-def test_a_row_an_extension_added_is_found_in_the_gap():
+def test_a_row_a_design_added_is_found_in_the_gap():
     m = pf.Pages()
     new = {2230000: encode("Magic", mp=90, refId1=21950111)}
     put_table(m, "Magic", MAGIC, new_rows=new, pad=8)
@@ -138,7 +138,7 @@ def test_a_row_an_extension_added_is_found_in_the_gap():
 
 
 def put_end_grown(mem, table, old_rows, new_rows, relocate, index=0):
-    """Fake file of a table an extension grew at its END (grow.py _grow_end): the descriptors grew into the front of the data, the
+    """Fake file of a table a design grew at its END (grow.py _grow_end): the descriptors grew into the front of the data, the
     `relocate` first old rows were copied behind the strings, the new rows follow the descriptors, `data_start` = end of the
     descriptors, the strings stay where they were."""
     size = LAYOUTS[table]["size"]
@@ -277,7 +277,7 @@ def test_a_catalog_with_an_unknown_table_is_refused(tmp_path):
 
 
 def test_the_layouts_agree_with_the_ones_innovate_items_uses():
-    from eldendisk.extension.innovate_items.paramdefs import PARAMDEFS
+    from eldendisk.design.innovate_items.paramdefs import PARAMDEFS
     for ext, ours in {"goods": "Goods", "magic": "Magic", "sp": "SpEffect", "shop": "ShopLineup"}.items():
         assert PARAMDEFS[ext]["size"] == LAYOUTS[ours]["size"]
         assert PARAMDEFS[ext]["fields"] == LAYOUTS[ours]["fields"]
@@ -290,8 +290,8 @@ ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 @pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
 def test_every_row_of_the_real_tables_decodes_and_black_flame_is_where_the_survey_found_it():
     import struct as st
-    from eldendisk.extension.innovate_items import bases, container, zstd
-    from eldendisk.extension.innovate_items.container import Bnd4
+    from eldendisk.design.innovate_items import bases, container, zstd
+    from eldendisk.design.innovate_items.container import Bnd4
     data = Path(ORIG).read_bytes()
     assert hashlib.sha256(data).hexdigest() == bases.BASES[bases.CURRENT_BASE]
     dcx = container.decrypt(data)

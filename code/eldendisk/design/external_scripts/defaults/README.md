@@ -15,4 +15,4 @@ class Hello(Interface):
         tools.log(f"HP {x.character.vitals.hit_point.current}")
 ```
 
-`eldendisk extension external-scripts --list` shows the scripts and how the last run ended for each.
+`eldendisk external-scripts --list` shows the scripts and how the last run ended for each.

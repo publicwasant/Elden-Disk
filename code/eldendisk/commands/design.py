@@ -1,6 +1,6 @@
-"""`extension --list`, `extension innovate-items spells --add all|PATH ...` and `extension innovate-items spells --secure`.
+"""`design --list`, `innovate-items spells --add all|PATH ...` and `innovate-items spells --secure`.
 
-innovate-items spells reads the design (`extension.json`, embedded in the exe), takes the game's own regulation.bin as the base and
+innovate-items spells reads the design (`design.json`, embedded in the exe), takes the game's own regulation.bin as the base and
 builds a new one; the gate judges the file. `--secure` confirms the build you tried in the game: it is kept as
 regulation.secured.bin, and `run` (vault ON) swaps that copy in without building again while the design does not change.
 `--add` also chooses WHICH spells later builds hold: `--add spells.slots.<id> ...` builds those only and `run` goes on building the
@@ -12,9 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import extension, ui
-from ..extension.innovate_items.spells import service, spec as specmod
-from ..logbook import EXT_TAG, book
+from .. import design, ui
+from ..design.innovate_items.spells import service, spec as specmod
+from ..logbook import DESIGN_TAG, book
 from ..vault import VaultError, resolve_vault
 from ..paths import describe_resource, get_resource_path
 from .common import log_config
@@ -23,21 +23,40 @@ MAX_DIFF_LINES = 12
 
 
 def spec_file(args) -> Path:
-    """`--spec FILE`, else extension.json next to the exe, else the embedded copy, else code/ in the source tree."""
+    """`--spec FILE`, else design.json next to the exe, else the embedded copy, else code/ in the source tree."""
     if getattr(args, "spec", None):
         return Path(args.spec)
     return get_resource_path(service.SPEC_FILE, default_dir=service.CODE_DIR)
 
 
-def ext_dir(args, vault_dir: Path | str | None = None) -> Path:
-    """Where the extensions keep their files: `--extension-dir`, else `<vault>/extension`. The vault is the one the other commands
+def design_folder(args, vault_dir: Path | str | None = None) -> Path:
+    """Where the designs keep their files: `--design-dir`, else `<vault>/design`. The vault is the one the other commands
     use (`--vault`, else the one remembered in the Registry, else the default); `run` passes the one it already resolved."""
-    if vault_dir is None and not getattr(args, "extension_dir", None):
+    if vault_dir is None and not getattr(args, "design_dir", None):
         try:
             vault_dir = resolve_vault(getattr(args, "vault", None))
         except VaultError as exc:
-            raise service.ExtensionError(str(exc))
-    return extension.data_dir(getattr(args, "extension_dir", None), vault_dir or "")
+            raise service.DesignError(str(exc))
+    if not getattr(args, "design_dir", None) and vault_dir:
+        _moved_from_extension(Path(vault_dir))
+    return design.data_dir(getattr(args, "design_dir", None), vault_dir or "")
+
+
+OLD_SUBDIR = "extension"         # <vault>\extension until 1.8.0
+
+
+def _moved_from_extension(vault_dir: Path) -> None:
+    """1.8.0 renamed `<vault>/extension` to `<vault>/design`: the folder of an older vault is renamed once (the builds, the
+    secured file and the scripts' status keep working). Nothing happens when the new folder exists already or the old one does not."""
+    old, new = vault_dir / OLD_SUBDIR, vault_dir / design.SUBDIR
+    if not old.is_dir() or new.exists():
+        return
+    try:
+        old.rename(new)
+        book.i(DESIGN_TAG, f"{old} renamed to {new} (1.8.0: `extension` is `design` now)")
+    except OSError as exc:          # another step of `run` did it at the same moment, or the folder is in use
+        if not new.exists():
+            book.w(DESIGN_TAG, f"could not rename {old} to {new} ({exc}); the design's files are looked for in {new}")
 
 
 def game_file(args) -> Path | None:
@@ -63,9 +82,9 @@ def _show_diff(diff: list) -> None:
     shown = diff[:MAX_DIFF_LINES]
     more = len(diff) - len(shown)
     for n, line in enumerate(shown):
-        book.i(EXT_TAG, ("  \u2514\u2500 " if n == len(shown) - 1 and not more else "  \u251c\u2500 ") + line)
+        book.i(DESIGN_TAG, ("  \u2514\u2500 " if n == len(shown) - 1 and not more else "  \u251c\u2500 ") + line)
     if more > 0:
-        book.i(EXT_TAG, f"  \u2514\u2500 \u2026 and {more} more (see the design and {service.SECURED_FILE})")
+        book.i(DESIGN_TAG, f"  \u2514\u2500 \u2026 and {more} more (see the design and {service.SECURED_FILE})")
 
 
 def _colour_text(rgb, color: bool) -> str:
@@ -126,11 +145,11 @@ def _show_error(exc: Exception) -> None:
     """The lines of an error (a design that is not valid, a gate that failed) inside the block, one by one; the command does not
     say them again (`exc.shown`)."""
     for line in str(exc).splitlines() or [""]:
-        book.e(EXT_TAG, line)
+        book.e(DESIGN_TAG, line)
     exc.shown = True
 
 
-def say_error(exc: Exception, tag: str = EXT_TAG) -> None:
+def say_error(exc: Exception, tag: str = DESIGN_TAG) -> None:
     """For the caller of prepare_regulation: say the error unless the block already did."""
     if not getattr(exc, "shown", False):
         book.e(tag, str(exc))
@@ -138,17 +157,17 @@ def say_error(exc: Exception, tag: str = EXT_TAG) -> None:
 
 def prepare_regulation(args, game_dir_file: Path | None, which=None, dry_run: bool = False,
                        allow_secured: bool = False, vault_dir: Path | str | None = None, summary: bool = False) -> Prepared:
-    """What both `extension innovate-items spells --add` and `run` do, in one block on the console: why the build happens, what changed
-    in the design, the build and the gate, then the spells with the ids the game really uses. Raises ExtensionError / GateFailed
+    """What both `innovate-items spells --add` and `run` do, in one block on the console: why the build happens, what changed
+    in the design, the build and the gate, then the spells with the ids the game really uses. Raises DesignError / GateFailed
     (their lines are in the block already: `exc.shown`). `which`: what `--add` was given (a list of `all` / spell paths) or None for
     `run`, which builds the selection the last `--add` made (every spell when there was none). `allow_secured` (`run`): swap the
     secured file, or the latest build, without building when nothing changed. `summary`: the hashes and what to do next in the block."""
-    ci = extension.open_spells(ext_dir(args, vault_dir), spec_file(args))
+    ci = design.open_spells(design_folder(args, vault_dir), spec_file(args))
     log_config("design", ci.spec_path)
     with ui.block("design \u00b7 innovate-items spells", verbose=getattr(args, "verbose", False)) as blk:
         try:
             return _prepare(args, ci, blk, game_dir_file, which, dry_run, allow_secured, summary)
-        except service.ExtensionError as exc:      # includes GateFailed
+        except service.DesignError as exc:      # includes GateFailed
             _show_error(exc)
             raise
 
@@ -159,44 +178,44 @@ def _prepare(args, ci, blk, game_dir_file, which, dry_run, allow_secured, summar
         try:
             sel = specmod.selection_of(which)
         except specmod.SpecError as e:
-            raise service.ExtensionError("; ".join(e.problems))
+            raise service.DesignError("; ".join(e.problems))
     else:
         sel, note = ci.selection()
         if note:
-            book.w(EXT_TAG, note)
+            book.w(DESIGN_TAG, note)
     spells = ci.items(sel)
     if sel != "all":
         sel = [i["id"] for i in spells]            # slot order, so the same choice is always written the same way
     ui.mark_spell_ids(i["id"] for i in spells)
     if not spells:
-        book.i(EXT_TAG, f"no spells in {ci.spec_path}: nothing to build")
+        book.i(DESIGN_TAG, f"no spells in {ci.spec_path}: nothing to build")
         blk.close("nothing to build", "info")
         return Prepared(None, "none")
     names = ", ".join(i["id"] for i in spells)
     if sel != "all":
         left = [i["id"] for i in ci.items("all") if i["id"] not in sel]
-        book.i(EXT_TAG, f"building only {names}"
+        book.i(DESIGN_TAG, f"building only {names}"
                + (" (chosen with the last --add; `--add all` builds every spell)" if not chosen else "")
                + (f"; left out: {', '.join(left)}" if left else ""))
     base, base_sha = ci.read_base(game_dir_file)
     if allow_secured:
         d = ci.decide(spells, base_sha)
         if d.use_secured:
-            book.ok(EXT_TAG, f"{names} unchanged since it was secured: using {ci.secured_bin} (no build)")
+            book.ok(DESIGN_TAG, f"{names} unchanged since it was secured: using {ci.secured_bin} (no build)")
             blk.close("no build", "ok")
             return Prepared(ci.secured_bin, "secured")
         last = ci.decide_last(spells, sel, base_sha)
         if last.use_secured:
-            book.ok(EXT_TAG, f"{names} unchanged since the last build: using {ci.output_path} (no build; not secured yet)")
+            book.ok(DESIGN_TAG, f"{names} unchanged since the last build: using {ci.output_path} (no build; not secured yet)")
             blk.close("no build", "ok")
             return Prepared(ci.output_path, "last")
         for r in d.reasons + [r for r in last.reasons if r != "no build yet"]:
-            book.i(EXT_TAG, f"building because {r}")
+            book.i(DESIGN_TAG, f"building because {r}")
         _show_diff(d.diff or last.diff)
-    with ui.working(EXT_TAG, f"building {names} on {game_dir_file} and checking", short=f"building {names}") as step:
+    with ui.working(DESIGN_TAG, f"building {names} on {game_dir_file} and checking", short=f"building {names}") as step:
         rep = ci.build(spells, base, dry_run, selection=sel)
         for n in rep.notes:
-            book.d(EXT_TAG, f"gate: {n}")
+            book.d(DESIGN_TAG, f"gate: {n}")
         step.done(f"{names} built, gate passed ({rep.changed_blocks} blocks re-encoded)")
     _spell_rows(blk, spells, rep.rows)
     if summary and rep.spells:
@@ -210,7 +229,7 @@ def _summary(blk, rep: service.Report) -> None:
     verb = "would write" if rep.dry_run else "wrote"
     rows = [("sha256", rep.sha256[:16] + "\u2026"), ("content", rep.decrypted_sha256[:16] + "\u2026"), (verb, str(rep.output)),
             ("next", "`eldendisk run` (vault ON) swaps it in for the session; when it works in the game, close the game and run "
-                     "`extension innovate-items spells --secure`" if not rep.dry_run else "run again without --dry-run to write it")]
+                     "`innovate-items spells --secure`" if not rep.dry_run else "run again without --dry-run to write it")]
     if blk.active:
         blk.rows(rows)
     else:
@@ -218,14 +237,14 @@ def _summary(blk, rep: service.Report) -> None:
 
 
 def cmd_list(args) -> int:
-    ci = extension.open_spells(ext_dir(args), spec_file(args))
+    ci = design.open_spells(design_folder(args), spec_file(args))
     try:
         spells = ci.load_spec()["spells"]
         n = len(spells)
         text = f"{n} spell{'s' if n != 1 else ''} in the design"
-    except service.ExtensionError as exc:
+    except service.DesignError as exc:
         spells, text = None, str(exc).splitlines()[0]
-    ui.result("info", f"extensions (files in {ext_dir(args)})")
+    ui.result("info", f"design (files in {design_folder(args)})")
     rows = [("innovate-items spells", text), ("design", f"{ci.spec_path} ({describe_resource(ci.spec_path)})")]
     try:
         rec = ci.read_secured()
@@ -237,7 +256,7 @@ def cmd_list(args) -> int:
         rows.append(("secured", rows_secured))
     elif rec is None:
         rows.append(("secured", "none yet: `run` builds; after you tried it in the game, close the game and run "
-                                "`extension innovate-items spells --secure`"))
+                                "`innovate-items spells --secure`"))
     else:
         rows.append(("secured", f"{rec.get('committed_at', '?')} ({ci.secured_bin})"))
         if spells is not None:
@@ -251,32 +270,32 @@ def cmd_list(args) -> int:
     rows.append(("selection", note or ("every spell (no --add yet, or the last was `--add all`)" if sel == "all" else
                                        f"{', '.join(sel)} (chosen with --add; `run` builds only these; `--add all` builds every spell)")))
     rows.append(("last build", str(ci.output_path) if ci.output_path.is_file()
-                 else "none yet (built by `run` or `extension innovate-items spells --add all`)"))
+                 else "none yet (built by `run` or `innovate-items spells --add all`)"))
     from .scripts import default_dir, script_paths
     n = len(script_paths(args))
     rows.append(("external scripts", f"{n} by default ({default_dir()})" + (": `run` starts them (vault ON)" if n else "")
-                 + "; `extension external-scripts` lists them, `--scripts-dir PATH` adds more"))
+                 + "; `external-scripts` lists them, `--scripts-dir PATH` adds more"))
     ui.fields(rows)
     return 0
 
 
 def cmd_secure(args) -> int:
-    ci = extension.open_spells(ext_dir(args), spec_file(args))
+    ci = design.open_spells(design_folder(args), spec_file(args))
     with ui.block("design \u00b7 innovate-items spells \u00b7 secure", verbose=getattr(args, "verbose", False)) as blk:
         try:
             sel, note = ci.selection()                  # the build holds the spells of the last --add: that is what is checked and kept
             if note:
-                book.w(EXT_TAG, note)
+                book.w(DESIGN_TAG, note)
             spells = ci.items(sel)
             ui.mark_spell_ids(i["id"] for i in spells)
             rep = ci.secure(spells, game_file(args))
-        except service.ExtensionError as exc:
+        except service.DesignError as exc:
             _show_error(exc)
             blk.close("not secured", "error")
             return 1
         for n in rep.notes:
-            book.d(EXT_TAG, f"gate: {n}")
-        book.ok(EXT_TAG, f"{', '.join(rep.spells)} secured -> {rep.output}")
+            book.d(DESIGN_TAG, f"gate: {n}")
+        book.ok(DESIGN_TAG, f"{', '.join(rep.spells)} secured -> {rep.output}")
         rows = [("sha256", rep.sha256[:16] + "\u2026"), ("record", str(ci.secured_path)),
                 ("next", "`eldendisk run` swaps the secured file without building while the design does not change")]
         if blk.active:
@@ -288,36 +307,38 @@ def cmd_secure(args) -> int:
 
 
 def cmd_spells(args) -> int:
-    ci = extension.open_spells(ext_dir(args), spec_file(args))
+    ci = design.open_spells(design_folder(args), spec_file(args))
     if args.secure:
         return cmd_secure(args)
     if args.add is None:
         ui.fields([("design", f"{ci.spec_path} ({describe_resource(ci.spec_path)})"), ("build", str(ci.output_path)),
                    ("secured", str(ci.secured_bin))])
         sel, _note = ci.selection()
-        ui.out("     build with: eldendisk extension innovate-items spells --add all   (or --add spells.slots.<id> [spells.slots.<id> ...])")
+        ui.out("     build with: eldendisk innovate-items spells --add all   (or --add spells.slots.<id> [spells.slots.<id> ...])")
         ui.out("     selection now: " + ("every spell" if sel == "all" else f"{', '.join(sel)} (`run` builds only these)"))
-        ui.out("     after you tried it in the game (game closed): eldendisk extension innovate-items spells --secure")
+        ui.out("     after you tried it in the game (game closed): eldendisk innovate-items spells --secure")
         return 0
     try:
         prepare_regulation(args, game_file(args), args.add, args.dry_run, summary=True)
-    except service.ExtensionError as exc:      # includes GateFailed
+    except service.DesignError as exc:      # includes GateFailed
         say_error(exc)
         return 1
     return 0
 
 
-def cmd_extension(args) -> int:
+def cmd_design(args) -> int:
+    """`design [--list]` (the overview), `innovate-items spells ...` and `external-scripts ...` (1.8.0: commands of their own, no
+    `extension` in front)."""
     try:
-        if args.list:
+        if args.cmd == "design":
             return cmd_list(args)
-        if args.ext_name == "innovate-items" and getattr(args, "items_kind", None) == "spells":
+        if args.cmd == "innovate-items" and getattr(args, "items_kind", None) == "spells":
             return cmd_spells(args)
-        if args.ext_name == "external-scripts":
+        if args.cmd == "external-scripts":
             from .scripts import cmd_external_scripts
             return cmd_external_scripts(args)
-    except service.ExtensionError as exc:      # includes a vault that cannot be found (ext_dir)
+    except service.DesignError as exc:      # includes a vault that cannot be found (design_folder)
         say_error(exc)
         return 1
-    ui.result("error", "give --list, or an extension: innovate-items spells, external-scripts")
+    ui.result("error", "give a command: design, innovate-items spells, external-scripts")
     return 2

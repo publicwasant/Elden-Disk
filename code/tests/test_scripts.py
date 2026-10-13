@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 import eldendisk.__main__ as cli
-import eldendisk.extension.external_scripts  # noqa: F401  (installs `edstdlib`)
+import eldendisk.design.external_scripts  # noqa: F401  (installs `edstdlib`)
 from eldendisk.commands import scripts as cmd
-from eldendisk.extension.external_scripts import edstdlib as ed
-from eldendisk.extension.external_scripts import host
+from eldendisk.design.external_scripts import edstdlib as ed
+from eldendisk.design.external_scripts import host
 from tests.fake_tools import FakeBackend
 
 EXAMPLES_DIR = Path(__file__).parent / "external_scripts"     # the example scripts: tests here, examples for a person
@@ -32,9 +32,9 @@ def test_tools_read_gives_the_document_as_an_object():
         x = tools.read()
         assert x.character.vitals.hit_point.current == 1000 and x.character.attributes.faith == 60
         assert x.params.effects[1621000].effectEndurance == 2.0                       # a number key with [ ]
-        rct = x.extension.innovate_items.spells[2230000]
+        rct = x.design.innovate_items.spells[2230000]
         assert rct is not None and rct.id == "reverse_cursed_technique"
-        assert x.extension.innovate_items.spells.reverse_cursed_technique.slot == 1    # a spell also by its label
+        assert x.design.innovate_items.spells.reverse_cursed_technique.slot == 1    # a spell also by its label
         assert rct.customs.advanced.colors["SpEffect.1642100"] == "#90D5FF"            # a dotted key whole
         assert rct.customs.advanced.colors.SpEffect[1642100] == "#90D5FF"               # or in two parts
         assert rct.customs.basic["SpEffect.1642100.effectEndurance"] == 20.0
@@ -52,9 +52,9 @@ def test_tools_write_writes_only_what_was_changed_and_under_the_part_given():
     with FakeBackend() as b:
         x = tools.read()
         x.character.attributes.vigor = 61
-        x.extension.innovate_items.spells[2230000].customs.advanced.colors["SpEffect.1642100"] = "#FF909E"
-        assert tools.write(x.extension) is True                                     # only the part under `extension`
-        assert b.writes == [("extension.innovate_items.spells.2230000.customs.advanced.colors.SpEffect.1642100", "#FF909E")]
+        x.design.innovate_items.spells[2230000].customs.advanced.colors["SpEffect.1642100"] = "#FF909E"
+        assert tools.write(x.design) is True                                     # only the part under `design`
+        assert b.writes == [("design.innovate_items.spells.2230000.customs.advanced.colors.SpEffect.1642100", "#FF909E")]
         assert tools.write(x) is True and b.writes[-1] == ("character.attributes.vigor", 61)
         assert tools.write(x) is True and len(b.writes) == 2                        # nothing changed since: nothing written
 
@@ -350,7 +350,7 @@ def test_buff_logger_says_what_came_and_went():
 
 def test_eyes_follow_hp_writes_the_colour_of_the_spell_once_per_change():
     s = example("eyes_follow_hp.py")
-    key = "extension.innovate_items.spells.2230000.customs.advanced.colors.SpEffect.1642100"
+    key = "design.innovate_items.spells.2230000.customs.advanced.colors.SpEffect.1642100"
     with FakeBackend() as b:
         ed._set_current(s)
         s.setup()
@@ -373,20 +373,20 @@ def test_the_list_shows_every_script_and_how_it_ended(tmp_path, capsys, monkeypa
     ext.mkdir()
     (ext / host.STATUS_FILE).write_text(json.dumps({"updated": "now", "scripts": [{"name": "A", "state": "dead", "loops": 3,
                                                                                    "error": "ValueError: x"}]}), encoding="utf-8")
-    assert cli.main(["extension", "external-scripts", "--scripts-dir", str(folder), "--extension-dir", str(ext)]) == 0
+    assert cli.main(["external-scripts", "--scripts-dir", str(folder), "--design-dir", str(ext)]) == 0
     out = " ".join(capsys.readouterr().out.split())
     assert "A, every 0.05 s; last run: dead after 3 loop(s) (ValueError: x)" in out and "b.py cannot be loaded: SyntaxError" in out
 
 
 def test_when_loaded_goes_with_run(capsys):
     with pytest.raises(SystemExit):
-        cli.main(["extension", "external-scripts", "--when-loaded"])
+        cli.main(["external-scripts", "--when-loaded"])
 
 
 def test_run_without_scripts_has_nothing_to_do(tmp_path, monkeypatch):
     monkeypatch.setattr(cmd, "require_windows_x64", lambda: None)
     monkeypatch.setattr(cmd, "default_dir", lambda: tmp_path / "none")
-    assert cli.main(["extension", "external-scripts", "--run", "--scripts-dir", str(tmp_path / "empty")]) == 0
+    assert cli.main(["external-scripts", "--run", "--scripts-dir", str(tmp_path / "empty")]) == 0
 
 
 def test_run_scripts_runs_them_on_a_backend_until_told(tmp_path, monkeypatch):
@@ -408,7 +408,7 @@ def test_run_starts_the_host_only_when_there_are_scripts(tmp_path, monkeypatch):
     assert run_cmd.has_scripts(args)
     seen = []
     run_cmd.start_scripts(args, tmp_path / "vault", spawn=lambda c, **kw: seen.append(c))
-    assert seen[0][-6:] == ["extension", "external-scripts", "--run", "--when-loaded", "--scripts-dir", str(tmp_path / "s")]
+    assert seen[0][-5:] == ["external-scripts", "--run", "--when-loaded", "--scripts-dir", str(tmp_path / "s")]
 
 
 def test_the_run_console_shows_the_lines_of_the_scripts_and_a_check_mark_when_one_starts(monkeypatch):
@@ -429,7 +429,7 @@ def test_the_default_scripts_and_every_scripts_dir_are_run_folders_or_files_each
     monkeypatch.setattr(cmd, "default_dir", lambda: default)
     extra = write(tmp_path / "more", "b.py", GOOD)
     one = write(tmp_path / "elsewhere", "c.py", GOOD)
-    args = cli.build_parser().parse_args(["extension", "external-scripts", "--scripts-dir", str(extra.parent), str(one),
+    args = cli.build_parser().parse_args(["external-scripts", "--scripts-dir", str(extra.parent), str(one),
                                           "--scripts-dir", str(default / "a.py"), str(tmp_path / "missing")])
     said = []
     got = cmd.script_paths(args, warn=said.append)
@@ -485,7 +485,7 @@ def test_a_group_used_as_a_number_says_which_values_it_has():
 
 def test_the_colours_follow_the_spell_that_is_selected():
     s = example("rct_colours_follow_the_spell.py")
-    key = "extension.innovate_items.spells.2230000.customs.advanced.colors.Magic.6421.castSfxId"
+    key = "design.innovate_items.spells.2230000.customs.advanced.colors.Magic.6421.castSfxId"
     with FakeBackend() as b:
         ed._set_current(s)
         s.setup()

@@ -9,8 +9,8 @@ from pathlib import Path
 
 import eldendisk
 from ..console import require_windows_x64
-from .. import extension, ui
-from ..logbook import EXT_TAG, Tail, book
+from .. import design, ui
+from ..logbook import DESIGN_TAG, Tail, book
 from ..game.processes import GAME_EXE, anticheat_processes, find_pid, list_process_names, process_started, sha256_file
 from ..game.profile import load_profile
 from ..host import launcher
@@ -18,9 +18,9 @@ from ..host.host import Hooks, Session, State
 from ..paths import HERE, describe_resource, get_resource_path
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, log_config, session_log
-from .extension import ext_dir, prepare_regulation, say_error, spec_file
+from .design import design_folder, prepare_regulation, say_error, spec_file
 from .scripts import WORLD_READY, has_scripts
-from ..extension.innovate_items.spells.service import ExtensionError, GateFailed
+from ..design.innovate_items.spells.service import DesignError, GateFailed
 
 
 STEAM_EXE = "steam.exe"
@@ -46,26 +46,26 @@ def auto_prune(vault: SaveVault, keep: int) -> None:
         book.d("vault", "pruned: " + ", ".join(gone))
 
 
-TEXT_MODES = ("secured", "last", "built")      # the regulation.bin is the extension's: the design's text belongs to it
+TEXT_MODES = ("secured", "last", "built")      # the regulation.bin is the design's: the design's text belongs to it
 
 
 def design_has_text(args, vault_path: Path) -> bool:
     """Is there any text in the design for the spells the build holds? (Nothing to start otherwise.)"""
     try:
-        ci = extension.open_spells(ext_dir(args, vault_path), spec_file(args))
+        ci = design.open_spells(design_folder(args, vault_path), spec_file(args))
         sel, _note = ci.selection()
         return any(any(t.values()) for t in ci.texts(sel).values())
-    except ExtensionError:
+    except DesignError:
         return False
 
 
 def design_has_flame(args, vault_path: Path) -> bool:
     """Does a spell of the design name a flame_color, or a colour for its positive_curse_energy_eyes? (Nothing to start otherwise.)"""
     try:
-        ci = extension.open_spells(ext_dir(args, vault_path), spec_file(args))
+        ci = design.open_spells(design_folder(args, vault_path), spec_file(args))
         sel, _note = ci.selection()
         return ci.flame_color(sel)[0] is not None or ci.eyes_color(sel)[0] is not None
-    except ExtensionError:
+    except DesignError:
         return False
 
 
@@ -86,7 +86,7 @@ def child_command(args, vault_path: Path, words: list[str]) -> tuple[list[str], 
         cmd += ["--vault", str(vault_path)]
     if str(args.offsets) != str(get_resource_path("offsets.json", default_dir=HERE)):      # only an offsets.json the user chose
         cmd += ["--offsets", str(args.offsets)]
-    for flag, value in (("--spec", getattr(args, "spec", None)), ("--extension-dir", getattr(args, "extension_dir", None))):
+    for flag, value in (("--spec", getattr(args, "spec", None)), ("--design-dir", getattr(args, "design_dir", None))):
         if value:
             cmd += [flag, str(value)]
     return cmd, None if frozen else str(Path(eldendisk.__file__).resolve().parent.parent)
@@ -102,7 +102,7 @@ def start_text(args, vault_path: Path, spawn=subprocess.Popen, flag: str = "--te
     """Start the text step (or, with flag --flame-color, the fire colour step) in the background. Its lines appear in this console
     and in the log; if it fails the game goes on."""
     cmd, cwd = text_command(args, vault_path, flag)
-    book.d(EXT_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
+    book.d(DESIGN_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}   # -v shows its log lines
     return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), env=_child_env(), **quiet)
 
@@ -112,13 +112,13 @@ def start_flame(args, vault_path: Path):
 
 
 def start_scripts(args, vault_path: Path, spawn=subprocess.Popen, after_steps: bool = False):
-    """Start the host of the external scripts (`extension external-scripts --run --when-loaded`) in the background: its lines appear in
+    """Start the host of the external scripts (`external-scripts --run --when-loaded`) in the background: its lines appear in
     this console and in the log; a script that fails, or the host itself, never stops the game or the restore."""
-    cmd, cwd = child_command(args, vault_path, ["extension", "external-scripts", "--run", "--when-loaded"])
+    cmd, cwd = child_command(args, vault_path, ["external-scripts", "--run", "--when-loaded"])
     from .scripts import extra_paths
     if extra_paths(args):
         cmd += ["--scripts-dir", *[str(p) for p in extra_paths(args)]]
-    book.d(EXT_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
+    book.d(DESIGN_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}
     env = _child_env()
     if after_steps:                    # the text and colour steps waited for a stable world: the scripts look once and start
@@ -129,14 +129,14 @@ def start_scripts(args, vault_path: Path, spawn=subprocess.Popen, after_steps: b
 def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
     """-> (the regulation.bin to swap in for this session or None, mode). mode: "none" | "file" (--regulation) | "secured"
     (the confirmed copy, nothing built) | "last" (the latest build, unchanged since, nothing built) | "built" (a new build the gate
-    passed). `--regulation FILE` wins. Otherwise, with the vault ON, the extension swaps the secured file, or the latest build, when
+    passed). `--regulation FILE` wins. Otherwise, with the vault ON, the design swaps the secured file, or the latest build, when
     the design is unchanged and builds (a few seconds) when it is not: the spells the last `--add` chose, every spell without one. The vault
-    is what makes that safe: it puts the game's file back. With the vault OFF the extension does not run. A build error or a
-    failed gate stops `run` (ExtensionError / GateFailed): nothing is swapped, the game is not started.
+    is what makes that safe: it puts the game's file back. With the vault OFF the design does not run. A build error or a
+    failed gate stops `run` (DesignError / GateFailed): nothing is swapped, the game is not started.
     The 1.6.4 place `<vault>/regulation/regulation.bin` is not read any more."""
     legacy = vault.legacy_world()
     if legacy is not None:
-        book.w("vault", f"{legacy} is no longer read (since 1.7.0); the extension builds the file from the spec now, "
+        book.w("vault", f"{legacy} is no longer read (since 1.7.0); the design builds the file from the spec now, "
                         "or pass a file as --regulation FILE")
     if getattr(args, "regulation", None):
         f = Path(args.regulation)
@@ -147,10 +147,10 @@ def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
             return None, "none"
         return f, "file"
     if not protect:
-        book.i(EXT_TAG, "vault OFF: the extension is not run (it changes the game's files; only the vault can put them back)")
+        book.i(DESIGN_TAG, "vault OFF: the design is not run (it changes the game's files; only the vault can put them back)")
         return None, "none"
     if vault.read_session() is not None:
-        book.d(EXT_TAG, "the vault owes a restore from an earlier session: not building; the session will say what to do")
+        book.d(DESIGN_TAG, "the vault owes a restore from an earlier session: not building; the session will say what to do")
         return None, "none"
     prep = prepare_regulation(args, game_dir / "regulation.bin", allow_secured=True, vault_dir=vault.root)
     return prep.path, prep.mode
@@ -175,7 +175,7 @@ def cmd_run(args) -> int:
         say_error(exc, "run")
         book.e("run", "the game was not started and nothing was swapped; the game's files are as they were")
         return 1
-    except (ExtensionError, FileNotFoundError) as exc:
+    except (DesignError, FileNotFoundError) as exc:
         say_error(exc, "run")
         return 1
     rows = [("vault", str(vault_path)), ("save", str(live)), ("game", str(game_dir)),
@@ -197,7 +197,7 @@ def cmd_run(args) -> int:
         return out
 
     children: list = []
-    steps = []       # the memory steps that have something to give: the regulation.bin is the extension's, the design has it
+    steps = []       # the memory steps that have something to give: the regulation.bin is the design's, the design has it
     if protect and world is not None and mode in TEXT_MODES:
         if design_has_text(args, vault_path):
             steps.append(start_text)
@@ -207,7 +207,7 @@ def cmd_run(args) -> int:
     if protect and has_scripts(args):          # the external scripts: whatever regulation.bin the session swaps (they write through the session)
         scripts = start_scripts
     elif protect:
-        book.d(EXT_TAG, "no external scripts (none in external_scripts/defaults when the exe was built, no --scripts-dir): none started")
+        book.d(DESIGN_TAG, "no external scripts (none in external_scripts/defaults when the exe was built, no --scripts-dir): none started")
     ended, starting = threading.Event(), threading.Lock()
 
     def scripts_after(memory, pid):
@@ -227,7 +227,7 @@ def cmd_run(args) -> int:
         if not memory:
             children.append(scripts(args, vault_path))
             return
-        book.d(EXT_TAG, "external scripts: they start once the text and colour steps are done")
+        book.d(DESIGN_TAG, "external scripts: they start once the text and colour steps are done")
         threading.Thread(target=scripts_after, args=(memory, pid), name="scripts-after", daemon=True).start()
 
     hooks = Hooks(
@@ -262,6 +262,6 @@ def cmd_run(args) -> int:
     if State.RESTORING in session.history:   # a session really ran; never prune a vault that still owes a restore
         auto_prune(vault, args.keep)
         if mode in ("built", "last"):
-            book.i(EXT_TAG, "this regulation.bin is a build that is not secured yet. If it worked in the game, keep it for next time: "
-                                "eldendisk extension innovate-items spells --secure   (game closed)")
+            book.i(DESIGN_TAG, "this regulation.bin is a build that is not secured yet. If it worked in the game, keep it for next time: "
+                                "eldendisk innovate-items spells --secure   (game closed)")
     return rc

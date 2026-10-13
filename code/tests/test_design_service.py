@@ -1,5 +1,5 @@
 """innovate-items spells service: the design, the base (always the game's own file), the secured state and the decision to build.
-The build and the gate are replaced by counters here (the real ones are in test_ext_golden.py); what is tested is what
+The build and the gate are replaced by counters here (the real ones are in test_design_golden.py); what is tested is what
 surrounds them: when a build happens, when it does not, and what a failed gate leaves behind."""
 import copy
 import hashlib
@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_items import bases
-from eldendisk.extension.innovate_items.spells import service, spec
-from eldendisk.extension.innovate_items.spells.build import Result
-from eldendisk.extension.innovate_items.spells.gate import Verdict
+from eldendisk.design.innovate_items import bases
+from eldendisk.design.innovate_items.spells import service, spec
+from eldendisk.design.innovate_items.spells.build import Result
+from eldendisk.design.innovate_items.spells.gate import Verdict
 
 BASE = b"pretend this is the game's regulation.bin" * 50
 PKG = Path(spec.__file__).parent
@@ -35,7 +35,7 @@ def ci(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "make", fake_make)
     monkeypatch.setattr(service, "prepare", lambda data: "SRC")
     monkeypatch.setattr(service.gate, "verify", fake_verify)
-    c = service.Spells(tmp_path / "ext", tmp_path / "extension.json")
+    c = service.Spells(tmp_path / "ext", tmp_path / "design.json")
     c.state, c.game = state, tmp_path / "game-regulation.bin"
     c.game.write_bytes(BASE)
     c.spec_path.write_text(json.dumps(Z4), encoding="utf-8")
@@ -68,13 +68,13 @@ def decide(c):
 # ---------------- the shipped design ----------------
 def test_the_shipped_design_and_schema_are_where_the_service_looks():
     code = PKG.parents[3]
-    assert service.PKG_DIR == PKG and service.CODE_DIR == code and (code / "extension.json").is_file()
+    assert service.PKG_DIR == PKG and service.CODE_DIR == code and (code / "design.json").is_file()
     assert (PKG / "spells.schema.json").is_file() and not (PKG / "spells.design.json").exists()
-    assert len(spec.normalise(json.loads((code / "extension.json").read_text(encoding="utf-8")))["spells"]) >= 1
+    assert len(spec.normalise(json.loads((code / "design.json").read_text(encoding="utf-8")))["spells"]) >= 1
 
 
-def test_the_default_design_is_code_extension_json(tmp_path):
-    assert service.Spells(tmp_path).spec_path == PKG.parents[3] / "extension.json"
+def test_the_default_design_is_code_design_json(tmp_path):
+    assert service.Spells(tmp_path).spec_path == PKG.parents[3] / "design.json"
 
 
 # ---------------- the build ----------------
@@ -132,7 +132,7 @@ def test_a_failed_gate_on_a_first_build_leaves_no_file(ci):
 
 def test_the_decoder_tables_are_dropped_after_a_build_and_a_secure_whatever_the_gate_says(ci):
     """`run` goes on for the whole game after it built: the tables the build decoded with (tens of MB) are not kept."""
-    from eldendisk.extension.innovate_items import zstd
+    from eldendisk.design.innovate_items import zstd
     base, _ = ci.read_base(ci.game)
     for problems, call in (([], lambda: ci.build(ci.items("all"), base)), ([], lambda: ci.secure(ci.items("all"), ci.game)),
                            (["G1: no"], lambda: ci.build(ci.items("all"), base))):
@@ -164,11 +164,11 @@ def test_an_empty_draft_builds_nothing(ci):
 
 def test_a_missing_or_invalid_draft_stops_before_anything(ci):
     ci.spec_path.unlink()
-    with pytest.raises(service.ExtensionError) as e:
+    with pytest.raises(service.DesignError) as e:
         ci.items("all")
     assert "was not found" in str(e.value)
     write_spec(ci, edited(lambda i: i.update(fp_cost=-5)))
-    with pytest.raises(service.ExtensionError) as e:
+    with pytest.raises(service.DesignError) as e:
         ci.items("all")
     assert "fp_cost" in str(e.value) and not ci.state["makes"] and not ci.ext.exists()
 
@@ -179,7 +179,7 @@ def test_every_slot_is_built_but_a_shop_needs_a_shop_line(ci):
     assert [s["id"] for s in ci.items("second")] == ["second"]
     seven = {"s%d" % i: copy.deepcopy(SPELL) for i in range(1, 9)}                     # the 8th has a shop: no line left for it
     write_spec(ci, file_of(seven))
-    with pytest.raises(service.ExtensionError) as e:
+    with pytest.raises(service.DesignError) as e:
         ci.items("all")
     assert "s8 is in slot 8" in str(e.value) and "shop" in str(e.value)
     seven["s8"].pop("shop")                                                             # without a shop it is fine
@@ -188,27 +188,27 @@ def test_every_slot_is_built_but_a_shop_needs_a_shop_line(ci):
     write_spec(ci, file_of({"<id-1>": None, "second": copy.deepcopy(SPELL)}))         # alone, in slot 2
     base, _ = ci.read_base(ci.game)
     assert ci.build(ci.items("second"), base).spells == ["second"] and ci.state["makes"] == [["second"]]
-    with pytest.raises(service.ExtensionError):
+    with pytest.raises(service.DesignError):
         ci.items("missing")
 
 
 # ---------------- the base is the game's own file, on every path ----------------
 def test_the_base_must_be_the_known_original(ci):
     ci.game.write_bytes(BASE + b"modified")
-    with pytest.raises(service.ExtensionError) as e:
+    with pytest.raises(service.DesignError) as e:
         ci.read_base(ci.game)
     msg = " ".join(str(e.value).split())
     assert "not a regulation.bin this version knows" in msg and "vault restore" in msg and "close it first" in msg
-    with pytest.raises(service.ExtensionError):
+    with pytest.raises(service.DesignError):
         ci.read_base(None)
-    with pytest.raises(service.ExtensionError):
+    with pytest.raises(service.DesignError):
         ci.read_base(ci.game.with_name("missing.bin"))
     assert not ci.ext.exists()
 
 
 def test_our_own_output_is_never_a_base(ci):
     build_and_secure(ci)
-    with pytest.raises(service.ExtensionError):
+    with pytest.raises(service.DesignError):
         ci.read_base(ci.output_path)
 
 
@@ -226,7 +226,7 @@ def test_secure_keeps_the_build_and_writes_the_record_last(ci):
 
 
 def test_secure_needs_a_build_to_exist(ci):
-    with pytest.raises(service.ExtensionError) as e:
+    with pytest.raises(service.DesignError) as e:
         ci.secure(ci.items("all"), ci.game)
     assert "build it first" in str(e.value) and not ci.secured_path.exists()
 
@@ -244,7 +244,7 @@ def test_secure_refuses_a_modified_game_file(ci):
     base, _ = ci.read_base(ci.game)
     ci.build(ci.items("all"), base)
     ci.game.write_bytes(BASE + b"x")
-    with pytest.raises(service.ExtensionError):
+    with pytest.raises(service.DesignError):
         ci.secure(ci.items("all"), ci.game)
     assert not ci.secured_path.exists()
 
@@ -371,7 +371,7 @@ def test_diff_specs_lists_every_changed_field_in_dotted_form():
 
 # ---- 1.7.1: the text for the game ----
 def test_texts_hold_every_slot_and_the_text_only_of_the_spells_that_are_built(ci):
-    from eldendisk.extension.innovate_items.spells import recipes
+    from eldendisk.design.innovate_items.spells import recipes
     t = ci.texts("all")
     gid = recipes.slot_rows(1)["goods"]
     assert len(t) == 64 and t[gid] == SPELL["text"] and t[gid + 1] == {"goods_name": "", "goods_info": "", "goods_captions": ""}

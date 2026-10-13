@@ -17,8 +17,8 @@ the tables and the array are FOUND, by what they are (writer/scan.py does the lo
     by chance. Only the first is searched for; the other two slots are read where one is seen. The search starts around the tables
     (scan.py `near`) and ends at the first whole array.
 
-This module knows bytes only. Building the new table (ids -> text) is done by the command with extension/innovate_items/fmg.py:
-the writer package may not import the extension package, and the extension knows nothing of the game.
+This module knows bytes only. Building the new table (ids -> text) is done by the command with design/innovate_items/fmg.py:
+the writer package may not import the design package, and the design knows nothing of the game.
 """
 from __future__ import annotations
 

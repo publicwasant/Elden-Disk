@@ -15,7 +15,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from eldendisk.extension.innovate_items import aes
+from eldendisk.design.innovate_items import aes
 
 ARCHIVES = ("Data0", "Data1", "Data2", "Data3")
 _PEM = re.compile(rb"-----BEGIN RSA PUBLIC KEY-----.*?-----END RSA PUBLIC KEY-----", re.S)

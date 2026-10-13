@@ -22,7 +22,7 @@ from .profile import PARAM_TYPES, ParamField, ParamsProfile, ParamTable, Profile
 
 ROOT = "params"
 NAME = "name"           # the first value of every row in the document: its text from the profile, never written
-MAX_GAP = 1 << 20         # rows an extension put between the descriptors and the original data (64 spells: about 117 KB)
+MAX_GAP = 1 << 20         # rows a design put between the descriptors and the original data (64 spells: about 117 KB)
 MAX_ROWS = 100_000      # a param file with more rows than this is not what we think it is (the largest has ~15,000)
 
 
@@ -118,7 +118,7 @@ class ParamStore:
         if not 0 < count <= MAX_ROWS:
             return None, f"row count {count} is not plausible"
         expected = lay.descriptors + count * lay.descriptor_size
-        # The game's own file has its data right after the descriptors (gap 0). A file that an extension grew in place (rows
+        # The game's own file has its data right after the descriptors (gap 0). A file that a design grew in place (rows
         # appended in the space in front of the old data) has a gap holding the new rows plus the padding that keeps the old data 8-aligned (measured on the
         # slot-1 build: Goods 184, Magic 168, Shop 56, SpEffect 1824), so the gap is a multiple of 4.
         gap = data_start - expected

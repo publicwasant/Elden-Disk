@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from eldendisk.extension.innovate_items import bases, preflight                      # noqa: E402
-from eldendisk.extension.innovate_items.spells import build, gate, recipes, spec     # noqa: E402
+from eldendisk.design.innovate_items import bases, preflight                      # noqa: E402
+from eldendisk.design.innovate_items.spells import build, gate, recipes, spec     # noqa: E402
 
 KINDS = ("buff", "clone", "enchant", "projectile", "attack")
 FROM = {"clone": 6210, "enchant": 6250, "projectile": 6210, "attack": 4440}
@@ -54,7 +54,7 @@ VARY = {   # a `set` that makes every slot's copied rows differ from the other s
 
 
 def design(mix: list[tuple[str, int]], vary: bool = True) -> dict:
-    """The extension.json for this mix (slots in the order of the mix; the first 7 have a shop line, price 1000 + the slot number). `vary`: every slot gets its own
+    """The design.json for this mix (slots in the order of the mix; the first 7 have a shop line, price 1000 + the slot number). `vary`: every slot gets its own
     numbers (cost, effect, `set`), as a real design has; identical slots compress better and would make the frame look smaller."""
     slots, i = {}, 0
     for kind, n in mix:
@@ -114,7 +114,7 @@ def main(argv=None) -> int:
     ap.add_argument("--source", required=True, help="the game's own regulation.bin (1.17.1)")
     ap.add_argument("--mix", action="append", default=[], help="kind=count,kind=count (repeatable)")
     ap.add_argument("--each", help="every kind alone for these slot counts, for example 1,8,16,32,64")
-    ap.add_argument("--write-design", metavar="FILE", help="write the design of the FIRST --mix to FILE (an extension.json; for envelope_test.py --spec) and exit")
+    ap.add_argument("--write-design", metavar="FILE", help="write the design of the FIRST --mix to FILE (an design.json; for envelope_test.py --spec) and exit")
     a = ap.parse_args(argv)
     try:
         mixes = [parse_mix(m) for m in a.mix]

@@ -6,9 +6,9 @@ import struct
 
 import pytest
 
-from eldendisk.extension.innovate_items import container, grow
-from eldendisk.extension.innovate_items.container import Bnd4, ContainerError, ParamView
-from tests import ext_helpers as H
+from eldendisk.design.innovate_items import container, grow
+from eldendisk.design.innovate_items.container import Bnd4, ContainerError, ParamView
+from tests import design_helpers as H
 
 RS = 16
 rnd = random.Random(5)

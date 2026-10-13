@@ -4,9 +4,9 @@
 
 1. Tests: runs the whole test suite (pytest); a failure stops the pipeline.
 2. Build: compiles `./build/dist/eldendisk.exe` (PyInstaller; `--engine nuitka` for Nuitka). The build always starts clean
-   (`./build` is removed first) and embeds offsets.json, chr_state_ids.json and extension.json in the exe; `--no-embed` leaves
+   (`./build` is removed first) and embeds offsets.json, chr_state_ids.json and design.json in the exe; `--no-embed` leaves
    them next to the exe instead. It also removes the tool's own folder `%LOCALAPPDATA%\\EldenDisk` (the vault and its save
-   snapshots, the extensions' files, the exports), never while a vault in it owes a restore or the game or the tool runs;
+   snapshots, the designs' files, the exports), never while a vault in it owes a restore or the game or the tool runs;
    `--keep-app-data` keeps it. A README.md (quick start + the exe's command reference, from `docs/guilde/`) is written next to
    the exe. Building the exe is a developer's job, so it lives here and not in the `eldendisk` command line.
 3. Status: where the exe is, its size and SHA-256, the version, what was embedded, how long each step took, and the command
@@ -117,7 +117,7 @@ def _local_app_data() -> Path:
 
 
 def app_data_problems(target: Path) -> list[str]:
-    """Why `target` (the tool's folder %LOCALAPPDATA%\\EldenDisk: the vault with its save snapshots, the extensions' files, the exports)
+    """Why `target` (the tool's folder %LOCALAPPDATA%\\EldenDisk: the vault with its save snapshots, the designs' files, the exports)
     must not be removed now; [] when it may. Only that exact folder is ever removed; nothing while a vault in it owes a restore or
     while the game or the tool runs (a session in progress keeps the only clean copy of the save there)."""
     if target.name != "EldenDisk" or target.parent != _local_app_data() or target.is_symlink():
@@ -131,10 +131,10 @@ def app_data_problems(target: Path) -> list[str]:
 
 
 def config_files(layout: dict) -> list[Path]:
-    """offsets.json, chr_state_ids.json and the extensions' design extension.json (from code/ or the project root); only those
+    """offsets.json, chr_state_ids.json and the design design.json (from code/ or the project root); only those
     that exist."""
     out = []
-    for name in ("offsets.json", "chr_state_ids.json", "extension.json"):
+    for name in ("offsets.json", "chr_state_ids.json", "design.json"):
         for base in (layout["code_dir"], layout["project_root"]):
             if (base / name).exists():
                 out.append(base / name)
@@ -146,8 +146,8 @@ SCRIPTS_FOLDER = "external-scripts"      # where the external scripts are inside
 
 
 def user_scripts(layout: dict) -> list[Path]:
-    """The external scripts the exe carries: every `*.py` of code/eldendisk/extension/external_scripts/defaults (not `_*.py`)."""
-    folder = layout["code_dir"] / "eldendisk" / "extension" / "external_scripts" / "defaults"
+    """The external scripts the exe carries: every `*.py` of code/eldendisk/design/external_scripts/defaults (not `_*.py`)."""
+    folder = layout["code_dir"] / "eldendisk" / "design" / "external_scripts" / "defaults"
     return sorted(p for p in folder.glob("*.py") if p.is_file() and not p.name.startswith("_")) if folder.is_dir() else []
 
 
@@ -198,7 +198,7 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
               app_data: bool = False) -> bool:
     """Compile ./build/dist/eldendisk.exe. `clean` (the default) removes ./build first, except while a vault inside it still
     owes a restore. `app_data` (with `clean`; what the pipeline does unless --keep-app-data) also removes %LOCALAPPDATA%\\EldenDisk,
-    the tool's own folder (the vault and its save snapshots, the extensions' files, the exports), except while a vault in it owes a
+    the tool's own folder (the vault and its save snapshots, the designs' files, the exports), except while a vault in it owes a
     restore or the game or the tool runs; nothing is removed when either check fails."""
     log(f"Step 2/2: Building standalone {EXE_NAME} for version {__version__} ({engine}, onefile; this takes a while)...")
     if engine not in ENGINES:
@@ -220,7 +220,7 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
                 for p in problems:
                     log(f"ERROR: {p}")
                 return False
-            log(f"cleaning the tool's own folder {target} (vault, save snapshots, extension files, exports)")
+            log(f"cleaning the tool's own folder {target} (vault, save snapshots, design files, exports)")
             try:
                 shutil.rmtree(target)
             except OSError as exc:
@@ -307,7 +307,7 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
         ("tests", "skipped" if tests_s is None else _fmt_seconds(tests_s)),
         ("build", _fmt_seconds(build_s)),
         ("total", _fmt_seconds(total_s)),
-        ("data", f"{app_data_dir()} (the vault, the extensions' files and the exports; the exe can be copied anywhere)"),
+        ("data", f"{app_data_dir()} (the vault, the designs' files and the exports; the exe can be copied anywhere)"),
         ("start it", f"{REL_EXE.replace('/', chr(92))} run -v"),
     ]
     width = max(len(k) for k, _ in rows)
@@ -328,11 +328,11 @@ def main(argv: list[str] | None = None) -> int:
                                      f"{REL_EXE}, then print where it is. It does not start the game.")
     parser.add_argument("--skip-tests", action="store_true", help="skip the tests")
     parser.add_argument("--no-embed", action="store_true",
-                        help="do not embed offsets.json, chr_state_ids.json and extension.json in the exe (copy them next to it)")
+                        help="do not embed offsets.json, chr_state_ids.json and design.json in the exe (copy them next to it)")
     parser.add_argument("--engine", choices=ENGINES, default="pyinstaller", help="compiler for the exe (default: pyinstaller)")
     parser.add_argument("--icon", metavar="ICO", default=None, help="icon file (.ico) for the exe")
     parser.add_argument("--keep-app-data", action="store_true",
-                        help="do not remove %%LOCALAPPDATA%%\\EldenDisk (the vault and its save snapshots, the extensions' files, the "
+                        help="do not remove %%LOCALAPPDATA%%\\EldenDisk (the vault and its save snapshots, the designs' files, the "
                              "exports) before the build; by default it is removed, never while a vault in it owes a restore or the game runs")
     args = parser.parse_args(argv)
 

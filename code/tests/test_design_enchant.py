@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_items import bases, container
-from eldendisk.extension.innovate_items.spells import build, chain as chainmod, gate, recipes, spec
-from eldendisk.extension.innovate_items.defs import TABLE_FILES, Def
-from tests.ext_helpers import param_blob
+from eldendisk.design.innovate_items import bases, container
+from eldendisk.design.innovate_items.spells import build, chain as chainmod, gate, recipes, spec
+from eldendisk.design.innovate_items.defs import TABLE_FILES, Def
+from tests.design_helpers import param_blob
 from tests.z4 import ID as Z4_ID, SPELL as Z4_SPELL, file_of
 
 PKG = Path(spec.__file__).parent
@@ -275,7 +275,7 @@ def _orig(src):
 
 def _file_tables(data):
     import struct
-    from eldendisk.extension.innovate_items import zstd
+    from eldendisk.design.innovate_items import zstd
     dcx = container.decrypt(data)
     body = zstd.decode_frame(dcx[0x4C:0x4C + struct.unpack(">I", dcx[0x20:0x24])[0]])
     bnd = container.Bnd4(body)

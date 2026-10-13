@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import eldendisk.commands.write as wcmd
-from eldendisk.extension.innovate_items.fmg import Fmg
+from eldendisk.design.innovate_items.fmg import Fmg
 from eldendisk.game.attach import EXIT_NO_SESSION, EXIT_UNSUPPORTED, AttachError, Target
 from eldendisk.game.memory import Module
 from eldendisk.game.profile import TextProfile
@@ -312,9 +312,9 @@ def rig(tmp_path, monkeypatch):
     monkeypatch.setattr(wcmd, "locate", lambda offsets: box["locate"](offsets))
     monkeypatch.setattr(wcmd, "process_started", lambda pid: HOST_STARTED if pid == HOST_PID else None)
     monkeypatch.setattr(wcmd, "WritableProcessMemory", lambda pid: game)
-    monkeypatch.setattr(wcmd, "ext_dir", lambda args: tmp_path / "ext")
-    monkeypatch.setattr(wcmd, "spec_file", lambda args: tmp_path / "extension.json")
-    monkeypatch.setattr(wcmd.extension, "open_spells", lambda d, s: design)
+    monkeypatch.setattr(wcmd, "design_folder", lambda args: tmp_path / "ext")
+    monkeypatch.setattr(wcmd, "spec_file", lambda args: tmp_path / "design.json")
+    monkeypatch.setattr(wcmd.design, "open_spells", lambda d, s: design)
     monkeypatch.setattr(wcmd, "_sleep", sleep)
     monkeypatch.setattr(wcmd, "_clock", lambda: clock["t"])
     monkeypatch.setattr(scan, "_sleep", lambda s: None)
@@ -326,7 +326,7 @@ def rig(tmp_path, monkeypatch):
 
     def args(**kw):
         d = dict(text=True, flame_color=False, wait=0, set=[], refill=None, reset=[], verbose=False, vault=str(vault.root), offsets="x",
-                 spec=None, extension_dir=None)
+                 spec=None, design_dir=None)
         return argparse.Namespace(**{**d, **kw})
 
     return SimpleNamespace(vault=vault, game=game, box=box, open_session=open_session, args=args, clock=clock)

@@ -7,8 +7,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import capacity  # noqa: E402
 
-from eldendisk.extension.innovate_items import preflight                      # noqa: E402
-from eldendisk.extension.innovate_items.spells import build, spec             # noqa: E402
+from eldendisk.design.innovate_items import preflight                      # noqa: E402
+from eldendisk.design.innovate_items.spells import build, spec             # noqa: E402
 
 ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 

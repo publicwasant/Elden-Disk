@@ -1,5 +1,5 @@
 """The Z4 spell exactly as it was tested in the game (handbook Part VI). A FIXED copy: the tests must not depend
-extension.json, which is the user's file to edit (price, visual, ...). The golden hash belongs to this spec."""
+design.json, which is the user's file to edit (price, visual, ...). The golden hash belongs to this spec."""
 import json
 
 ID = "reverse_curse_technique"
@@ -19,7 +19,7 @@ SPELL = {
 
 
 def file_of(slots: dict, maximum: int = 64) -> dict:
-    """extension.json with these filled slots (in this order, from slot 1) and empty ones up to `maximum`."""
+    """design.json with these filled slots (in this order, from slot 1) and empty ones up to `maximum`."""
     slots = dict(slots)
     n = len(slots)
     while len(slots) < maximum:

@@ -1,6 +1,6 @@
 """The host of the external scripts (1.7.2): finds the scripts, runs each in a thread of its own, keeps their pace, watches them, ends them.
 
-One process (`eldendisk extension external-scripts --run`, which `run` starts) holds every script. A Python thread cannot be killed, so
+One process (`eldendisk external-scripts --run`, which `run` starts) holds every script. A Python thread cannot be killed, so
 the process is what ends for sure: when the game closes the host asks every script to stop, waits a moment for each, and returns
 (the threads are daemons). Nothing a script does can keep the vault from putting the save back: `run` does that, not this process.
 
@@ -16,7 +16,7 @@ The life of a script:
   * a loop() that does not return for STUCK seconds is reported once as stuck (it keeps its thread: it cannot be taken away);
   * teardown() always.
 
-The status of every script is kept in `<extension dir>/external-scripts.status.json` for `extension external-scripts --list`."""
+The status of every script is kept in `<design dir>/external-scripts.status.json` for `external-scripts --list`."""
 from __future__ import annotations
 
 import importlib.util

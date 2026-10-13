@@ -9,7 +9,7 @@ class RctColoursFollowTheSpell(Interface):
     spell = "reverse_cursed_technique"
 
     def setup(self):
-        rct = tools.read().extension.innovate_items.spells[self.spell]
+        rct = tools.read().design.innovate_items.spells[self.spell]
         self.magic = rct.rows.magic                               # the spell's id in the magic slots
         self.key = f"Magic.{rct['from']}.castSfxId"                # `from` is a word of Python: read with [ ]
         fire = rct.customs.advanced.colors[self.key]
@@ -21,7 +21,7 @@ class RctColoursFollowTheSpell(Interface):
         chosen = x.character.equipment.magic.selected.id == self.magic
         if chosen == self.on:
             return
-        fire = x.extension.innovate_items.spells[self.spell].customs.advanced.colors[self.key]
+        fire = x.design.innovate_items.spells[self.spell].customs.advanced.colors[self.key]
         fire.main = self.main if chosen else None                 # None: the game's own colours
         fire.accent = self.accent if chosen else None
         if tools.write(x):                                        # the log says it: `reverse_cursed_technique colours: ...`
@@ -30,6 +30,6 @@ class RctColoursFollowTheSpell(Interface):
     def teardown(self):
         if not self.on:                                           # leave the design's colours as `run` left them
             x = tools.read()
-            fire = x.extension.innovate_items.spells[self.spell].customs.advanced.colors[self.key]
+            fire = x.design.innovate_items.spells[self.spell].customs.advanced.colors[self.key]
             fire.main, fire.accent = self.main, self.accent
             tools.write(x)

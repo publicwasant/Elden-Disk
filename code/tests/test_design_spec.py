@@ -1,11 +1,11 @@
-"""extension.json (innovate_items.spells): strict validation, canonical form, and agreement with the JSON schema."""
+"""design.json (innovate_items.spells): strict validation, canonical form, and agreement with the JSON schema."""
 import copy
 import json
 from pathlib import Path
 
 import pytest
 
-from eldendisk.extension.innovate_items.spells import spec
+from eldendisk.design.innovate_items.spells import spec
 
 PKG = Path(spec.__file__).parent
 CODE = PKG.parents[3]
@@ -19,7 +19,7 @@ def mutated(fn):
 
 
 def test_the_shipped_design_is_valid_whatever_the_user_made_of_it():
-    n = spec.normalise(json.loads((CODE / "extension.json").read_text(encoding="utf-8")))
+    n = spec.normalise(json.loads((CODE / "design.json").read_text(encoding="utf-8")))
     assert n["spells"] and all(i["effect"]["visual"] in spec.VISUALS for i in n["spells"] if i.get("kind", "buff") == "buff")
 
 
@@ -149,9 +149,9 @@ def test_wrong_shapes_are_refused():
         spec.normalise([])
 
 
-def test_other_extensions_sections_are_left_alone():
+def test_other_sections_of_the_design_are_left_alone():
     d = copy.deepcopy(Z4)
-    d["some_other_extension"] = {"anything": [1, 2, 3]}
+    d["some_other_section"] = {"anything": [1, 2, 3]}
     assert spec.normalise(d) == spec.normalise(Z4)
 
 

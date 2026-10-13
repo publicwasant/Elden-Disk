@@ -122,8 +122,8 @@ class Tables:
         return head, count, data_start, raw
 
     def _check_offset(self, table: str, row_id: int, off: int, count: int, data_start: int, head: int = 0) -> None:
-        """The descriptor of a row must point to a row-sized slot in the gap (a row an extension added), in the old data, or, for a
-        table an extension grew at its END (AtkParam_Pc: the descriptors grew into the front of the data, the first rows were copied
+        """The descriptor of a row must point to a row-sized slot in the gap (a row a design added), in the old data, or, for a
+        table a design grew at its END (AtkParam_Pc: the descriptors grew into the front of the data, the first rows were copied
         behind the strings), in the old data counted back from the strings or in the rows behind the strings."""
         lay, size = self.store.spec.layout, LAYOUTS[table]["size"]
         first = lay.descriptors + count * lay.descriptor_size

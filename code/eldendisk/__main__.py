@@ -1,11 +1,13 @@
-"""CLI: eldendisk run | read | write | vault | extension | hash
+"""CLI: eldendisk run | read | write | vault | design | innovate-items | external-scripts | hash
 
-  run    host: back up the save, launch the game offline, restore the save when it exits (leave this open)
-  read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
-  write  edit values in the running game (--set, --refill, --reset), give it the spells' text (--text) or the fire colour (--flame-color); only inside a session started by `run`
-  vault  save vault tools (status, list, verify, restore, keep, prune)
-  extension  build things for the game outside the game: `extension --list`, `extension innovate-items spells --add all|--secure`,
-             and run your own scripts next to it: `extension external-scripts [--run]`
+  run               host: back up the save, launch the game offline, restore the save when it exits (leave this open)
+  read              look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
+  write             edit values in the running game (--set, --refill, --reset), give it the spells' text (--text) or the fire colour
+                    (--flame-color); only inside a session started by `run`
+  vault             save vault tools (status, list, verify, restore, keep, prune)
+  design            the design (design.json): what it holds, what is secured, the last build
+  innovate-items    build things for the game outside the game: `innovate-items spells --add all|--secure`
+  external-scripts  your own scripts next to the game: `external-scripts [--run]`
 
 Every command prints concise lines; with -v it prints the log itself, live (the same lines that go to
 <vault>/eldendisk.log).
@@ -21,7 +23,7 @@ if __package__ is None or __package__ == "":   # run as a script (frozen exe, `p
 
 from eldendisk import __version__  # noqa: E402
 from eldendisk.commands.common import add_vault_option, add_verbose  # noqa: E402
-from eldendisk.commands.extension import cmd_extension  # noqa: E402
+from eldendisk.commands.design import cmd_design  # noqa: E402
 from eldendisk.commands.hash import cmd_hash  # noqa: E402
 from eldendisk.commands.read import cmd_read  # noqa: E402
 from eldendisk.commands.run import cmd_run  # noqa: E402
@@ -47,9 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--game-dir", help="folder containing eldenring.exe (default: auto-detect via Steam)")
     r.add_argument("--regulation", metavar="FILE", help="swap this regulation.bin in for the session instead of building one "
                    "from the design (an experiment); needs the vault ON")
-    r.add_argument("--spec", metavar="FILE", default=None, help="the design: the spells to build into regulation.bin (default: extension.json next to the exe, "
+    r.add_argument("--spec", metavar="FILE", default=None, help="the design: the spells to build into regulation.bin (default: design.json next to the exe, "
                    "else the copy embedded in it); with the vault ON `run` swaps the secured file when the design is unchanged, else builds")
-    r.add_argument("--extension-dir", metavar="DIR", default=None, help="where the built and secured files go (default: %%LOCALAPPDATA%%\\EldenDisk\\extension)")
+    r.add_argument("--design-dir", metavar="DIR", default=None, help="where the built and secured files go (default: %%LOCALAPPDATA%%\\EldenDisk\\design)")
     r.add_argument("--offsets", default=offsets_default, help="offsets.json, checked before launching (default: %(default)s)")
     r.add_argument("--scripts-dir", metavar="PATH", nargs="+", action="extend", default=[],
                    help="more external scripts to start next to the game, besides the ones the exe carries (external_scripts/defaults when "
@@ -129,18 +131,18 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--refill", metavar="LIST", help="refill current hp, fp, stamina to their maximum once, e.g. hp,fp,stamina")
     w.add_argument("--text", action="store_true",
                    help="put the text of the design's spells (name, short line, description) into the running game; `run` does this by "
-                        "itself after the game is up. Stands alone (only --wait or --when-loaded, --spec and --extension-dir go with it)")
+                        "itself after the game is up. Stands alone (only --wait or --when-loaded, --spec and --design-dir go with it)")
     w.add_argument("--flame-color", action="store_true",
                    help="recolour the fire of Flame, Grant Me Strength (the fire while casting and the burst) in the running game with the design's "
                         "`flame_color`; `run` does this by itself after the game is up. Stands alone (only --wait, --spec and "
-                        "--extension-dir go with it)")
+                        "--design-dir go with it)")
     w.add_argument("--when-loaded", dest="when_loaded", action="store_true",
                    help="--text, --flame-color: wait until a character is in the world, write once, and end (what `run` starts); "
                         "waits without a time limit, so it does not go with --wait")
     w.add_argument("--wait", nargs="?", type=float, const=300.0, default=0, metavar="SEC",
                    help="--text, --flame-color: wait up to SEC seconds (default 300) for the game to have loaded what it needs")
-    w.add_argument("--spec", metavar="FILE", default=None, help="--text, --flame-color: the design (default: extension.json next to the exe, else the embedded copy)")
-    w.add_argument("--extension-dir", metavar="DIR", default=None, help="--text, --flame-color: where the built files are (default: <vault>\\extension)")
+    w.add_argument("--spec", metavar="FILE", default=None, help="--text, --flame-color: the design (default: design.json next to the exe, else the embedded copy)")
+    w.add_argument("--design-dir", metavar="DIR", default=None, help="--text, --flame-color: where the built files are (default: <vault>\\design)")
     add_vault_option(w)
     w.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
     add_verbose(w)
@@ -170,39 +172,39 @@ def build_parser() -> argparse.ArgumentParser:
         add_verbose(sp, leaf=True)
         sp.set_defaults(fn=cmd_vault)
 
-    # ---- extension ----
-    e = sub.add_parser("extension", help="build things for the game outside the game (innovate-items spells), run scripts next to it "
-                                         "(external-scripts)")
-    e.add_argument("--list", action="store_true", help="show every extension, its design, what is secured and the last build")
-    add_vault_option(e)
-    e.add_argument("--extension-dir", metavar="DIR", default=None,
-                   help="where the built files go (default: <vault>\\extension)")
-    e.add_argument("--spec", metavar="FILE", default=None, help="the design (default: extension.json next to the exe, else the embedded copy)")
-    add_verbose(e)
-    es = e.add_subparsers(dest="ext_name")
-    ii = es.add_parser("innovate-items", help="new items for the game, built outside it (kinds: spells)")
-    ii.add_argument("--extension-dir", metavar="DIR", default=argparse.SUPPRESS, help="where the built files go")
+    # ---- design: the overview, and the things it builds and runs (one command each; before 1.8.0 under `extension`) ----
+    d = sub.add_parser("design", help="the design (design.json): what it holds, what is secured, the last build")
+    d.add_argument("--list", action="store_true", help="the same (the overview is what `design` shows)")
+    d.add_argument("--design-dir", metavar="DIR", default=None, help="where the built files go (default: <vault>\\design)")
+    d.add_argument("--spec", metavar="FILE", default=None, help="the design (default: design.json next to the exe, else the embedded copy)")
+    add_vault_option(d, leaf=True)
+    add_verbose(d, leaf=True)
+    d.set_defaults(fn=cmd_design)
+
+    ii = sub.add_parser("innovate-items", help="new items for the game, built outside it (kinds: spells)")
     add_vault_option(ii, leaf=True)
     add_verbose(ii, leaf=True)
     ik = ii.add_subparsers(dest="items_kind")
     ci = ik.add_parser("spells", help="build a regulation.bin with the spells of the design, or secure the one you tried")
     ci.add_argument("--add", metavar="all|PATH", nargs="+",
-                    help="which spells to build: `all`, or the path of each spell in extension.json (spells.slots.<id>; several can be given). "
+                    help="which spells to build: `all`, or the path of each spell in design.json (spells.slots.<id>; several can be given). "
                          "Built every time, and `run` then builds the same selection until `--add` changes it; without any --add "
                          "`run` builds every spell")
     ci.add_argument("--secure", action="store_true",
                     help="after you tried the build in the game (game closed): check it again and keep it as regulation.secured.bin; "
                          "`run` then swaps it without building while the design does not change")
     ci.add_argument("--dry-run", action="store_true", help="build and check in memory, write nothing")
-    ci.add_argument("--source", metavar="FILE", default=argparse.SUPPRESS,
+    ci.add_argument("--source", metavar="FILE", default=None,
                     help="the game's original regulation.bin to build on (default: the one in the game folder)")
-    ci.add_argument("--game-dir", default=argparse.SUPPRESS, help="folder containing eldenring.exe (default: auto-detect via Steam)")
-    ci.add_argument("--extension-dir", metavar="DIR", default=argparse.SUPPRESS, help="where the built files go")
-    ci.add_argument("--spec", metavar="FILE", default=argparse.SUPPRESS, help="the design")
+    ci.add_argument("--game-dir", default=None, help="folder containing eldenring.exe (default: auto-detect via Steam)")
+    ci.add_argument("--design-dir", metavar="DIR", default=None, help="where the built files go (default: <vault>\\design)")
+    ci.add_argument("--spec", metavar="FILE", default=None, help="the design")
     add_vault_option(ci, leaf=True)
     add_verbose(ci, leaf=True)
-    xs = es.add_parser("external-scripts", help="your Python scripts that run next to the game (edstdlib): list them, or run them "
-                                                "(`run` does that by itself, vault ON)")
+    ii.set_defaults(fn=cmd_design)
+
+    xs = sub.add_parser("external-scripts", help="your Python scripts that run next to the game (edstdlib): list them, or run them "
+                                                 "(`run` does that by itself, vault ON)")
     xs.add_argument("--run", action="store_true",
                     help="run every script of the folder until the game closes (needs the session `run` started; `run` starts this by itself)")
     xs.add_argument("--when-loaded", dest="when_loaded", action="store_true",
@@ -212,11 +214,11 @@ def build_parser() -> argparse.ArgumentParser:
                          "or .py files, anywhere")
     xs.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
     xs.add_argument("--state-ids", dest="state_ids", default=state_ids_default, help="chr_state_ids.json (default: %(default)s)")
-    xs.add_argument("--extension-dir", metavar="DIR", default=argparse.SUPPRESS, help="where the extension's files are")
-    xs.add_argument("--spec", metavar="FILE", default=argparse.SUPPRESS, help="the design")
+    xs.add_argument("--design-dir", metavar="DIR", default=None, help="where the design's files are")
+    xs.add_argument("--spec", metavar="FILE", default=None, help="the design")
     add_vault_option(xs, leaf=True)
     add_verbose(xs, leaf=True)
-    e.set_defaults(fn=cmd_extension)
+    xs.set_defaults(fn=cmd_design)
 
     # ---- tooling ----
     h = sub.add_parser("hash", help="print SHA-256 of eldenring.exe (key for offsets.json)")
@@ -262,21 +264,17 @@ def main(argv=None) -> int:
         ap.error("--text and --flame-color are separate steps: run them one at a time")
     if args.cmd == "write" and (args.text or args.flame_color) and (args.set or args.refill or args.reset):
         ap.error("--text and --flame-color stand alone (they do not go with --set, --refill or --reset)")
-    if args.cmd == "write" and not args.text and not args.flame_color and (args.wait or args.when_loaded or args.spec or args.extension_dir):
-        ap.error("--wait, --when-loaded, --spec and --extension-dir go with --text or --flame-color")
+    if args.cmd == "write" and not args.text and not args.flame_color and (args.wait or args.when_loaded or args.spec or args.design_dir):
+        ap.error("--wait, --when-loaded, --spec and --design-dir go with --text or --flame-color")
     if args.cmd == "write" and args.when_loaded and args.wait:
         ap.error("--when-loaded waits without a time limit: it does not go with --wait")
     if args.cmd == "write" and args.wait < 0:
         ap.error("--wait must not be negative")
-    if args.cmd == "extension" and not args.list and not args.ext_name:
-        ap.error("give --list or an extension name (innovate-items spells, external-scripts)")
-    if args.cmd == "extension" and args.ext_name == "external-scripts" and args.when_loaded and not args.run:
+    if args.cmd == "external-scripts" and args.when_loaded and not args.run:
         ap.error("--when-loaded goes with --run")
-    if args.cmd == "extension" and args.ext_name == "innovate-items" and not getattr(args, "items_kind", None):
+    if args.cmd == "innovate-items" and not getattr(args, "items_kind", None):
         ap.error("give the kind of item: innovate-items spells")
-    if args.cmd == "extension" and args.ext_name == "innovate-items" and args.list:
-        ap.error("--list stands alone")
-    if args.cmd == "extension" and getattr(args, "items_kind", None) == "spells" and args.secure and (args.add is not None or args.dry_run):
+    if args.cmd == "innovate-items" and args.secure and (args.add is not None or args.dry_run):
         ap.error("--secure stands alone (it does not build; --add and --dry-run build)")
     if args.cmd == "run" and args.keep < 0:
         ap.error("--keep must not be negative")

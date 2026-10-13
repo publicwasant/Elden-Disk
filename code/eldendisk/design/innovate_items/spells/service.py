@@ -1,8 +1,8 @@
 """innovate-items spells: design -> built -> secured.
 
-    extension.json            the design you edit (code/extension.json; section `innovate_items.spells`; the exe embeds a copy)
+    design.json            the design you edit (code/design.json; section `innovate_items.spells`; the exe embeds a copy)
     <game>/regulation.bin     the base: always the game's own, untouched file
-    <extension dir>/innovate-items/spells/    (<extension dir> = <vault>/extension)
+    <design dir>/innovate-items/spells/    (<design dir> = <vault>/design)
         regulation.bin            the latest build (judged by the gate, not yet confirmed in the game)
         regulation.secured.bin    a copy of the build you confirmed (`--secure`)
         spells.commit.json        the commit: the spec behind that copy, the rows each slot took, and the proof (hashes, recipe
@@ -31,8 +31,8 @@ from ..reblock import BuildError
 
 NAME = "innovate-items/spells"
 PKG_DIR = Path(__file__).resolve().parent                 # where spells.schema.json lives
-CODE_DIR = PKG_DIR.parents[3]                             # code/: where extension.json lives in the source tree
-SPEC_FILE, SCHEMA_FILE = "extension.json", "spells.schema.json"
+CODE_DIR = PKG_DIR.parents[3]                             # code/: where design.json lives in the source tree
+SPEC_FILE, SCHEMA_FILE = "design.json", "spells.schema.json"
 OUTPUT_FILE, SECURED_BIN, SECURED_FILE = "regulation.bin", "regulation.secured.bin", "spells.commit.json"
 BUILD_FILE, BUILD_KIND, BUILD_FORMAT = "spells.build.json", "innovate-items.spells build", 1
 RESOLVED_FILE, RESOLVED_KIND, RESOLVED_FORMAT = "spells.resolved.json", "innovate-items.spells resolved", 1
@@ -40,11 +40,11 @@ SECURED_KIND = "innovate-items.spells commit"
 COMMIT_FORMAT = 2
 
 
-class ExtensionError(Exception):
+class DesignError(Exception):
     pass
 
 
-class GateFailed(ExtensionError):
+class GateFailed(DesignError):
     def __init__(self, problems):
         self.problems = list(problems)
         super().__init__("GATE FAILED: this regulation.bin is NOT safe for the game; nothing was swapped\n  "
@@ -151,8 +151,8 @@ def _tables_dropped(fn):
 
 
 class Spells:
-    def __init__(self, ext_dir: Path, spec_path: Path | None = None):
-        self.ext = Path(ext_dir)
+    def __init__(self, design_folder: Path, spec_path: Path | None = None):
+        self.ext = Path(design_folder)
         self.dir = self.ext / NAME
         self.spec_path = Path(spec_path) if spec_path else CODE_DIR / SPEC_FILE
         self.output_path = self.dir / OUTPUT_FILE
@@ -164,13 +164,13 @@ class Spells:
     # ---------------- the design ----------------
     def load_spec(self) -> dict:
         if not self.spec_path.is_file():
-            raise ExtensionError(f"the design {self.spec_path} was not found")
+            raise DesignError(f"the design {self.spec_path} was not found")
         try:
             return specmod.parse(self.spec_path.read_text(encoding="utf-8"))
         except specmod.SpecError as e:
-            raise ExtensionError(f"{self.spec_path} is not valid:\n  " + "\n  ".join(e.problems))
+            raise DesignError(f"{self.spec_path} is not valid:\n  " + "\n  ".join(e.problems))
         except UnicodeDecodeError:
-            raise ExtensionError(f"{self.spec_path} must be UTF-8 text")
+            raise DesignError(f"{self.spec_path} must be UTF-8 text")
 
     def items(self, which="all") -> list:
         """The spells to build, in slot order: `all`, or the ones named by id / path (see spec.selection_of). An empty list
@@ -179,10 +179,10 @@ class Spells:
         try:
             spells = specmod.select(raw, which)
         except specmod.SpecError as e:
-            raise ExtensionError(str(e))
+            raise DesignError(str(e))
         for s in spells:
             if s.get("shop") is not None and recipes.slot_rows(s["slot"])["shop_line"] is None:
-                raise ExtensionError(f"{s['id']} is in slot {s['slot']} and has a `shop`, but only the first {len(recipes.SHOP_LINES)} "
+                raise DesignError(f"{s['id']} is in slot {s['slot']} and has a `shop`, but only the first {len(recipes.SHOP_LINES)} "
                                      "slots have a shop line (the merchant's group has no more free lines): remove its `shop`")
         return spells
 
@@ -238,11 +238,11 @@ class Spells:
     def read_base(self, game_file: Path | None) -> tuple:
         """The game's own regulation.bin -> (bytes, sha256). It must be the known untouched original, on every path."""
         if game_file is None or not Path(game_file).is_file():
-            raise ExtensionError("the game's regulation.bin was not found; give --game-dir or --source")
+            raise DesignError("the game's regulation.bin was not found; give --game-dir or --source")
         data = Path(game_file).read_bytes()
         got = hashlib.sha256(data).hexdigest()
         if bases.version_of(got) is None:
-            raise ExtensionError(
+            raise DesignError(
                 f"{game_file} is not a regulation.bin this version knows (sha256 {got[:12]}…). Only the game's own, untouched "
                 f"file of version {', '.join(bases.BASES)} works as a base. If the game is still running, close it first. If a "
                 "session crashed and left the game's file modified, run `eldendisk vault restore`, or verify the game files in Steam")
@@ -359,7 +359,7 @@ class Spells:
             src = prepare(base)
             res = make(src, spells)
         except BuildError as e:
-            raise ExtensionError(f"build failed: {e}")
+            raise DesignError(f"build failed: {e}")
         tmp = self.output_path.with_name(self.output_path.name + ".tmp")
         if dry_run:
             v = gate.verify(res.data, src, spells)
@@ -400,7 +400,7 @@ class Spells:
         return {s["id"]: recipes.spell_rows(s["slot"], added, copies.get(s["id"])) for s in spells}
 
     def _write_resolved(self, spells: list, rows: dict, res, base: bytes) -> None:
-        """`spells.resolved.json`: the design as it became in the game. The key of a spell in extension.json (`<id-1>`, or any name the
+        """`spells.resolved.json`: the design as it became in the game. The key of a spell in design.json (`<id-1>`, or any name the
         user chose) is only a label; the game knows it by its Goods id (2230000 + slot - 1), so here every spell is keyed by that id,
         with the rows it owns and its design with the values that were built."""
         out = {"kind": RESOLVED_KIND, "format": RESOLVED_FORMAT, "built_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -422,21 +422,21 @@ class Spells:
         """Commit the current regulation.bin: the gate judges it against the CURRENT design, then it is copied to
         regulation.secured.bin and the record is written (the bin first, the record last, so a half-done secure is just 'not secured')."""
         if not spells:
-            raise ExtensionError(f"no spells in {self.spec_path}: nothing to secure")
+            raise DesignError(f"no spells in {self.spec_path}: nothing to secure")
         if not self.output_path.is_file():
-            raise ExtensionError(f"{self.output_path} does not exist yet: build it first (`eldendisk run`, or `extension innovate-items spells --add all`)")
+            raise DesignError(f"{self.output_path} does not exist yet: build it first (`eldendisk run`, or `innovate-items spells --add all`)")
         base, base_sha = self.read_base(game_file)
         try:
             src = prepare(base)
         except BuildError as e:
-            raise ExtensionError(f"the base cannot be read: {e}")
+            raise DesignError(f"the base cannot be read: {e}")
         data = self.output_path.read_bytes()
         v = gate.verify(data, src, spells)
         if not v.ok:
             raise GateFailed(v.problems + [f"(if the design changed after this regulation.bin was built, build again first: it must match {self.spec_path.name})"])
         _write_atomic(self.secured_bin, data)
         if sha256_file(self.secured_bin) != v.sha256:
-            raise ExtensionError(f"{self.secured_bin} was not written correctly (hash differs); nothing was secured")
+            raise DesignError(f"{self.secured_bin} was not written correctly (hash differs); nothing was secured")
         rec = {"kind": SECURED_KIND, "format": COMMIT_FORMAT, "committed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                "recipe_version": bases.RECIPE_VERSION, "base_version": bases.version_of(base_sha), "base_sha256": base_sha,
                "bin": {"file": SECURED_BIN, "sha256": v.sha256, "decrypted_sha256": v.decrypted_sha256, "size": len(data)},

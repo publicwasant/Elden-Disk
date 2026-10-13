@@ -23,7 +23,7 @@ SCAN_SPAN = 0x4000       # bytes of the object that holds the entries, from its 
 CHUNK = 0x1000
 SAMPLE_ROWS = 512        # descriptors read to find the row size
 
-# The tables Phase 1 needs: name -> (row size, rows in the original 1.17.1 file). A file that an extension grew has up to
+# The tables Phase 1 needs: name -> (row size, rows in the original 1.17.1 file). A file that a design grew has up to
 # MAX_EXTRA rows more.
 WANTED = {
     "EquipParamGoods": (176, 2329), "Magic": (168, 317), "ShopLineupParam": (52, 1296),
@@ -62,7 +62,7 @@ class ProbeResult:
 
 def row_size_of(offsets: list[int]) -> int | None:
     """The row size: the most common gap between consecutive row data offsets (None if there are not enough rows).
-    Not the gcd: a row an extension added sits in front of the old data, and one such offset would break a gcd (ShopLineup:
+    Not the gcd: a row a design added sits in front of the old data, and one such offset would break a gcd (ShopLineup:
     its new rows have small ids, so they are among the first descriptors; the gcd came out as 4)."""
     ordered = sorted(set(offsets))
     gaps = Counter(b - a for a, b in zip(ordered, ordered[1:]))

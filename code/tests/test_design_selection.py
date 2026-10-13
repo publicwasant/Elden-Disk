@@ -9,10 +9,10 @@ import pytest
 
 import eldendisk.__main__ as cli
 import eldendisk.commands.run as run_cmd
-from eldendisk.extension.innovate_items import bases
-from eldendisk.extension.innovate_items.spells import service, spec
-from eldendisk.extension.innovate_items.spells.build import Result
-from eldendisk.extension.innovate_items.spells.gate import Verdict
+from eldendisk.design.innovate_items import bases
+from eldendisk.design.innovate_items.spells import service, spec
+from eldendisk.design.innovate_items.spells.build import Result
+from eldendisk.design.innovate_items.spells.gate import Verdict
 from eldendisk.vault import SaveVault
 from tests.z4 import ID, SPELL, file_of
 
@@ -52,13 +52,13 @@ def world(tmp_path, monkeypatch):
     game.mkdir()
     (game / "eldenring.exe").write_bytes(b"EXE")
     (game / "regulation.bin").write_bytes(BASE)
-    spec_file = tmp_path / "extension.json"
+    spec_file = tmp_path / "design.json"
     spec_file.write_text(json.dumps(design()), encoding="utf-8")
     return argparse.Namespace(ext=tmp_path / "ext", game=game, spec=spec_file, builds=builds, tmp=tmp_path)
 
 
 def args_for(w, *more):
-    return ["extension", "innovate-items", "spells", "--extension-dir", str(w.ext), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
+    return ["innovate-items", "spells", "--design-dir", str(w.ext), "--spec", str(w.spec), "--game-dir", str(w.game), *more]
 
 
 def record(w):
@@ -70,7 +70,7 @@ def built(w):
 
 
 def run_args(w):
-    return argparse.Namespace(regulation=None, extension_dir=str(w.ext), spec=str(w.spec))
+    return argparse.Namespace(regulation=None, design_dir=str(w.ext), spec=str(w.spec))
 
 
 def do_run(w, capsys=None):
@@ -216,7 +216,7 @@ def test_a_chosen_spell_that_left_the_design_stops_run(world):
     doc = design()
     doc["innovate_items"]["spells"]["slots"][SECOND] = None
     set_spec(world, doc)
-    with pytest.raises(service.ExtensionError) as e:
+    with pytest.raises(service.DesignError) as e:
         do_run(world)
     assert "spells.slots." + SECOND in str(e.value)
 
@@ -234,7 +234,7 @@ def test_a_changed_game_file_or_recipe_version_builds_again(world, monkeypatch):
     monkeypatch.setattr(bases, "RECIPE_VERSION", bases.RECIPE_VERSION + 1)
     assert do_run(world)[1] == "built"
     (world.game / "regulation.bin").write_bytes(BASE + b"x")
-    with pytest.raises(service.ExtensionError):
+    with pytest.raises(service.DesignError):
         do_run(world)
 
 
@@ -271,7 +271,7 @@ def test_a_secured_build_of_other_spells_is_not_used_for_this_selection(world, c
 
 # ---------------- --list ----------------
 def test_list_shows_the_selection(world, capsys):
-    base = ["extension", "--list", "--extension-dir", str(world.ext), "--spec", str(world.spec)]
+    base = ["design", "--list", "--design-dir", str(world.ext), "--spec", str(world.spec)]
     assert cli.main(base) == 0
     assert "every spell" in capsys.readouterr().out
     cli.main(args_for(world, "--add", "spells.slots." + SECOND, "spells.slots." + THIRD))

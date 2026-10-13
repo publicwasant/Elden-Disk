@@ -90,15 +90,15 @@ def _canonical(leaves: dict[str, object]) -> dict[str, str]:
     return out
 
 
-SPELLS = "extension.innovate_items.spells."
+SPELLS = "design.innovate_items.spells."
 
 
 def _by_label(doc: dict, path: str) -> str:
-    """`extension.innovate_items.spells.<label>...` -> the same path with the spell's goods id (a spell is named by both)."""
+    """`design.innovate_items.spells.<label>...` -> the same path with the spell's goods id (a spell is named by both)."""
     if not path.startswith(SPELLS):
         return path
     head, _dot, rest = path[len(SPELLS):].partition(".")
-    spells = ((doc.get("extension") or {}).get("innovate_items") or {}).get("spells") or {}
+    spells = ((doc.get("design") or {}).get("innovate_items") or {}).get("spells") or {}
     if head in spells:
         return path
     for goods, s in spells.items():
@@ -115,13 +115,13 @@ def _select_one(doc: dict, name: str) -> list[tuple[str, object]]:
         if hits:
             return hits
     else:
-        if path.startswith(FULL_ROOTS):   # `params` / `extension` names are typed in any letter case (effectEndurance), the rest is lower-case
+        if path.startswith(FULL_ROOTS):   # `params` / `design` names are typed in any letter case (effectEndurance), the rest is lower-case
             path = _canonical(leaves).get(path, path)
         try:
             return [(path, _walk(path, doc))]
         except KeyError:
             pass
-        if path in leaves:            # a key with dots in it (`extension....basic.SpEffect.1642100.effectEndurance`)
+        if path in leaves:            # a key with dots in it (`design....basic.SpEffect.1642100.effectEndurance`)
             return [(path, leaves[path])]
         under = [(p, v) for p, v in leaves.items() if p.startswith(path + ".")]
         if under:                     # the first parts of such a key (`....colors.Magic.6421.castSfxId`)

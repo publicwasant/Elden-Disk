@@ -20,7 +20,7 @@ from typing import Callable
 
 from . import __version__
 from .console import printable
-from .logbook import EXT_TAG, TAG_WIDTH, Event, book, format_line, parse_line
+from .logbook import DESIGN_TAG, TAG_WIDTH, Event, book, format_line, parse_line
 
 _SYMBOLS = {"ok": ("\u2713", "+"), "info": ("\u00b7", "-"), "warn": ("!", "!"), "error": ("\u2716", "x")}
 _COLORS = {"ok": "32", "warn": "33", "error": "31", "dim": "2", "bold": "1", "cyan": "36", "hot": "1;33", "tick": "35", "unknown": "36", "spell": "35", "file": "38;5;208",
@@ -146,7 +146,7 @@ def mark_spell_ids(ids) -> None:
 
 
 def highlight_spells(text: str, color: bool, tag: str) -> str:
-    if not color or tag != EXT_TAG or _SPELL_IDS is None:
+    if not color or tag != DESIGN_TAG or _SPELL_IDS is None:
         return text
     return _SPELL_IDS.sub(lambda m: paint(m.group(1), "spell", True), text)
 
@@ -351,12 +351,12 @@ def working(tag: str, text: str, **kw) -> Working:
     return Working(tag, text, **kw)
 
 
-# ---- one block for the whole of `extension innovate-items spells`: what changed, the build, the gate, the ids ----
+# ---- one block for the whole of `innovate-items spells`: what changed, the build, the gate, the ids ----
 _block = None                      # the Block that is open (at most one); the lines of the `design` tag go inside it
 
 
 def _in_block(stream, tag: str) -> bool:
-    return _block is not None and tag == EXT_TAG and _block.stream is stream
+    return _block is not None and tag == DESIGN_TAG and _block.stream is stream
 
 
 _PROBLEM = re.compile(r"^((?:\x1b\[[0-9;]*m)?\s*)(\$\.[^\s:]+(?:\[[^\]]*\][^\s:]*)?): (.*)$", re.DOTALL)
@@ -424,7 +424,7 @@ class Block:
             return
         color = use_color(self.stream)
         sym = paint(symbol(kind, getattr(self.stream, "encoding", None)), kind, color)
-        _emit(f" {self._bar(color)}  {sym}  {paint_numbers(highlight_spells(text, color, EXT_TAG), color)}", self.stream)
+        _emit(f" {self._bar(color)}  {sym}  {paint_numbers(highlight_spells(text, color, DESIGN_TAG), color)}", self.stream)
 
     def rows(self, rows: list[tuple[str, str]], indent: int = 5) -> None:
         """`key  value` rows under the line before them (values may hold colour codes already; ids and addresses get theirs here)."""
@@ -489,7 +489,7 @@ def pretty_sink(*, show_time: bool = False, stream=None) -> Callable[[Event], No
         msg = (paint(emphasize(e.msg, color, resume, ticks=False), kind, color) if resume
                else emphasize(highlight_spells(e.msg, color, e.tag), color))
         msg = paint_numbers(msg, color, resume)
-        if _in_block(out, e.tag):                      # a line of the block of `extension innovate-items spells`
+        if _in_block(out, e.tag):                      # a line of the block of `innovate-items spells`
             msg = _problem_line(msg, color, resume)
             _emit(f" {paint(chr(0x2502), 'dim', color)}  {sym}  {msg}", out, resume)
             return
@@ -519,7 +519,7 @@ def _line(line: str, kind: str | None, color: bool, level: str) -> tuple[str, st
     return emphasize(line, color), ""
 
 
-_EXT_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ [VDIWE] %s *: )(.*)$" % EXT_TAG)
+_EXT_LINE = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} +\d+ [VDIWE] %s *: )(.*)$" % DESIGN_TAG)
 
 
 def raw_sink(stream=None) -> Callable[[Event], None]:
@@ -546,8 +546,8 @@ def raw_line(line: str, stream=None) -> None:
     if m:                          # the message after "tag   : " gets the colours of ids and addresses; the prefix (time, pid, tag) is not touched
         back = {"E": "\x1b[31m", "W": "\x1b[33m", "V": "\x1b[2m", "D": "\x1b[2m"}.get(got[1], "")
         msg = paint_numbers(m.group(6), color, back)
-        if kind is None and m.group(5) == EXT_TAG:
-            msg = highlight_spells(msg, color, EXT_TAG)
+        if kind is None and m.group(5) == DESIGN_TAG:
+            msg = highlight_spells(msg, color, DESIGN_TAG)
         line = line[:len(line) - len(m.group(6))] + msg
     text, resume = _line(line, kind, color, got[1] if got else "I")
     _emit(text, out, resume)

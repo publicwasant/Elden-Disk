@@ -1,4 +1,4 @@
-"""Experiment 3: read only. A line when a buff comes on the character and when it goes (the buff of a spell of the extension is
+"""Experiment 3: read only. A line when a buff comes on the character and when it goes (the buff of a spell of the design is
 named by the spell's label)."""
 from edstdlib import *
 

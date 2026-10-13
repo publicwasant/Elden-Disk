@@ -84,9 +84,9 @@ def _why_unknown(exc: UnknownName, doc: dict, sample, names) -> str:
     wanted = [names] if isinstance(names, str) else names or []
     if doc.get("params") is None and any(is_param_name(n) for n in wanted):
         return f"params cannot be read: {sample.params_error or 'this exe version has no params block in offsets.json'}"
-    if not doc.get("extension") and any(n.strip().lower().startswith("extension") for n in wanted):
-        return ("the extension has no spells built in this vault yet (spells.resolved.json is written by every build: `run`, or "
-                "`extension innovate-items spells --add all`)")
+    if not doc.get("design") and any(n.strip().lower().startswith("design") for n in wanted):
+        return ("the design has no spells built in this vault yet (spells.resolved.json is written by every build: `run`, or "
+                "`innovate-items spells --add all`)")
     return str(exc)
 
 
@@ -166,7 +166,7 @@ def cmd_read(args) -> int:
         if args.live_buffs or args.live_animations:
             return _monitors(args, target, mem, sampler, vault)
         export = _exporter(args, target, vault)
-        export.extension = _extension_block(args, target, mem, vault, sampler)
+        export.design = _design_block(args, target, mem, vault, sampler)
         if args.export and not args.live:
             return _export_once(args, target, mem, sampler, export)
         if not args.export and not args.live:
@@ -273,21 +273,21 @@ def _exporter(args, target: Target, vault: Path | None) -> ExportWriter:
     return export
 
 
-def _extension_block(args, target: Target, mem, vault: Path | None, sampler: Sampler | None = None, every: float = 1.0):
-    """The `extension` block of the document (1.7.2): the spells of the last build with what the game holds now; read again at most
+def _design_block(args, target: Target, mem, vault: Path | None, sampler: Sampler | None = None, every: float = 1.0):
+    """The `design` block of the document (1.7.2): the spells of the last build with what the game holds now; read again at most
     every `every` seconds (a few rows of the game's tables and two small files). None when there is no build or no vault."""
     if not vault:
         return None
-    from .extension import ext_dir, spec_file
-    from .. import extension
-    from ..extension.external_scripts.backend import ExtensionLive, with_spell_buffs
-    from ..extension.innovate_items.spells.service import ExtensionError
+    from .design import design_folder, spec_file
+    from .. import design
+    from ..design.external_scripts.backend import DesignLive, with_spell_buffs
+    from ..design.innovate_items.spells.service import DesignError
     try:
-        resolved = extension.open_spells(ext_dir(args, vault), spec_file(args)).resolved_path
-    except ExtensionError:
+        resolved = design.open_spells(design_folder(args, vault), spec_file(args)).resolved_path
+    except DesignError:
         return None
-    ext = ExtensionLive(mem, target, vault, resolved)
-    if sampler is not None:            # the buffs of the extension's spells are named in character.buffs
+    ext = DesignLive(mem, target, vault, resolved)
+    if sampler is not None:            # the buffs of the design's spells are named in character.buffs
         sampler.state_ids = with_spell_buffs(sampler.state_ids, ext.spells())
     last = {"at": -1e9, "block": None}
 

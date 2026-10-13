@@ -7,7 +7,7 @@
 
         def loop(self):
             x = tools.read()                              # the game now, as one object
-            rct = x.extension.innovate_items.spells[2230000]
+            rct = x.design.innovate_items.spells[2230000]
             if x.character.vitals.hit_point.current < 500:
                 rct.customs.advanced.colors["SpEffect.1642100"] = "#FF909E"
                 tools.write(x)                            # only what changed is written
@@ -15,7 +15,7 @@
 `Interface` is the base of a script: `setup()` once, `loop()` again and again (every `every` seconds), `teardown()` once at the end,
 each script in a thread of its own. `tools` is the tool itself:
 
-  tools.read()        the document `read --export` writes (`systems`, `character`, `params`) and the `extension` block (the spells of the
+  tools.read()        the document `read --export` writes (`systems`, `character`, `params`) and the `design` block (the spells of the
                       last build with what the game holds now), as an object: `x.character.attributes.vigor`; a key that is not a name
                       is read with [ ]: `spells[2230000]`, `colors["SpEffect.1642100"]`, `basic["SpEffect.1642100.effectEndurance"]`;
                       a spell also by its label: `spells.reverse_cursed_technique`.
@@ -56,7 +56,7 @@ def _use(backend):
 def _b():
     if _backend is None:
         raise RuntimeError("edstdlib is not connected to a game: scripts are run by `eldendisk run` (or "
-                           "`eldendisk extension external-scripts --run`)")
+                           "`eldendisk external-scripts --run`)")
     return _backend
 
 

@@ -1,10 +1,10 @@
-"""The `innovate_items.spells` section of extension.json: a strict stdlib validator.
+"""The `innovate_items.spells` section of design.json: a strict stdlib validator.
 
     {"innovate_items": {"spells": {"maximum": 64, "slots": {"<spell-id>": {...the spell...}, "<id-2>": null, ...}}}}
 
 A slot is a place in the list, counted from 1 in file order; its number fixes the rows the spell gets in the game (so a spell
-that moves to another slot gets other rows). A slot holding null is empty and is not built. The other sections of extension.json
-(other kinds of items under `innovate_items`, other extensions) and are left alone.
+that moves to another slot gets other rows). A slot holding null is empty and is not built. The other sections of design.json
+(other kinds of items under `innovate_items`, other designs) and are left alone.
 
 Text (since 1.7.1): `text` = {"goods_name", "goods_info", "goods_captions"} is the spell's name, its short line and its long
 description in the game. It is not part of the build (a new text never builds again; `write --text` puts it into the running game).
@@ -17,7 +17,7 @@ import re
 from ..defs import Def
 
 FORMAT = 1                    # the canonical form (what `normalise` returns and the commit record stores)
-PATH = ("innovate_items", "spells")   # where this extension sits in extension.json: {"innovate_items": {"spells": {...}}}
+PATH = ("innovate_items", "spells")   # where this design sits in design.json: {"innovate_items": {"spells": {...}}}
 SECTION = ".".join(PATH)             # the same, as it is written in error messages
 MAX_SLOTS = 64                # proven in the game (T6): 64 new rows in each of Goods, Magic, ShopLineup and SpEffect
 ID_RE = r"[a-z0-9][a-z0-9_-]{0,39}"
@@ -149,7 +149,7 @@ def _text_object(c, it, p):
 
 
 def empty_text(maximum: int = MAX_SLOTS) -> str:
-    """An extension.json with `maximum` empty slots: nothing to build yet."""
+    """An design.json with `maximum` empty slots: nothing to build yet."""
     slots = ",\n".join('        "<id-%d>": null' % n for n in range(1, maximum + 1))
     return ('{\n  "innovate_items": {\n    "spells": {\n      "maximum": %d,\n      "slots": {\n%s\n      }\n    }\n  }\n}\n'
             % (maximum, slots))
@@ -677,7 +677,7 @@ def parse(text: str) -> dict:
 
 
 def as_file(spec: dict) -> dict:
-    """The canonical form back into the shape of extension.json (filled slots keep their numbers, the others are null)."""
+    """The canonical form back into the shape of design.json (filled slots keep their numbers, the others are null)."""
     by_slot = {s["slot"]: s for s in spec["spells"]}
     slots = {}
     for n in range(1, spec["maximum"] + 1):
@@ -712,14 +712,14 @@ def dumps(spec: dict) -> str:
     return json.dumps(spec, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
-SELECT_PREFIXES = ("innovate_items.spells.slots", "spells.slots")      # where a spell sits in extension.json, as `--add` writes it
+SELECT_PREFIXES = ("innovate_items.spells.slots", "spells.slots")      # where a spell sits in design.json, as `--add` writes it
 RESERVED_IDS = ("all",)                                                 # `--add all` means every spell: no spell may be called that
 
 
 def selection_of(which) -> "str | list":
     """What `--add` was given -> "all", or the ids of the spells (syntax only, nothing is looked up).
 
-    A value is `all`, `spells.slots` (the same), `spells.slots.<id>` (the path of a spell in extension.json; the leading
+    A value is `all`, `spells.slots` (the same), `spells.slots.<id>` (the path of a spell in design.json; the leading
     `innovate_items.` is optional) or a bare `<id>`. Several can be given. `all` stands alone. Raises SpecError."""
     values = [which] if isinstance(which, str) else list(which)
     if not values:
@@ -737,7 +737,7 @@ def selection_of(which) -> "str | list":
                     sid = v[len(pre) + 1:]
                     break
         if not isinstance(sid, str) or not re.fullmatch(ID_RE, sid) or sid in RESERVED_IDS:
-            raise SpecError(["%r is not a spell: write spells.slots.<id> (the id is the key of the slot in extension.json), or all" % (raw,)])
+            raise SpecError(["%r is not a spell: write spells.slots.<id> (the id is the key of the slot in design.json), or all" % (raw,)])
         if sid not in ids:
             ids.append(sid)
     if every and ids:

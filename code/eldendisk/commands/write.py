@@ -21,7 +21,7 @@ from pathlib import Path
 
 from ..console import require_windows_x64
 from ..logbook import book
-from ..extension.innovate_items.fmg import Fmg, FmgError
+from ..design.innovate_items.fmg import Fmg, FmgError
 from ..game.attach import EXIT_ERROR, EXIT_NO_SESSION, EXIT_UNSUPPORTED, AttachError, Target, locate
 from ..game.layout import LEVEL_RANGE, Layout
 from ..game.memory import read_u32
@@ -35,9 +35,9 @@ from ..writer import scan as wscan
 from ..writer import text as wtext
 from ..writer.cache import CACHE_NAME, MemoryCache
 from ..writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
-from .extension import ext_dir, spec_file
-from .. import extension
-from ..extension.innovate_items.spells.service import ExtensionError
+from .design import design_folder, spec_file
+from .. import design
+from ..design.innovate_items.spells.service import DesignError
 
 TEXT_TABLES = {"GoodsName": "goods_name", "GoodsInfo": "goods_info", "GoodsCaption": "goods_captions"}   # game table -> field of `text`
 POLL, SETTLE = 1.0, 3.0     # seconds between looks for the game's modules; seconds to see that the game kept the new tables
@@ -259,12 +259,12 @@ def cmd_write_text(args) -> int:
     when_loaded = bool(getattr(args, "when_loaded", False))
     wait = ATTACH_WAIT if when_loaded else float(getattr(args, "wait", 0) or 0)
     try:
-        ci = extension.open_spells(ext_dir(args), spec_file(args))
+        ci = design.open_spells(design_folder(args), spec_file(args))
         sel, note = ci.selection()          # the spells the build holds: the last `--add` chose them
         if note:
             book.w("write", f"innovate-items spells: {note}")
         texts = ci.texts(sel)
-    except ExtensionError as exc:
+    except DesignError as exc:
         book.e("write", str(exc))
         return 1
     target, code, record = _attach(args, wait)
@@ -292,7 +292,7 @@ def cmd_write_text(args) -> int:
 
 def _shown(rgb) -> str:
     """A colour in a log line as the design writes it: "#90D5FF", or the numbers when a channel is above 1."""
-    from ..extension.innovate_items.spells.spec import colour_text
+    from ..design.innovate_items.spells.spec import colour_text
     t = colour_text(rgb)
     return t if isinstance(t, str) else str(tuple(round(c, 3) for c in rgb))
 
@@ -376,14 +376,14 @@ def cmd_write_flame(args) -> int:
     when_loaded = bool(getattr(args, "when_loaded", False))
     wait = ATTACH_WAIT if when_loaded else float(getattr(args, "wait", 0) or 0)
     try:
-        ci = extension.open_spells(ext_dir(args), spec_file(args))
+        ci = design.open_spells(design_folder(args), spec_file(args))
         sel, note = ci.selection()
         if note:
             book.w("write", f"innovate-items spells: {note}")
         colour, cnote = ci.flame_color(sel)
         eyes, enote = ci.eyes_color(sel)
         accent, anote = ci.flame_accent_color(sel)
-    except ExtensionError as exc:
+    except DesignError as exc:
         book.e("write", str(exc))
         return 1
     for n in (cnote, enote, anote):
@@ -413,7 +413,7 @@ def cmd_write_flame(args) -> int:
 
 
 def ext_value(raw: str):
-    """The value of `--set extension....=VALUE` as typed: a number, `null` (the game's own colour), or a text / a hex colour (quotes
+    """The value of `--set design....=VALUE` as typed: a number, `null` (the game's own colour), or a text / a hex colour (quotes
     around it are taken off)."""
     t = raw.strip()
     if len(t) >= 2 and t[0] == t[-1] and t[0] in "'\"":
@@ -428,22 +428,22 @@ def ext_value(raw: str):
     return t
 
 
-def _write_extension(args, target: Target, mem, gate, snapshot, sets: list) -> tuple[int, int]:
-    """`--set extension.innovate_items.spells.<goods id>.<path>=VALUE` (1.7.2): the values of the extension's spells in the running
-    game (extension/external_scripts/backend.py). -> (written, refused)."""
-    from ..extension.external_scripts.backend import ExtensionLive, Refused, extension_path
+def _write_design(args, target: Target, mem, gate, snapshot, sets: list) -> tuple[int, int]:
+    """`--set design.innovate_items.spells.<goods id>.<path>=VALUE` (1.7.2): the values of the design's spells in the running
+    game (design/external_scripts/backend.py). -> (written, refused)."""
+    from ..design.external_scripts.backend import DesignLive, Refused, design_path
     vault_root = resolve_vault(args.vault)
     try:
-        resolved = extension.open_spells(ext_dir(args, vault_root), spec_file(args)).resolved_path
-    except ExtensionError as exc:
+        resolved = design.open_spells(design_folder(args, vault_root), spec_file(args)).resolved_path
+    except DesignError as exc:
         book.e("write", str(exc))
         return 0, len(sets)
-    live = ExtensionLive(mem, target, vault_root, resolved, gate=gate, snapshot=snapshot,
+    live = DesignLive(mem, target, vault_root, resolved, gate=gate, snapshot=snapshot,
                          say=lambda level, msg: {"W": book.w, "E": book.e, "D": book.d}.get(level, book.i)("write", msg))
     ok = bad = 0
     for item in sets:
         name, _sep, raw = item.partition("=")
-        goods, parts = extension_path(name)
+        goods, parts = design_path(name)
         try:
             for what, value in live.apply(goods, parts, ext_value(raw)).items():
                 book.ok("write", f"{name.strip()} = {value}  ({what})")
@@ -460,11 +460,11 @@ def cmd_write(args) -> int:
     if getattr(args, "flame_color", False):
         return cmd_write_flame(args)
     require_windows_x64()
-    ext_sets = [s for s in (args.set or []) if s.strip().lower().startswith("extension.")]
+    ext_sets = [s for s in (args.set or []) if s.strip().lower().startswith("design.")]
     for item in ext_sets:
         name, sep, _raw = item.partition("=")
-        if not sep or len(name.strip().split(".")) < 5 or name.strip().split(".")[:3] != ["extension", "innovate_items", "spells"]:
-            book.e("write", f"--set {item!r}: expected extension.innovate_items.spells.<goods id>.<path>=VALUE")
+        if not sep or len(name.strip().split(".")) < 5 or name.strip().split(".")[:3] != ["design", "innovate_items", "spells"]:
+            book.e("write", f"--set {item!r}: expected design.innovate_items.spells.<goods id>.<path>=VALUE")
             return 1
     try:
         policy = parse_policy([s for s in (args.set or []) if s not in ext_sets], args.refill, getattr(args, "reset", None))
@@ -515,7 +515,7 @@ def cmd_write(args) -> int:
         writer = MemoryWriter(mem, Layout(mem, target.profile, target.base), policy, gate,
                               log=lambda m: book.d("write", m), snapshot=snapshot)
         results = writer.apply_once()
-        ext_ok, ext_bad = _write_extension(args, target, mem, gate, snapshot, ext_sets) if ext_sets else (0, 0)
+        ext_ok, ext_bad = _write_design(args, target, mem, gate, snapshot, ext_sets) if ext_sets else (0, 0)
     finally:
         mem.close()
         try:

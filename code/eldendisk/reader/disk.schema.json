@@ -192,9 +192,9 @@
         }
       }
     },
-    "extension": {
+    "design": {
       "type": ["object", "null"],
-      "description": "1.7.2: the extension's spells of the last build (extension.innovate_items.spells.<goods id>) with what the game holds now; null without a build.",
+      "description": "1.7.2: the design's spells of the last build (design.innovate_items.spells.<goods id>) with what the game holds now; null without a build.",
       "properties": {
         "innovate_items": {
           "type": "object",

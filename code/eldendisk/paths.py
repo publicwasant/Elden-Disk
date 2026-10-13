@@ -62,7 +62,7 @@ def describe_resource(path: Path | str) -> str:
 
 
 def app_data_dir() -> Path:
-    """`%LOCALAPPDATA%\\EldenDisk`: everything the tool produces lives here (the vault, the extensions' files, the exports), so the
+    """`%LOCALAPPDATA%\\EldenDisk`: everything the tool produces lives here (the vault, the designs' files, the exports), so the
     exe can sit anywhere and a rebuild of it deletes nothing."""
     base = os.environ.get("LOCALAPPDATA")
     return (Path(base) if base else Path.home() / "AppData" / "Local") / "EldenDisk"

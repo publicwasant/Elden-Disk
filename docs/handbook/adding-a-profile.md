@@ -487,7 +487,7 @@ slot); the slot that is selected (0 = the first) is a 32-bit number at `magic_se
 (`selected.slot` and `selected.id`, `slots` numbered from 1 as the game shows them). Without the block there is no
 `character.equipment`; a block that is there must be complete.
 
-How the 1.17.1 values were found (2026-10-13, read-only, the game running): with a spell of the extension (Magic 2230000) memorised in the
+How the 1.17.1 values were found (2026-10-13, read-only, the game running): with a spell of the design (Magic 2230000) memorised in the
 first slot, a look for that number in PlayerGameData and one pointer away from it found it at `[PlayerGameData+0x530]+0x10`, followed by the
 other memorised spells 8 bytes apart; selecting the next slot changed one number only, at `+0x80`, from 0 to 1.
 

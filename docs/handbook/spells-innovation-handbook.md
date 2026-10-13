@@ -98,7 +98,7 @@ You only need these.
 | **`regulation.bin`** | The game's **recipe book**: one file holding the numbers for every item, spell, enemy, shop. Elden-Disk reads it, builds a new copy with your spells added, and puts it in place while you play. Your original is kept safe and restored afterwards. |
 | **Row / table (param)** | A table is a spreadsheet; a row is one line (one spell, one effect…). A spell is not one row: it is a **chain** of a few rows that point at each other (the item, the spell, its effect…). |
 | **Slot** | A numbered **shelf**. Your spells live on shelves 1, 2, 3… The shelf number decides the game ids your spell uses. |
-| **`extension.json`** | The **order form** where you write your spells. |
+| **`design.json`** | The **order form** where you write your spells. |
 | **JSON** | The way the order form is written. Section below. |
 | **Row / id** | Every line of a game table has a number, its **id**: its address. `6210` is the address of Black Flame. Chapter 3 is the map of these numbers. |
 | **`from`** | "Start from this game spell." It is the spell's id number (its Magic id). |
@@ -140,7 +140,7 @@ Open the file and you meet numbers like `6210`, `1621000`, `44400`. Nothing in t
 
 ### 3.1 Every number is an address
 
-Behind the game there is a handful of giant **tables** (think of phone books with thousands of lines). Every line is a **row**, and every row has an **id**: its phone number. In `extension.json`, whenever you point at "that spell" or "that burn" or "that hit", you write its id.
+Behind the game there is a handful of giant **tables** (think of phone books with thousands of lines). Every line is a **row**, and every row has an **id**: its phone number. In `design.json`, whenever you point at "that spell" or "that burn" or "that hit", you write its id.
 
 | Table (the name written in the file) | One row is… | What the id looks like | Example | Where you write it |
 |:--|:--|:--|:--|:--|
@@ -319,7 +319,7 @@ Total healed: 45 HP × (20 s ÷ 0.5 s) = **1,800 HP**. Blessing's Boon also appl
 
 You will start from the spell that is already there: **Reverse Cursed Technique**, a regenerating incantation that gives back HP, FP and stamina over 15 seconds. We will make it last twice as long.
 
-**Step 1. Open `extension.json`** (the one next to `eldendisk.exe`; if there is none the exe uses the copy built into it).
+**Step 1. Open `design.json`** (the one next to `eldendisk.exe`; if there is none the exe uses the copy built into it).
 
 **Step 2. Find the spell.** Search for `reverse_curse_technique`. It sits on shelf 1. Find the line:
 
@@ -332,7 +332,7 @@ You will start from the spell that is already there: **Reverse Cursed Technique*
 **Step 4. Rehearse.** In a terminal. (With the exe type `eldendisk.exe`; from the source code type `python -m eldendisk`. The examples below write just `eldendisk`.)
 
 ```commandline
-eldendisk extension innovate-items spells --add all --dry-run
+eldendisk innovate-items spells --add all --dry-run
 ```
 
 It builds in memory (a few seconds) and prints whether the **gate passed**. Nothing is written.
@@ -350,7 +350,7 @@ The tool builds, checks, puts the new file in place and starts the game.
 **Step 7 (when it works).** Close the game and run:
 
 ```commandline
-eldendisk extension innovate-items spells --secure
+eldendisk innovate-items spells --secure
 ```
 
 This saves your build as the known-good one.
@@ -620,7 +620,7 @@ Since 1.7.1 a remixed spell can be written so that each part answers one questio
 
 `colors` has two kinds of keys. `"Magic.<from>.castSfxId"` is the fire of the cast: one colour `[r, g, b]`, or `main` (the fire) and `accent` (the ring of runes at the hand, and what the main colour does not reach). It only works when the spell casts `524400`, the fire of Flame, Grant Me Strength (set `Magic.<from>.castSfxId: 524400` in `customs.basic`). `"SpEffect.<id>"` is a buff row: while it lasts, the eyes glow in that colour (`null`: the game's own red).
 
-**Your spell's real id.** The name you give it (`reverse_cursed_technique`) is a label. The game knows it by the ids of its shelf: after a build, `<vault>\extension\innovate-items\spells\spells.resolved.json` lists every spell under its Goods id (`2230000` for shelf 1, `2230001` for shelf 2, ...) with all the rows it owns. The console shows the same under the spell (`game  goods 2230000 · magic 2230000 · ...`).
+**Your spell's real id.** The name you give it (`reverse_cursed_technique`) is a label. The game knows it by the ids of its shelf: after a build, `<vault>\design\innovate-items\spells\spells.resolved.json` lists every spell under its Goods id (`2230000` for shelf 1, `2230001` for shelf 2, ...) with all the rows it owns. The console shows the same under the spell (`game  goods 2230000 · magic 2230000 · ...`).
 
 **Editing later: a checklist.**
 
@@ -628,7 +628,7 @@ Since 1.7.1 a remixed spell can be written so that each part answers one questio
 2. Numbers of the game's rows go in `customs.basic` with the key you would use in `set` (3.3, 7.5); look the row up in the Row Finder first (Appendix B) and read the original value (7.9).
 3. A change in `customs.basic`, `requires` or `locations` builds regulation.bin again (a few seconds); a change in `customs.advanced` does not, it is written into the game after the world loads.
 4. The message of a mistake names the exact place (`...customs.basic.Magic.6422.mp: ...`): fix that line only.
-5. After `run` builds, read the block on the console: the changes (`└─ ...  34590 -> 40000`), then each spell with what the design says. When it works in the game, close it and run `extension innovate-items spells --secure`.
+5. After `run` builds, read the block on the console: the changes (`└─ ...  34590 -> 40000`), then each spell with what the design says. When it works in the game, close it and run `innovate-items spells --secure`.
 
 ### 7.1 The two words that matter: `from` and `set`
 
@@ -952,14 +952,14 @@ What fits (measured offline, and checked in the game for the last row):
 ### 11.1 The loop
 
 ```commandline
-eldendisk extension innovate-items spells --add all --dry-run    # 1. rehearse (a few seconds, writes nothing)
+eldendisk innovate-items spells --add all --dry-run    # 1. rehearse (a few seconds, writes nothing)
 eldendisk run                                                    # 2. build, check, play
-eldendisk extension innovate-items spells --secure               # 3. after it worked, game closed: keep this build
+eldendisk innovate-items spells --secure               # 3. after it worked, game closed: keep this build
 ```
 
-- **Build only some spells:** `--add spells.slots.<id>` (the path of the spell in `extension.json`) builds just that spell; give several paths to build several, e.g. `--add spells.slots.my_heal spells.slots.my_flame`. `eldendisk run` then goes on building **the same spells** until you type `--add all` (or another `--add`). If you never use `--add`, `run` builds every spell. A rehearsal (`--dry-run`) does not change the choice. The tool always tells you which spells it is building and which it left out.
+- **Build only some spells:** `--add spells.slots.<id>` (the path of the spell in `design.json`) builds just that spell; give several paths to build several, e.g. `--add spells.slots.my_heal spells.slots.my_flame`. `eldendisk run` then goes on building **the same spells** until you type `--add all` (or another `--add`). If you never use `--add`, `run` builds every spell. A rehearsal (`--dry-run`) does not change the choice. The tool always tells you which spells it is building and which it left out.
 - `run` uses the **secured** build while your design equals the secured one. If you changed something it says what changed (`reverse_curse_technique.shop.price  34590 -> 40000`) and rebuilds.
-- The files live in `<vault>\extension\innovate-items\spells\`: `regulation.bin` (latest build), `regulation.secured.bin`, `spells.commit.json`.
+- The files live in `<vault>\design\innovate-items\spells\`: `regulation.bin` (latest build), `regulation.secured.bin`, `spells.commit.json`.
 - With `--vault-off` the spells are not used (and so no text is put in).
 - The text of the spells (6.1b) is put in by `run` once the game is up; `eldendisk write --text` (game running) does it again after you edit it.
 - After a build, `read --param-check` (game running) compares every original row with the game: they must all be equal, and your new rows are counted.
@@ -1361,9 +1361,9 @@ One entry per spell for every workshop above the Photocopier, with the ids you m
 
 | Topic | Source |
 |:--|:--|
-| Field ranges, `set` rules, messages | `code/eldendisk/extension/innovate_items/spells/spec.py`, `recipes.py` |
+| Field ranges, `set` rules, messages | `code/eldendisk/design/innovate_items/spells/spec.py`, `recipes.py` |
 | Rows per shelf, ids | `recipes.py`, `build.py`, `chain.py` |
-| Gate numbers | `code/eldendisk/extension/innovate_items/preflight.py` |
+| Gate numbers | `code/eldendisk/design/innovate_items/preflight.py` |
 | Field names per table | `paramdefs.py` (generated from Paramdex) |
 | Spell and row names, Finders | Paramdex `ER/Names/*.txt` (community), ids and numbers read from the original 1.17.1 `regulation.bin` with the tool's own chain reader (`chain.py`) |
 | Tests in the game | [manual-test-plan-1.7.0](../experiments/extensional/innovate-items/spell/level2/docs/manual-test-plan-1.7.0.md) |

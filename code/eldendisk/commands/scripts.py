@@ -1,27 +1,27 @@
-"""`extension external-scripts [--run [--when-loaded]] [--scripts-dir DIR]` (1.7.2): the user's Python scripts next to the game.
+"""`external-scripts [--run [--when-loaded]] [--scripts-dir DIR]` (1.7.2): the user's Python scripts next to the game.
 
 Without `--run` it lists the scripts of the folder and how each ended the last time. `--run` is the host of the scripts
-(eldendisk/extension/external_scripts/host.py): it attaches to the game `run` started, checks the session as `write` does, and runs every script of the
+(eldendisk/design/external_scripts/host.py): it attaches to the game `run` started, checks the session as `write` does, and runs every script of the
 folder until the game closes. `run` starts it by itself (vault ON) when the folder has a script, with `--when-loaded`: the scripts start
 once a character is in the world. By hand (game running, session open) it starts them at once.
 
-The scripts: the default ones, those of code/eldendisk/extension/external_scripts/defaults (the exe carries them: the build embeds
+The scripts: the default ones, those of code/eldendisk/design/external_scripts/defaults (the exe carries them: the build embeds
 them; a build with --no-embed puts them in `external-scripts\\` next to the exe), and IN ADDITION every `--scripts-dir PATH`: a folder
 (its `*.py`) or one `.py` file, anywhere, as many as wanted (for scripts written after the exe was built).
 
-Everything of the scripts is in eldendisk/extension/external_scripts/ (edstdlib, the host, the backend on the game, FakeGame, the
+Everything of the scripts is in eldendisk/design/external_scripts/ (edstdlib, the host, the backend on the game, FakeGame, the
 defaults/; example scripts are in code/tests/external_scripts). The backend opens the write handle only after the session check here, as `write` does."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from .. import extension, ui
+from .. import design, ui
 from ..console import require_windows_x64
-from ..extension.external_scripts import FOLDER_NAME, DEFAULTS_DIR, edstdlib as ed
-from ..extension.external_scripts import host as shost
-from ..extension.external_scripts.backend import open_live
-from ..extension.innovate_items.spells.service import ExtensionError
+from ..design.external_scripts import FOLDER_NAME, DEFAULTS_DIR, edstdlib as ed
+from ..design.external_scripts import host as shost
+from ..design.external_scripts.backend import open_live
+from ..design.innovate_items.spells.service import DesignError
 from ..game.attach import EXIT_NO_SESSION, AttachError, Target, locate
 from ..game.processes import process_started
 from ..game.profile import StateIds, load_state_ids
@@ -29,7 +29,7 @@ from ..logbook import book
 from ..paths import HERE, get_resource_path, runtime_dirs
 from ..vault import VaultError, authorise, resolve_vault
 from ..vault import session as vault_session
-from .extension import ext_dir, spec_file
+from .design import design_folder, spec_file
 
 TAG = shost.TAG
 WORLD_READY = "ELDENDISK_WORLD_READY"   # set by `run` when it starts the scripts after the text and colour steps: no second wait of 5 s
@@ -44,7 +44,7 @@ def say(level: str, msg: str) -> None:
 # ---------------------------------------------------------------------------------------------------------------------------- the command
 def default_dir() -> Path:
     """The folder of the default scripts: the ones embedded in the exe (or copied next to it by a build with --no-embed), else
-    code/eldendisk/extension/external_scripts/defaults in the source tree."""
+    code/eldendisk/design/external_scripts/defaults in the source tree."""
     external, embedded = runtime_dirs()
     for d in (embedded, external):
         if d is not None and (d / FOLDER_NAME).is_dir():
@@ -84,7 +84,7 @@ def has_scripts(args) -> bool:
 
 
 def status_path(args, vault_dir=None) -> Path:
-    return ext_dir(args, vault_dir) / shost.STATUS_FILE
+    return design_folder(args, vault_dir) / shost.STATUS_FILE
 
 
 def cmd_scripts_list(args) -> int:
@@ -94,7 +94,7 @@ def cmd_scripts_list(args) -> int:
     try:
         sp = status_path(args)
         last = shost.read_status(sp)
-    except ExtensionError:
+    except DesignError:
         sp, last = None, None
     ended = {s.get("name"): s for s in (last or {}).get("scripts", [])}
     rows = []
@@ -156,10 +156,10 @@ def cmd_scripts_run(args) -> int:
         book.w(TAG, f"{exc}; buffs and animations are read without names")
         state_ids = StateIds({}, {})
     try:
-        resolved = extension.open_spells(ext_dir(args, vault_root), spec_file(args)).resolved_path
-        status = ext_dir(args, vault_root) / shost.STATUS_FILE
-    except ExtensionError as exc:
-        book.w(TAG, f"the extension's files cannot be found ({exc}); game.spells is empty")
+        resolved = design.open_spells(design_folder(args, vault_root), spec_file(args)).resolved_path
+        status = design_folder(args, vault_root) / shost.STATUS_FILE
+    except DesignError as exc:
+        book.w(TAG, f"the design's files cannot be found ({exc}); game.spells is empty")
         resolved, status = None, None
     backend = open_live(target, state_ids, vault_root, resolved, say)      # the write handle: only now, after the session check
     try:

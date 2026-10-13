@@ -29,7 +29,7 @@ def check(mem, checked, as_json=False):
 
 
 # ---- the game side: a whole table at once ----
-def test_all_rows_gives_every_row_including_the_ones_an_extension_added():
+def test_all_rows_gives_every_row_including_the_ones_a_design_added():
     m = game_with(MAGIC, new_rows={90000: encode("Magic", mp=7)})
     rows = tables(m).all_rows("Magic")
     assert set(rows) == {4000, 6210, 6230, 90000}

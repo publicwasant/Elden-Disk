@@ -20,8 +20,8 @@ game session.
 The same is done for the glowing eyes (`positive_curse_energy_eyes` of the design): f000004866 (EYES_PLANS), the eyes of a human NPC of the DLC, with
 their own colour, in the same look. That file is shared with that NPC too.
 
-This module knows bytes only. The design's colour is read by the command (extension/.../service.py: flame_color); the writer
-package may not import the extension package.
+This module knows bytes only. The design's colour is read by the command (design/.../service.py: flame_color); the writer
+package may not import the design package.
 """
 from __future__ import annotations
 

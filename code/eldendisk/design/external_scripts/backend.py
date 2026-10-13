@@ -1,12 +1,12 @@
-"""The running game for edstdlib and for `read` / `write` of the `extension` block (1.7.2): the one file of extension/external_scripts
+"""The running game for edstdlib and for `read` / `write` of the `design` block (1.7.2): the one file of design/external_scripts
 that touches the game (tests/test_architecture.py: EXCEPTIONS).
 
 Nothing new touches the game here: the character is read by the Sampler of `read` and the document is the one `read --export` builds
 (reader/export.py); values are written by the MemoryWriter of `write --set` (the same policy, gate and snapshot of the game's own values).
 What this adds:
 
-  * `ExtensionLive`: the block `extension.innovate_items.spells.<goods id>` of the document (spells.resolved.json and what the game
-    holds now) and the writes of its values (extension/innovate_items/spells/live.py says what each name is in the game): a field of
+  * `DesignLive`: the block `design.innovate_items.spells.<goods id>` of the document (spells.resolved.json and what the game
+    holds now) and the writes of its values (design/innovate_items/spells/live.py says what each name is in the game): a field of
     a row through the MemoryWriter; a text by rebuilding that one table at the pointer `write --text` switched; a colour by repainting
     the copies `write --flame-color` painted, from the colours they carry to the new ones. The last two use the memory cache
     (writer/cache.py) and never look through the memory unless the game reloaded what the cache knows;
@@ -75,8 +75,8 @@ def write_values(mem, target, gate, snapshot, values: dict, say, tables=None) ->
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- the block
-class ExtensionLive:
-    """The `extension` block of the document, and its writes. `mem` may be read-only for `block()`; `apply` needs the write handle
+class DesignLive:
+    """The `design` block of the document, and its writes. `mem` may be read-only for `block()`; `apply` needs the write handle
     and an open `gate`."""
 
     def __init__(self, mem, target, vault_root: Path | None, resolved_path: Path | None, *, gate=None, snapshot=None,
@@ -202,7 +202,7 @@ class ExtensionLive:
             goods = next((g for g, r in spells.items() if str(r.get("id", "")).lower() == str(goods).lower()), goods)
             rec = spells.get(str(goods))
         if rec is None:
-            raise Refused(f"extension.innovate_items.spells.{goods}: no such spell in the last build (it has: {', '.join(spells) or 'none'})")
+            raise Refused(f"design.innovate_items.spells.{goods}: no such spell in the last build (it has: {', '.join(spells) or 'none'})")
         try:
             kind, *what = live.target(str(goods), rec, parts)
         except live.Locked as exc:
@@ -289,21 +289,21 @@ class ExtensionLive:
 
 
 def with_spell_buffs(state_ids: StateIds, spells: dict) -> StateIds:
-    """`state_ids` with the buffs of the extension's spells named (their copied SpEffect rows, by the spell's label), so the document
+    """`state_ids` with the buffs of the design's spells named (their copied SpEffect rows, by the spell's label), so the document
     lists them under character.buffs like any buff the tool knows (they are in no chr_state_ids.json)."""
     extra = {}
     for goods, rec in spells.items():
         for sp in rec.get("rows", {}).get("sp_effect", ()):
-            extra[int(sp)] = StateConfig(rec.get("id", str(goods)), "EXTENSION", f"a buff of the extension's spell {rec.get('id')} (goods {goods})")
+            extra[int(sp)] = StateConfig(rec.get("id", str(goods)), "DESIGN", f"a buff of the design's spell {rec.get('id')} (goods {goods})")
     if not extra:
         return state_ids
     return StateIds({**extra, **state_ids.buffs}, state_ids.animations)
 
 
-def extension_path(name: str) -> tuple[str, list] | None:
-    """`extension.innovate_items.spells.<goods>.<path>` -> (goods, path parts); None for any other name."""
+def design_path(name: str) -> tuple[str, list] | None:
+    """`design.innovate_items.spells.<goods>.<path>` -> (goods, path parts); None for any other name."""
     parts = name.strip().split(".")
-    if parts[:3] != ["extension", "innovate_items", "spells"] or len(parts) < 5:
+    if parts[:3] != ["design", "innovate_items", "spells"] or len(parts) < 5:
         return None
     return parts[3], parts[4:]
 
@@ -325,8 +325,8 @@ class LiveBackend:
         self.gate.open()                       # made only after the session check
         self.snapshot = Snapshot(self.vault_root / SNAPSHOT_NAME, target.pid, target.started)
         self.snapshot.load()
-        self.extension = ExtensionLive(mem, target, self.vault_root, resolved_path, gate=self.gate, snapshot=self.snapshot, say=say)
-        self.sampler.state_ids = with_spell_buffs(state_ids, self.extension.spells())
+        self.design = DesignLive(mem, target, self.vault_root, resolved_path, gate=self.gate, snapshot=self.snapshot, say=say)
+        self.sampler.state_ids = with_spell_buffs(state_ids, self.design.spells())
         self._clock = clock
         self._read_lock, self._write_lock = threading.Lock(), threading.Lock()
         self._doc, self._doc_at = None, -1e9
@@ -342,7 +342,7 @@ class LiveBackend:
         self.mem.close()
 
     def document(self) -> dict:
-        """The document `read --export` writes, with the `extension` block: one read, shared for SHARE seconds."""
+        """The document `read --export` writes, with the `design` block: one read, shared for SHARE seconds."""
         with self._read_lock:
             now = self._clock()
             if self._doc is not None and now - self._doc_at < SHARE:
@@ -353,7 +353,7 @@ class LiveBackend:
                                  anti_cheat="DISABLED_OFFLINE", exe_sha256=self.target.sha256, profile_label=p.label,
                                  buffs_supported=p.sp_effect is not None, animations_supported=p.anim is not None, sample=s,
                                  mode="sandbox", read_only=False, sandbox=True)
-            doc["extension"] = self.extension.block()
+            doc["design"] = self.design.block()
             self._doc, self._doc_at = doc, now
             return doc
 
@@ -387,13 +387,13 @@ class LiveBackend:
                 name = ".".join(str(p) for p in path)
                 if not path or path[0] == "systems":
                     problems.append(f"{name}: what the tool knows of itself, not a value of the game")
-                elif path[0] == "extension":
-                    ext = extension_path(name) if len(path) >= 5 else None
-                    if ext is None or list(path[:3]) != ["extension", "innovate_items", "spells"]:
+                elif path[0] == "design":
+                    ext = design_path(name) if len(path) >= 5 else None
+                    if ext is None or list(path[:3]) != ["design", "innovate_items", "spells"]:
                         problems.append(f"{name}: not a value of the game")
                         continue
                     try:
-                        got = self.extension.apply(str(path[3]), list(path[4:]), value)
+                        got = self.design.apply(str(path[3]), list(path[4:]), value)
                     except Refused as exc:
                         problems.append(str(exc))
                         continue
@@ -404,7 +404,7 @@ class LiveBackend:
             for name, value in plain.items():       # one at a time, so one refused value does not keep the others back
                 try:
                     done.update(write_values(self.mem, self.target, self.gate, self.snapshot, {name: value}, self.say,
-                                             self.extension.table_index()))
+                                             self.design.table_index()))
                 except Refused as exc:
                     problems.append(f"{name}: {exc}")
             with self._read_lock:                    # the next read sees what was just written
@@ -417,7 +417,7 @@ class LiveBackend:
     def _label(self, goods: str) -> str:
         """The spell's label (`reverse_cursed_technique`) for its goods id; what was typed when it is not known."""
         try:
-            rec = self.extension.spells().get(goods)
+            rec = self.design.spells().get(goods)
         except AttributeError:
             rec = None
         return str(rec.get("id", goods)) if isinstance(rec, dict) else goods

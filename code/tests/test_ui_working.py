@@ -8,8 +8,8 @@ from datetime import datetime
 import pytest
 
 from eldendisk import ui
-from eldendisk.commands import extension as ext
-from eldendisk.logbook import EXT_TAG, book, format_line
+from eldendisk.commands import design as ext
+from eldendisk.logbook import DESIGN_TAG, book, format_line
 
 
 class Stream(io.StringIO):
@@ -31,7 +31,7 @@ def lines(monkeypatch):
 
 
 def test_without_animation_a_step_is_a_start_line_and_an_end_line_with_the_time(lines):
-    with ui.working(EXT_TAG, "building", animate=False) as w:
+    with ui.working(DESIGN_TAG, "building", animate=False) as w:
         w.done("built")
     assert lines[0] == "I design: building" and re.fullmatch(r"I\+design: built  \(\d+\.\d s\)", lines[1])
 
@@ -39,7 +39,7 @@ def test_without_animation_a_step_is_a_start_line_and_an_end_line_with_the_time(
 def test_a_step_that_fails_leaves_no_end_line_and_no_status_line(lines):
     err = Stream()
     with pytest.raises(ValueError):
-        with ui.working(EXT_TAG, "building", stream=err, animate=True):
+        with ui.working(DESIGN_TAG, "building", stream=err, animate=True):
             raise ValueError("boom")
     assert ui._live is None and lines == ["D design: building"]          # only the file line; no end line
     assert err.getvalue().endswith("\r\x1b[2K")                    # the status line is wiped
@@ -48,7 +48,7 @@ def test_a_step_that_fails_leaves_no_end_line_and_no_status_line(lines):
 def test_the_status_line_spins_counts_the_seconds_and_lets_other_lines_through_above_it(lines, monkeypatch):
     err = Stream()
     clock = [0.0]
-    with ui.working(EXT_TAG, "the long text goes to the log", short="building x", stream=err, animate=True, clock=lambda: clock[0],
+    with ui.working(DESIGN_TAG, "the long text goes to the log", short="building x", stream=err, animate=True, clock=lambda: clock[0],
                     interval=0.01) as w:
         clock[0] = 12.3
         time.sleep(0.05)
@@ -64,8 +64,8 @@ def test_the_status_line_spins_counts_the_seconds_and_lets_other_lines_through_a
 
 def test_only_one_status_line_at_a_time(lines):
     err = Stream()
-    with ui.working(EXT_TAG, "first", stream=err, animate=True):
-        with ui.working(EXT_TAG, "second", stream=err, animate=True) as inner:
+    with ui.working(DESIGN_TAG, "first", stream=err, animate=True):
+        with ui.working(DESIGN_TAG, "second", stream=err, animate=True) as inner:
             assert not inner.animated
     assert ui._live is None
 
@@ -73,7 +73,7 @@ def test_only_one_status_line_at_a_time(lines):
 def test_the_spinner_uses_ascii_on_a_legacy_code_page(lines):
     err = Stream()
     err.encoding = "cp874"
-    with ui.working(EXT_TAG, "building", stream=err, animate=True):
+    with ui.working(DESIGN_TAG, "building", stream=err, animate=True):
         pass
     assert "|" in err.getvalue() and "⠋" not in err.getvalue()
 

@@ -5,9 +5,9 @@ import struct
 
 import pytest
 
-from eldendisk.extension.innovate_items import aes, container, fse, reblock, zstd
-from eldendisk.extension.innovate_items.defs import Def
-from tests import ext_helpers as H
+from eldendisk.design.innovate_items import aes, container, fse, reblock, zstd
+from eldendisk.design.innovate_items.defs import Def
+from tests import design_helpers as H
 
 
 # ---------------- AES ----------------

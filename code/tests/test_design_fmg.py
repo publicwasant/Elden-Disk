@@ -3,7 +3,7 @@ import struct
 
 import pytest
 
-from eldendisk.extension.innovate_items.fmg import Fmg, FmgError
+from eldendisk.design.innovate_items.fmg import Fmg, FmgError
 
 
 def test_fmg_roundtrip_groups_gaps_and_empty_text():
