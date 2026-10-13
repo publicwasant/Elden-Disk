@@ -32,8 +32,8 @@ def test_every_command_writes_the_logcat_file_next_to_the_vault(env, capsys):
     text = (vault.root / LOG_NAME).read_text(encoding="utf-8")
     lines = text.splitlines()
     assert all(LOGCAT.match(l) for l in lines), lines
-    assert "D client" in lines[0] and "version " in lines[0]
-    assert "D client   : run: " in lines[1] and "vault verify" in lines[1]          # the command line itself, no version in it
+    assert "D client   : run: " in lines[0] and "vault verify" in lines[0]          # the command line itself
+    assert not any("version " in l for l in lines)                                   # the version is `--version`, not every log
     assert any(" I vault" in l and "matches its manifest" in l for l in lines)
     assert lines[-1].endswith("exit 0")
 
@@ -137,3 +137,34 @@ def test_command_line_is_the_command_as_typed(tmp_path):
     assert logsetup.command_line(["run", "-v"], ["python", "-m", "eldendisk", "run", "-v"]) == "python -m eldendisk run -v"
     assert logsetup.command_line(["write", "--set", "a b=1"], ["x", "write", "--set", "a b=1"]) == 'x write --set "a b=1"'
     assert logsetup.command_line(["run"], ["other", "args"]) == "eldendisk run"   # orig does not end with argv: ignore it
+
+
+def test_a_step_run_started_does_not_log_its_command_line_again(env, monkeypatch):
+    from eldendisk.logsetup import STARTED_BY
+    live, vault = env
+    monkeypatch.setenv(STARTED_BY, "run")
+    assert cli.main(["vault", "status", "--vault", str(vault.root)]) == 0
+    text = (vault.root / LOG_NAME).read_text(encoding="utf-8")
+    assert "client   : run: " not in text and text.splitlines()[-1].endswith("exit 0")
+
+
+def test_run_marks_the_steps_it_starts(tmp_path):
+    import eldendisk.commands.run as run_cmd
+    from eldendisk.logsetup import STARTED_BY
+    args = cli.build_parser().parse_args(["run"])
+    seen = []
+    run_cmd.start_text(args, tmp_path, spawn=lambda c, **kw: seen.append(kw))
+    assert seen[0]["env"][STARTED_BY] == "run"
+
+
+
+def test_the_built_in_config_files_are_not_logged_every_time(monkeypatch):
+    from eldendisk.commands import common
+    from eldendisk import paths
+    seen = []
+    monkeypatch.setattr(common.book, "d", lambda tag, msg: seen.append((tag, msg)))
+    monkeypatch.setattr(paths, "describe_resource", lambda p: "embedded")
+    common.log_config("offsets", "X:/_MEI/offsets.json")
+    monkeypatch.setattr(paths, "describe_resource", lambda p: "external")
+    common.log_config("offsets", "D:/dist/offsets.json")
+    assert seen == [("config", "offsets: D:/dist/offsets.json (external)")]

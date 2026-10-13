@@ -142,7 +142,17 @@ def config_files(layout: dict) -> list[Path]:
     return out
 
 
-def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, configs: list[Path]) -> list[str]:
+SCRIPTS_FOLDER = "external-scripts"      # where the external scripts are inside the exe (and next to it, with --no-embed)
+
+
+def user_scripts(layout: dict) -> list[Path]:
+    """The external scripts the exe carries: every `*.py` of code/eldendisk/extension/external_scripts/defaults (not `_*.py`)."""
+    folder = layout["code_dir"] / "eldendisk" / "extension" / "external_scripts" / "defaults"
+    return sorted(p for p in folder.glob("*.py") if p.is_file() and not p.name.startswith("_")) if folder.is_dir() else []
+
+
+def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, configs: list[Path],
+                  scripts: list[Path] = ()) -> list[str]:
     """The compiler command line for `engine` (pure, so it can be unit-tested without compiling)."""
     entry, dist_dir = layout["entry_point"], layout["dist_dir"]
     icon_path = Path(icon).resolve() if icon and Path(icon).exists() else None
@@ -157,6 +167,7 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
             cmd.append(f"--icon={icon_path}")
         if embed:
             cmd += [f"--add-data={c}{sep}." for c in configs]
+            cmd += [f"--add-data={s}{sep}{SCRIPTS_FOLDER}" for s in scripts]
     else:  # nuitka
         cmd = [sys.executable, "-m", "nuitka", "--onefile", f"--output-dir={dist_dir}",
                f"--output-filename={EXE_NAME}"]
@@ -164,6 +175,7 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
             cmd.append(f"--windows-icon-from-ico={icon_path}")
         if embed:
             cmd += [f"--include-data-files={c}={c.name}" for c in configs]
+            cmd += [f"--include-data-files={s}={SCRIPTS_FOLDER}/{s.name}" for s in scripts]
     cmd.append(str(entry))
     return cmd
 
@@ -221,7 +233,8 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
     dist_dir.mkdir(parents=True, exist_ok=True)
     layout["work_dir"].mkdir(parents=True, exist_ok=True)
     configs = config_files(layout)
-    cmd = build_command(engine, embed=embed, icon=icon, layout=layout, configs=configs)
+    scripts = user_scripts(layout)
+    cmd = build_command(engine, embed=embed, icon=icon, layout=layout, configs=configs, scripts=scripts)
     try:
         res = subprocess.run(cmd, check=False)
     except OSError as exc:
@@ -231,9 +244,13 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
         log(f"ERROR: {engine} build failed. Aborting pipeline.")
         return False
 
-    if not embed:  # editable configs travel next to the exe
+    if not embed:  # editable configs travel next to the exe, the scripts in external-scripts\ beside it
         for c in configs:
             shutil.copy2(c, dist_dir / c.name)
+        if scripts:
+            (dist_dir / SCRIPTS_FOLDER).mkdir(exist_ok=True)
+            for s in scripts:
+                shutil.copy2(s, dist_dir / SCRIPTS_FOLDER / s.name)
 
     readme = exe_readme(layout)
     if readme is None:
@@ -283,6 +300,9 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
         ("version", f"{__version__} ({engine}, onefile)"),
         ("configs", (", ".join(c.name for c in configs) + (" embedded in the exe" if embed else f" copied next to the exe ({dist})"))
          if configs else "none found"),
+        ("scripts", (", ".join(s.name for s in user_scripts(layout)) + (" embedded in the exe (the default external scripts; `run --scripts-dir` "
+                                                                           "adds more)" if embed else f" copied to {dist / SCRIPTS_FOLDER}"))
+         if user_scripts(layout) else "none in external_scripts/defaults (nothing embedded)"),
         ("readme", str(dist / "README.md") if (dist / "README.md").exists() else "not written (no docs/guilde/)"),
         ("tests", "skipped" if tests_s is None else _fmt_seconds(tests_s)),
         ("build", _fmt_seconds(build_s)),

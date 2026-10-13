@@ -39,18 +39,19 @@
               "Goods.6421.iconId": 6806
             },
             "advanced": {
-              "__info__": "Level 3: things that are not in regulation.bin. `eldendisk run` writes them into the game's memory once the character is in the world (a scan of the game's memory, about 4 seconds), and they last until the game closes. `texts`: goods_name = the name (shop and inventory), goods_info = the short line (shop and inventory), goods_caption = the long description (inventory and memory slot). `colors` are [red, green, blue], each 0 to 2 (1 = the full colour). Magic.6421.castSfxId: the effect the spell casts; `main` = the fire (in the hand, the burst and the burning), `accent` = what the fire's own colour does not reach and the ring of runes at the hand. SpEffect.1642100: the buff row; its colour is the colour of the Positive Curse Energy Eyes that glow while it lasts (null = the game's own red). The effect files are the game's own and shared, so the colours are for the whole game session. Changing only this part never builds regulation.bin again.",
+              "__info__": "Level 3: things that are not in regulation.bin. `eldendisk run` writes them into the game's memory once the character is in the world (a scan of the game's memory, about 4 seconds), and they last until the game closes. `texts`: goods_name = the name (shop and inventory), goods_info = the short line (shop and inventory), goods_caption = the long description (inventory and memory slot). `colors` are hex colours \"#RRGGBB\" (or [red, green, blue], each 0 to 2, 1 = the full colour, above 1 brighter). Magic.6421.castSfxId: the effect the spell casts; `main` = the fire (in the hand, the burst and the burning), `accent` = what the fire's own colour does not reach and the ring of runes at the hand. SpEffect.1642100: the buff row; its colour is the colour of the Positive Curse Energy Eyes that glow while it lasts (null = the game's own red). The effect files are the game's own and shared, so the colours are for the whole game session. Changing only this part never builds regulation.bin again.",
               "texts": {
                 "goods_name": "Reverse Cursed Technique",
                 "goods_info": "Converts negative curse energy into a positive cursed energy that resurrects over time.",
                 "goods_caption": "The nature of a curse is to erode, corrupt, and destroy. Yet, this paradox dictates a terrifying truth: when two currents of profound malice are forced to violently collide and multiply, they do not bring absolute ruin. Instead, the multiplied negativity gives birth to a vibrant, positive spark of life capable of reversing death's approach.\n\nThis alien logic was introduced to the Lands Between by an Unknown Sorcerer—a wanderer who fell through the cracks of reality from a universe entirely unalike our own. They wore strange garments, swore fealty to no sovereign, and manipulated an unseen energy that defied every natural law of this world. To them, the impossible was merely a matter of calculation.\n\nThe sorcerer lingered only briefly before the fabric of space swallowed them once more, returning them to their distant home. In their wake, they left nothing but the formula for this absolute contradiction. Perhaps it was a deliberate miracle gifted to those who suffer, or perhaps, to a being who walks between dimensions, rewriting the rules of mortality was simply a fleeting whim"
               },
               "colors": {
+                "__info__": "Base of Light Blue Color Palette from https://www.figma.com/colors/light-blue/, I've adjusted the Color harmonies - Split Color Palette Sets, using #FF909E as the Negative Cursed Energy, and #90D5FF as the Positive Cursed Energy for the concept.",
                 "Magic.6421.castSfxId": {
-                  "main": [0.2, 0.65, 1.0],
-                  "accent": [1.0, 1.0, 1.0]
+                  "main": "#90D5FF",
+                  "accent": "#FF909E"
                 },
-                "SpEffect.1642100": [0.2, 0.65, 1.0]
+                "SpEffect.1642100": "#90D5FF"
               }
             }
           }

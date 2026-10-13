@@ -1,14 +1,16 @@
 """Starts the logbook for one command: the log file next to the vault and the console sink."""
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-from . import __version__, ui
+from . import ui
 from .logbook import LOG_NAME, book
 from .vault import VaultError, resolve_vault
 
+STARTED_BY = "ELDENDISK_STARTED_BY"   # set by `run` for the steps it starts (their command line is in run's own log line)
 LONG_RUNNING = ("run", "read")   # commands that stay open: their console lines carry the time
 
 
@@ -37,8 +39,8 @@ def start(args, argv: list[str], real: bool = False) -> None:
     except VaultError:
         log_file = None   # the remembered vault is unavailable: the command reports that itself
     book.configure(file=log_file, console=console)
-    book.d("client", f"version {__version__}")
-    book.d("client", "run: " + command_line(argv, getattr(sys, "orig_argv", None) if real else None))
+    if not os.environ.get(STARTED_BY):        # a step `run` started: its line `design: starting: ...` says it already
+        book.d("client", "run: " + command_line(argv, getattr(sys, "orig_argv", None) if real else None))
     if verbose:
         on, why = ui.links_status(sys.stderr)
         book.d("client", f"clickable paths {'on' if on else 'off'}: {why}")

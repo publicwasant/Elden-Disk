@@ -30,6 +30,8 @@ _SEGMENTS = {"attrs": "attributes", "rune": "runes", "animation": "animations", 
              "max": "maximum"}
 _ROOTS = ("character", "systems", "params")
 PARAMS = "params"   # the third block of the document: tables of the game itself, always typed in full (`params.effects...`)
+EXTENSION = "extension"   # the fourth (1.7.2): the extension's spells, always typed in full (`extension.innovate_items.spells...`)
+FULL_ROOTS = (PARAMS, EXTENSION)
 _READ_ONLY_WHY = (
     ("character.vitals.", ("maximum", "base"),
      "computed by the game from your stats (set the attribute, or use hp/fp/stamina for the current value)"),
@@ -44,26 +46,30 @@ class UnknownName(ValueError):
         super().__init__(f"unknown name {name!r}{hint}")
 
 
+CHARACTER_HEADS = ("level", "runes", "vitals", "attributes", "buffs", "animations", *VITALS, *ATTR_NAMES)
+
+
 def normalize(name: str) -> str:
-    """The canonical dotted path of `name` (wildcards pass through). Does not check that the path exists."""
+    """The canonical dotted path of `name` (wildcards pass through). Does not check that the path exists.
+
+    A name is a path of the document as it is (`systems...`, `character...`, `params...`, `extension...`, `*` for all of it). The
+    only shortening: a name that starts with a value of the character (`hp`, `vigor`, `attrs.faith`, `runes`, `buffs`...) may leave
+    `character.` out. Nothing else is assumed: a name that names nothing is an unknown name, never quietly read as another."""
     n = name.strip().lower()
     parts = [s for s in n.split(".") if s != ""]
-    if parts and parts[0] == PARAMS:   # no short forms and no aliases below `params`: its names come from offsets.json
+    if not parts or parts[0] in FULL_ROOTS or parts[0] == "systems":   # below `params` / `extension` the names are the game's
         return ".".join(parts)
     segs = [_SEGMENTS.get(s, s) for s in parts]
-    if segs and segs[0] == "character":
-        segs = segs[1:] or ["character"]
-        if segs == ["character"]:
-            return "character"
-    if segs and segs[0] != "systems":
+    if segs[0] == "character":
+        return ".".join(segs)
+    if segs[0] in CHARACTER_HEADS:
         if segs[0] in VITALS:
             segs.insert(0, "vitals")
         elif segs[0] in ATTR_NAMES:
             segs.insert(0, "attributes")
-        elif segs[0] == "stamina":
-            segs.insert(0, "vitals")
         segs.insert(0, "character")
-    return ".".join(segs) if segs else ""
+        return ".".join(segs)
+    return ".".join(parts)
 
 
 def is_param_name(name: str) -> bool:

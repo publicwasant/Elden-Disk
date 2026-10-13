@@ -66,7 +66,10 @@ def slot_rows(slot: int) -> dict:
             "shop_flag": None if line is None else 150000 + (line - 100500) * 10}      # the game's own pattern for this group
 
 
-def spell_rows(slot: int, added: dict) -> dict:
+COPY_TABLES = {"sp": "SpEffect", "bullet": "Bullet", "atk": "AtkParam_Pc"}
+
+
+def spell_rows(slot: int, added: dict, copies: dict | None = None) -> dict:
     """The ids the game really uses for the spell of slot `slot`: the rows of `added` (Footprint.added, key -> ids) that lie in the
     blocks the slot owns. -> {"goods": id, "magic": id, "sp_effect": [ids], "bullet": [ids], "atk": [ids], "shop": id | None}; the
     id of a spell is its Goods id (2230000 + slot - 1), not the key the user gave it in extension.json."""
@@ -75,8 +78,11 @@ def spell_rows(slot: int, added: dict) -> dict:
           or ids["sp_copy_base"] <= r < ids["sp_copy_base"] + COPY_SP_BLOCK]
     bullet = [r for r in sorted(added.get("bullet", ())) if ids["bullet_copy_base"] <= r < ids["bullet_copy_base"] + COPY_BULLET_BLOCK]
     atk = [r for r in sorted(added.get("atk", ())) if ids["atk_copy_base"] <= r < ids["atk_copy_base"] + COPY_ATK_BLOCK]
-    return {"goods": ids["goods"], "magic": ids["magic"], "sp_effect": sp, "bullet": bullet, "atk": atk,
-            "shop": ids["shop_line"] if ids["shop_line"] in added.get("shop", ()) else None}
+    out = {"goods": ids["goods"], "magic": ids["magic"], "sp_effect": sp, "bullet": bullet, "atk": atk,
+           "shop": ids["shop_line"] if ids["shop_line"] in added.get("shop", ()) else None}
+    if copies:          # the template's row id -> the id of its copy, by table name (what customs.basic writes to in the game)
+        out["copies"] = {COPY_TABLES[t]: {str(old): new for old, new in sorted(m.items())} for t, m in copies.items() if m}
+    return out
 
 
 @dataclass
@@ -84,6 +90,7 @@ class Footprint:
     removed: dict = field(default_factory=lambda: {k: set() for k in KEYS})
     added: dict = field(default_factory=lambda: {k: set() for k in KEYS})
     modified: dict = field(default_factory=lambda: {k: set() for k in KEYS})
+    copies: dict = field(default_factory=dict)      # spell id -> {"sp"|"bullet"|"atk": {template row id: its copy's id}} (1.7.2)
 
 
 def _row(P: Param, rid: int, what: str):
@@ -289,6 +296,7 @@ def make_rows(P: dict, D: dict, spells: list, chain=None):
         ids = slot_rows(spell["slot"])
         if is_template(spell):
             built = template_rows(P, D, spell, chain)
+            fp.copies[spell["id"]] = {t: dict(m) for t, m in built.own.items()}
             rows["goods"].append((ids["goods"], built.goods))
             rows["magic"].append((ids["magic"], built.magic))
             rows["sp"].extend(built.sp)

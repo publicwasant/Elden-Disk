@@ -9,7 +9,7 @@ import json
 from fnmatch import fnmatchcase
 from typing import Iterator, NamedTuple
 
-from ..game.values import PARAMS, UnknownName, is_pattern, normalize, suggest
+from ..game.values import FULL_ROOTS, PARAMS, UnknownName, is_pattern, normalize, suggest
 
 TICKING = (".buff_duration",)     # countdowns: the live views paint them in their own colour, they are never "changes"
 VOLATILE = (*TICKING, "systems.status.ignored.buffs", "systems.status.ignored.animations")
@@ -90,20 +90,42 @@ def _canonical(leaves: dict[str, object]) -> dict[str, str]:
     return out
 
 
+SPELLS = "extension.innovate_items.spells."
+
+
+def _by_label(doc: dict, path: str) -> str:
+    """`extension.innovate_items.spells.<label>...` -> the same path with the spell's goods id (a spell is named by both)."""
+    if not path.startswith(SPELLS):
+        return path
+    head, _dot, rest = path[len(SPELLS):].partition(".")
+    spells = ((doc.get("extension") or {}).get("innovate_items") or {}).get("spells") or {}
+    if head in spells:
+        return path
+    for goods, s in spells.items():
+        if isinstance(s, dict) and str(s.get("id", "")).lower() == head:
+            return SPELLS + goods + ("." + rest if rest else "")
+    return path
+
+
 def _select_one(doc: dict, name: str) -> list[tuple[str, object]]:
-    path = normalize(name)
+    path = _by_label(doc, normalize(name))
     leaves = flatten(doc)
     if is_pattern(path):
         hits = [(p, v) for p, v in leaves.items() if fnmatchcase(p.lower(), path)]
         if hits:
             return hits
     else:
-        if path.startswith(PARAMS):   # `params` names are typed in any letter case (effectEndurance), the rest is lower-case
+        if path.startswith(FULL_ROOTS):   # `params` / `extension` names are typed in any letter case (effectEndurance), the rest is lower-case
             path = _canonical(leaves).get(path, path)
         try:
             return [(path, _walk(path, doc))]
         except KeyError:
             pass
+        if path in leaves:            # a key with dots in it (`extension....basic.SpEffect.1642100.effectEndurance`)
+            return [(path, leaves[path])]
+        under = [(p, v) for p, v in leaves.items() if p.startswith(path + ".")]
+        if under:                     # the first parts of such a key (`....colors.Magic.6421.castSfxId`)
+            return under
     if _names_a_list(path):
         return []       # the lists come and go (a buff ends, an animation stops): no match now is not a wrong name
     known = (set(leaves) | {p.rsplit(".", 1)[0] for p in leaves if "." in p}) - {"character", "systems"}
@@ -118,11 +140,11 @@ def fmt(key: str, value, path: str = "") -> str:
     if isinstance(value, int):
         if key == "delta":
             return f"{value:+,}"
-        return str(value) if key in ("pid", "code") or path.startswith(PARAMS + ".") else f"{value:,}"   # ids: no commas
+        return str(value) if key in ("pid", "code") or path.startswith(tuple(r + "." for r in FULL_ROOTS)) else f"{value:,}"   # ids: no commas
     if isinstance(value, float):
-        return repr(value) if path.startswith(PARAMS + ".") else f"{value:.2f}"   # params: -1.0 and 0.01 as they are
+        return repr(value) if path.startswith(tuple(r + "." for r in FULL_ROOTS)) else f"{value:.2f}"   # params: -1.0 and 0.01 as they are
     if isinstance(value, list):
-        return ", ".join(fmt(key, v) for v in value) if all(not isinstance(v, (dict, list)) for v in value) \
+        return ", ".join(fmt(key, v, path) for v in value) if all(not isinstance(v, (dict, list)) for v in value) \
             else json.dumps(value)
     return str(value)
 

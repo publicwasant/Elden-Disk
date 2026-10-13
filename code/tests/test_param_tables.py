@@ -315,3 +315,47 @@ def test_every_row_of_the_real_tables_decodes_and_black_flame_is_where_the_surve
     assert PT.decode_row("Bullet", rows["Bullet"][10621001])["spEffectId0"] == 1621000
     burn = PT.decode_row("SpEffect", rows["SpEffect"][1621000])
     assert burn["effectEndurance"] == 2.0 and burn["changeHpRate"] == 0.1 and burn["changeHpPoint"] == 1
+
+
+# ---- 1.7.2: the row index (a long-lived Tables reads the whole descriptor table once) ----
+class _Counting(pf.Pages):
+    def __init__(self):
+        super().__init__()
+        self.sizes = []
+
+    def read(self, addr, size):
+        self.sizes.append(size)
+        return super().read(addr, size)
+
+
+def test_a_row_read_again_reads_one_descriptor_not_the_whole_table():
+    m = _Counting()
+    put_table(m, "Magic", MAGIC)
+    t = tables(m)
+    whole = len(MAGIC) * 24                                                          # the descriptor table
+    assert t.read_row("Magic", 6230)["mp"] == 21 and whole in m.sizes
+    m.sizes.clear()
+    assert t.read_row("Magic", 6210)["mp"] == 18 and t.read_row("Magic", 6230)["mp"] == 21
+    assert whole not in m.sizes and m.sizes.count(24) == 2                            # one descriptor per row, not the table
+
+
+def test_a_changed_table_is_indexed_again():
+    m = pf.Pages()
+    put_table(m, "Magic", MAGIC)
+    t = tables(m)
+    assert t.read_row("Magic", 6230)["mp"] == 21
+    put_table(m, "Magic", {**MAGIC, 7000: encode("Magic", mp=77)})               # another row count: the index is built again
+    assert t.read_row("Magic", 7000)["mp"] == 77 and t.read_row("Magic", 6230)["mp"] == 21
+
+
+def test_a_descriptor_that_no_longer_names_the_row_makes_the_index_again():
+    m = pf.Pages()
+    head = put_table(m, "Magic", MAGIC)
+    t = tables(m)
+    t.read_row("Magic", 6230)
+    i = t._index["Magic"][3][6230]
+    other = t._index["Magic"][3][6210]
+    a, b = m.read(head + 0x40 + i * 24, 24), m.read(head + 0x40 + other * 24, 24)
+    m.put(head + 0x40 + i * 24, b)                                                   # the two descriptors swapped places
+    m.put(head + 0x40 + other * 24, a)
+    assert t.read_row("Magic", 6230)["mp"] == 21 and t.read_row("Magic", 6210)["mp"] == 18

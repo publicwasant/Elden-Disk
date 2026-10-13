@@ -282,11 +282,12 @@ class WriteResult:
 class MemoryWriter:
     def __init__(self, mem, layout: Layout, policy: EditPolicy, gate: WriteGate, *,
                  hz: float = 4.0, clock: Callable[[], float] = time.monotonic,
-                 log: Callable[[str], None] | None = None, snapshot: Snapshot | None = None):
+                 log: Callable[[str], None] | None = None, snapshot: Snapshot | None = None, tables: Tables | None = None):
         if not WRITE_HZ_RANGE[0] <= hz <= WRITE_HZ_RANGE[1]:
             raise ValueError(f"write rate must be between {WRITE_HZ_RANGE[0]:g} and {WRITE_HZ_RANGE[1]:g} Hz")
         self.mem, self.layout, self.policy, self.gate = mem, layout, policy, gate
         self.snapshot = snapshot
+        self.tables = tables       # a Tables a long-lived caller keeps (its row index: the chain and the row are still checked each time)
         self._period, self._clock, self._log = 1.0 / hz, clock, log or (lambda _m: None)
         self._next = 0.0
         self._last_status: dict[str, str] = {}
@@ -391,7 +392,7 @@ class MemoryWriter:
             for edit in self.policy.catalog_edits:
                 self._skip(edit.name, "nosnap", "skipped, no snapshot to keep the game's own value in")
             return out
-        tables = Tables(self.mem, self.layout.profile, self.layout.base)
+        tables = self.tables or Tables(self.mem, self.layout.profile, self.layout.base)
         rows: dict[tuple[str, int], int | str] = {}
         for edit in self.policy.catalog_edits:
             if (edit.table, edit.row) not in rows:

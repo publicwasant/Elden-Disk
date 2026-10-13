@@ -262,7 +262,8 @@ def test_values_are_clamped_to_the_range_of_the_profile():
 
 def test_params_names_keep_their_own_rules():
     assert normalize("params.effects.1621000.effectEndurance") == "params.effects.1621000.effectendurance"
-    assert normalize("effects.1621000") == "character.effects.1621000"   # no short form: `params` is always typed in full
+    assert normalize("effects.1621000") == "effects.1621000"   # no short form: `params` is always typed in full (and a name that
+                                                               # names nothing is not read as a value of the character either)
     assert is_param_name("params") and is_param_name("Params.effects") and not is_param_name("character.buffs") and not is_param_name("effects")
     assert normalize("params.attrs.max") == "params.attrs.max"                    # the aliases of the character do not apply
 

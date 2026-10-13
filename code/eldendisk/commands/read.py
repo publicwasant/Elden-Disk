@@ -39,7 +39,7 @@ from ..reader.export import ExportWriter, JsonLogger
 from ..reader.sampler import Sampler
 from ..vault import VaultError, authorise, resolve_vault
 from ..vault import session as vault_session
-from .common import begin
+from .common import begin, log_config
 
 RESCAN_S = 2.0       # how often EAC and the session record are re-checked
 EXPORT_NAME = "disk-state.json"
@@ -84,6 +84,9 @@ def _why_unknown(exc: UnknownName, doc: dict, sample, names) -> str:
     wanted = [names] if isinstance(names, str) else names or []
     if doc.get("params") is None and any(is_param_name(n) for n in wanted):
         return f"params cannot be read: {sample.params_error or 'this exe version has no params block in offsets.json'}"
+    if not doc.get("extension") and any(n.strip().lower().startswith("extension") for n in wanted):
+        return ("the extension has no spells built in this vault yet (spells.resolved.json is written by every build: `run`, or "
+                "`extension innovate-items spells --add all`)")
     return str(exc)
 
 
@@ -133,8 +136,8 @@ def cmd_read(args) -> int:
         if checked is None:
             return EXIT_ERROR
 
-    book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
-    book.d("config", f"state ids: {args.state_ids} ({describe_resource(args.state_ids)})")
+    log_config("offsets", args.offsets)
+    log_config("state ids", args.state_ids)
     vault = Path()
     try:
         vault = resolve_vault(args.vault)
@@ -163,6 +166,7 @@ def cmd_read(args) -> int:
         if args.live_buffs or args.live_animations:
             return _monitors(args, target, mem, sampler, vault)
         export = _exporter(args, target, vault)
+        export.extension = _extension_block(args, target, mem, vault, sampler)
         if args.export and not args.live:
             return _export_once(args, target, mem, sampler, export)
         if not args.export and not args.live:
@@ -267,6 +271,32 @@ def _exporter(args, target: Target, vault: Path | None) -> ExportWriter:
     export.animations_supported = profile.anim is not None
     export.sandbox = bool(vault) and _in_session(vault, target)
     return export
+
+
+def _extension_block(args, target: Target, mem, vault: Path | None, sampler: Sampler | None = None, every: float = 1.0):
+    """The `extension` block of the document (1.7.2): the spells of the last build with what the game holds now; read again at most
+    every `every` seconds (a few rows of the game's tables and two small files). None when there is no build or no vault."""
+    if not vault:
+        return None
+    from .extension import ext_dir, spec_file
+    from .. import extension
+    from ..extension.external_scripts.backend import ExtensionLive, with_spell_buffs
+    from ..extension.innovate_items.spells.service import ExtensionError
+    try:
+        resolved = extension.open_spells(ext_dir(args, vault), spec_file(args)).resolved_path
+    except ExtensionError:
+        return None
+    ext = ExtensionLive(mem, target, vault, resolved)
+    if sampler is not None:            # the buffs of the extension's spells are named in character.buffs
+        sampler.state_ids = with_spell_buffs(sampler.state_ids, ext.spells())
+    last = {"at": -1e9, "block": None}
+
+    def block():
+        now = time.monotonic()
+        if now - last["at"] >= every:
+            last["at"], last["block"] = now, ext.block()
+        return last["block"]
+    return block
 
 
 def _first_sample(args, mem, sampler: Sampler):

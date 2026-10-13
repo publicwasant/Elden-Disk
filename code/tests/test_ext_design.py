@@ -115,12 +115,14 @@ def test_the_diff_names_the_places_the_user_edits():
     assert service.diff_specs(spec.design_view(a), spec.design_view(c)) == []                     # a colour is no reason to build
 
 
-def test_the_shipped_design_is_written_in_the_new_structure_and_holds_the_blue_purple_design():
+def test_the_shipped_design_is_written_in_the_new_structure_and_holds_its_hex_colours():
     doc = json.loads((service.CODE_DIR / "extension.json").read_text(encoding="utf-8"))
     raw = doc["innovate_items"]["spells"]["slots"]["reverse_cursed_technique"]
     assert {"__info__", "requires", "locations", "customs"} <= set(raw) and {"basic", "advanced"} == set(raw["customs"])
     got = spec.normalise(doc)["spells"][0]
-    assert got["flame_color"] == BLUE and got["flame_accent_color"] == [1.0, 1.0, 1.0] and got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100", "color": BLUE}
+    assert raw["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"] == {"main": "#90D5FF", "accent": "#FF909E"}
+    assert got["flame_color"] == [0x90 / 255, 0xD5 / 255, 1.0] and got["flame_accent_color"] == [1.0, 0x90 / 255, 0x9E / 255]
+    assert got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100", "color": [0x90 / 255, 0xD5 / 255, 1.0]}
     assert got["requires"] == {"intelligence": 0, "faith": 60, "arcane": 10} and got["fp_cost"] == 120 and got["shop"] == {"price": 34590, "stock": 1}
 
 
@@ -212,3 +214,43 @@ def test_golden_eyes_is_now_positive_curse_energy_eyes_and_an_old_record_builds_
     record = {"format": now["format"], "spells": [{("golden_eyes" if k == "positive_curse_energy_eyes" else k): v
                                                    for k, v in now["spells"][0].items()}]}
     assert spec.build_view(record) == spec.build_view(now)
+
+
+# ---- colours as hex (2026-10-13: "#90D5FF" instead of [0.565, 0.835, 1.0]; the numbers stay valid) ----
+@pytest.mark.parametrize("text, rgb", [("#90D5FF", [0x90 / 255, 0xD5 / 255, 1.0]), ("90d5ff", [0x90 / 255, 0xD5 / 255, 1.0]),
+                                       ("#9DF", [0x99 / 255, 0xDD / 255, 1.0]), (" #000000 ", [0.0, 0.0, 0.0]),
+                                       ([0.2, 0.65, 2], [0.2, 0.65, 2.0])])
+def test_a_colour_is_a_hex_string_or_three_numbers(text, rgb):
+    assert spec.colour_of(text) == rgb
+
+
+@pytest.mark.parametrize("bad", ["#90D5F", "#GGGGGG", "blue", "", [1, 1], [3, 0, 0], None, 0x90D5FF])
+def test_anything_else_is_not_a_colour(bad):
+    assert spec.colour_of(bad) is None
+
+
+def test_a_hex_colour_is_written_back_as_hex_and_a_brighter_one_as_numbers():
+    assert spec.colour_text([0x90 / 255, 0xD5 / 255, 1.0]) == "#90D5FF" and spec.colour_text([0.2, 0.65, 2.0]) == [0.2, 0.65, 2.0]
+    hexed = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": {"main": "#90D5FF", "accent": "#FF909E"},
+                                                                      "SpEffect.1642100": "#90d5ff"}))
+    canon = one(hexed)
+    back = spec.design_of(canon)["customs"]["advanced"]["colors"]
+    assert back == {"Magic.6421.castSfxId": {"main": "#90D5FF", "accent": "#FF909E"}, "SpEffect.1642100": "#90D5FF"}
+    assert one(spec.design_of(canon)) == canon
+
+
+def test_a_bad_hex_is_named_where_it_is_written_and_says_what_a_colour_is():
+    got = problems(mutate(lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": "#12345"})))
+    assert any("colors.SpEffect.1642100" in p and '"#RRGGBB"' in p for p in got), got
+    old = dict(LEGACY, flame_color="#zzzzzz")
+    assert any(".flame_color" in p and '"#RRGGBB"' in p for p in problems(old))
+
+
+def test_the_schema_takes_hex_colours_too():
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((service.PKG_DIR / "spells.schema.json").read_text(encoding="utf-8"))
+    v = jsonschema.Draft202012Validator(schema)
+    good = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": "#90D5FF"}))
+    bad = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": "#90D5F"}))
+    assert v.is_valid(file_of({"p": good}, maximum=7)) and not v.is_valid(file_of({"p": bad}, maximum=7))
+    assert v.is_valid(file_of({"p": dict(LEGACY, flame_color="#90D5FF")}, maximum=7))

@@ -49,3 +49,13 @@ def begin(args, title: str, rows: list[tuple[str, str]]) -> None:
         book.d("config", f"{k}: {v}")
     if not getattr(args, "verbose", False):
         ui.header(title, rows)
+
+
+def log_config(label: str, path) -> None:
+    """`config: <label>: <path> (<where>)` in the log, only when the file is not the copy built into the exe (one the user put next to
+    it, `--offsets FILE`, or the source tree): the built-in one is the same every time, so it is not said every time."""
+    from ..paths import describe_resource
+    where = describe_resource(path)
+    if where != "embedded":
+        book.d("config", f"{label}: {path} ({where})")
+

@@ -176,6 +176,22 @@
           }
         }
       }
+    },
+    "extension": {
+      "type": ["object", "null"],
+      "description": "1.7.2: the extension's spells of the last build (extension.innovate_items.spells.<goods id>) with what the game holds now; null without a build.",
+      "properties": {
+        "innovate_items": {
+          "type": "object",
+          "properties": {
+            "spells": {
+              "type": "object",
+              "propertyNames": { "pattern": "^[1-9][0-9]*$" },
+              "additionalProperties": { "type": "object", "required": ["id", "slot", "rows"] }
+            }
+          }
+        }
+      }
     }
   }
 }

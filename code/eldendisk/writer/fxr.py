@@ -190,7 +190,7 @@ class Painted:
     copies: int        # copies of the file found in the game (own colours)
     already: int       # copies that already carry the change
     places: int        # places written now
-    bases: tuple = ()  # where the game holds the copies that now carry the change
+    bases: tuple = ()  # where the game holds the copies that now carry the change (painted now, then the ones painted before)
 
 
 def paint_many(mem, gate, eids, target, budget: float = scan.BUDGET, painted: bool = True, everything: bool = False,
@@ -225,5 +225,49 @@ def paint_many(mem, gate, eids, target, budget: float = scan.BUDGET, painted: bo
                 if not mem.write(base + off, new) or mem.read(base + off, len(new)) != new:
                     raise FlameError(f"{eid}: could not write at {base + off:#x}")
                 places += 1
-        out[eid] = Painted(eid, len(bases), len(done), places, tuple(bases or done))
+        out[eid] = Painted(eid, len(bases), len(done), places, tuple((*bases, *done)))
     return out, found
+
+
+class Stale(FlameError):
+    """No copy is where the cache says any more (the game reloaded the file): look again."""
+
+
+def repaint(mem, gate, eid: str, bases, before: dict, after: dict) -> tuple[int, list]:
+    """Change the colours of the copies of `eid` at `bases` (from the memory cache) from `before` to `after`, without a look through
+    the memory: {"main": rgb | None, "accent": rgb | None}, None = the game's own colours. A copy whose every place does not hold the
+    bytes `before` says is left alone (the game moved or reloaded it). -> (places written, the bases that still hold the colours).
+    Stale when no base does."""
+    if not gate.allowed:
+        raise FlameError(f"writes are not allowed ({gate.reason})")
+    plan = _ALL[str(eid)]
+
+    def state(at_list, target):
+        return {at: (recolor(bytes.fromhex(h), target, bloom) if target is not None else bytes.fromhex(h),
+                     bytes.fromhex(h), bloom) for at, h, bloom in at_list}
+    now = {**state(plan["colours"], before.get("main")), **state(plan.get("accent", ()), before.get("accent"))}
+    main_after = {at: (recolor(old, after.get("main"), bloom) if after.get("main") is not None else old)
+                  for at, (_cur, old, bloom) in state(plan["colours"], None).items()}
+    acc_after = {at: (recolor(old, after.get("accent"), bloom) if after.get("accent") is not None else old)
+                 for at, (_cur, old, bloom) in state(plan.get("accent", ()), None).items()}
+    want = {**main_after, **acc_after}
+    lo, hi = min(now), max(now) + 16           # the part of the file the places lie in: read in ONE piece, checked, read back once
+    good, places = [], 0
+    for base in bases:
+        block = mem.read(base + lo, hi - lo)
+        if block is None or not all(block[at - lo:at - lo + 16] == cur for at, (cur, _old, _b) in now.items()):
+            continue
+        changed = [(at, new) for at, new in want.items() if new != now[at][0]]
+        for at, new in changed:
+            if not mem.write(base + at, new):
+                raise FlameError(f"{eid}: could not write at {base + at:#x}")
+        back = mem.read(base + lo, hi - lo) if changed else block
+        bad = [at for at, new in changed if back is None or back[at - lo:at - lo + 16] != new]
+        if bad:
+            raise FlameError(f"{eid}: the colour did not stick at {base + bad[0]:#x}")
+        places += len(changed)
+        good.append(base)
+    if not good:
+        raise Stale(f"{eid}: no copy holds the colours the cache knows (the game reloaded the file)")
+    return places, good
+

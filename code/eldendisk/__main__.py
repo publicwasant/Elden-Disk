@@ -4,7 +4,8 @@
   read   look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
   write  edit values in the running game (--set, --refill, --reset), give it the spells' text (--text) or the fire colour (--flame-color); only inside a session started by `run`
   vault  save vault tools (status, list, verify, restore, keep, prune)
-  extension  build things for the game outside the game: `extension --list`, `extension innovate-items spells --add all|--secure`
+  extension  build things for the game outside the game: `extension --list`, `extension innovate-items spells --add all|--secure`,
+             and run your own scripts next to it: `extension external-scripts [--run]`
 
 Every command prints concise lines; with -v it prints the log itself, live (the same lines that go to
 <vault>/eldendisk.log).
@@ -50,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
                    "else the copy embedded in it); with the vault ON `run` swaps the secured file when the design is unchanged, else builds")
     r.add_argument("--extension-dir", metavar="DIR", default=None, help="where the built and secured files go (default: %%LOCALAPPDATA%%\\EldenDisk\\extension)")
     r.add_argument("--offsets", default=offsets_default, help="offsets.json, checked before launching (default: %(default)s)")
+    r.add_argument("--scripts-dir", metavar="PATH", nargs="+", action="extend", default=[],
+                   help="more external scripts to start next to the game, besides the ones the exe carries (external_scripts/defaults when "
+                        "it was built): folders (their *.py) or .py files, anywhere; vault ON only")
     g = r.add_mutually_exclusive_group()
     g.add_argument("--vault-on", dest="protect", action="store_true",
                    help="back the save up before the game and restore it after (the default)")
@@ -167,7 +171,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.set_defaults(fn=cmd_vault)
 
     # ---- extension ----
-    e = sub.add_parser("extension", help="build things for the game outside the game (innovate-items spells)")
+    e = sub.add_parser("extension", help="build things for the game outside the game (innovate-items spells), run scripts next to it "
+                                         "(external-scripts)")
     e.add_argument("--list", action="store_true", help="show every extension, its design, what is secured and the last build")
     add_vault_option(e)
     e.add_argument("--extension-dir", metavar="DIR", default=None,
@@ -196,6 +201,21 @@ def build_parser() -> argparse.ArgumentParser:
     ci.add_argument("--spec", metavar="FILE", default=argparse.SUPPRESS, help="the design")
     add_vault_option(ci, leaf=True)
     add_verbose(ci, leaf=True)
+    xs = es.add_parser("external-scripts", help="your Python scripts that run next to the game (edstdlib): list them, or run them "
+                                                "(`run` does that by itself, vault ON)")
+    xs.add_argument("--run", action="store_true",
+                    help="run every script of the folder until the game closes (needs the session `run` started; `run` starts this by itself)")
+    xs.add_argument("--when-loaded", dest="when_loaded", action="store_true",
+                    help="with --run: start the scripts once a character is in the world (what `run` starts)")
+    xs.add_argument("--scripts-dir", metavar="PATH", nargs="+", action="extend", default=[],
+                    help="more scripts besides the ones the exe carries (external_scripts/defaults when it was built): folders (their *.py) "
+                         "or .py files, anywhere")
+    xs.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
+    xs.add_argument("--state-ids", dest="state_ids", default=state_ids_default, help="chr_state_ids.json (default: %(default)s)")
+    xs.add_argument("--extension-dir", metavar="DIR", default=argparse.SUPPRESS, help="where the extension's files are")
+    xs.add_argument("--spec", metavar="FILE", default=argparse.SUPPRESS, help="the design")
+    add_vault_option(xs, leaf=True)
+    add_verbose(xs, leaf=True)
     e.set_defaults(fn=cmd_extension)
 
     # ---- tooling ----
@@ -249,7 +269,9 @@ def main(argv=None) -> int:
     if args.cmd == "write" and args.wait < 0:
         ap.error("--wait must not be negative")
     if args.cmd == "extension" and not args.list and not args.ext_name:
-        ap.error("give --list or an extension name (innovate-items spells)")
+        ap.error("give --list or an extension name (innovate-items spells, external-scripts)")
+    if args.cmd == "extension" and args.ext_name == "external-scripts" and args.when_loaded and not args.run:
+        ap.error("--when-loaded goes with --run")
     if args.cmd == "extension" and args.ext_name == "innovate-items" and not getattr(args, "items_kind", None):
         ap.error("give the kind of item: innovate-items spells")
     if args.cmd == "extension" and args.ext_name == "innovate-items" and args.list:

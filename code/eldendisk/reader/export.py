@@ -167,6 +167,7 @@ class ExportWriter:
         self._latest: dict | None = None
         self._busy_warned = False
         self._last_verbose: tuple | None = None
+        self.extension: Callable[[], dict | None] | None = None    # the `extension` block (1.7.2), when the command gives one
 
     def _due(self, doc: dict, now: float) -> bool:
         if self._last_doc is None:
@@ -193,12 +194,15 @@ class ExportWriter:
         """The document for this sample (also remembers the character, so a lost world keeps the last one)."""
         if sample is not None and sample.character is not None:
             self._last_character = sample.character
-        return build_document(
+        doc = build_document(
             state=state, pid=self.pid, anti_cheat=self.anti_cheat, exe_sha256=self.sha, profile_label=self.label,
             buffs_supported=self.buffs_supported, animations_supported=self.animations_supported,
             sample=sample, last_character=self._last_character, note=note,
             mode="sandbox" if self.sandbox else "telemetry", read_only=True, sandbox=self.sandbox,
         )
+        if self.extension is not None:
+            doc["extension"] = self.extension()
+        return doc
 
     def emit(self, state: str, sample: Sample | None = None, note: str | None = None, now: float | None = None) -> None:
         doc = self.build(state, sample, note)

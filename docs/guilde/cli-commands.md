@@ -119,7 +119,7 @@ Read-only: it never opens a write handle. Works with or without `run` (a game st
 
 `--live` means "do not stop"; Ctrl+C ends it and the game keeps running. One-shot commands wait up to `--timeout` seconds for the game and for a loaded world, then exit `1`; the live commands wait for ever.
 
-**Names.** A name is a path into `disk-state.json`: `character.level`, `character.runes.total`, `character.attributes.vigor`, `character.vitals.hit_point.current`, `character.buffs`, `systems.status.pid`. Short forms work: `character.` can be left out, `attrs` = `attributes`, `hp` = `hit_point`, `fp` = `focus_point`, `max` = `maximum`. A group name shows the whole group; `*` selects several values. A wrong name is an error with suggestions. The game's own tables are under `params` (`params.effects.1621000.effectEndurance`; typed in full, any letter case; `read` with no flag shows them last, `character.*` never includes them). They are read about once a second, and `params` is `null` (and `read --query params...` says why) when the table cannot be found or checked. `--export` writes them as the third block `params`, `null` when no game is attached.
+**Names.** A name is a path into `disk-state.json`: `character.level`, `character.runes.total`, `character.attributes.vigor`, `character.vitals.hit_point.current`, `character.buffs`, `systems.status.pid`. Every block of the document can be read the same way, by its own name: `systems`, `character`, `params`, `extension` (1.7.2: the extension's spells, section 4c); `read --query "*"` is all of it. Short forms work for the character only: `character.` can be left out before a value of the character (`hp`, `vigor`, `attrs.faith`, `runes`, `buffs`), `attrs` = `attributes`, `hp` = `hit_point`, `fp` = `focus_point`, `max` = `maximum`; any other name is the path as typed, never read as a value of another block. A group name shows the whole group; `*` selects several values. A wrong name is an error with suggestions. The game's own tables are under `params` (`params.effects.1621000.effectEndurance`; typed in full, any letter case; `read` with no flag shows them last, `character.*` never includes them). They are read about once a second, and `params` is `null` (and `read --query params...` says why) when the table cannot be found or checked. `--export` writes them as the third block `params`, `null` when no game is attached.
 
 **Several names, and the tree.** `--query` takes any number of names (`--query runes hp attrs.vigor`); the result is one selection, in the order asked, each value once. Whatever is selected (a group, a wildcard, several names) is printed **in its place in the tree**, the same layout as `read` itself (`character` > `runes` > `total`), so `--live` redraws and highlights it the same way. Exactly one single value is the exception: it stays one `path  value` line (handy in scripts). `--json` prints a flat object `{"path": value, ...}` for the selection.
 
@@ -351,6 +351,51 @@ A file goes **design → built → secured**. `extension.json` is what you edit.
 **In `run`:** `run --vault-on` shows either `using …regulation.secured.bin (no build)` or `building because …` with the diff, then `built, gate passed`, then the host lines (PREFLIGHT, SNAPSHOTTING, READY); the vault swaps the file in and puts the game's own back. A failed gate: `GATE FAILED … nothing was swapped`, exit 1, the game is not started. A vault that still owes a restore: no build. Spec: [elden-disk-spec-v1.7.0](../specs/elden-disk-spec-v1.7.0.md).
 
 Exit codes: `0` ok, `1` error, `2` usage.
+
+---
+
+## 4c. `extension external-scripts` (your scripts next to the game, 1.7.2)
+
+```
+python -m eldendisk extension external-scripts [--scripts-dir PATH ...]                      (list them)
+python -m eldendisk extension external-scripts --run [--when-loaded] [--scripts-dir PATH ...]  (run them; `run` does it by itself)
+```
+
+An external script is a Python file with a class that has `setup()` (once), `loop()` (again and again) and `teardown()` (once, at the end). `run` (vault ON) starts every script next to the game, once a character is in the world, each in a thread of its own; they end when the game closes. A script imports **edstdlib**, which gives two things, `Interface` and `tools`:
+
+```python
+from edstdlib import *
+
+class EyesFollowHp(Interface):
+    every = 0.5                                              # seconds between two calls of loop()
+
+    def loop(self):
+        x = tools.read()                                     # the game now, as one object
+        hp = x.character.vitals.hit_point
+        rct = x.extension.innovate_items.spells.reverse_cursed_technique      # or spells[2230000]
+        rct.customs.advanced.colors["SpEffect.1642100"] = "#FF909E" if hp.current < 0.3 * hp.maximum else "#90D5FF"
+        tools.write(x)                                       # writes only what changed
+```
+
+| edstdlib | What it is |
+|:--|:--|
+| `Interface` | the base of a script: `setup()`, `loop()`, `teardown()`; `every` (the pace, seconds), `name`, `enabled = False` (not run) |
+| `tools.read()` | the document `read --export` writes (`systems`, `character`, `params`) and the `extension` block (section 2), built in memory (never read back from `disk-state.json`), as an object: `x.character.attributes.vigor`. A key that is not a name is read with `[ ]`: `spells[2230000]`, `params.effects[1621000]`, `colors["SpEffect.1642100"]` (or `colors.SpEffect[1642100]`); a spell also by its label (`spells.reverse_cursed_technique`) |
+| `tools.write(obj)` | writes what was changed in a snapshot (`x.character.attributes.vigor = 60`; `rct.customs.basic["SpEffect.1642100.effectEndurance"] = 30`): `obj` is the snapshot or a part of it (then only what changed under it). True when every change was written; what was refused is in the log. Everything `read` shows can be written except `systems` and what is computed (maxima, buffs, animations, the ids a build made) |
+| `tools.dead()` | ends this script now (status `stopped`) |
+| `tools.log(text[, level])` | a line in the log and on the `run` console, starting with the script's name; level `info` (default), `ok`, `warn`, `error`, `debug` |
+
+Note: `x.a.b = v` changes the snapshot `x`; write `tools.write(x)`. (`y = x.a.b = v` makes `y` the value `v`, not the snapshot.) The buffs of the extension's spells are named by the spell's label in `character.buffs` (category `EXTENSION`).
+
+**Writes** go through the same checks as `write` (the session `run` started, checked again every second while the scripts run; the game offline; the field writable; the value in range); a value equal to the game's is not written again.
+
+**The life of a script:** `loaded -> setup -> live -> stopped | dead` (`off`: `enabled = False`; `failed`: the file could not be loaded). Reading in `character` while no character is in the world (title screen, loading) skips that call of `loop()`; it is not an error. `tools.dead()` ends the script (`stopped`); any exception makes it `dead` (the traceback in the log); the others go on. A `loop()` that does not return for 10 s is reported as stuck; it cannot be taken away, but the scripts end with the game anyway. `teardown()` always runs.
+
+**Which scripts:** the default ones are the `*.py` of `code\eldendisk\extension\external_scripts\defaults\` (not `_*.py`): the build embeds them in the exe (`dev_pipeline.py`; with `--no-embed` they are copied to `external-scripts\` next to it), and a source run reads the folder. **In addition**, every `--scripts-dir PATH` adds scripts written after the exe was built: a folder (its `*.py`) or one `.py` file, anywhere, as many as wanted (`--scripts-dir D:\my-scripts D:\tests\probe.py`); the same file twice is run once. `run --scripts-dir PATH ...` passes them to the scripts `run` starts. Examples to copy into `defaults\`: `code\eldendisk\extension\external_scripts\examples\` (heartbeat, low_hp, buff_logger, keep_fp, eyes_follow_hp, dead_on_purpose, hang_on_purpose).
+
+**The `extension` block of `read` and `write` (section 2 and 3).** The document has `extension.innovate_items.spells.<goods id>` for every spell of the last build: `id` (its label), `slot`, `rows` (the ids it owns; `copies`: each template row and its copy) and its design (`kind`, `from`, `requires`, `locations`, `customs`) with the values the game holds now. They can be written like any other value: `read --query "extension.innovate_items.spells.2230000.*"`, `write --set extension.innovate_items.spells.2230000.customs.basic.SpEffect.1642100.effectEndurance=30`, `write --set extension.innovate_items.spells.2230000.customs.advanced.colors.Magic.6421.castSfxId.main="#90D5FF"`, `write --set extension.innovate_items.spells.2230000.customs.advanced.texts.goods_name="Reverse"`. What each is in the game: `requires.status.*` and `requires.cost.*` are fields of the spell's Magic row, `locations.kale.*` its shop line, `customs.basic.<Table>.<template id>.<field>` the same field of the spell's own row (the template's SpEffect, Bullet and AtkParam_Pc rows are its copies: `rows.copies`), `texts` the text in the game's tables, `colors` the fire (`main`), its accent and the ring (`accent`) and the eyes (`SpEffect.<id>`). A text and a colour change at once and without a look through the memory: `run` remembers where it put them (`<vault>\memory-cache.json`, for that game process only), so this works once `run` has set the text and painted the colours in this game; `null` puts the game's own colour back. `id`, `slot`, `rows`, `kind` and `from` are made by the build (change the design and build again).
+
+Without `--run` the command lists the scripts and how each ended the last time (`<vault>\extension\external-scripts.status.json`). `--run` by hand needs the game `run` started (exit `5` otherwise) and starts the scripts at once; `--when-loaded` waits for a character in the world first (what `run` starts). Exit codes: `0` ok, `1` no script can run, `5` no session.
 
 ---
 

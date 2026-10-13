@@ -396,7 +396,8 @@ class Spells:
         """spell id -> the ids the game really uses (recipes.spell_rows), from the rows the build added."""
         fp = getattr(res, "footprint", None)
         added = fp.added if fp is not None else {}
-        return {s["id"]: recipes.spell_rows(s["slot"], added) for s in spells}
+        copies = getattr(fp, "copies", {}) if fp is not None else {}
+        return {s["id"]: recipes.spell_rows(s["slot"], added, copies.get(s["id"])) for s in spells}
 
     def _write_resolved(self, spells: list, rows: dict, res, base: bytes) -> None:
         """`spells.resolved.json`: the design as it became in the game. The key of a spell in extension.json (`<id-1>`, or any name the

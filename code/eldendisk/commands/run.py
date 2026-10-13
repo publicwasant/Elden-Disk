@@ -1,6 +1,7 @@
 """`run`: the host. Vault backup -> offline launch -> wait for the game -> restore. It never reads game memory."""
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,8 +16,9 @@ from ..host import launcher
 from ..host.host import Hooks, Session, State
 from ..paths import HERE, describe_resource, get_resource_path
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
-from .common import begin, live_dir, session_log
+from .common import begin, live_dir, log_config, session_log
 from .extension import ext_dir, prepare_regulation, say_error, spec_file
+from .scripts import has_scripts
 from ..extension.innovate_items.spells.service import ExtensionError, GateFailed
 
 
@@ -68,9 +70,15 @@ def text_command(args, vault_path: Path, flag: str = "--text") -> tuple[list[str
     """The command that gives the running game the design's text, and the folder to run it in: `eldendisk write --text --when-loaded`
     (`--flame-color` for the colour of the fire). `run` itself never touches the game's memory; this is a separate process, as
     if you typed it in another terminal."""
+    return child_command(args, vault_path, ["write", flag, "--when-loaded"])
+
+
+def child_command(args, vault_path: Path, words: list[str]) -> tuple[list[str], str | None]:
+    """`eldendisk <words>` as a process of its own, with the vault, offsets.json and the design `run` was given (only those the user
+    chose), and the folder to run it in."""
     frozen = getattr(sys, "frozen", False)
     cmd = [sys.executable] if frozen else [sys.executable, "-m", "eldendisk"]
-    cmd += ["write", flag, "--when-loaded"]
+    cmd += list(words)
     if getattr(args, "vault", None):                 # the vault `run` was told is remembered, so the step finds the same one without being told
         cmd += ["--vault", str(vault_path)]
     if str(args.offsets) != str(get_resource_path("offsets.json", default_dir=HERE)):      # only an offsets.json the user chose
@@ -81,17 +89,35 @@ def text_command(args, vault_path: Path, flag: str = "--text") -> tuple[list[str
     return cmd, None if frozen else str(Path(eldendisk.__file__).resolve().parent.parent)
 
 
+def _child_env() -> dict:
+    """The environment of a step `run` starts: its own command line is not logged again (`design: starting: ...` says it)."""
+    from ..logsetup import STARTED_BY
+    return {**os.environ, STARTED_BY: "run"}
+
+
 def start_text(args, vault_path: Path, spawn=subprocess.Popen, flag: str = "--text"):
     """Start the text step (or, with flag --flame-color, the fire colour step) in the background. Its lines appear in this console
     and in the log; if it fails the game goes on."""
     cmd, cwd = text_command(args, vault_path, flag)
     book.d(EXT_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}   # -v shows its log lines
-    return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), **quiet)
+    return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), env=_child_env(), **quiet)
 
 
 def start_flame(args, vault_path: Path):
     return start_text(args, vault_path, flag="--flame-color")
+
+
+def start_scripts(args, vault_path: Path, spawn=subprocess.Popen):
+    """Start the host of the external scripts (`extension external-scripts --run --when-loaded`) in the background: its lines appear in
+    this console and in the log; a script that fails, or the host itself, never stops the game or the restore."""
+    cmd, cwd = child_command(args, vault_path, ["extension", "external-scripts", "--run", "--when-loaded"])
+    from .scripts import extra_paths
+    if extra_paths(args):
+        cmd += ["--scripts-dir", *[str(p) for p in extra_paths(args)]]
+    book.d(EXT_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}
+    return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), env=_child_env(), **quiet)
 
 
 def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
@@ -135,7 +161,7 @@ def cmd_run(args) -> int:
     sha = sha256_file(game_dir / GAME_EXE)
     vault, live = SaveVault(vault_path), live_dir(args.save_dir)
 
-    book.d("config", f"offsets: {args.offsets} ({describe_resource(args.offsets)})")
+    log_config("offsets", args.offsets)
     protect = getattr(args, "protect", True)
     try:
         world, mode = _regulation(args, vault, game_dir, protect)
@@ -171,6 +197,10 @@ def cmd_run(args) -> int:
             steps.append(start_text)
         if design_has_flame(args, vault_path):
             steps.append(start_flame)
+    if protect and has_scripts(args):          # the external scripts: whatever regulation.bin the session swaps (they write through the session)
+        steps.append(start_scripts)
+    elif protect:
+        book.d(EXT_TAG, "no external scripts (none in external_scripts/defaults when the exe was built, no --scripts-dir): none started")
 
     def on_running(pid):
         for start in steps:

@@ -198,19 +198,49 @@ def _flame_color(c, it, p, o):
         return
     v = it["flame_color"]
     if not _colour(v):
-        c.bad(p + ".flame_color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
+        c.bad(p + ".flame_color", "must be " + COLOUR_HELP)
         return
-    o["flame_color"] = [float(x) for x in v]
+    o["flame_color"] = colour_of(v)
     if "flame_accent_color" in it:
         a = it["flame_accent_color"]
         if not _colour(a):
-            c.bad(p + ".flame_accent_color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
+            c.bad(p + ".flame_accent_color", "must be " + COLOUR_HELP)
         else:
-            o["flame_accent_color"] = [float(x) for x in a]
+            o["flame_accent_color"] = colour_of(a)
+
+
+_HEX_RE = re.compile(r"#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})")
+COLOUR_HELP = ('a hex colour "#RRGGBB" (or "#RGB"), or three numbers [red, green, blue], each from 0 to %g (1 = full colour, above 1 '
+               "shines brighter)" % FLAME_COLOR_MAX)
+
+
+def colour_of(v) -> list | None:
+    """A colour of the design -> [red, green, blue] (floats, 1 = full colour), or None when it is not one. A hex string "#90D5FF" (the
+    `#` is optional, "#9DF" is "#99DDFF") gives each channel as n/255; three numbers [r, g, b] (0 to FLAME_COLOR_MAX) stay as they are
+    (above 1 shines brighter, which hex cannot say)."""
+    if isinstance(v, str):
+        m = _HEX_RE.fullmatch(v.strip())
+        if not m:
+            return None
+        h = m.group(1)
+        if len(h) == 3:
+            h = "".join(ch * 2 for ch in h)
+        return [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    if isinstance(v, list) and len(v) == 3 and all(_num(x) and 0 <= x <= FLAME_COLOR_MAX for x in v):
+        return [float(x) for x in v]
+    return None
+
+
+def colour_text(rgb) -> str | list:
+    """[r, g, b] -> "#RRGGBB" when every channel is a whole 255th within 0..1 (what a hex colour of the design gives), else the
+    numbers themselves (a channel above 1)."""
+    if all(0 <= x <= 1 and abs(x * 255 - round(x * 255)) < 1e-6 for x in rgb):
+        return "#" + "".join("%02X" % round(x * 255) for x in rgb)
+    return [float(x) for x in rgb]
 
 
 def _colour(v) -> bool:
-    return isinstance(v, list) and len(v) == 3 and all(_num(x) and 0 <= x <= FLAME_COLOR_MAX for x in v)
+    return colour_of(v) is not None
 
 
 def _positive_curse_energy_eyes(c, it, p, o, template):
@@ -247,9 +277,9 @@ def _positive_curse_energy_eyes(c, it, p, o, template):
             e["on"] = "SpEffect.%d" % int(m.group(1))
     if "color" in v:
         if _colour(v["color"]):
-            e["color"] = [float(x) for x in v["color"]]
+            e["color"] = colour_of(v["color"])
         else:
-            c.bad(q + ".color", "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX)
+            c.bad(q + ".color", "must be " + COLOUR_HELP)
     o["positive_curse_energy_eyes"] = e
 
 
@@ -491,7 +521,7 @@ def _advanced(c, adv, path, src, out):
     if not isinstance(colors, dict):
         c.bad(path + ".colors", 'must be an object: "Magic.<from>.castSfxId": [r, g, b], "SpEffect.<id>": [r, g, b]')
         return
-    bad_colour = "must be three numbers [red, green, blue], each from 0 to %g (1 = full colour)" % FLAME_COLOR_MAX
+    bad_colour = "must be " + COLOUR_HELP
     for key, val in colors.items():
         if key == "__info__":
             continue
@@ -511,10 +541,10 @@ def _advanced(c, adv, path, src, out):
             if not _colour(main):
                 c.bad(kp + (".main" if isinstance(val, dict) else ""), bad_colour)
                 continue
-            out["flame_color"] = [float(x) for x in main]
+            out["flame_color"] = colour_of(main)
             if accent is not None:
                 if _colour(accent):
-                    out["flame_accent_color"] = [float(x) for x in accent]
+                    out["flame_accent_color"] = colour_of(accent)
                 else:
                     c.bad(kp + ".accent", bad_colour)
             fx = out.get("set", {}).get("Magic.%d.castSfxId" % src) if src is not None else None
@@ -525,9 +555,9 @@ def _advanced(c, adv, path, src, out):
             eyes = {"on": "SpEffect.%d" % int(e.group(1))}
             if val is not None:
                 if not _colour(val):
-                    c.bad(kp, "must be null (the game's own colour) or three numbers [red, green, blue], each from 0 to %g" % FLAME_COLOR_MAX)
+                    c.bad(kp, "must be null (the game's own colour) or " + COLOUR_HELP)
                     continue
-                eyes["color"] = [float(x) for x in val]
+                eyes["color"] = colour_of(val)
             out["positive_curse_energy_eyes"] = eyes
         else:
             c.bad(kp, 'a key is "Magic.<from>.castSfxId" (the fire and the ring of the cast) or "SpEffect.<id>" (the eyes while '
@@ -560,12 +590,12 @@ def design_of(spell: dict) -> dict:
                         "goods_caption": t.get("goods_captions", "")}
     colors = {}
     if "flame_color" in s:
-        main = list(s["flame_color"])
-        colors["Magic.%d.castSfxId" % s["from"]] = ({"main": main, "accent": list(s["flame_accent_color"])}
+        main = colour_text(s["flame_color"])
+        colors["Magic.%d.castSfxId" % s["from"]] = ({"main": main, "accent": colour_text(s["flame_accent_color"])}
                                                     if "flame_accent_color" in s else main)
     if "positive_curse_energy_eyes" in s:
         g = s["positive_curse_energy_eyes"]
-        colors[g["on"]] = list(g["color"]) if "color" in g else None
+        colors[g["on"]] = colour_text(g["color"]) if "color" in g else None
     if colors:
         adv["colors"] = colors
     if adv:

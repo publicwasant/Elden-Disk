@@ -446,7 +446,7 @@ def card(title: str, rows: list[tuple[str, str]], stream=None) -> None:
 
 # ---- what the other processes of a `run` did (read back from the log file) ----
 _LOG_LINE = re.compile(r"^\d\d-\d\d (\d\d):(\d\d):(\d\d)\.\d{3} +\d+ ([VDIWE]) (\S+) *: (.*)$")
-CHILD_TAGS = ("write",)
+CHILD_TAGS = ("write", "scripts")
 CHILD_DONE = "it lasts until the game closes"     # the end of the line a `write` step ends with when it has done its work
 
 
@@ -458,7 +458,7 @@ def child_line(line: str, stream=None, show_time: bool = True) -> None:
         return
     h, mi, s, level, tag, msg = m.groups()
     when = datetime.now().replace(hour=int(h), minute=int(mi), second=int(s), microsecond=0)
-    ok = level == "I" and CHILD_DONE in msg
+    ok = level == "I" and (CHILD_DONE in msg or (tag == "scripts" and ": live (every " in msg))     # a script that started
     pretty_sink(show_time=show_time, stream=stream)(Event(when, 0, level, tag, msg, ok))
 
 

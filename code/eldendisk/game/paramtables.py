@@ -91,9 +91,10 @@ class Tables:
             raise ParamError("this exe version has no params.catalog in offsets.json (run `read --probe-params`)")
         self.store = ParamStore(mem, profile, module_base)
         self.mem, self.catalog = mem, profile.params.catalog
+        self._index: dict = {}         # table -> (head, count, data start, {row id: descriptor number}): see row_address
 
-    def locate(self, table: str) -> tuple[int, int, int, bytes]:
-        """(head, row count, data start, the descriptor table) of `table`, after the file and row-size checks."""
+    def _head(self, table: str) -> tuple[int, int, int]:
+        """(head, row count, data start) of `table`: the chain followed again and the file's header checked, every time."""
         chain = self.catalog.get(table)
         if chain is None:
             raise ParamError(f"{table}: no chain in params.catalog")
@@ -103,7 +104,11 @@ class Tables:
         info, reason = self.store._check_head(head)
         if info is None:
             raise ParamError(f"{table} not found ({reason})")
-        count, data_start = info
+        return head, info[0], info[1]
+
+    def locate(self, table: str) -> tuple[int, int, int, bytes]:
+        """(head, row count, data start, the descriptor table) of `table`, after the file and row-size checks."""
+        head, count, data_start = self._head(table)
         lay = self.store.spec.layout
         raw = self.mem.read(head + lay.descriptors, count * lay.descriptor_size)
         if raw is None:
@@ -135,17 +140,28 @@ class Tables:
         return struct.unpack("<I", raw)[0] if raw else 0
 
     def row_address(self, table: str, row_id: int) -> tuple[int, bytes]:
-        """(address of the row, its bytes)."""
-        head, count, data_start, raw = self.locate(table)
+        """(address of the row, its bytes). The chain and the header are checked every time; the whole descriptor table (hundreds of
+        KB for SpEffect) is read only the first time and when the table changed (another head, another row count): after that, ONE
+        descriptor, the row's own, is read and must still name the row (1.7.2: the scripts read a few rows several times a second)."""
         lay, size = self.store.spec.layout, LAYOUTS[table]["size"]
+        head, count, data_start = self._head(table)
+        known = self._index.get(table)
         off = None
-        for i in range(count):
-            base = i * lay.descriptor_size
-            if struct.unpack_from("<I", raw, base + lay.descriptor_id)[0] == row_id:
-                off = struct.unpack_from("<Q", raw, base + lay.descriptor_data_offset)[0]
-                break
+        if known is not None and known[:3] == (head, count, data_start) and row_id in known[3]:
+            i = known[3][row_id]
+            one = self.mem.read(head + lay.descriptors + i * lay.descriptor_size, lay.descriptor_size)
+            if one is not None and struct.unpack_from("<I", one, lay.descriptor_id)[0] == row_id:
+                off = struct.unpack_from("<Q", one, lay.descriptor_data_offset)[0]
         if off is None:
-            raise ParamError(f"{table}: row {row_id} is not in the file")
+            head, count, data_start, raw = self.locate(table)
+            ids = {}
+            for i in range(count):
+                rid = struct.unpack_from("<I", raw, i * lay.descriptor_size + lay.descriptor_id)[0]
+                ids.setdefault(rid, i)
+            self._index[table] = (head, count, data_start, ids)
+            if row_id not in ids:
+                raise ParamError(f"{table}: row {row_id} is not in the file")
+            off = struct.unpack_from("<Q", raw, ids[row_id] * lay.descriptor_size + lay.descriptor_data_offset)[0]
         self._check_offset(table, row_id, off, count, data_start, head)
         data = self.mem.read(head + off, size)
         if data is None:

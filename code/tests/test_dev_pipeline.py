@@ -310,3 +310,38 @@ def test_only_the_exact_folder_may_be_removed(tmp_path, monkeypatch):
     for other in (tmp_path / "EldenDisk", dev_pipeline.app_data_dir() / "vault", dev_pipeline.app_data_dir().parent):
         assert dev_pipeline.app_data_problems(other)
 
+
+
+# ---------- the external scripts of external_scripts/defaults travel with the exe (1.7.2) ----------
+def _defaults(project, *names):
+    defaults = project / "code" / "eldendisk" / "extension" / "external_scripts" / "defaults"
+    defaults.mkdir(parents=True, exist_ok=True)
+    for n in names:
+        (defaults / n).write_text("# a script\n")
+    (defaults / "README.md").write_text("not a script")
+    return defaults
+
+
+def test_the_default_scripts_are_embedded_in_the_exe(project, monkeypatch):
+    _defaults(project, "heartbeat.py", "_helper.py")
+    ok, calls = build(monkeypatch)
+    adds = [c for c in calls[0] if c.startswith("--add-data=")]
+    assert ok and len(adds) == 4 and any(a.endswith(("heartbeat.py;external-scripts", "heartbeat.py:external-scripts")) for a in adds)
+    assert not any("_helper" in a or "README" in a for a in adds)
+
+
+def test_nuitka_embeds_the_scripts_in_the_same_folder(project, monkeypatch):
+    _defaults(project, "heartbeat.py")
+    ok, calls = build(monkeypatch, engine="nuitka")
+    assert any(c.endswith("=external-scripts/heartbeat.py") for c in calls[0] if c.startswith("--include-data-files="))
+
+
+def test_without_embedding_the_scripts_go_next_to_the_exe(project, monkeypatch):
+    _defaults(project, "heartbeat.py")
+    ok, _calls = build(monkeypatch, embed=False)
+    assert ok and (project / "build" / "dist" / "external-scripts" / "heartbeat.py").is_file()
+
+
+def test_no_scripts_no_folder_embedded(project, monkeypatch):
+    ok, calls = build(monkeypatch)
+    assert ok and not any("external-scripts" in c for c in calls[0])

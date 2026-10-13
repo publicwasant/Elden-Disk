@@ -17,6 +17,7 @@ from ..extension.innovate_items.spells import service, spec as specmod
 from ..logbook import EXT_TAG, book
 from ..vault import VaultError, resolve_vault
 from ..paths import describe_resource, get_resource_path
+from .common import log_config
 
 MAX_DIFF_LINES = 12
 
@@ -68,7 +69,8 @@ def _show_diff(diff: list) -> None:
 
 
 def _colour_text(rgb, color: bool) -> str:
-    return f"{ui.swatch(rgb, color)} " + " ".join(f"{c:g}" for c in rgb)
+    shown = specmod.colour_text(rgb)
+    return f"{ui.swatch(rgb, color)} " + (shown if isinstance(shown, str) else " ".join(f"{c:g}" for c in rgb))
 
 
 def _facts(s: dict, rows: dict | None = None, color: bool = False) -> list[tuple[str, str]]:
@@ -142,7 +144,7 @@ def prepare_regulation(args, game_dir_file: Path | None, which=None, dry_run: bo
     `run`, which builds the selection the last `--add` made (every spell when there was none). `allow_secured` (`run`): swap the
     secured file, or the latest build, without building when nothing changed. `summary`: the hashes and what to do next in the block."""
     ci = extension.open_spells(ext_dir(args, vault_dir), spec_file(args))
-    book.d("config", f"design: {ci.spec_path} ({describe_resource(ci.spec_path)})")
+    log_config("design", ci.spec_path)
     with ui.block("design \u00b7 innovate-items spells", verbose=getattr(args, "verbose", False)) as blk:
         try:
             return _prepare(args, ci, blk, game_dir_file, which, dry_run, allow_secured, summary)
@@ -250,6 +252,10 @@ def cmd_list(args) -> int:
                                        f"{', '.join(sel)} (chosen with --add; `run` builds only these; `--add all` builds every spell)")))
     rows.append(("last build", str(ci.output_path) if ci.output_path.is_file()
                  else "none yet (built by `run` or `extension innovate-items spells --add all`)"))
+    from .scripts import default_dir, script_paths
+    n = len(script_paths(args))
+    rows.append(("external scripts", f"{n} by default ({default_dir()})" + (": `run` starts them (vault ON)" if n else "")
+                 + "; `extension external-scripts` lists them, `--scripts-dir PATH` adds more"))
     ui.fields(rows)
     return 0
 
@@ -307,8 +313,11 @@ def cmd_extension(args) -> int:
             return cmd_list(args)
         if args.ext_name == "innovate-items" and getattr(args, "items_kind", None) == "spells":
             return cmd_spells(args)
+        if args.ext_name == "external-scripts":
+            from .scripts import cmd_external_scripts
+            return cmd_external_scripts(args)
     except service.ExtensionError as exc:      # includes a vault that cannot be found (ext_dir)
         say_error(exc)
         return 1
-    ui.result("error", "give --list, or an extension and a kind: innovate-items spells")
+    ui.result("error", "give --list, or an extension: innovate-items spells, external-scripts")
     return 2

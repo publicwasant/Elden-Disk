@@ -33,6 +33,7 @@ from ..writer.paramedit import SNAPSHOT_NAME, Snapshot
 from ..writer import fxr as wfxr
 from ..writer import scan as wscan
 from ..writer import text as wtext
+from ..writer.cache import CACHE_NAME, MemoryCache
 from ..writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
 from .extension import ext_dir, spec_file
 from .. import extension
@@ -122,7 +123,24 @@ def _find_tables(mem, target: Target, passes):
     return [], why
 
 
-def _put_text(mem, gate, target: Target, texts: dict, passes) -> int:
+def _cache_of(args, target: Target) -> MemoryCache | None:
+    """The memory cache of this game process (writer/cache.py), or None when the vault cannot be found."""
+    try:
+        return MemoryCache(resolve_vault(args.vault) / CACHE_NAME, target.pid, target.started).load()
+    except VaultError:
+        return None
+
+
+def _keep(cache: MemoryCache | None, what: str) -> None:
+    if cache is None:
+        return
+    try:
+        cache.save()
+    except OSError as exc:
+        book.w("write", f"could not save {CACHE_NAME} ({exc}); a later write of the {what} in this game looks through the memory again")
+
+
+def _put_text(mem, gate, target: Target, texts: dict, passes, cache: MemoryCache | None = None) -> int:
     after: dict[int, bytes] = {}
     names: dict[int, str] = {}
     for attempt in (1, 2):
@@ -156,6 +174,9 @@ def _put_text(mem, gate, target: Target, texts: dict, passes) -> int:
             book.e("write", "the game replaced its text tables again after they were set; run `eldendisk write --text` again")
             return 1
         book.w("write", "the game replaced its text tables after they were set (it was still loading); setting them once more")
+    if cache is not None:                       # where the pointers are and what they hold now: a later write needs no look
+        cache.set_text({name: at for at, name in names.items()}, {gid: dict(t) for gid, t in texts.items()})
+        _keep(cache, "text")
     shown = sum(1 for t in texts.values() if any(t.values()))
     book.ok("write", f"goods text: {shown} spell{'s' if shown != 1 else ''} named in the game (name, short line, description); "
                      "it lasts until the game closes")
@@ -261,13 +282,20 @@ def cmd_write_text(args) -> int:
             if not _wait_world(mem, target, "goods text"):
                 book.i("write", "goods text: the game closed before a character was in the world; nothing was written")
                 return 0
-            return _put_text(mem, gate, target, texts, LOOKS)
-        return _put_text(mem, gate, target, texts, LOOKS if wait > 0 else ONCE)
+            return _put_text(mem, gate, target, texts, LOOKS, _cache_of(args, target))
+        return _put_text(mem, gate, target, texts, LOOKS if wait > 0 else ONCE, _cache_of(args, target))
     finally:
         mem.close()
 
 
-def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=False) -> int:
+def _shown(rgb) -> str:
+    """A colour in a log line as the design writes it: "#90D5FF", or the numbers when a channel is above 1."""
+    from ..extension.innovate_items.spells.spec import colour_text
+    t = colour_text(rgb)
+    return t if isinstance(t, str) else str(tuple(round(c, 3) for c in rgb))
+
+
+def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=False, cache: MemoryCache | None = None) -> int:
     """Recolour the fire (`colour`, the two effects) and the positive curse energy eyes (`eyes`, when the design gives them a colour): one look
     through the game's memory for the effect files not done yet (all in the same look), as the schedule `passes` says (the rest in
     seconds before each look). A look is only made while something is missing. Either colour may be None. `accent`: the second colour
@@ -315,18 +343,27 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=Fal
         book.e("write", f"{what}: the game does not hold the effect file(s) {', '.join(todo)} after {len(passes)} look(s)"
                + ": the game is still starting (use --wait), or it is not the version this was made for")
         return 1
+    if cache is not None:                       # every copy and the colours it carries now: a later change of colour needs no look
+        for eid, p in done.items():
+            if eid in wfxr.effect_ids():
+                cache.set_effect(eid, p.bases, colour, accent)
+            elif eid in wfxr.eyes_ids():
+                cache.set_effect(eid, p.bases, eyes, None)
+            else:
+                cache.set_effect(eid, p.bases, ring, None)
+        _keep(cache, "colours")
     fire = [done[e] for e in wfxr.effect_ids() if e in done]
     if fire:
-        second = f" and {tuple(round(c, 3) for c in accent)}" if accent is not None else ""
-        book.ok("write", f"flame colour: the fire of Flame, Grant Me Strength is now {tuple(round(c, 3) for c in colour)}{second} in {len(fire)} "
+        second = f" and {_shown(accent)}" if accent is not None else ""
+        book.ok("write", f"flame colour: the fire of Flame, Grant Me Strength is now {_shown(colour)}{second} in {len(fire)} "
                          f"effects ({sum(g.places for g in fire)} places written); it lasts until the game closes")
     rings = [done[e] for e in wfxr.ring_ids() if e in done]
     if rings:
-        book.ok("write", f"ring colour: the ring of runes at the hand is now {tuple(round(c, 3) for c in ring)} ({sum(g.places for g in rings)} "
+        book.ok("write", f"ring colour: the ring of runes at the hand is now {_shown(ring)} ({sum(g.places for g in rings)} "
                          "places written); it lasts until the game closes")
     glow = [done[e] for e in wfxr.eyes_ids() if e in done]
     if glow:
-        book.ok("write", f"eyes colour: the glowing eyes are now {tuple(round(c, 3) for c in eyes)} ({sum(g.places for g in glow)} places "
+        book.ok("write", f"eyes colour: the glowing eyes are now {_shown(eyes)} ({sum(g.places for g in glow)} places "
                          "written); it lasts until the game closes")
     return 0
 
@@ -367,10 +404,52 @@ def cmd_write_flame(args) -> int:
             if not _wait_world(mem, target, "flame colour"):
                 book.i("write", "flame colour: the game closed before a character was in the world; nothing was written")
                 return 0
-            return _put_flame(mem, gate, colour, LOOKS, eyes, accent, fresh=True)
-        return _put_flame(mem, gate, colour, LOOKS if wait > 0 else ONCE, eyes, accent)
+            return _put_flame(mem, gate, colour, LOOKS, eyes, accent, fresh=True, cache=_cache_of(args, target))
+        return _put_flame(mem, gate, colour, LOOKS if wait > 0 else ONCE, eyes, accent, cache=_cache_of(args, target))
     finally:
         mem.close()
+
+
+def ext_value(raw: str):
+    """The value of `--set extension....=VALUE` as typed: a number, `null` (the game's own colour), or a text / a hex colour (quotes
+    around it are taken off)."""
+    t = raw.strip()
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in "'\"":
+        return t[1:-1]
+    if t.lower() in ("null", "none"):
+        return None
+    for kind in (int, float):
+        try:
+            return kind(t.replace("_", "")) if kind is int else kind(t)
+        except ValueError:
+            pass
+    return t
+
+
+def _write_extension(args, target: Target, mem, gate, snapshot, sets: list) -> tuple[int, int]:
+    """`--set extension.innovate_items.spells.<goods id>.<path>=VALUE` (1.7.2): the values of the extension's spells in the running
+    game (extension/external_scripts/backend.py). -> (written, refused)."""
+    from ..extension.external_scripts.backend import ExtensionLive, Refused, extension_path
+    vault_root = resolve_vault(args.vault)
+    try:
+        resolved = extension.open_spells(ext_dir(args, vault_root), spec_file(args)).resolved_path
+    except ExtensionError as exc:
+        book.e("write", str(exc))
+        return 0, len(sets)
+    live = ExtensionLive(mem, target, vault_root, resolved, gate=gate, snapshot=snapshot,
+                         say=lambda level, msg: {"W": book.w, "E": book.e, "D": book.d}.get(level, book.i)("write", msg))
+    ok = bad = 0
+    for item in sets:
+        name, _sep, raw = item.partition("=")
+        goods, parts = extension_path(name)
+        try:
+            for what, value in live.apply(goods, parts, ext_value(raw)).items():
+                book.ok("write", f"{name.strip()} = {value}  ({what})")
+            ok += 1
+        except Refused as exc:
+            book.e("write", f"not applied: {exc}")
+            bad += 1
+    return ok, bad
 
 
 def cmd_write(args) -> int:
@@ -379,12 +458,18 @@ def cmd_write(args) -> int:
     if getattr(args, "flame_color", False):
         return cmd_write_flame(args)
     require_windows_x64()
+    ext_sets = [s for s in (args.set or []) if s.strip().lower().startswith("extension.")]
+    for item in ext_sets:
+        name, sep, _raw = item.partition("=")
+        if not sep or len(name.strip().split(".")) < 5 or name.strip().split(".")[:3] != ["extension", "innovate_items", "spells"]:
+            book.e("write", f"--set {item!r}: expected extension.innovate_items.spells.<goods id>.<path>=VALUE")
+            return 1
     try:
-        policy = parse_policy(args.set, args.refill, getattr(args, "reset", None))
+        policy = parse_policy([s for s in (args.set or []) if s not in ext_sets], args.refill, getattr(args, "reset", None))
     except ValueError as exc:   # unknown or unsettable name, bad value
         book.e("write", str(exc))
         return 1
-    if policy.empty:
+    if policy.empty and not ext_sets:
         book.i("write", "nothing to do")
         return 0
 
@@ -428,6 +513,7 @@ def cmd_write(args) -> int:
         writer = MemoryWriter(mem, Layout(mem, target.profile, target.base), policy, gate,
                               log=lambda m: book.d("write", m), snapshot=snapshot)
         results = writer.apply_once()
+        ext_ok, ext_bad = _write_extension(args, target, mem, gate, snapshot, ext_sets) if ext_sets else (0, 0)
     finally:
         mem.close()
         try:
@@ -439,12 +525,14 @@ def cmd_write(args) -> int:
     for r in results:
         if r.wrote:
             book.ok("write", f"{r.name} = {r.value}" + (f"  ({r.note})" if r.note else ""))
+    if ext_bad:
+        return 1
     if writer.skipped or failed:
         for why in writer.skipped:
             book.e("write", f"not applied: {why}")
         if failed:
             book.e("write", f"failed or did not stick: {', '.join(failed)}")
         return 1
-    if not results:
+    if not results and not ext_ok:
         book.i("write", "values already match")
     return 0
