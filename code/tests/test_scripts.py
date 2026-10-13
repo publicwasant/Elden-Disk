@@ -211,7 +211,7 @@ def test_a_script_that_fails_is_dead_and_the_others_go_on(tmp_path, lines):
     sup = supervise(tmp_path, FakeBackend(), [good, bad], seconds=0.4)
     a, b = sup.runners
     assert b.state == "dead" and "ValueError: on purpose" in b.error and type(b.script).torn
-    assert a.state == "stopped" and a.loops >= 3
+    assert a.state == "stopped" and a.loops >= 2                               # it ran on after the other one died
     assert any(level == "E" and "Bad: dead: ValueError: on purpose" in m for level, m in lines)
     assert any(level == "D" and "Traceback" in m for level, m in lines)
 
@@ -264,7 +264,7 @@ def test_no_character_in_the_world_skips_a_loop_and_is_not_an_error(tmp_path, li
     sup = supervise(tmp_path, b, [f], seconds=0.5)
     r = sup.runners[0]
     assert r.state == "stopped" and r.skipped >= 1 and r.loops > r.skipped
-    assert any("A: waiting, no character in the world" in m for _l, m in lines)
+    assert any(m == "A: waiting, no character in the world" for _l, m in lines)              # said once, not twice in brackets
     assert any("A: a character is in the world again" in m for _l, m in lines)
 
 
@@ -441,3 +441,28 @@ def test_run_passes_every_scripts_dir_on(tmp_path):
     seen = []
     run_cmd.start_scripts(args, tmp_path / "vault", spawn=lambda c, **kw: seen.append(c))
     assert seen[0][-3:] == ["--scripts-dir", str(tmp_path / "a"), str(tmp_path / "b.py")]
+
+
+def test_the_wait_for_the_world_of_the_scripts_is_logged_under_their_own_tag(monkeypatch):
+    import eldendisk.commands.write as wcmd
+    seen = []
+    monkeypatch.setattr(wcmd.book, "i", lambda tag, msg: seen.append((tag, msg)))
+    monkeypatch.setattr(wcmd, "world_loaded", lambda mem, target: (True, ""))
+    clock = iter(range(100))
+    monkeypatch.setattr(wcmd, "_clock", lambda: next(clock) * 10.0)
+    monkeypatch.setattr(wcmd, "_sleep", lambda s: None)
+    mem = type("M", (), {"alive": lambda self: True})()
+    assert wcmd._wait_world(mem, None, "external scripts", tag="scripts")
+    assert seen == [("scripts", "external scripts: a character is in the world")]
+
+
+def test_a_group_used_as_a_number_says_which_values_it_has():
+    with FakeBackend():
+        x = tools.read()
+        with pytest.raises(TypeError, match=r"character.runes is a group \(total, baseline, delta\), not a number: use one of its "
+                                            r"values, e.g. character.runes.total"):
+            x.character.runes += 50
+        with pytest.raises(TypeError, match="is a group"):
+            x.character.vitals.hit_point < 500
+        x.character.runes.total += 50                                                 # the value itself is a number
+        assert x.character.runes.total == 1284

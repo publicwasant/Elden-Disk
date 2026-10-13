@@ -149,11 +149,11 @@ class Runner:
                     if self._waiting:
                         self._waiting = False
                         book.i(TAG, f"{self.name}: a character is in the world again")
-                except ed._NotInWorld as exc:
+                except ed._NotInWorld:
                     self.skipped += 1
                     if not self._waiting:
                         self._waiting = True
-                        book.i(TAG, f"{self.name}: waiting, no character in the world ({exc})")
+                        book.i(TAG, f"{self.name}: waiting, no character in the world")
                 finally:
                     self.in_loop_since = None
                 self.loops += 1

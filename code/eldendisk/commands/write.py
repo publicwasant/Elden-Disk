@@ -195,7 +195,7 @@ def world_loaded(mem, target: Target) -> tuple[bool, str]:
     return True, ""
 
 
-def _wait_world(mem, target: Target, name: str) -> bool:
+def _wait_world(mem, target: Target, name: str, tag: str = "write") -> bool:
     """Wait until a character is in the world and has stayed there for WORLD_STABLE seconds (the loading screens flicker). The only thing
     done meanwhile is a look at a few pointers every WORLD_POLL seconds. False when the game closed first."""
     since, said_at, said_before = None, -2 * TELL_EVERY, False
@@ -205,16 +205,16 @@ def _wait_world(mem, target: Target, name: str) -> bool:
         if loaded:
             since = now if since is None else since
             if now - since >= WORLD_STABLE:
-                book.i("write", f"{name}: a character is in the world")
+                book.i(tag, f"{name}: a character is in the world")
                 return True
         else:
             since = None
             if not said_before:
-                book.i("write", f"{name}: waiting for a character to be in the world ({why})")
+                book.i(tag, f"{name}: waiting for a character to be in the world ({why})")
                 said_before, said_at = True, now
             elif now - said_at >= 2 * TELL_EVERY:
                 said_at = now
-                book.d("write", f"{name}: still waiting for the world ({why})")
+                book.d(tag, f"{name}: still waiting for the world ({why})")
         _sleep(WORLD_POLL)
     return False
 

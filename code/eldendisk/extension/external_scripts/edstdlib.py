@@ -207,6 +207,17 @@ class Node:
     def __repr__(self) -> str:
         return f"<{'.'.join(map(str, self._path)) or 'snapshot'}: {self._data!r:.200}>"
 
+    def _not_a_number(self, *_a):
+        """A group used as a number (`x.character.runes += 50`): say which values it has, not "unsupported operand type"."""
+        where = ".".join(map(str, self._path)) or "the snapshot"
+        keys = self.keys()
+        hint = f": use one of its values, e.g. {where}.{keys[0]}" if keys else ""
+        raise TypeError(f"{where} is a group ({', '.join(map(str, keys)) or 'empty'}), not a number{hint}")
+
+    __add__ = __radd__ = __iadd__ = __sub__ = __rsub__ = __isub__ = __mul__ = __rmul__ = __imul__ = _not_a_number
+    __truediv__ = __rtruediv__ = __floordiv__ = __mod__ = __neg__ = __int__ = __float__ = _not_a_number
+    __lt__ = __le__ = __gt__ = __ge__ = _not_a_number
+
 
 class _Prefix:
     """`colors.SpEffect` before `[1642100]`: the first part of a dotted key."""

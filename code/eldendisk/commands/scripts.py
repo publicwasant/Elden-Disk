@@ -161,7 +161,7 @@ def cmd_scripts_run(args) -> int:
         resolved, status = None, None
     backend = open_live(target, state_ids, vault_root, resolved, say)      # the write handle: only now, after the session check
     try:
-        if when_loaded and not _wait_world(backend.mem, target, "external scripts"):
+        if when_loaded and not _wait_world(backend.mem, target, "external scripts", tag=TAG):
             book.i(TAG, "the game closed before a character was in the world; no script was started")
             return 0
         return run_scripts(files, backend, status)
