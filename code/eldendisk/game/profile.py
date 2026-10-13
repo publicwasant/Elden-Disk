@@ -130,6 +130,18 @@ class ParamsProfile:
 
 
 @dataclass(frozen=True)
+class EquipmentLayout:
+    """Where PlayerGameData keeps the equipment (1.7.2; measured on 1.17.1, read-only, with the game running): the spells memorised in the
+    magic slots ([PlayerGameData + game_data_to_magic] + magic_slots + n * magic_slot_size: the Magic id, -1 for an empty slot) and the
+    slot that is selected (a 32-bit number at magic_selected, 0 = the first slot)."""
+    game_data_to_magic: int
+    magic_slots: int
+    magic_slot_size: int
+    magic_slot_count: int
+    magic_selected: int
+
+
+@dataclass(frozen=True)
 class TextProfile:
     """The text tables `write --text` changes (measured on 1.17.1, tools/probe_text.py; writer/text.py says how they are found). `files`:
     table name -> the number of its text file (the pointer to the table sits at `array + number * 8`). `sizes`: table name -> the size of
@@ -155,6 +167,7 @@ class Profile:
     buffs_note: str | None = None
     params: ParamsProfile | None = None   # None -> params unsupported for this exe
     text: TextProfile | None = None       # None -> `write --text` unsupported for this exe
+    equipment: EquipmentLayout | None = None   # None -> character.equipment is not read for this exe
 
 
 def _parse_sp_effect(d: dict) -> tuple[SpEffectLayout | None, str | None]:
@@ -276,6 +289,20 @@ def _parse_text(d: dict) -> TextProfile | None:
                        {str(n): _number(v, f"text.sizes.{n}", 0x28, 64 * 1024 * 1024) for n, v in sizes.items()})
 
 
+def _parse_equipment(d: dict) -> EquipmentLayout | None:
+    """Absent block -> None (no character.equipment). A block that is there must be complete."""
+    e = d.get("equipment")
+    if e is None:
+        return None
+    if not isinstance(e, dict):
+        raise Incomplete("equipment must be an object")
+    lay = EquipmentLayout(**{k: _num(e.get(k), f"equipment.{k}") for k in (
+        "game_data_to_magic", "magic_slots", "magic_slot_size", "magic_slot_count", "magic_selected")})
+    if lay.magic_slot_size < 4 or not 1 <= lay.magic_slot_count <= 64:
+        raise Incomplete("equipment: magic_slot_size must be at least 4 and magic_slot_count 1 to 64")
+    return lay
+
+
 def _parse_params(d: dict) -> ParamsProfile | None:
     """Absent block -> None (params unsupported). A block that is there must be complete and consistent."""
     pr = d.get("params")
@@ -369,6 +396,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
         at_grace = _parse_at_grace(raw)
         params = _parse_params(raw)
         text = _parse_text(raw)
+        equipment = _parse_equipment(raw)
         return Profile(
             sha256=exe_sha256.lower(),
             label=str(raw.get("label") or exe_sha256[:12]),
@@ -385,6 +413,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
             buffs_note=note,
             params=params,
             text=text,
+            equipment=equipment,
         ), None
     except Incomplete as exc:
         return None, f"profile incomplete: {exc}"

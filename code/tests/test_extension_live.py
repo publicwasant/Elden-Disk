@@ -99,6 +99,31 @@ def test_the_cache_belongs_to_one_game_process(tmp_path):
     assert other.text_slots() == {} and other.effect("4866") is None
 
 
+def test_two_steps_saving_the_cache_keep_what_each_found(tmp_path):
+    """`write --text` loaded the cache before the colours were painted and saved after: it must not wipe the colours (seen in the game)."""
+    text = MemoryCache(tmp_path / CACHE_NAME, 10, 20).load()                        # the text step starts: nothing known yet
+    colours = MemoryCache(tmp_path / CACHE_NAME, 10, 20).load()
+    colours.set_effect("524400", [0x30000000], BLUE, None)
+    colours.save()                                                                  # the colours are painted first
+    text.set_text({"GoodsName": 0x1000}, {2230000: {"goods_name": "RCT"}})
+    text.save()                                                                     # the text step ends later
+    now = MemoryCache(tmp_path / CACHE_NAME, 10, 20).load()
+    assert now.effect("524400") == {"bases": [0x30000000], "main": BLUE, "accent": None}
+    assert now.texts(2230000) == {"goods_name": "RCT"}
+    assert text.effect("524400") is not None                                        # and the saver now knows what the other found
+    assert not (tmp_path / (CACHE_NAME + ".lock")).exists()
+
+
+def test_a_lock_left_by_a_dead_process_does_not_stop_a_save(tmp_path, monkeypatch):
+    import eldendisk.writer.cache as wc
+    monkeypatch.setattr(wc, "LOCK_WAIT", 0.05)
+    (tmp_path / (CACHE_NAME + ".lock")).write_text("")
+    c = MemoryCache(tmp_path / CACHE_NAME, 10, 20)
+    c.set_effect("4866", [0x30000000], BLUE, None)
+    c.save()                                                                        # waits a little, then saves without the lock
+    assert MemoryCache(tmp_path / CACHE_NAME, 10, 20).load().effect("4866")["main"] == BLUE
+
+
 # ------------------------------------------------------------------------------------------------------------------------ repaint
 def painted(eids, main, accent=None):
     g = tf.Game(effects=eids)
@@ -122,6 +147,18 @@ def test_a_repaint_changes_the_colours_without_a_look(monkeypatch):
     assert g.read(tf.BASES["524400"] + at, 16) == fxr.recolor(bytes.fromhex(hexa), PINK, bloom)
     fxr.repaint(g, gate, "524400", good, {"main": PINK, "accent": PINK}, {"main": None, "accent": None})     # the game's own back
     assert g.read(tf.BASES["524400"] + at, 16) == bytes.fromhex(hexa)
+
+
+def test_a_repaint_writes_each_copy_in_one_piece():
+    g, gate, bases = painted(("524401",), BLUE, PINK)
+    calls = []
+    real = g.write
+    g.write = lambda addr, data: calls.append((addr, len(data))) or real(addr, data)
+    n, _ = fxr.repaint(g, gate, "524401", bases["524401"], {"main": BLUE, "accent": PINK}, {"main": None, "accent": PINK})
+    assert n > 1 and len(calls) == len(bases["524401"])                            # one write per copy, not one per place
+    plan = fxr._ALL["524401"]
+    assert all(g.read(tf.BASES["524401"] + at, 16) == bytes.fromhex(h) for at, h, _b in plan["colours"])      # the game's own
+    assert all(g.read(tf.BASES["524401"] + at, 16) == fxr.recolor(bytes.fromhex(h), PINK, b) for at, h, b in plan["accent"])
 
 
 def test_a_repaint_from_colours_the_copy_does_not_carry_is_stale():
@@ -215,6 +252,20 @@ def test_a_snapshots_changes_go_where_they_belong(monkeypatch, tmp_path):
     assert plain == [{"character.attributes.vigor": 60}, {"params.effects.1621000.effectEndurance": 5.0}]
     assert applied == [("2230000", ["customs", "advanced", "colors", "SpEffect.1642100"], "#FF909E")]
     assert len(problems) == 1 and "systems.status.pid" in problems[0]
+
+
+
+def test_the_colours_a_write_changed_are_one_short_info_line():
+    b = object.__new__(backend.LiveBackend)
+    b.mem = b.target = b.snapshot = None
+    said = []
+    b.gate, b.say, b._write_lock, b._read_lock, b._doc = tf.open_gate(), (lambda l, m: said.append((l, m))),         __import__("threading").Lock(), __import__("threading").Lock(), None
+    b._checked_at, b._clock = 0.0, (lambda: 0.5)
+    b.extension = SimpleNamespace(apply=lambda goods, parts, value: {f"colour.{parts[-1]}": value or "the game's own"},
+                                  spells=lambda: {"2230000": {"id": "reverse_cursed_technique"}})
+    key = ("extension", "innovate_items", "spells", "2230000", "customs", "advanced", "colors", "Magic.6421.castSfxId")
+    b.write({key + ("main",): "#90D5FF", key + ("accent",): None})
+    assert said == [("I", "reverse_cursed_technique colours: main #90D5FF, accent the game's own")]
 
 
 # ------------------------------------------------------------------------------------------------------------------------ write --set

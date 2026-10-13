@@ -450,3 +450,25 @@ def test_raw_buffs_lists_everything_unclassified():
     assert entries is None
     entries, err = Sampler(m, make_profile(sp=False), state_ids(), BASE).raw_buffs()
     assert entries is None and "sp_effect" in err
+
+
+# ---- 1.7.2: character.equipment (the magic slots) ----
+def test_the_magic_slots_and_the_selected_one_are_in_the_character():
+    from dataclasses import replace
+    from eldendisk.game.profile import EquipmentLayout
+    m = full_world()
+    magic = 0x270000000
+    m.u64(GD + 0x530, magic)
+    slots = [2230000, 6420, -1, 6210] + [-1] * 10
+    m.put(magic + 0x10, b"".join(struct.pack("<ii", s, -1 if s > 0 else 0) for s in slots))
+    m.u32(magic + 0x80, 1)
+    prof = replace(make_profile(), equipment=EquipmentLayout(0x530, 0x10, 8, 14, 0x80))
+    s = Sampler(m, prof, state_ids(), BASE)
+    r = s.sample(NOW)
+    assert r.character["equipment"] == {"magic": {"selected": {"slot": 2, "id": 6420},
+                                                  "slots": {"1": 2230000, "2": 6420, "4": 6210}}}
+    valid(doc_for(s, r))
+    m.u64(GD + 0x530, 0)                                                              # unreadable: left out, the sample still holds
+    r2 = s.sample(NOW)
+    assert r2.state == "CONNECTED" and "equipment" not in r2.character
+    assert "equipment" not in Sampler(full_world(), make_profile(), state_ids(), BASE).sample(NOW).character    # no block: none

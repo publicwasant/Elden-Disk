@@ -258,9 +258,13 @@ def repaint(mem, gate, eid: str, bases, before: dict, after: dict) -> tuple[int,
         if block is None or not all(block[at - lo:at - lo + 16] == cur for at, (cur, _old, _b) in now.items()):
             continue
         changed = [(at, new) for at, new in want.items() if new != now[at][0]]
-        for at, new in changed:
-            if not mem.write(base + at, new):
-                raise FlameError(f"{eid}: could not write at {base + at:#x}")
+        if changed:                            # one write from the first changed place to the end of the last, the bytes between as read
+            a, b = min(at for at, _ in changed), max(at for at, _ in changed) + 16
+            piece = bytearray(block[a - lo:b - lo])
+            for at, new in changed:
+                piece[at - a:at - a + 16] = new
+            if not mem.write(base + a, bytes(piece)):
+                raise FlameError(f"{eid}: could not write at {base + a:#x}")
         back = mem.read(base + lo, hi - lo) if changed else block
         bad = [at for at, new in changed if back is None or back[at - lo:at - lo + 16] != new]
         if bad:

@@ -70,3 +70,24 @@ def test_a_profile_without_text_just_has_no_text(tmp_path):
 def test_a_text_block_that_is_there_must_be_complete(tmp_path, bad):
     p, why = _load(tmp_path, lambda r: r.__setitem__("text", bad))
     assert p is None and "text" in why
+
+
+# ---- 1.7.2: the equipment (the magic slots) ----
+def test_the_shipped_profile_says_where_the_magic_slots_are(tmp_path):
+    p, why = _load(tmp_path, lambda r: None)
+    e = p.equipment
+    assert why is None and (e.game_data_to_magic, e.magic_slots, e.magic_slot_size, e.magic_slot_count, e.magic_selected) == \
+        (0x530, 0x10, 8, 14, 0x80)
+
+
+def test_a_profile_without_equipment_just_has_none(tmp_path):
+    p, why = _load(tmp_path, lambda r: r.pop("equipment"))
+    assert why is None and p.equipment is None
+
+
+@pytest.mark.parametrize("bad", [True, {"game_data_to_magic": "0x530"},
+                                 {"game_data_to_magic": "0x530", "magic_slots": "0x10", "magic_slot_size": "0x2", "magic_slot_count": 14,
+                                  "magic_selected": "0x80"}])
+def test_an_equipment_block_that_is_there_must_be_complete(tmp_path, bad):
+    p, why = _load(tmp_path, lambda r: r.__setitem__("equipment", bad))
+    assert p is None and "equipment" in why

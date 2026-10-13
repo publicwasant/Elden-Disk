@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import eldendisk
@@ -18,7 +19,7 @@ from ..paths import HERE, describe_resource, get_resource_path
 from ..vault import GameFolderGuard, SaveVault, VaultError, resolve_vault
 from .common import begin, live_dir, log_config, session_log
 from .extension import ext_dir, prepare_regulation, say_error, spec_file
-from .scripts import has_scripts
+from .scripts import WORLD_READY, has_scripts
 from ..extension.innovate_items.spells.service import ExtensionError, GateFailed
 
 
@@ -26,6 +27,8 @@ STEAM_EXE = "steam.exe"
 STEAM_CLOUD_NOTE = ("Steam is running: Steam Cloud may sync the save when the game exits (not verified). "
                     "Use Steam offline mode, or turn Steam Cloud off for Elden Ring")
 
+
+STEPS_POLL = 0.25      # seconds between two looks at the text and colour steps, while the scripts wait for them
 
 def auto_prune(vault: SaveVault, keep: int) -> None:
     """After a finished session keep only the newest `keep` snapshots (0 = never). A failure is only a warning."""
@@ -108,7 +111,7 @@ def start_flame(args, vault_path: Path):
     return start_text(args, vault_path, flag="--flame-color")
 
 
-def start_scripts(args, vault_path: Path, spawn=subprocess.Popen):
+def start_scripts(args, vault_path: Path, spawn=subprocess.Popen, after_steps: bool = False):
     """Start the host of the external scripts (`extension external-scripts --run --when-loaded`) in the background: its lines appear in
     this console and in the log; a script that fails, or the host itself, never stops the game or the restore."""
     cmd, cwd = child_command(args, vault_path, ["extension", "external-scripts", "--run", "--when-loaded"])
@@ -117,7 +120,10 @@ def start_scripts(args, vault_path: Path, spawn=subprocess.Popen):
         cmd += ["--scripts-dir", *[str(p) for p in extra_paths(args)]]
     book.d(EXT_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}
-    return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), env=_child_env(), **quiet)
+    env = _child_env()
+    if after_steps:                    # the text and colour steps waited for a stable world: the scripts look once and start
+        env[WORLD_READY] = "1"
+    return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), env=env, **quiet)
 
 
 def _regulation(args, vault: SaveVault, game_dir: Path, protect: bool) -> tuple:
@@ -197,14 +203,32 @@ def cmd_run(args) -> int:
             steps.append(start_text)
         if design_has_flame(args, vault_path):
             steps.append(start_flame)
+    scripts = None
     if protect and has_scripts(args):          # the external scripts: whatever regulation.bin the session swaps (they write through the session)
-        steps.append(start_scripts)
+        scripts = start_scripts
     elif protect:
         book.d(EXT_TAG, "no external scripts (none in external_scripts/defaults when the exe was built, no --scripts-dir): none started")
+    ended, starting = threading.Event(), threading.Lock()
+
+    def scripts_after(memory, pid):
+        """The scripts start once the text and colour steps are done: what `run` gives the game is in place, so a script that changes
+        a colour finds it painted (started side by side, its first writes were refused: "not painted yet")."""
+        while not ended.is_set() and any(c.poll() is None for c in memory):
+            ended.wait(STEPS_POLL)
+        with starting:
+            if not ended.is_set() and find_pid(GAME_EXE) == pid:
+                children.append(scripts(args, vault_path, after_steps=True))
 
     def on_running(pid):
-        for start in steps:
-            children.append(start(args, vault_path))
+        memory = [start(args, vault_path) for start in steps]
+        children.extend(memory)
+        if scripts is None:
+            return
+        if not memory:
+            children.append(scripts(args, vault_path))
+            return
+        book.d(EXT_TAG, "external scripts: they start once the text and colour steps are done")
+        threading.Thread(target=scripts_after, args=(memory, pid), name="scripts-after", daemon=True).start()
 
     hooks = Hooks(
         find_game_pid=lambda: find_pid(GAME_EXE),
@@ -228,6 +252,8 @@ def cmd_run(args) -> int:
     try:
         rc = session.run()
     finally:
+        with starting:
+            ended.set()             # the scripts are not started after this
         for child in children:      # the steps end by themselves; do not leave one behind
             if child.poll() is None:
                 child.terminate()

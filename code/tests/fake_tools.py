@@ -15,6 +15,7 @@ DOC = {
                        "arcane": 10},
         "buffs": {"21951000": {"name": "reverse_cursed_technique", "categories": "EXTENSION"}},
         "animations": {},
+        "equipment": {"magic": {"selected": {"slot": 1, "id": 2230000}, "slots": {"1": 2230000, "2": 6420}}},
     },
     "params": {"effects": {"1621000": {"name": "Black Flame", "effectEndurance": 2.0}}},
     "extension": {"innovate_items": {"spells": {"2230000": {

@@ -267,8 +267,13 @@ class Tools:
         done, problems = _b().write(mine)
         for p in mine:
             root._changed.pop(p, None)
-        for why in problems:
-            Tools.log(f"not written: {why}", "warn")
+        s = current()
+        seen = s.__dict__.get("_ed_refused", ()) if s is not None else ()
+        for why in dict.fromkeys(problems):    # the same refusal of a script is in the log once, until a write goes through
+            if why not in seen:
+                Tools.log(f"not written: {why}", "warn")
+        if s is not None:
+            s.__dict__["_ed_refused"] = set(problems)
         return not problems
 
     @staticmethod

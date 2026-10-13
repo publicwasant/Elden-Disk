@@ -140,7 +140,8 @@ def fmt(key: str, value, path: str = "") -> str:
     if isinstance(value, int):
         if key == "delta":
             return f"{value:+,}"
-        return str(value) if key in ("pid", "code") or path.startswith(tuple(r + "." for r in FULL_ROOTS)) else f"{value:,}"   # ids: no commas
+        return str(value) if key in ("pid", "code") or path.startswith(tuple(r + "." for r in FULL_ROOTS) + ("character.equipment.",)) \
+            else f"{value:,}"   # ids: no commas
     if isinstance(value, float):
         return repr(value) if path.startswith(tuple(r + "." for r in FULL_ROOTS)) else f"{value:.2f}"   # params: -1.0 and 0.01 as they are
     if isinstance(value, list):

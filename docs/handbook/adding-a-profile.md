@@ -474,3 +474,20 @@ To find the chains and the file on a new build: export the rows with Smithbox (v
 No address is kept: the tool **finds** what it changes, by looking through the game's memory (handbook Chapter 19.4). `sizes` is the size in bytes of the game's own table (its `.fmg` file) in the language the game is played in: a table of the right shape and exactly that size is the one wanted. `files` names the three tables and their text file numbers N: the pointer to the table of file N sits at `array + N * 8` in an array that the tool also finds (three pointers to the three tables at exactly these distances). Both keys are required and must name the same three tables.
 
 To fill them in for a new build or language: `tools/dump_msgbnd.py` writes the original tables (their sizes are the file sizes); the numbers N come from the distances between the pointers `tools/probe_text.py` reports for the three tables (Chapter 19.5). Check the result in the game (a rename must show). The sizes in the example are those of the English (engUS) tables of 1.17.1.
+
+## Optional block: `equipment` (since 1.7.2)
+
+```json
+"equipment": { "game_data_to_magic": "0x530", "magic_slots": "0x10", "magic_slot_size": "0x8", "magic_slot_count": 14, "magic_selected": "0x80" }
+```
+
+Where PlayerGameData keeps the spells memorised in the magic slots: the pointer at `PlayerGameData + game_data_to_magic` leads to a block
+whose `magic_slot_count` slots start at `magic_slots`, `magic_slot_size` bytes each, the Magic id first as a 32-bit number (`-1` for an empty
+slot); the slot that is selected (0 = the first) is a 32-bit number at `magic_selected`. `read` shows it as `character.equipment.magic`
+(`selected.slot` and `selected.id`, `slots` numbered from 1 as the game shows them). Without the block there is no
+`character.equipment`; a block that is there must be complete.
+
+How the 1.17.1 values were found (2026-10-13, read-only, the game running): with a spell of the extension (Magic 2230000) memorised in the
+first slot, a look for that number in PlayerGameData and one pointer away from it found it at `[PlayerGameData+0x530]+0x10`, followed by the
+other memorised spells 8 bytes apart; selecting the next slot changed one number only, at `+0x80`, from 0 to 1.
+

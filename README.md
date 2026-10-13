@@ -1,7 +1,7 @@
 # Elden-Disk
 
 > **Elden-Disk Memory I/O (Read / Write) Tools: offline save guard + live memory reader and writer for Elden Ring 1.17.1**  
-> **Version:** `1.7.1` | **Spec Version:** `1.7.1` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable (`eldendisk.exe`) or Python 3.11+
+> **Version:** `1.7.2` | **Spec Version:** `1.7.2` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable (`eldendisk.exe`) or Python 3.11+
 
 Five parts with one job each:
 
@@ -9,7 +9,7 @@ Five parts with one job each:
 - **Vault (`vault`):** snapshots, the session record, restore and recovery. It is the part that must not fail: a restore that could not finish leaves a record, and the next `run` refuses until `vault restore` has been run.
 - **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree (`--flat`: one `full.path  value` row each); `--export` writes `disk-state.json` once; `--live` keeps going; `--live-buffs` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. `--param Magic.6230` shows any row of six of the game's tables (the params workbench), `--probe-params` finds where those tables are in memory, `--param-check [FILE]` compares a `regulation.bin` with the running game row by row. Values are addressed by **name** only. Read-only; works with or without `run`.
 - **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST` / `write --reset NAME ...`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...; and the game's own tables: `params.effects.1621000.effectEndurance`, or any numeric field of any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup: `params.Magic.6230.mp`). `--reset` puts the game's own value back. `write --text` (1.7.1) gives the running game the **text of your spells** (name, short line, description) and `write --flame-color` the **colour of the fire** of Flame, Grant Me Strength; `run` starts both by itself once a character is in the world. It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
-- **Extension (`extension`):** builds things for the game outside the game. The first one, `innovate-items spells`, turns `extension.json` into a `regulation.bin` with your own incantation (design → built → secured, judged by a gate). With the vault ON, `run` swaps it in for one session and the vault puts the game's own file back with the save.
+- **Extension (`extension`):** builds things for the game outside the game. The first one, `innovate-items spells`, turns `extension.json` into a `regulation.bin` with your own incantation (design → built → secured, judged by a gate). With the vault ON, `run` swaps it in for one session and the vault puts the game's own file back with the save. `extension external-scripts` (1.7.2) runs **your own Python scripts** next to the game (edstdlib: read the game as one document, write back what you change).
 - **Zero configuration files:** `--save-dir` and `--vault` are remembered in the Windows Registry (`HKCU\Software\EldenDisk`). The vault lives in `%LOCALAPPDATA%\EldenDisk\vault` by default, never next to the exe, so a rebuild cannot delete it.
 
 > [!IMPORTANT]
@@ -84,7 +84,7 @@ eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID
 ```
 
 ```commandline
- Elden-Disk 1.7.1 · run
+ Elden-Disk 1.7.2 · run
  ────────────────────────────────────────────────────────────────
    vault  %LOCALAPPDATA%\EldenDisk\vault
    save   C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>
@@ -115,13 +115,14 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 | `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables, any numeric field of any row of six tables); `--reset` puts the game's own params back (it remembers the first value of a field in this game process); exit `5` without a valid session. `write --text [--wait [SEC] \| --when-loaded]` puts the `text` of the design's spells into the running game, `write --flame-color [--wait [SEC] \| --when-loaded]` the `flame_color` of the design (both also started by `run`; `--when-loaded` waits for a character in the world and writes once) |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
 | `extension --list` \| `extension innovate-items spells --add all\|PATH...\|--secure` | **Extension** | Build things for the game outside the game. `innovate-items spells` turns `extension.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in; `--add spells.slots.<id> ...` picks which spells `run` builds |
+| `extension external-scripts [--run [--when-loaded]] [--scripts-dir PATH ...]` | **Extension** | Your Python scripts next to the game (1.7.2): without `--run` it lists them and how each ended; `run` (vault ON) starts them by itself |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
 
 **Exit codes:** `0` ok · `1` error / not applied · `2` unsupported exe, or a read-only `params` field named in `write` · `3` EAC · `4` restore pending · `5` no valid session · `130` interrupted.
 
 Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `animations` (now `read --live-buffs` / `--live-animations`), JSON output of `run` (now `read --export`), the verbs `read effects|animations|export`, `write set|refill` (now flags) and `--once` (a read without `--live` is already one shot). Values are addressed by name only; there are no memory addresses or scans.
 
-**Full references:** [spec 1.7.1](docs/specs/elden-disk-spec-v1.7.1.md) · [changes 1.7.1](docs/wahy/changes-version-1.7.1.md) · [manual test plan 1.7.1](docs/manual-tests/manual-test-plan-1.7.1.md) · [docs/guilde/cli-commands-exe.md](docs/guilde/cli-commands-exe.md) (executable) · [docs/guilde/cli-commands.md](docs/guilde/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/experiments/extensional/innovate-items/spell/level2/docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-tests/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-tests/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md) · [params workbench (Phase 1)](docs/experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md) · [roadmap: innovate spells, all kinds](docs/experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md)
+**Full references:** [spec 1.7.2](docs/specs/elden-disk-spec-v1.7.2.md) · [changes 1.7.2](docs/wahy/changes-version-1.7.2.md) · [spec 1.7.1](docs/specs/elden-disk-spec-v1.7.1.md) · [changes 1.7.1](docs/wahy/changes-version-1.7.1.md) · [manual test plan 1.7.1](docs/manual-tests/manual-test-plan-1.7.1.md) · [docs/guilde/cli-commands-exe.md](docs/guilde/cli-commands-exe.md) (executable) · [docs/guilde/cli-commands.md](docs/guilde/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/experiments/extensional/innovate-items/spell/level2/docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-tests/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-tests/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md) · [params workbench (Phase 1)](docs/experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md) · [roadmap: innovate spells, all kinds](docs/experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md)
 
 ---
 
@@ -158,6 +159,32 @@ next run, design unchanged: regulation.secured.bin is swapped, nothing is built
 - The order is: build, back up the save and the game's file, write the session record, swap, launch. When the game closes, `run` restores the save **and** the game's file and checks both by hash. If either fails, the record stays and the next `run` is refused until `vault restore` finishes (exit `4`). `vault keep` keeps the current *save* only; the game's own file always comes back first.
 - Offline only (as every param change). `write --set params.…` works inside a swapped session, so a new row can be tuned live.
 - Details: [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md), [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md); the research is in the [item-customization handbook](docs/experiments/item-customization/item-customization-handbook.md).
+
+---
+
+## 🐍 External scripts (1.7.2)
+
+Your own behaviour next to the game: a Python script that reads the game as one document and writes back what it changes, again and again, while the game runs. `run` (vault ON) starts every script once the text and colour steps are done, each in a thread of its own; they end when the game closes, and nothing a script does keeps the vault from putting the save back.
+
+```python
+from edstdlib import *
+
+class RctColoursFollowTheSpell(Interface):
+    every = 0.2                                               # seconds between two calls of loop()
+
+    def loop(self):
+        x = tools.read()                                      # the game now, as one object
+        chosen = x.character.equipment.magic.selected.id == 2230000
+        fire = x.extension.innovate_items.spells.reverse_cursed_technique.customs.advanced.colors["Magic.6421.castSfxId"]
+        fire.main = "#90D5FF" if chosen else None             # None: the game's own colour
+        tools.write(x)                                        # writes only what changed
+```
+
+- **Which scripts:** `code\eldendisk\extension\external_scripts\defaults\*.py`, embedded in the exe by the build; `--scripts-dir PATH ...` (on `run` too) adds folders or `.py` files written after it. Examples to copy: `code\tests\external_scripts\` (the full colour script above is `rct_colours_follow_the_spell.py`).
+- **The whole document reads and writes:** `read` has a fourth block, `extension` (the spells of the last build with the values the game holds now), `read --query "*"` shows everything, and every value `read` shows can be written (`write --set NAME=VALUE` or `tools.write`) except `systems` and what is computed. A text or a colour changes at once: the steps that put them into the game remember where (`<vault>\memory-cache.json`, for that game process only).
+- **`character.equipment.magic`** (1.7.2): the spells in the magic slots and the selected one (`selected.slot`, `selected.id`, `slots.1` ...), read only.
+- **Colours are hex** (`"#90D5FF"`) in the design and in writes; a colour console shows a `#RRGGBB` in its own colour.
+- Details: [spec 1.7.2](docs/specs/elden-disk-spec-v1.7.2.md), [changes 1.7.2](docs/wahy/changes-version-1.7.2.md), [cli-commands section 4c](docs/guilde/cli-commands.md).
 
 ---
 
@@ -264,8 +291,9 @@ python code/tools/dev_pipeline.py --skip-tests
   },
   "character": { "level": 386, "vitals": { ... }, "runes": { ... }, "attributes": { ... },
                  "buffs": { "3971": { "name": "Gold-Pickled Fowl Foot", "categories": "CONSUMABLES", "times": { ... } } },
-                 "animations": { ... } },
-  "params": { "effects": { "1621000": { "name": "Black Flame", ... } } }
+                 "animations": { ... }, "equipment": { "magic": { "selected": { "slot": 1, "id": 2230000 }, "slots": { ... } } } },
+  "params": { "effects": { "1621000": { "name": "Black Flame", ... } } },
+  "extension": { "innovate_items": { "spells": { "2230000": { "id": "reverse_cursed_technique", "slot": 1, "rows": { ... }, "customs": { ... } } } } }
 }
 ```
 

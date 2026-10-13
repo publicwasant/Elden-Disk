@@ -68,6 +68,21 @@ def test_a_refused_write_is_false_and_in_the_log():
         assert sum(1 for level, m in b.lines if level == "W" and "not written" in m) == 2
 
 
+def test_a_refusal_that_repeats_is_in_the_log_once_until_a_write_goes_through():
+    class Again(Interface):
+        def loop(self):
+            x = tools.read()
+            x.character.level = 200
+            tools.write(x)
+
+    with FakeBackend(refuse={"character.level"}) as b:
+        b.run(Again(), loops=5)
+        assert sum(1 for level, m in b.lines if "not written" in m) == 1
+        b.refuse.clear()
+        b.run(s := Again(), loops=1)                                              # a write that goes through clears it
+        assert s.__dict__["_ed_refused"] == set()
+
+
 def test_tools_write_wants_the_snapshot_not_the_value():
     with FakeBackend():
         with pytest.raises(TypeError, match="snapshot of tools.read"):
@@ -275,7 +290,7 @@ def test_a_slow_loop_is_said_once_and_off_or_broken_files_are_in_the_status(tmp_
     off = write(folder, "b_off.py", "from edstdlib import *\nclass Off(Interface):\n    enabled = False\n    def loop(self):\n        pass\n")
     broken = write(folder, "c_broken.py", "def (:\n")
     supervise(tmp_path, FakeBackend(), [slow, off, broken], seconds=0.4)
-    assert sum(1 for level, m in lines if level == "W" and "Slow: loop() took" in m) == 1
+    assert sum(1 for level, m in lines if level == "D" and "Slow: loop() took" in m) == 1                 # a debug line: not a warning
     states = {s["name"]: s["state"] for s in json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))["scripts"]}
     assert states == {"Slow": "stopped", "Off": "off", "c_broken": "failed"}
 
@@ -297,7 +312,7 @@ def example(name, index=0):
 def test_every_example_loads():
     files = host.script_files(EXAMPLES_DIR)
     got = [host.load_file(f) for f in files]
-    assert len(files) == 7 and all(f.error is None and f.scripts for f in got)
+    assert len(files) == 8 and all(f.error is None and f.scripts for f in got)
 
 
 def test_keep_fp_refills_below_a_fifth():
@@ -466,3 +481,24 @@ def test_a_group_used_as_a_number_says_which_values_it_has():
             x.character.vitals.hit_point < 500
         x.character.runes.total += 50                                                 # the value itself is a number
         assert x.character.runes.total == 1284
+
+
+def test_the_colours_follow_the_spell_that_is_selected():
+    s = example("rct_colours_follow_the_spell.py")
+    key = "extension.innovate_items.spells.2230000.customs.advanced.colors.Magic.6421.castSfxId"
+    with FakeBackend() as b:
+        ed._set_current(s)
+        s.setup()
+        s.loop()                                                                      # selected: the colours are on already
+        assert b.writes == []
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 2, "id": 6420}
+        s.loop()
+        s.loop()                                                                      # once per change
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 1, "id": 2230000}
+        s.loop()
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 2, "id": 6420}
+        s.loop()
+        s.teardown()                                                                  # left as `run` left them
+        ed._set_current(None)
+    assert b.writes == [(key + ".main", None), (key + ".accent", None), (key + ".main", "#90D5FF"), (key + ".accent", "#FF909E"),
+                        (key + ".main", None), (key + ".accent", None), (key + ".main", "#90D5FF"), (key + ".accent", "#FF909E")]

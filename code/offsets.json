@@ -1,5 +1,5 @@
 {
-  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. text (optional): the tables `write --text` replaces. files: table name -> number N of its text file (the pointer to that table sits at array + N * 8, in an array the tool finds by scanning the game's memory); sizes: the size in bytes of the game's own table (its file) in the language the game is played in; a table of that size and shape is the one wanted. No fixed address is kept. params (optional): the game's own tables (SpEffectParam), see docs/adding-a-profile.md. See README section 'Adding a profile'.",
+  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. text (optional): the tables `write --text` replaces. files: table name -> number N of its text file (the pointer to that table sits at array + N * 8, in an array the tool finds by scanning the game's memory); sizes: the size in bytes of the game's own table (its file) in the language the game is played in; a table of that size and shape is the one wanted. No fixed address is kept. params (optional): the game's own tables (SpEffectParam), see docs/adding-a-profile.md. equipment (optional, 1.7.2): the spells memorised in the magic slots: [PlayerGameData + game_data_to_magic] -> magic_slot_count slots of magic_slot_size bytes from magic_slots (the Magic id as a 32-bit number, -1 for an empty slot); the slot that is selected (0 = the first) is a 32-bit number at magic_selected. See README section 'Adding a profile'.",
   "profiles": {
     "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891": {
       "label": "Elden Ring 1.17.1",
@@ -25,6 +25,7 @@
         "data_to_vitals": "0x138"
       },
       "at_grace": { "source": "anim", "equals": ["0x109AB"] },
+      "equipment": { "game_data_to_magic": "0x530", "magic_slots": "0x10", "magic_slot_size": "0x8", "magic_slot_count": 14, "magic_selected": "0x80" },
       "text": { "files": { "GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24 }, "sizes": { "GoodsName": 114880, "GoodsInfo": 164208, "GoodsCaption": 975296 } },
       "params": {
         "file_layout": {

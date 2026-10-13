@@ -209,7 +209,36 @@ class Sampler(Layout):
             "buffs": buffs,
             "animations": self._last_animation,
         }
+        equipment = self._read_equipment(gd)
+        if equipment is not None:
+            character["equipment"] = equipment
         return Sample("CONNECTED", character, ignored, ignored_anim, None, runes)
+
+    def _read_equipment(self, gd: int) -> dict | None:
+        """`character.equipment` (1.7.2): {"magic": {"selected": {"slot", "id"}, "slots": {"1": id, ...}}}: the spells memorised in the
+        magic slots (numbered from 1, as the game shows them; empty slots left out) and the one that is selected. None when the profile
+        has no equipment block or the data cannot be read now (the rest of the sample is not held back by it)."""
+        lay = self.profile.equipment
+        if lay is None:
+            return None
+        magic = read_ptr(self.mem, gd + lay.game_data_to_magic)
+        if magic is None or not is_user_ptr(magic):
+            return None
+        lo = min(lay.magic_slots, lay.magic_selected)          # the slots and the selected one in ONE read (116 bytes on 1.17.1)
+        hi = max(lay.magic_slots + lay.magic_slot_count * lay.magic_slot_size, lay.magic_selected + 4)
+        raw = self.mem.read(magic + lo, hi - lo)
+        if raw is None or len(raw) < hi - lo:
+            return None
+        sel = struct.unpack_from("<I", raw, lay.magic_selected - lo)[0]
+        slots = {}
+        for n in range(lay.magic_slot_count):
+            mid = struct.unpack_from("<i", raw, lay.magic_slots - lo + n * lay.magic_slot_size)[0]
+            if mid > 0:
+                slots[str(n + 1)] = mid
+        if sel >= lay.magic_slot_count:
+            return None
+        chosen = slots.get(str(sel + 1))
+        return {"magic": {"selected": {"slot": sel + 1, "id": chosen}, "slots": slots}}
 
     def raw_buffs(self) -> tuple[list[tuple[int, float, float]] | None, str | None]:
         """Unclassified (id, duration, timer) entries, for the `--live-buffs` monitor."""

@@ -251,7 +251,7 @@ class ExtensionLive:
         plan = {"main": [(e, "main") for e in wfxr.effect_ids()],
                 "accent": [(e, "accent") for e in wfxr.effect_ids()] + [(e, "main") for e in wfxr.ring_ids()],
                 "eyes": [(e, "main") for e in wfxr.eyes_ids()]}[which]
-        places, done = 0, []
+        done = []
         for eid, part in plan:
             known = cache.effect(eid)
             if known is None:
@@ -259,19 +259,17 @@ class ExtensionLive:
             before = {"main": known["main"], "accent": known["accent"]}
             after = dict(before, **{part: rgb})
             try:
-                n, bases = wfxr.repaint(self.mem, self.gate, eid, known["bases"], before, after)
+                _n, bases = wfxr.repaint(self.mem, self.gate, eid, known["bases"], before, after)
             except wfxr.Stale:
-                n, bases = self._again(eid, after)
+                _n, bases = self._again(eid, after)
             except wfxr.FlameError as exc:
                 raise Refused(str(exc)) from None
             cache.set_effect(eid, bases, after["main"], after["accent"])
-            places += n
             done.append(eid)
         if not done:
             raise Refused("the colours of this game were not painted yet (`run` paints them once a character is in the world)")
         self._save(cache)
         shown = colour_text(rgb) if rgb is not None else "the game's own"
-        self.say("D", f"{which} colour -> {shown}: {places} places in {', '.join(done)}")
         return {f"colour.{which}": shown}
 
     def _again(self, eid: str, after: dict) -> tuple[int, list]:
@@ -384,7 +382,7 @@ class LiveBackend:
                 self._authorised()
             except Refused as exc:
                 return {}, [str(exc)]
-            plain = {}
+            plain, colours = {}, {}
             for path, value in changes.items():
                 name = ".".join(str(p) for p in path)
                 if not path or path[0] == "systems":
@@ -395,9 +393,12 @@ class LiveBackend:
                         problems.append(f"{name}: not a value of the game")
                         continue
                     try:
-                        done.update(self.extension.apply(str(path[3]), list(path[4:]), value))
+                        got = self.extension.apply(str(path[3]), list(path[4:]), value)
                     except Refused as exc:
                         problems.append(str(exc))
+                        continue
+                    done.update(got)
+                    colours.setdefault(str(path[3]), []).extend(f"{k[len('colour.'):]} {v}" for k, v in got.items() if k.startswith("colour."))
                 else:
                     plain[name] = value
             for name, value in plain.items():       # one at a time, so one refused value does not keep the others back
@@ -408,4 +409,15 @@ class LiveBackend:
                     problems.append(f"{name}: {exc}")
             with self._read_lock:                    # the next read sees what was just written
                 self._doc = None
+        for goods, shown in colours.items():         # one short info line per spell (the debug lines say where):
+            if shown:                                # `reverse_cursed_technique colours: main #90D5FF, accent #FF909E`
+                self.say("I", f"{self._label(goods)} colours: {', '.join(shown)}")
         return done, problems
+
+    def _label(self, goods: str) -> str:
+        """The spell's label (`reverse_cursed_technique`) for its goods id; what was typed when it is not known."""
+        try:
+            rec = self.extension.spells().get(goods)
+        except AttributeError:
+            rec = None
+        return str(rec.get("id", goods)) if isinstance(rec, dict) else goods

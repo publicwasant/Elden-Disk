@@ -70,6 +70,21 @@
       "required": ["level", "vitals", "runes", "attributes", "buffs", "animations"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
+        "equipment": {
+          "type": "object",
+          "description": "1.7.2, when the profile has an equipment block: the spells memorised in the magic slots (numbered from 1) and the selected one",
+          "properties": {
+            "magic": {
+              "type": "object",
+              "required": ["selected", "slots"],
+              "properties": {
+                "selected": { "type": "object", "required": ["slot", "id"],
+                              "properties": { "slot": { "type": "integer", "minimum": 1 }, "id": { "type": ["integer", "null"] } } },
+                "slots": { "type": "object", "propertyNames": { "pattern": "^[1-9][0-9]*$" }, "additionalProperties": { "type": "integer" } }
+              }
+            }
+          }
+        },
         "vitals": {
           "type": "object",
           "required": ["hit_point", "focus_point", "stamina"],

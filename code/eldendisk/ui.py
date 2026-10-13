@@ -99,7 +99,19 @@ def paint_tails(text: str, resume: str = "") -> str:
 _ANSI = re.compile(r"(\x1b\[[0-9;]*m)")
 # An id (4 or more digits: 114880, 2230000) or an address (0x7ff3cbbb0000). Not part of a word, a path, a time, a decimal or a date
 # (`20261012-185726`), and never inside an escape sequence.
-_NUMBER = re.compile(r"(?<![\w.:\\/\-])(0x[0-9a-fA-F]{4,}|[0-9]{4,})(?![\w.:\\/\-])")
+_NUMBER = re.compile(r"(?<![\w.:\\/\-#])(0x[0-9a-fA-F]{4,}|[0-9]{4,})(?![\w.:\\/\-])")
+_HEX = re.compile(r"(?<![\w&])#([0-9a-fA-F]{6})(?![\w])")       # a colour as the design writes it: #90D5FF
+
+
+def paint_hex(text: str, color: bool, resume: str = "") -> str:
+    """On a colour console: each colour `#RRGGBB` written in that colour (bright, even in a dim debug line). Never inside an escape."""
+    if not color or "#" not in text:
+        return text
+    parts = _ANSI.split(text)
+    for i in range(0, len(parts), 2):
+        parts[i] = _HEX.sub(lambda m: "\x1b[22;38;2;%d;%d;%dm%s\x1b[0m%s" % (
+            int(m.group(1)[0:2], 16), int(m.group(1)[2:4], 16), int(m.group(1)[4:6], 16), m.group(0), resume), parts[i])
+    return "".join(parts)
 
 
 def paint_numbers(text: str, color: bool, resume: str = "") -> str:
@@ -110,7 +122,7 @@ def paint_numbers(text: str, color: bool, resume: str = "") -> str:
     parts = _ANSI.split(text)
     for i in range(0, len(parts), 2):
         parts[i] = _NUMBER.sub(lambda m: paint(m.group(1), "addr" if m.group(1).startswith("0x") else "id", True) + resume, parts[i])
-    return "".join(parts)
+    return paint_hex("".join(parts), color, resume)
 
 
 def swatch(rgb, color: bool) -> str:

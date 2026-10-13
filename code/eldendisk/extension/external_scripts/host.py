@@ -160,7 +160,7 @@ class Runner:
                 took = _clock() - t
                 if took > self.every and not self._slow_said:
                     self._slow_said = True
-                    book.w(TAG, f"{self.name}: loop() took {took:.2f} s, longer than its pace of {self.every:g} s")
+                    book.d(TAG, f"{self.name}: loop() took {took:.2f} s, longer than its pace of {self.every:g} s")
                 s.wait(self.every - took)
             self._end("stopped")
         except ed._Dead:

@@ -46,7 +46,7 @@ class UnknownName(ValueError):
         super().__init__(f"unknown name {name!r}{hint}")
 
 
-CHARACTER_HEADS = ("level", "runes", "vitals", "attributes", "buffs", "animations", *VITALS, *ATTR_NAMES)
+CHARACTER_HEADS = ("level", "runes", "vitals", "attributes", "buffs", "animations", "equipment", *VITALS, *ATTR_NAMES)
 
 
 def normalize(name: str) -> str:

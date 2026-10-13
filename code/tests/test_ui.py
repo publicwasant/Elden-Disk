@@ -429,6 +429,14 @@ def test_ids_and_addresses_have_their_own_colours_and_nothing_else_does(monkeypa
     assert ui.paint_numbers(text, False) == text
 
 
+def test_a_colour_in_a_line_is_shown_in_that_colour_and_its_digits_are_not_an_id():
+    got = ui.paint_numbers("main colour -> #90D5FF: 68 places in 524400; #900000", True, "\x1b[2m")
+    assert "\x1b[22;38;2;144;213;255m#90D5FF\x1b[0m\x1b[2m" in got                   # bright, then back to the dim line
+    assert "\x1b[22;38;2;144;0;0m#900000\x1b[0m" in got and ID.format("900000") not in got
+    assert ID.format("524400") in got
+    assert ui.paint_numbers("#90D5FF", False) == "#90D5FF" and ui.paint_hex("a#90D5FF, #90D5FFF, &#123456", True).count("38;2") == 0
+
+
 def test_a_number_inside_a_warning_goes_back_to_the_colour_of_the_warning(monkeypatch):
     colour(monkeypatch)
     buf = Stream()

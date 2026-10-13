@@ -355,6 +355,61 @@ def test_a_text_step_still_running_when_the_session_ends_is_stopped(tmp_path, mo
     book.close()
 
 
+def test_the_scripts_start_once_the_text_and_colour_steps_are_done(tmp_path, monkeypatch):
+    """Started side by side, a script's first colour writes were refused (`not painted yet`): the scripts wait for those steps."""
+    import argparse
+    import threading
+    from eldendisk.logbook import book
+    order, done = [], threading.Event()
+
+    class Step:
+        def __init__(self, name, polls): self.name, self.polls = name, polls
+        def poll(self):
+            self.polls -= 1
+            if self.polls <= 0 and self.name not in order:
+                order.append(self.name)
+            return None if self.polls > 0 else 0
+        def terminate(self): pass
+
+    class FakeSession:
+        history = []
+        def __init__(self, vault, live, hooks, **k): self.h = hooks
+        def run(self):
+            self.h.on_running(77)
+            assert done.wait(5)
+            return 0
+
+    monkeypatch.setattr(run_cmd, "Session", FakeSession)
+    monkeypatch.setattr(run_cmd, "STEPS_POLL", 0.01)
+    monkeypatch.setattr(run_cmd, "require_windows_x64", lambda: None)
+    monkeypatch.setattr(run_cmd.launcher, "find_game_dir", lambda d: tmp_path / "game")
+    monkeypatch.setattr(run_cmd, "sha256_file", lambda p: "ab" * 32)
+    monkeypatch.setattr(run_cmd, "live_dir", lambda d: tmp_path / "live")
+    monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
+    monkeypatch.setattr(run_cmd, "session_log", lambda: None)
+    monkeypatch.setattr(run_cmd, "_regulation", lambda *a: ("w.bin", "built"))
+    monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "design_has_flame", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "has_scripts", lambda a: True)
+    monkeypatch.setattr(run_cmd, "find_pid", lambda exe: 77)
+    monkeypatch.setattr(run_cmd, "start_text", lambda a, v: Step("text", 3))
+    monkeypatch.setattr(run_cmd, "start_flame", lambda a, v: Step("flame", 6))
+    monkeypatch.setattr(run_cmd, "start_scripts", lambda a, v, after_steps=False: order.append(("scripts", after_steps)) or done.set()
+                        or Step("scripts", 99))
+    args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=True,
+                              no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
+    assert run_cmd.cmd_run(args) == 0
+    book.close()
+    assert order == ["text", "flame", ("scripts", True)]
+
+
+def test_scripts_started_after_the_steps_do_not_wait_for_the_world_twice(tmp_path):
+    seen = []
+    run_cmd.start_scripts(_args(tmp_path), tmp_path / "vault", spawn=lambda c, **kw: seen.append(kw["env"]), after_steps=True)
+    run_cmd.start_scripts(_args(tmp_path), tmp_path / "vault", spawn=lambda c, **kw: seen.append(kw["env"]))
+    assert seen[0].get(run_cmd.WORLD_READY) == "1" and run_cmd.WORLD_READY not in seen[1]
+
+
 @pytest.mark.parametrize("eyes,flame,expect", [({"color": [0.2, 0.65, 1]}, None, True), ({}, None, False), (None, [1, 0, 0], True), (None, None, False)])
 def test_the_colour_step_starts_for_a_fire_colour_or_a_colour_of_the_positive_curse_energy_eyes(tmp_path, eyes, flame, expect):
     import copy

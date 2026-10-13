@@ -582,6 +582,13 @@ def test_the_world_must_stay_for_a_while_and_a_flicker_starts_the_count_again(ri
     assert any("waiting for a character" in s for s in st["said"]) and sum("waiting for a character" in s for s in st["said"]) == 1
 
 
+def test_a_world_already_checked_by_a_step_before_is_taken_at_the_first_look(rig, monkeypatch):
+    _world(rig, monkeypatch, lambda st: st.update(world=True))
+    t0 = rig.clock["t"]
+    assert wcmd._wait_world(rig.game, None, "external scripts", stable=0.0) is True
+    assert rig.clock["t"] - t0 < wcmd.WORLD_STABLE                                       # no second wait of 5 s
+
+
 def test_the_wait_ends_when_the_game_closes(rig, monkeypatch):
     _world(rig, monkeypatch, lambda st: st.update(alive=st["tick"] < 4))
     assert wcmd._wait_world(rig.game, None, "text") is False

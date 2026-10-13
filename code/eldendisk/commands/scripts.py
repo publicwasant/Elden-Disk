@@ -13,6 +13,7 @@ Everything of the scripts is in eldendisk/extension/external_scripts/ (edstdlib,
 defaults/; example scripts are in code/tests/external_scripts). The backend opens the write handle only after the session check here, as `write` does."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .. import extension, ui
@@ -31,6 +32,7 @@ from ..vault import session as vault_session
 from .extension import ext_dir, spec_file
 
 TAG = shost.TAG
+WORLD_READY = "ELDENDISK_WORLD_READY"   # set by `run` when it starts the scripts after the text and colour steps: no second wait of 5 s
 _LEVELS = {"I": book.i, "OK": book.ok, "W": book.w, "E": book.e, "D": book.d}
 
 
@@ -161,7 +163,8 @@ def cmd_scripts_run(args) -> int:
         resolved, status = None, None
     backend = open_live(target, state_ids, vault_root, resolved, say)      # the write handle: only now, after the session check
     try:
-        if when_loaded and not _wait_world(backend.mem, target, "external scripts", tag=TAG):
+        ready = os.environ.get(WORLD_READY) == "1"        # `run` started us after the text and colour steps: the world was checked
+        if when_loaded and not _wait_world(backend.mem, target, "external scripts", tag=TAG, stable=0.0 if ready else None):
             book.i(TAG, "the game closed before a character was in the world; no script was started")
             return 0
         return run_scripts(files, backend, status)
