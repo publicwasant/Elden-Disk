@@ -10,14 +10,14 @@ them; a build with --no-embed puts them in `external-scripts\\` next to the exe)
 (its `*.py`) or one `.py` file, anywhere, as many as wanted (for scripts written after the exe was built).
 
 Everything of the scripts is in eldendisk/extension/external_scripts/ (edstdlib, the host, the backend on the game, FakeGame, the
-examples, defaults/). The backend opens the write handle only after the session check here, as `write` does."""
+defaults/; example scripts are in code/tests/external_scripts). The backend opens the write handle only after the session check here, as `write` does."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from .. import extension, ui
 from ..console import require_windows_x64
-from ..extension.external_scripts import EXAMPLES_DIR, FOLDER_NAME, DEFAULTS_DIR, edstdlib as ed
+from ..extension.external_scripts import FOLDER_NAME, DEFAULTS_DIR, edstdlib as ed
 from ..extension.external_scripts import host as shost
 from ..extension.external_scripts.backend import open_live
 from ..extension.innovate_items.spells.service import ExtensionError
@@ -109,7 +109,7 @@ def cmd_scripts_list(args) -> int:
                         + (f" ({was['error']})" if was.get("error") else "")
             rows.append((f.name, text))
     if not rows:
-        rows.append(("", f"no scripts yet: put one in {DEFAULTS_DIR} (copy from {EXAMPLES_DIR}) and build, or give --scripts-dir PATH"))
+        rows.append(("", f"no scripts yet: put one in {DEFAULTS_DIR} and build, or give --scripts-dir PATH"))
     ui.fields(rows)
     if last is not None:
         ui.fields([("status", f"{sp} ({last.get('updated', '?')})")])

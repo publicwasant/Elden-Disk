@@ -6,13 +6,12 @@ holds the session, each in a thread of its own, with the game given to them by `
   backend.py    what edstdlib reads and writes the running game with (the reader and the writer of `read` and `write`); the ONE
                 file of the extension package that touches the game (tests/test_architecture.py: EXCEPTIONS)
   defaults/     the default scripts: the build embeds them in the exe (`--scripts-dir PATH` adds more afterwards)
-  examples/     scripts to copy into defaults/ to try the foundation
+  (example scripts, which the tests also run: code/tests/external_scripts/)
 """
 from pathlib import Path
 
 PKG_DIR = Path(__file__).resolve().parent
 DEFAULTS_DIR = PKG_DIR / "defaults"
-EXAMPLES_DIR = PKG_DIR / "examples"
 FOLDER_NAME = "external-scripts"           # the folder of scripts next to the exe (and inside it when embedded)
 
 import sys as _sys

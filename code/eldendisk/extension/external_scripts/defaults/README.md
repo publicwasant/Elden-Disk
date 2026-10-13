@@ -1,7 +1,7 @@
 # External scripts
 
 Every `*.py` file in this folder is a script that `eldendisk run` starts next to the game (vault ON), once a character is in the world.
-A file whose name starts with `_` is a helper, not a script. Copy one from `../examples/` to begin. The build embeds these scripts in
+A file whose name starts with `_` is a helper, not a script. Copy one from `code/tests/external_scripts/` (the example scripts the tests run) to begin. The build embeds these scripts in
 the exe (they are its default scripts); `--scripts-dir PATH` (a folder or a `.py` file, anywhere) adds more after the exe is built.
 
 ```python

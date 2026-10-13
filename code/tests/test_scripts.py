@@ -10,9 +10,11 @@ import pytest
 import eldendisk.__main__ as cli
 import eldendisk.extension.external_scripts  # noqa: F401  (installs `edstdlib`)
 from eldendisk.commands import scripts as cmd
-from eldendisk.extension.external_scripts import EXAMPLES_DIR, edstdlib as ed
+from eldendisk.extension.external_scripts import edstdlib as ed
 from eldendisk.extension.external_scripts import host
 from tests.fake_tools import FakeBackend
+
+EXAMPLES_DIR = Path(__file__).parent / "external_scripts"     # the example scripts: tests here, examples for a person
 
 from edstdlib import *  # noqa: E402,F403  (the way a script imports it)
 from edstdlib import Interface, tools  # noqa: E402
