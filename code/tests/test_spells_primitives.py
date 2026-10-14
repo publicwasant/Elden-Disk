@@ -220,3 +220,23 @@ def test_encode_offsets_flex_ends_in_a_state_it_can_reach_and_says_which():
     codes, end = reblock.encode_offsets_flex(seqs, [24, 64, 111], [999, 64, 111])
     offs, st = _run([24, 64, 111], codes, seqs)
     assert offs == [24, 24] and st == tuple(end) and end != (999, 64, 111)
+
+
+@pytest.mark.parametrize("seed", [1, 7, 23])
+def test_the_state_only_source_equals_the_full_decode(seed):
+    """1.8.0 part 3: with the decoded bytes given (compression.zstd), the source follows only the decoder's state; it must keep the
+    same repeat offsets, Huffman trees and literal types in front of every block as a full decode."""
+    frame, body = H.make_frame(seed=seed, blocks=14)
+    dcx = H.dcx_of(frame, body)
+    full, fast = reblock.Source(dcx), reblock.Source(dcx, body)
+    assert fast.body == full.body == body
+    assert fast.rep_before == full.rep_before and fast.lit_type == full.lit_type
+    assert all(fast.huf_before[k] == full.huf_before[k] for k in full.huf_before)
+
+
+def test_the_build_takes_the_bytes_from_compression_zstd_when_this_python_has_it():
+    from eldendisk.creative.innovate_spells.build import fast_body
+    frame, body = H.make_frame(seed=3, blocks=4)
+    got = fast_body(H.dcx_of(frame, body))
+    assert got is None or got == body                    # None: no compression.zstd here, the full decode is used
+    assert fast_body(b"DCX\0" + bytes(0x60)) is None     # a frame it cannot read: the full decode decides

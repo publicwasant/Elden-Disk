@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .memory import Module, ProcessMemory, list_modules
 from .processes import (GAME_EXE, anticheat_processes, find_pid, has_eac, list_process_names, process_started,
-                        sha256_file)
+                        exe_sha256)
 from .profile import Profile, load_profile
 
 EXIT_ERROR, EXIT_UNSUPPORTED, EXIT_EAC, EXIT_NO_SESSION = 1, 2, 3, 5
@@ -58,7 +58,7 @@ def locate(offsets: Path) -> Target:
     if has_eac(m.name for m in mods):
         raise AttachError("EasyAntiCheat is loaded in eldenring.exe; not attaching. "
                           "Start the game offline with `eldendisk run`.", EXIT_EAC)
-    sha = sha256_file(Path(main.path))
+    sha = exe_sha256(Path(main.path))
     profile, reason = load_profile(Path(offsets), sha)
     if profile is None:
         raise AttachError(f"no verified profile for this eldenring.exe ({reason}); exe sha256: {sha}", EXIT_UNSUPPORTED)

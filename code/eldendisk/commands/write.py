@@ -142,7 +142,9 @@ def _keep(cache: MemoryCache | None, what: str) -> None:
         book.w("write", f"could not save {CACHE_NAME} ({exc}); a later write of the {what} in this game looks through the memory again")
 
 
-def _put_text(mem, gate, target: Target, texts: dict, passes, cache: MemoryCache | None = None) -> int:
+def _put_text(mem, gate, target: Target, texts: dict, passes, cache: MemoryCache | None = None, meanwhile=None) -> int:
+    """`meanwhile()` (1.8.0 part 3): what to do during the SETTLE seconds the game is watched after the tables were switched (the
+    colours of `innovate-spells apply`), instead of only waiting."""
     after: dict[int, bytes] = {}
     names: dict[int, str] = {}
     for attempt in (1, 2):
@@ -168,7 +170,13 @@ def _put_text(mem, gate, target: Target, texts: dict, passes, cache: MemoryCache
                 book.d("write", f"goods text {name}: {len(old.data)} -> {len(new)} bytes, now at {base:#x}")
         if len(passes) <= 1:
             break
-        _sleep(SETTLE)
+        t0 = _clock()
+        if meanwhile is not None:
+            meanwhile()
+            meanwhile = None
+        rest = SETTLE - (_clock() - t0)
+        if rest > 0:
+            _sleep(rest)
         kept = {at: wtext.read_table(mem, names[at], at)[0] for at in after}
         if all(t is not None and t.data == after[at] for at, t in kept.items()):
             break
@@ -288,6 +296,68 @@ def cmd_write_text(args) -> int:
                 return 0
             return _put_text(mem, gate, target, texts, LOOKS, _cache_of(args, target))
         return _put_text(mem, gate, target, texts, LOOKS if wait > 0 else ONCE, _cache_of(args, target))
+    finally:
+        mem.close()
+
+
+def cmd_apply_both(args, texts: bool = True, colours: bool = True) -> int:
+    """`innovate-spells apply [--when-loaded]` (1.8.0 part 3): the texts and the colours in ONE attach (one session check, one write
+    handle, one wait for the world), the colours painted during the few seconds the text step watches the game keep its tables.
+    -> exit code (the worse of the two)."""
+    require_windows_x64()
+    when_loaded = bool(getattr(args, "when_loaded", False))
+    wait = ATTACH_WAIT if when_loaded else float(getattr(args, "wait", 0) or 0)
+    try:
+        ci = creative.open_spells(creative_folder(args), spec_file(args))
+        sel, note = ci.selection()
+        if note:
+            book.w("write", f"innovate-spells: {note}")
+        words = ci.texts(sel) if texts else None
+        colour, cnote = ci.flame_color(sel) if colours else (None, None)
+        eyes, enote = ci.eyes_color(sel) if colours else (None, None)
+        accent, anote = ci.flame_accent_color(sel) if colours else (None, None)
+    except CreativeError as exc:
+        book.e("write", str(exc))
+        return 1
+    for n in (cnote, enote, anote):
+        if n:
+            book.w("write", n)
+    paint = colour is not None or eyes is not None
+    if not words and not paint:
+        book.i("write", "no spell names a text or a colour: nothing to apply")
+        return 0
+    target, code, record = _attach(args, wait)
+    if target is None:
+        return code
+    if words and (target.profile.text is None or not set(TEXT_TABLES) <= set(target.profile.text.files)):
+        book.w("write", "this game version has no `text` block in offsets.json: the texts are left out")
+        words = None
+        if not paint:
+            return EXIT_UNSUPPORTED
+    if not _authorised(target, record):
+        return EXIT_NO_SESSION
+    mem = WritableProcessMemory(target.pid)
+    book.d("write", "scan: " + (wscan.go_easy() or "ordinary priority"))
+    try:
+        gate = WriteGate()
+        gate.open()   # only after the session, anti-cheat and profile checks above
+        if when_loaded and not _wait_world(mem, target, "innovate-spells apply"):
+            book.i("write", "innovate-spells apply: the game closed before a character was in the world; nothing was written")
+            return 0
+        passes = LOOKS if (when_loaded or wait > 0) else ONCE
+        cache = _cache_of(args, target)
+        got = {}
+
+        def put_colours():
+            got["colours"] = _put_flame(mem, gate, colour, passes, eyes, accent, fresh=when_loaded, cache=cache)
+
+        if not words:
+            put_colours()
+            return got["colours"]
+        text_code = _put_text(mem, gate, target, words, passes, cache, meanwhile=put_colours if paint else None)
+        if paint and "colours" not in got:          # the text step ended before its watch (an error, or one look only)
+            put_colours()
+        return text_code or got.get("colours", 0)
     finally:
         mem.close()
 

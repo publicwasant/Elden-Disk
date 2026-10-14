@@ -419,6 +419,99 @@ class Dec:
     def stored(self, data):
         self.out += data
 
+    # ---- the decoder's state only (1.8.0 part 3): what reblock.Source keeps in front of every block, without the output
+    def literals_state(self, d, p):
+        """Like literals(), but the literals are not decoded: only the Huffman tree a block brings is kept. -> the position after
+        the literals section."""
+        b0 = d[p]
+        ty = b0 & 3
+        sf = (b0 >> 2) & 3
+        if ty in (0, 1):
+            if sf in (0, 2):
+                n, hl = b0 >> 3, 1
+            elif sf == 1:
+                n, hl = (b0 >> 4) | (d[p + 1] << 4), 2
+            else:
+                n, hl = (b0 >> 4) | (d[p + 1] << 4) | (d[p + 2] << 12), 3
+            return p + hl + (n if ty == 0 else 1)
+        if sf in (0, 1):
+            comp, hl = (int.from_bytes(d[p:p + 3], "little") >> 14) & 0x3FF, 3
+        elif sf == 2:
+            comp, hl = int.from_bytes(d[p:p + 4], "little") >> 18, 4
+        else:
+            comp, hl = int.from_bytes(d[p:p + 5], "little") >> 22, 5
+        if ty == 2:
+            w, _used = huff_weights(d[p + hl:p + hl + comp], 0)
+            self.huf = huff_table(w)
+        elif self.huf is None:
+            raise ZErr("treeless literals without a tree")
+        return p + hl + comp
+
+    def block_state(self, d):
+        """Like block(), but only the repeat offsets and the Huffman tree move on: no literal is decoded, nothing is copied. The
+        output comes from another decoder (reblock.Source(body=...))."""
+        p = self.literals_state(d, 0)
+        b0 = d[p]
+        if b0 < 128:
+            nseq, p = b0, p + 1
+        elif b0 < 255:
+            nseq, p = ((b0 - 128) << 8) + d[p + 1], p + 2
+        else:
+            nseq, p = d[p + 1] + (d[p + 2] << 8) + 0x7F00, p + 3
+        if nseq == 0:
+            return
+        m = d[p]
+        p += 1
+        p = self.seq_table("ll", (m >> 6) & 3, d, p, LL_DEF, 35)
+        p = self.seq_table("of", (m >> 4) & 3, d, p, OF_DEF, 31)
+        p = self.seq_table("ml", (m >> 2) & 3, d, p, ML_DEF, 52)
+        br = RBits(d[p:])
+        (llc, llacc), (ofc, ofacc), (mlc, mlacc) = self.tabs["ll"], self.tabs["of"], self.tabs["ml"]
+        sll, sof, sml = br.read(llacc), br.read(ofacc), br.read(mlacc)
+        r0, r1, r2 = self.rep
+        bits, from_bytes = br.d, int.from_bytes
+        last = nseq - 1
+        for i in range(nseq):
+            ofs, ofnb, ofbase = ofc[sof]
+            mls, mlnb, mlbase = mlc[sml]
+            lls, llnb, llbase = llc[sll]
+            mlb, llb = ML_BITS[mls], LL_BITS[lls]
+            r = ofs + mlb + llb + (llnb + mlnb + ofnb if i != last else 0)        # one slice for the six fields, as block() does
+            pos = br.pos - r
+            if pos >= 0:
+                br.pos = pos
+                v = from_bytes(bits[pos >> 3:((pos + r - 1) >> 3) + 1], "little") >> (pos & 7) if r else 0
+                r -= ofs
+                ofv = (1 << ofs) + ((v >> r) & ((1 << ofs) - 1))
+                r -= mlb + llb
+                ll = LL_BASE[lls] + ((v >> r) & ((1 << llb) - 1))
+                if i != last:
+                    r -= llnb
+                    sll = llbase + ((v >> r) & ((1 << llnb) - 1))
+                    r -= mlnb
+                    sml = mlbase + ((v >> r) & ((1 << mlnb) - 1))
+                    sof = ofbase + (v & ((1 << ofnb) - 1))
+            else:
+                ofv = (1 << ofs) + br.read(ofs)
+                br.read(mlb)
+                ll = LL_BASE[lls] + br.read(llb)
+                if i != last:
+                    sll = llbase + br.read(llnb)
+                    sml = mlbase + br.read(mlnb)
+                    sof = ofbase + br.read(ofnb)
+            if ofv > 3:
+                r2, r1, r0 = r1, r0, ofv - 3
+            else:
+                idx = ofv - 1 + (1 if ll == 0 else 0)
+                if idx:
+                    off = r0 - 1 if idx == 3 else (r1 if idx == 1 else r2)
+                    if idx >= 2:
+                        r2 = r1
+                    r1, r0 = r0, off
+            if r0 <= 0:
+                raise ZErr("zero offset")
+        self.rep = [r0, r1, r2]
+
 
 FRAME_HEADER = bytes([0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x80])   # magic, no flags (no size, no checksum), 64 MiB window
 

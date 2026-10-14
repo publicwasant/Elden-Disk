@@ -28,9 +28,22 @@ class Result:
     footprint: object = None          # recipes.Footprint: the ids of the rows the recipes added (make() fills it)
 
 
+def fast_body(dcx: bytes) -> bytes | None:
+    """The decoded frame from compression.zstd (Python 3.14), or None when this Python has none or it fails: then the frame is
+    decoded by our own decoder (1.8.0 part 3: the first decode of every build, about 2 s, becomes about 0.6 s)."""
+    try:
+        import importlib
+        z = importlib.import_module("compression.zstd")
+        comp = struct.unpack(">I", dcx[0x20:0x24])[0]
+        return z.decompress(bytes(dcx[0x4C:0x4C + comp]))
+    except Exception:
+        return None
+
+
 def prepare(base: bytes):
     """-> Source of the original (also checks that our container code reads and writes it back unchanged)."""
-    src = Source(container.decrypt(base))
+    dcx = container.decrypt(base)
+    src = Source(dcx, fast_body(dcx))
     bnd = Bnd4(src.body)
     if bnd.build() != src.body:
         raise BuildError("internal check failed: the BND4 writer does not reproduce the original")

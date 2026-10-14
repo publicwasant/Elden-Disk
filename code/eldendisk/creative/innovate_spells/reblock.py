@@ -29,9 +29,13 @@ class BuildError(Exception):
 
 
 class Source:
-    """The frame we start from (the game's own), decoded once, with the decoder state in front of every block."""
+    """The frame we start from (the game's own), decoded once, with the decoder state in front of every block.
 
-    def __init__(self, dcx: bytes):
+    `body` (1.8.0 part 3): the decoded bytes when another decoder already has them (compression.zstd, about 0.1 s): then this
+    decoder only follows its state from block to block (about a third of the time of a full decode) and the size is checked; a
+    wrong body is caught by the gate, which decodes the built file again with this decoder and compares."""
+
+    def __init__(self, dcx: bytes, body: bytes | None = None):
         if bytes(dcx[:4]) != b"DCX\0" or bytes(dcx[0x28:0x2C]) != b"ZSTD":
             raise BuildError("not a DCX/ZSTD container")
         self.header = bytearray(dcx[:0x4C])
@@ -54,8 +58,11 @@ class Source:
                 d.stored(bytes([c[0]]) * size)
             else:
                 self.rep_before[i], self.huf_before[i], self.lit_type[i] = list(d.rep), d.huf, c[0] & 3
-                d.block(c)
-        self.body = bytes(d.out)
+                if body is None:
+                    d.block(c)
+                else:
+                    d.block_state(c)
+        self.body = bytes(d.out) if body is None else bytes(body)
         declared = struct.unpack(">I", dcx[0x1C:0x20])[0]
         if declared != len(self.body):
             raise BuildError("decoded size %d differs from the DCX header (%d)" % (len(self.body), declared))

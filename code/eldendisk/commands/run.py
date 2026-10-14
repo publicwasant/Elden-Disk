@@ -13,7 +13,7 @@ import eldendisk
 from ..console import require_windows_x64
 from .. import creative, ui
 from ..logbook import CREATIVE_TAG, Tail, book
-from ..game.processes import GAME_EXE, anticheat_processes, find_pid, list_process_names, process_started, sha256_file
+from ..game.processes import GAME_EXE, anticheat_processes, find_pid, list_process_names, process_started, remember_sha256, sha256_file
 from ..game.profile import load_profile
 from ..host import launcher
 from ..host.host import Hooks, Session, State
@@ -177,7 +177,8 @@ def cmd_run(args) -> int:
         book.e("run", str(exc))
         return 1
     game_dir = launcher.find_game_dir(args.game_dir)
-    sha = sha256_file(game_dir / GAME_EXE)
+    sha = sha256_file(game_dir / GAME_EXE)          # afresh: the anchor of the session record
+    remember_sha256(game_dir / GAME_EXE, sha)       # the steps and the other terminals attach without hashing again
     vault, live = SaveVault(vault_path), live_dir(args.save_dir)
 
     log_config("offsets", args.offsets)

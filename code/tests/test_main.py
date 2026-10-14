@@ -349,3 +349,28 @@ def test_the_default_export_folder_is_under_the_eldendisk_data_folder(monkeypatc
 def test_the_exe_has_no_build_command():
     with pytest.raises(SystemExit):
         cli.build_parser().parse_args(["build"])
+
+
+def test_the_exe_hash_is_remembered_while_the_file_stays_the_same(tmp_path, monkeypatch):
+    from eldendisk.game import processes
+    exe, cache = tmp_path / "eldenring.exe", tmp_path / "cache.json"
+    exe.write_bytes(b"abc")
+    calls = []
+    real = processes.sha256_file
+    monkeypatch.setattr(processes, "sha256_file", lambda p: calls.append(p) or real(p))
+    want = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    assert processes.exe_sha256(exe, cache) == want and processes.exe_sha256(exe, cache) == want and len(calls) == 1
+    exe.write_bytes(b"abcd")                                   # another size: hashed again
+    assert processes.exe_sha256(exe, cache) != want and len(calls) == 2
+    cache.write_text("{not json", encoding="utf-8")
+    assert processes.exe_sha256(exe, cache) and len(calls) == 3
+
+
+def test_the_cli_imports_a_command_only_when_it_runs():
+    import subprocess
+    import sys
+    code = ("import sys, eldendisk.__main__ as m; "
+            "print(sorted(n for n in sys.modules if n.startswith('eldendisk.commands.') and n != 'eldendisk.commands.common'))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                         cwd=Path(__file__).resolve().parent.parent).stdout.strip()
+    assert out == "[]"

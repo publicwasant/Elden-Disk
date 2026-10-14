@@ -38,17 +38,33 @@ if __package__ is None or __package__ == "":   # run as a script (frozen exe, `p
 
 from eldendisk import __version__  # noqa: E402
 from eldendisk.commands.common import add_vault_option, add_verbose  # noqa: E402
-from eldendisk.commands.hash import cmd_hash  # noqa: E402
-from eldendisk.commands.innovate import cmd_innovate  # noqa: E402
-from eldendisk.commands.read import cmd_check, cmd_export, cmd_probe, cmd_reset, read_words  # noqa: E402
-from eldendisk.commands.resurrect import cmd_resurrect  # noqa: E402
-from eldendisk.commands.run import cmd_run  # noqa: E402
-from eldendisk.commands.scripts import cmd_scripts  # noqa: E402
-from eldendisk.commands.vault import cmd_vault  # noqa: E402
-from eldendisk.commands.write import cmd_write  # noqa: E402
 from eldendisk import logsetup  # noqa: E402
 from eldendisk.logbook import book  # noqa: E402
 from eldendisk.paths import HERE, default_out_dir, get_resource_path  # noqa: E402
+
+
+def _lazy(module: str, name: str):
+    """The command `name` of eldendisk.commands.<module>, imported only when that command runs (1.8.0 part 3: a command loads its
+    own code, not every command's: `read` does not import the build, `vault` not the reader)."""
+    def command(args):
+        import importlib
+        return getattr(importlib.import_module(f"eldendisk.commands.{module}"), name)(args)
+    command.__name__ = command.__qualname__ = name
+    return command
+
+
+cmd_hash = _lazy("hash", "cmd_hash")
+cmd_innovate = _lazy("innovate", "cmd_innovate")
+read_words = _lazy("read", "read_words")
+cmd_check = _lazy("read", "cmd_check")
+cmd_export = _lazy("read", "cmd_export")
+cmd_probe = _lazy("read", "cmd_probe")
+cmd_reset = _lazy("read", "cmd_reset")
+cmd_resurrect = _lazy("resurrect", "cmd_resurrect")
+cmd_run = _lazy("run", "cmd_run")
+cmd_scripts = _lazy("scripts", "cmd_scripts")
+cmd_vault = _lazy("vault", "cmd_vault")
+cmd_write = _lazy("write", "cmd_write")
 
 READ_DEFAULTS = dict(query=None, param=None, param_check=None, probe_params=False, export=False, live=False, live_buffs=False,
                      live_animations=False, mapped=False, unmapped=False, flat=False, json=False, quiet=False, hz=60.0, timeout=15.0,

@@ -368,26 +368,18 @@ def cmd_build(args) -> int:
 
 def cmd_apply(args) -> int:
     """`innovate-spells apply [--when-loaded]`: the spells' texts, then their colours, into the running game (memory only)."""
-    from .write import cmd_write_flame, cmd_write_text
+    from .write import cmd_apply_both
     from .run import creative_has_flame, creative_has_text
     try:
         vault = resolve_vault(getattr(args, "vault", None))
     except VaultError as exc:
         book.e("write", str(exc))
         return 5
-    steps = [(f, n) for f, n, has in ((cmd_write_text, "texts", creative_has_text), (cmd_write_flame, "colours", creative_has_flame))
-             if has(args, vault)]
-    if not steps:
+    texts, colours = creative_has_text(args, vault), creative_has_flame(args, vault)
+    if not (texts or colours):
         book.i(CREATIVE_TAG, "innovate-spells: no spell of the build has a text or a colour: nothing to apply")
         return 0
-    code = 0
-    for step, _name in steps:
-        got = step(args)
-        if got in (2, 3, 5):                 # no profile, the anti-cheat, no session: the next step would fail the same way
-            return got
-        code = code or got
-        args.world_ready = True              # the first step waited for a stable world: the next one looks once
-    return code
+    return cmd_apply_both(args, texts, colours)     # one attach for both (1.8.0 part 3)
 
 
 FUNCTIONS = {"build": cmd_build, "secure": cmd_secure, "apply": cmd_apply}

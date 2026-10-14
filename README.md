@@ -238,6 +238,7 @@ the exe; one next to the exe wins). The full document is in [spec 1.8.0 part 2](
  ├─ vault\                                       snapshots, session.json, creative\ (builds, the scripts' status), memory-cache.json,
  │                                               params-snapshot.json, eldendisk.log
  ├─ baselines.json                               what `reset` set
+ ├─ exe-sha256.json                              the hash of eldenring.exe, kept while the file stays the same
  └─ output\disk.json                             what `export` writes
 <exe folder>\                                    eldendisk.exe; offsets.json, names.json, creative.json when you put them next to it
 ```

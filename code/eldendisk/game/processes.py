@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import json
+import os
 from pathlib import Path
 
 from . import _win
@@ -31,6 +33,47 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+HASH_CACHE = "exe-sha256.json"     # in %LOCALAPPDATA%\EldenDisk: the hash of eldenring.exe, by its path, size and time
+
+
+def _hash_cache() -> Path:
+    base = os.environ.get("LOCALAPPDATA")
+    return (Path(base) if base else Path.home() / "AppData" / "Local") / "EldenDisk" / HASH_CACHE
+
+
+def _hash_key(path: Path) -> str:
+    st = path.stat()
+    return f"{path.resolve()}|{st.st_size}|{st.st_mtime_ns}"
+
+
+def remember_sha256(path: Path, sha: str, cache: Path | None = None) -> None:
+    """Keep `sha` as the hash of `path` as it is now (its size and modification time); a failure only means the next attach hashes."""
+    try:
+        f = cache or _hash_cache()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"key": _hash_key(Path(path)), "sha256": sha}), encoding="utf-8")
+        os.replace(tmp, f)
+    except OSError:
+        pass
+
+
+def exe_sha256(path: Path, cache: Path | None = None) -> str:
+    """sha256_file of eldenring.exe, remembered while the file keeps its size and modification time (1.8.0 part 3: every attach
+    hashed the 87 MB exe: 0.08 s, 1.7 s when the file was not in the disk cache). `run` always hashes it afresh (the session's anchor)."""
+    path = Path(path)
+    f = cache or _hash_cache()
+    try:
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        if isinstance(doc, dict) and doc.get("key") == _hash_key(path) and len(str(doc.get("sha256", ""))) == 64:
+            return doc["sha256"]
+    except (OSError, ValueError):
+        pass
+    sha = sha256_file(path)
+    remember_sha256(path, sha, f)
+    return sha
 
 
 def find_pid(exe_name: str) -> int | None:

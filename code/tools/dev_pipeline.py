@@ -181,7 +181,8 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
 
     if engine == "pyinstaller":
         cmd = [sys.executable, "-m", "PyInstaller", "--onefile", "--name=eldendisk",
-               f"--distpath={dist_dir}", f"--workpath={layout['work_dir']}", f"--specpath={layout['work_dir']}"]
+               f"--distpath={dist_dir}", f"--workpath={layout['work_dir']}", f"--specpath={layout['work_dir']}",
+               "--collect-submodules=eldendisk"]     # 1.8.0 part 3: the CLI imports each command only when it runs
         if icon_path:
             cmd.append(f"--icon={icon_path}")
         if embed:
@@ -190,7 +191,7 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
         cmd += [f"--add-data={f}{sep}{where}" for f, where in package_data(layout)]
     else:  # nuitka
         cmd = [sys.executable, "-m", "nuitka", "--onefile", f"--output-dir={dist_dir}",
-               f"--output-filename={EXE_NAME}"]
+               f"--output-filename={EXE_NAME}", "--include-package=eldendisk"]
         if icon_path:
             cmd.append(f"--windows-icon-from-ico={icon_path}")
         if embed:

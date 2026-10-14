@@ -434,6 +434,7 @@ The full example is in [spec 1.8.0 part 2, "The single source of truth"](../spec
  │   ├─ params-snapshot.json                    the game's own values of what `write` changed (for NAME=default)
  │   └─ eldendisk.log                           the log of every command
  ├─ baselines.json                              what `reset` set
+ ├─ exe-sha256.json                             the hash of eldenring.exe, kept while the file stays the same
  └─ output\disk.json                            what `export` writes
 <exe folder>\                                   eldendisk.exe; offsets.json, names.json, creative.json when you put them next to it
                                                 (they win over the copies in the exe)

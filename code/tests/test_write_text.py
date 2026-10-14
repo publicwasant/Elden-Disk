@@ -659,3 +659,46 @@ def test_the_second_fire_colour_reaches_the_places_the_first_leaves_out(rig, mon
         for at, (_old, new) in fxr.accent_writes(PLANS[eid], (0.55, 0.2, 1.0)).items():
             assert bytes(fg.mem[BASES[eid]][at:at + 16]) == new
 
+
+
+# ------------------------------------------------------------------------------------------------ innovate-spells apply (1.8.0 part 3)
+def test_apply_attaches_once_and_paints_the_colours_while_the_text_is_watched(rig, monkeypatch):
+    rig.open_session()
+    rig.box["flame"] = ((0.2, 0.65, 1.0), None)
+    seen, handles = [], []
+    real_open = wcmd.WritableProcessMemory
+    monkeypatch.setattr(wcmd, "WritableProcessMemory", lambda pid: handles.append(pid) or real_open(pid))
+
+    def put_text(mem, gate, target, texts, passes, cache=None, meanwhile=None):
+        seen.append("text written")
+        if meanwhile is not None:
+            meanwhile()
+        seen.append("text watched")
+        return 0
+
+    monkeypatch.setattr(wcmd, "_put_text", put_text)
+    monkeypatch.setattr(wcmd, "_put_flame", lambda *a, **k: seen.append("colours") or 0)
+    assert wcmd.cmd_apply_both(rig.args()) == 0
+    assert seen == ["text written", "colours", "text watched"] and len(handles) == 1
+
+
+def test_apply_with_colours_only_or_texts_only(rig, monkeypatch):
+    rig.open_session()
+    rig.box["flame"] = ((0.2, 0.65, 1.0), None)
+    seen = []
+    monkeypatch.setattr(wcmd, "_put_text", lambda *a, meanwhile=None, **k: seen.append(("text", meanwhile is not None)) or 0)
+    monkeypatch.setattr(wcmd, "_put_flame", lambda *a, **k: seen.append("colours") or 0)
+    assert wcmd.cmd_apply_both(rig.args(), texts=False) == 0 and seen == ["colours"]
+    seen.clear()
+    assert wcmd.cmd_apply_both(rig.args(), colours=False) == 0 and seen == [("text", False)]
+
+
+def test_the_text_watch_waits_only_what_the_colours_left_of_it(rig, monkeypatch):
+    rig.open_session()
+    rests = []
+    monkeypatch.setattr(wcmd, "_sleep", lambda s: rests.append(s) or rig.clock.__setitem__("t", rig.clock["t"] + s))
+
+    def colours():
+        rig.clock["t"] += 2.0                        # painting took 2 s of the 3 s watch
+    assert wcmd._put_text(rig.game, open_gate(), wcmd.locate("x"), rig.box["texts"], wcmd.LOOKS, meanwhile=colours) == 0
+    assert any(abs(r - (wcmd.SETTLE - 2.0)) < 1e-9 for r in rests) and wcmd.SETTLE not in rests

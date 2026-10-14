@@ -43,7 +43,19 @@ _(baseline: **[changes-version-1.7.2.md](changes-version-1.7.2.md)**; design: **
 | 15 | **Tests**: every command test moved to the new command line; new `test_baselines.py`, the host's requests, `scripts add / remove / change`, `write` of a script's state, `read` words. | `tests/` |
 | 16 | **Docs**: README, cli-commands (both), README-exe written again from spec Part 2; the handbooks' commands; spec 1.8.0 (status, implementation notes); this file. Version `1.8.0`. | `README.md`, `docs/` |
 
+### Part 3: Optimization (2026-10-15)
+
+| # | Change | Where |
+|:-:|:---|:---|
+| 17 | **The first decode of a build** 1.64 s → 1.07 s (a build 5.5 s → 4.9 s): compression.zstd gives the bytes, our decoder follows only its state; the gate keeps both decoders. | `innovate_spells/zstd.py` (`block_state`), `reblock.py`, `build.py` (`fast_body`) |
+| 18 | **The CLI loads only the command that runs**: 0.27 s → 0.17 s per command (`python -m`); the exe builds collect the whole package. | `__main__.py`, `tools/dev_pipeline.py` |
+| 19 | **The exe's hash remembered** (`<TOOLS-DIR>\exe-sha256.json`, by path, size and time): every attach hashed 87 MB (0.08 s, 1.7 s cold); `run` still hashes afresh. | `game/processes.py`, `game/attach.py`, `commands/run.py` |
+| 20 | **`innovate-spells apply` in one attach**, the colours painted during the text's 3 s watch (the log of 2026-10-14: 3 s idle and a second attach of 1.4 s). | `commands/write.py` (`cmd_apply_both`), `commands/innovate.py` |
+| 21 | **Tests** for the state-only decode, the hash cache, the lazy imports, the combined apply; spec 1.8.0 Part 3. | `tests/`, `docs/` |
+
 ## Not done (open)
 
+- The reads and scans inside the game, measured from a session's logs (spec 1.8.0 Part 3). Decided not to do: a one-folder exe, and the
+  decoded game file's state kept between builds.
 - Part 2 in the real game (the new command line, the scripts' control from another terminal, `reset`).
 - `creative.innovate_spells.<id>.design` written as a whole (a new build from the running session): the values only for now.
