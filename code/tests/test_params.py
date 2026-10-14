@@ -337,6 +337,7 @@ def world_with_params(**kw):
     m = full_world()
     pf.build_file(m, pf.small_ids(), **kw)
     pf.wire(m, 0)
+    pf.wire(m, 2)                       # the chain of params.catalog to SpEffectParam: every table is named by the game (1.8.0)
     return m
 
 
@@ -344,35 +345,42 @@ def sampler(m):
     return Sampler(m, pf.params_profile(), state_ids(), BASE)
 
 
-def test_the_sample_carries_the_params_and_the_document_shows_them_after_character():
+INDEX = {"SpEffectParam": {"rows": len(pf.small_ids())}}
+
+
+def test_the_sample_carries_the_index_of_the_tables_and_the_document_shows_it_after_character():
+    """1.8.0 part 4: the disk holds every table with its rows; the rows are read when a table is named, not here."""
     m = world_with_params()
     s = sampler(m).sample(NOW)
-    assert s.state == "CONNECTED" and s.params[KEY]["1621000"]["vfxId"] == 9010 and s.params_error is None
+    assert s.state == "CONNECTED" and s.params == INDEX and s.params_error is None
     doc = build_document(state="CONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE", exe_sha256="ab" * 32,
                          profile_label="Elden Ring 1.17.1", sample=s)
     assert list(doc) == ["systems", "character", "params"] and doc["params"] == s.params
     valid(doc)
 
 
-def test_params_are_looked_at_about_once_a_second_not_every_frame():
+def test_the_index_is_looked_at_about_once_a_second_not_every_frame():
     m = world_with_params()
     sp = sampler(m)
-    assert sp.sample(NOW).params[KEY]["1621000"]["effectEndurance"] == 2.0
-    res = store(m).resolve(KEY)
-    m.put(res.rows["1621000"] + 0x8, struct.pack("<f", -1.0))
-    assert sp.sample(NOW + timedelta(seconds=PARAMS_EVERY_S / 2)).params[KEY]["1621000"]["effectEndurance"] == 2.0
-    assert sp.sample(NOW + timedelta(seconds=PARAMS_EVERY_S + 0.01)).params[KEY]["1621000"]["effectEndurance"] == -1.0
+    calls = []
+    real = sp.tables.index
+    sp.tables.index = lambda: calls.append(1) or real()
+    sp.sample(NOW)
+    sp.sample(NOW + timedelta(seconds=PARAMS_EVERY_S / 2))
+    assert len(calls) == 1
+    sp.sample(NOW + timedelta(seconds=PARAMS_EVERY_S + 0.01))
+    assert len(calls) == 2
 
 
 def test_params_that_cannot_be_read_say_why_and_are_tried_again_soon():
     m = full_world()                                   # a world, but no param file yet
     sp = sampler(m)
     s = sp.sample(NOW)
-    assert s.state == "CONNECTED" and s.params is None and "SpEffectParam not found" in s.params_error
+    assert s.state == "CONNECTED" and s.params is None and "no param table" in s.params_error
     pf.build_file(m, pf.small_ids())
-    pf.wire(m, 0)
+    pf.wire(m, 2)
     assert sp.sample(NOW + timedelta(seconds=PARAMS_RETRY_S / 2)).params is None
-    assert sp.sample(NOW + timedelta(seconds=PARAMS_RETRY_S + 0.01)).params is not None
+    assert sp.sample(NOW + timedelta(seconds=PARAMS_RETRY_S + 0.01)).params == INDEX
 
 
 def test_params_never_stop_the_character_from_being_read():
@@ -396,10 +404,7 @@ def test_the_schema_checks_the_params_block():
     doc = build_document(state="CONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE", exe_sha256="ab" * 32,
                          profile_label="Elden Ring 1.17.1", sample=sampler(world_with_params()).sample(NOW))
     valid(doc)
-    for mutate in (lambda d: d["params"]["effects"]["1621000"].pop("vfxId"),
-                   lambda d: d["params"]["effects"]["1621000"].update(vfxId="9010"),
-                   lambda d: d["params"]["effects"]["1621000"].update(changeHpPoint=1.5),
-                   lambda d: d["params"]["effects"].update({"1621000": 5})):
+    for mutate in (lambda d: d["params"].update(SpEffectParam=5), lambda d: d["params"].update({"1 bad name": {}})):
         bad = json.loads(json.dumps(doc))
         mutate(bad)
         with pytest.raises(jsonschema.ValidationError):
@@ -420,14 +425,11 @@ def doc_with_params():
                           profile_label="x", sample=s)
 
 
-def test_a_query_finds_a_params_value_in_any_letter_case():
+def test_a_query_finds_a_table_of_the_index_in_any_letter_case():
     doc = doc_with_params()
-    for name in ("params.effects.1621000.effectEndurance", "PARAMS.effects.1621000.effectendurance"):
-        assert view.select(doc, name) == [("params.effects.1621000.effectEndurance", 2.0)]
-    assert [p for p, _ in view.select(doc, "params.effects.1625*.vfx*")] == ["params.effects.1625000.vfxId"]
-    assert len(view.select(doc, "params")) == 1 and len(view.select(doc, "params.effects.1621000")[0][1]) == 7
-    with pytest.raises(Exception, match="unknown name"):
-        view.select(doc, "params.effects.1621001.effectEndurance")
+    for name in ("params.SpEffectParam.rows", "PARAMS.speffectparam.ROWS"):
+        assert view.select(doc, name) == [("params.SpEffectParam.rows", 30)]
+    assert view.select(doc, "params") == [("params", INDEX)]
 
 
 def test_character_patterns_never_include_params():
@@ -437,35 +439,30 @@ def test_character_patterns_never_include_params():
 
 def test_params_numbers_are_shown_as_they_are():
     doc = doc_with_params()
-    rows = {r.path: r.value for r in view.rows(view.select(doc, "params.effects.1621000"), flat=True)}
-    assert rows["params.effects.1621000.effectEndurance"] == "2.0"
-    assert rows["params.effects.1621000.motionInterval"] == "0.1"
-    assert rows["params.effects.1621000.vfxId"] == "9010"          # an id, not 9,010
-    assert rows["params.effects.1621000.atkOccurrenceSpEffectId"] == "-1"
-    one = view.rows(view.select(doc, "params.effects.1621000.changeHpPoint"))
-    assert [(r.key, r.value) for r in one] == [("params.effects.1621000.changeHpPoint", "1")]
-    tree = view.rows(view.select(doc, "params.effects.1621000"))
-    assert [r.key for r in tree][:3] == ["params", "effects", "1621000"]
+    rows = {r.path: r.value for r in view.rows(view.select(doc, "params"), flat=True)}
+    assert rows["params.SpEffectParam.rows"] == "30"
 
 
-def test_a_change_of_a_params_value_is_a_change_for_the_live_view():
+def test_a_change_of_the_index_is_a_change_for_the_live_view():
     a, b = doc_with_params(), doc_with_params()
-    b["params"]["effects"]["1621000"]["effectEndurance"] = -1.0
-    ch = view.changes(view.flatten(a), view.flatten(b))
-    assert ch == [("params.effects.1621000.effectEndurance", 2.0, -1.0)]
+    b["params"]["SpEffectParam"]["rows"] = 31
+    assert view.changes(view.flatten(a), view.flatten(b)) == [("params.SpEffectParam.rows", 30, 31)]
 
 
-def test_a_write_to_the_real_sized_file_lands_where_cheat_engine_wrote_it():
+def test_a_write_to_the_real_sized_file_lands_where_cheat_engine_wrote_it(tmp_path):
+    from eldendisk.writer.paramedit import Snapshot
     from eldendisk.writer.writer import MemoryWriter, WriteGate, parse_policy, plan_params
     m = pf.Pages()
     pf.build_file(m, pf.real_ids(), only=set(pf.ROWS.values()))
-    pf.wire(m, 2)                                              # the third chain this time
+    pf.wire(m, 2)                                              # the chain of params.catalog to SpEffectParam
     prof = pf.params_profile()
-    policy, _ = plan_params(prof.params, parse_policy(["params.effects.*.effectEndurance=-1"], None))
+    names = [f"params.SpEffectParam.{rid}.effectEndurance=-1" for rid in pf.ROWS.values()]
+    policy, _ = plan_params(prof.params, parse_policy(names, None))
     gate = WriteGate()
     gate.open()
-    w = MemoryWriter(m, Sampler(m, prof, state_ids(), BASE), policy, gate, clock=lambda: 0.0)
+    w = MemoryWriter(m, Sampler(m, prof, state_ids(), BASE), policy, gate, clock=lambda: 0.0,
+                     snapshot=Snapshot(tmp_path / "snap.json", 1, 1))
     assert [r.wrote for r in w.tick()] == [True] * 4
-    assert sorted(m.log) == sorted(pf.HEAD + off for off in pf.REAL_ENDURANCE_FROM_HEAD.values())
+    assert sorted(set(m.log)) == sorted(pf.HEAD + off for off in pf.REAL_ENDURANCE_FROM_HEAD.values())
     for off in pf.REAL_ENDURANCE_FROM_HEAD.values():
         assert struct.unpack("<f", m.read(pf.HEAD + off, 4))[0] == -1.0

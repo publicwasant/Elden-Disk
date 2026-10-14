@@ -28,7 +28,7 @@ from ..game.processes import is_window_active, process_started
 from ..game.paramtables import Tables, parse_ref, pick
 from . import paramcheck
 from ..game.params import ParamError, ParamNameError, ParamStore
-from ..game.probe import as_json as probe_json, lines as probe_lines, probe
+from ..game.probe import as_json as probe_json, lines as probe_lines, probe, walk_lines, walk_report
 from ..game.profile import load_state_ids
 from ..game.values import UnknownName, is_param_name
 from ..logbook import book
@@ -152,13 +152,13 @@ def read_words(args) -> int:
 
 
 def _is_table_ref(name: str) -> bool:
-    """`params.<Table>.<id>...` for one of the six tables of the workbench (Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup or
-    the game's own names of them), not `params.effects...` (the rows the profile names)."""
+    """`params.<Table>[.<id or *>[.<field>]]` for a table of the game (1.8.0 part 4: every table, read when named); `params` alone and
+    `params.*` are the disk's index of the tables. `params.effects` (before 1.8.0) too, so that it says where its rows went."""
     parts = name.strip().split(".")
-    if len(parts) < 3 or parts[0].lower() != "params":
+    if len(parts) < 2 or parts[0].lower() != "params" or parts[1] in ("*", ""):
         return False
-    from ..game.paramtables import TABLES
-    return parts[1].lower() in TABLES
+    from ..game.paramnames import TABLES
+    return parts[1].lower() in TABLES or parts[1].lower() == "effects"
 
 
 def cmd_export(args) -> int:
@@ -221,6 +221,10 @@ def cmd_read(args) -> int:
     refs = []
     for text in args.param or []:
         try:
+            parts = text.strip().split(".")
+            if len(parts) >= 2 and parts[1].lower() == "effects":
+                raise ParamNameError(f"{text}: `params.effects` is gone (1.8.0): its rows are SpEffectParam's, for example "
+                                     "params.SpEffectParam.1621000")
             refs.append(parse_ref(text))
         except ParamNameError as exc:      # a wrong name is told before waiting for the game
             book.e("read", str(exc))
@@ -308,25 +312,31 @@ def _take_baselines(watch: baselines.Watch | None, sampler: Sampler, monitors) -
 
 
 def _probe_params(args, target: Target, mem) -> int:
-    """`probe`: list the param files reachable from the globals of the known chains. Reads only."""
+    """`probe`: list the param files reachable from the globals of the known chains, then every slot of `params.repository` with the
+    table it was named as (1.8.0 part 4). Reads only."""
     if target.profile.params is None:
         book.e("read", "this exe version has no params block in offsets.json; nothing to probe from")
         return EXIT_ERROR
     result = probe(ParamStore(mem, target.profile, target.base))
     book.d("read", f"probe: {len(result.hits)} param file(s)")
+    walk = None
+    if target.profile.params.repository is not None:
+        walk = walk_report(Tables(mem, target.profile, target.base))
+        book.d("read", f"probe: {len(walk['slots'])} slot(s) of params.repository, {len(walk['missing'])} table(s) not found")
     if args.json:
-        ui.out(view.as_json([("probe", probe_json(result))]))
+        ui.out(view.as_json([("probe", {**probe_json(result), **({"repository": walk} if walk else {})})]))
     else:
-        for line in probe_lines(result):
+        for line in probe_lines(result) + (walk_lines(walk) if walk else []):
             ui.out(line)
-    if not result.hits:
+    if not result.hits and not (walk and walk["slots"]):
         book.e("read", "no param file found from the known chains (is a character loaded? try again in the world)")
         return EXIT_ERROR
     return 0
 
 
 def _read_params(args, target: Target, mem, refs) -> int:
-    """`read params.<Table>.<id>`: print rows of the six tables as a tree (`--flat`: one `params.<Table>.<id>.<field>  value` row each). Reads only."""
+    """`read params.<Table>[.<id or *>[.<field>]]`: a table (every row), a row, the fields of every row that match, as a tree
+    (`--flat`: one `params.<Table>.<id>.<field>  value` row each). Reads only; the rows are read now, from the game (1.8.0 part 4)."""
     if target.profile.params is None:
         book.e("read", "this exe version has no params block in offsets.json")
         return EXIT_ERROR
@@ -334,12 +344,20 @@ def _read_params(args, target: Target, mem, refs) -> int:
         tables = Tables(mem, target.profile, target.base)
         selection: list[tuple[str, object]] = []
         for table, row_id, pattern in refs:
-            row = pick(tables.read_row(table, row_id), pattern)
-            path = f"params.{table}.{row_id}"
+            if row_id is None or row_id == "*":
+                rows = {str(rid): row for rid, row in tables.read_table(table).items()}
+                if pattern is not None:
+                    rows = {rid: _pick_some(row, pattern) for rid, row in rows.items()}
+                    rows = {rid: row for rid, row in rows.items() if row}
+                    if not rows:
+                        raise ParamNameError(f"no field of {table} matches {pattern!r}")
+                path, value = f"params.{table}", rows
+            else:
+                path, value = f"params.{table}.{row_id}", pick(tables.read_row(table, row_id), pattern)
             if all(path != p for p, _ in selection):
-                selection.append((path, row))
-            else:    # the same row asked twice (two patterns): merge the fields
-                dict(selection)[path].update(row)
+                selection.append((path, value))
+            else:    # the same row or table asked twice (two patterns): merge
+                dict(selection)[path].update(value)
     except (ParamError, ParamNameError) as exc:
         book.e("read", str(exc))
         return EXIT_ERROR
@@ -348,6 +366,13 @@ def _read_params(args, target: Target, mem, refs) -> int:
     else:
         ui.rows(view.rows(selection, flat=args.flat))
     return 0
+
+
+def _pick_some(row: dict, pattern: str) -> dict:
+    try:
+        return pick(row, pattern)
+    except ParamNameError:
+        return {}
 
 
 def _open_check_file(path: str, default: bool = False):

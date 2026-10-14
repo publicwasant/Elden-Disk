@@ -53,9 +53,20 @@ _(baseline: **[changes-version-1.7.2.md](changes-version-1.7.2.md)**; design: **
 | 20 | **`innovate-spells apply` in one attach**, the colours painted during the text's 3 s watch (the log of 2026-10-14: 3 s idle and a second attach of 1.4 s). | `commands/write.py` (`cmd_apply_both`), `commands/innovate.py` |
 | 21 | **Tests** for the state-only decode, the hash cache, the lazy imports, the combined apply; spec 1.8.0 Part 3. | `tests/`, `docs/` |
 
+### Part 4: Every param table in the disk (2026-10-15)
+
+| # | Change | Where |
+|:-:|:---|:---|
+| 22 | **Every table of the game** (194 in 1.17.1, 170,966 rows) is `params.<Table>.<id>.<field>`, by the game's own name of the table in any letter case; the short names still work. The layouts from Paramdex, generated against the game's `regulation.bin`: 188 tables decode, 6 have no def that fits yet. | `game/paramlayouts.py`, `game/paramnames.py`, `tools/gen_paramdefs.py` |
+| 23 | **Read when named.** The document's `params` is `{Table: {"rows": n}}`; `read params.NpcParam` (every row), `params.NpcParam.10000000[.hp]`, `params.NpcParam.*.hp` read from the game then. A script's table reads a row when it is touched. | `game/paramtables.py`, `reader/sampler.py`, `commands/read.py`, `creative/scripts/backend.py`, `disk.schema.json` |
+| 24 | **`params.effects` is gone**, folded into `params.SpEffectParam.<id>`; a name under it says where its rows are. Every table is written through the same edits (type and bit width checked; an id field gets a note). | `writer/writer.py`, `writer/paramedit.py` |
+| 25 | **`params.repository`**: the list the game keeps every table in, walked once; each slot named by its param type, rows, ids, the digest of its rows or the name next to it, else left out with the reason. `probe` prints every slot. | `game/profile.py`, `game/paramtables.py`, `game/probe.py`, `offsets.json` |
+| 26 | **Tests** of the walk (`test_param_walk.py`); the `params.effects` tests moved to `params.SpEffectParam`; docs and spec 1.8.0 Part 4. | `tests/`, `docs/` |
+
 ## Not done (open)
 
 - The reads and scans inside the game, measured from a session's logs (spec 1.8.0 Part 3). Decided not to do: a one-folder exe, and the
   decoded game file's state kept between builds.
 - Part 2 in the real game (the new command line, the scripts' control from another terminal, `reset`).
+- Part 4 in the real game: the walk of `params.repository` (`probe`).
 - `creative.innovate_spells.<id>.design` written as a whole (a new build from the running session): the values only for now.

@@ -1,51 +1,71 @@
-"""Any row of the six workbench tables, any field by name (`read --param Magic.6230`). Read-only.
+"""Every table of the game's params, any row, any field by name (`read params.NpcParam.10000000.hp`). Read-only.
 
-The field layouts are Paramdex's (`paramlayouts.py`, generated); where a table's file is comes from `params.catalog` in
-offsets.json (found with `probe`). The same decoder serves a row from the running game and a row from a
-regulation.bin file (`decode_row` takes the row's bytes), so the two can be compared field for field.
+1.8.0 part 4: every table of the game's regulation.bin, by the name the file gives it (paramnames.py). The field layouts are Paramdex's
+(`paramlayouts.py`, generated against the game's own file); where a table's file is comes from `params.catalog` (six chains, measured)
+and, for every other table, from walking `params.repository`, the list the game keeps every table in: each slot that ends in a valid
+param file is named by the param type the file gives, its rows and, for tables of the same type, its first and last row id, the digest
+of its rows or the name the game keeps next to the slot (`Tables.found`). The same decoder serves a row from the running game and a row
+from a regulation.bin file (`decode_row` takes the row's bytes), so the two can be compared field for field.
 
 Correct-or-silent, like `params.py`: the file header must pass the same checks, the row size found in the file must be the
 layout's, and a row is read only when its descriptor points inside the file. One failed check stops the read.
 """
 from __future__ import annotations
 
+import hashlib
+import re
 import struct
+import time
+from collections import Counter
+from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 
+from .memory import is_user_ptr, read_ptr
 from .paramlayouts import LAYOUTS
+from .paramnames import TABLES, canonical, has_fields  # noqa: F401  (TABLES: the names a person may type)
 from .params import ParamError, ParamNameError, ParamStore, shown
-from .probe import row_size_of
 
 ROOT = "params"
 SAMPLE_ROWS = 512
 READ_CHUNK = 1 << 20      # bytes per read of a whole table
 MAX_BEHIND = 4 << 20      # how far behind the strings a row of a table grown at its end may lie
+MAX_EXTRA = 200           # rows a build may add to a table (innovate-spells: Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup)
+TYPE_AT = 0x10            # the u64 in a param file's header that says where its param type (a name) is
+NAME_SPAN = 0x100         # bytes of a slot's object looked through for the table's name, when nothing else tells two tables apart
+WALK_AGAIN_S = 5.0        # a walk that found no table (the game had not loaded them yet) is made again after this many seconds
+_UTF16 = re.compile(rb"(?:[\x20-\x7e]\x00){4,}")      # a UTF-16 text of plain letters, as the game keeps resource names
 UNIT_FORMATS = _FMT = {"s8": "<b", "u8": "<B", "s16": "<h", "u16": "<H", "s32": "<i", "u32": "<I", "f32": "<f", "b32": "<i"}
-
-# what a person may type for a table: the workbench name, the game's own name, the Paramdex name (any letter case)
-_ALIASES = {"equipparamgoods": "Goods", "magicparam": "Magic", "speffectparam": "SpEffect", "bulletparam": "Bullet",
-            "atkparam": "AtkParam_Pc", "atkpc": "AtkParam_Pc", "shoplineupparam": "ShopLineup"}
-TABLES = {**{name.lower(): name for name in LAYOUTS}, **_ALIASES, **{v["param"].lower(): k for k, v in LAYOUTS.items()}}
 
 
 def table_name(text: str) -> str:
-    """The workbench name of a table as typed (`magic`, `MagicParam`, `Magic`)."""
-    name = TABLES.get(text.strip().lower())
+    """The game's name of a table as typed (`npcparam`, `NpcParam`, `Goods`, `MagicParam`)."""
+    name = canonical(text)
     if name is None:
-        raise ParamNameError(f"{text!r} is not a table of the workbench (one of {', '.join(LAYOUTS)})")
+        raise ParamNameError(f"{text!r} is not a table of the game (`read params` lists them)")
     return name
 
 
-def parse_ref(text: str) -> tuple[str, int, str | None]:
-    """`Magic.6230` or `params.Magic.6230.mp*` -> (table, row id, field name or pattern or None for every field)."""
+def _row_part(text: str):
+    if text == "*":
+        return "*"
+    if not text.isdigit():
+        raise ParamNameError(f"the row id must be a number or *, got {text!r}")
+    return int(text)
+
+
+def parse_ref(text: str) -> tuple[str, int | str | None, str | None]:
+    """`Magic.6230`, `params.Magic.6230.mp*`, `params.NpcParam` (every row), `params.NpcParam.*.hp` (a field of every row) ->
+    (table, row id or "*" or None for every row, field name or pattern or None for every field)."""
     parts = text.strip().split(".")
     if parts and parts[0].lower() == ROOT:
         parts = parts[1:]
-    if len(parts) < 2 or len(parts) > 3:
-        raise ParamNameError(f"{text!r}: write it as Table.id or Table.id.field (for example Magic.6230.mp)")
-    if not parts[1].isdigit():
-        raise ParamNameError(f"{text!r}: the row id must be a number, got {parts[1]!r}")
-    return table_name(parts[0]), int(parts[1]), (parts[2] if len(parts) == 3 else None)
+    if not 1 <= len(parts) <= 3 or not parts[0]:
+        raise ParamNameError(f"{text!r}: write it as Table, Table.id or Table.id.field (for example Magic.6230.mp)")
+    table = table_name(parts[0])
+    if len(parts) == 1:
+        return table, None, None
+    row = _row_part(parts[1])
+    return table, row, (parts[2] if len(parts) == 3 else None)
 
 
 # ---- decoding a row ---------------------------------------------------------------------------------------------
@@ -58,7 +78,10 @@ def _one(ftype: str, raw: bytes, off: int, bpos: int, bits: int):
 
 def decode_row(table: str, raw: bytes) -> dict:
     """{field: value} in the order of the layout; a field that is an array is a list; padding is not listed."""
+    table = canonical(table) or table
     layout = LAYOUTS[table]
+    if layout["fields"] is None:
+        raise ParamError(f"{table}: its rows cannot be decoded ({layout['why']})")
     if len(raw) != layout["size"]:
         raise ParamError(f"{table}: a row is {layout['size']} bytes, got {len(raw)}")
     out: dict = {}
@@ -84,20 +107,204 @@ def pick(row: dict, pattern: str | None) -> dict:
     return hits
 
 
+def row_size_of(offsets: list[int]) -> int | None:
+    """The row size: the most common gap between consecutive row data offsets (None if there are not enough rows).
+    Not the gcd: a row a build added sits in front of the old data, and one such offset would break a gcd."""
+    ordered = sorted(set(offsets))
+    gaps = Counter(b - a for a, b in zip(ordered, ordered[1:]))
+    return gaps.most_common(1)[0][0] if gaps else None
+
+
+# ---- which table a file in memory is ----------------------------------------------------------------------------
+@dataclass
+class Seen:
+    """A param file found at slot `slot` of the list: what it says of itself, and the table it was named as (or why not)."""
+    slot: int
+    head: int
+    ptype: str
+    rows: int
+    stride: int | None
+    first: int | None
+    last: int | None
+    table: str | None = None
+    why: str = ""
+    candidates: list[str] = field(default_factory=list)
+
+
+def candidates_of(ptype: str, rows: int, stride: int | None, first: int | None, last: int | None) -> list[str]:
+    """The tables a file of this type and these rows may be: the type, the rows (a build adds up to MAX_EXTRA), the row size, then
+    the first and last row id when that narrows it down (a grown table has another last id)."""
+    hits = [n for n, v in LAYOUTS.items() if v["type"] == ptype and 0 <= rows - v["rows"] <= MAX_EXTRA
+            and (stride is None or rows < 2 or v["stride"] == stride)]
+    if len(hits) > 1:
+        same = [n for n in hits if LAYOUTS[n]["rows"] == rows and LAYOUTS[n]["first"] == first and LAYOUTS[n]["last"] == last]
+        hits = same or hits
+    return hits
+
+
 # ---- the running game ---------------------------------------------------------------------------------------------
 class Tables:
     def __init__(self, mem, profile, module_base: int):
-        if profile.params is None or not profile.params.catalog:
-            raise ParamError("this exe version has no params.catalog in offsets.json (run `probe`)")
+        if profile.params is None or not (profile.params.catalog or profile.params.repository):
+            raise ParamError("this exe version has no params.catalog or params.repository in offsets.json (run `probe`)")
         self.store = ParamStore(mem, profile, module_base)
-        self.mem, self.catalog = mem, profile.params.catalog
+        self.mem, self.base = mem, module_base
+        self.catalog = dict(profile.params.catalog)
+        self.repository = profile.params.repository
+        self._seen: list[Seen] | None = None
+        self._walked_at = -1e9
         self._index: dict = {}         # table -> (head, count, data start, {row id: descriptor number}): see row_address
 
+    # -- every table ---------------------------------------------------------------------------------------------
+    def found(self) -> list[Seen]:
+        """Every slot of the list that ends in a param file, with the table it is (walked once per object; about 200 small reads)."""
+        now = time.monotonic()
+        if self._seen is None or (not self._seen and now - self._walked_at >= WALK_AGAIN_S):   # none yet, or none loaded at the last walk
+            self._seen, self._walked_at = (self._walk() if self.repository is not None else []), now
+        return self._seen
+
+    def _walk(self) -> list[Seen]:
+        lay = self.store.spec.layout
+        out: list[Seen] = []
+        for n in range(self.repository.slots):
+            head, _why = self.store._follow(None, self.repository.chain(n))
+            if head is None:
+                continue
+            info, _why = self.store._check_head(head)
+            if info is None:
+                continue
+            count = info[0]
+            ptype = self._type_of(head)
+            if ptype is None:
+                continue
+            raw = self.mem.read(head + lay.descriptors, min(count, SAMPLE_ROWS) * lay.descriptor_size)
+            last_raw = self.mem.read(head + lay.descriptors + (count - 1) * lay.descriptor_size, lay.descriptor_size)
+            if raw is None or last_raw is None:
+                continue
+            n_read = len(raw) // lay.descriptor_size
+            ids = [struct.unpack_from("<i", raw, i * lay.descriptor_size + lay.descriptor_id)[0] for i in range(n_read)]
+            offs = [struct.unpack_from("<Q", raw, i * lay.descriptor_size + lay.descriptor_data_offset)[0] for i in range(n_read)]
+            seen = Seen(n, head, ptype, count, row_size_of(offs), ids[0] if ids else None,
+                        struct.unpack_from("<i", last_raw, lay.descriptor_id)[0])
+            seen.candidates = candidates_of(ptype, count, seen.stride, seen.first, seen.last)
+            out.append(seen)
+        self._name(out)
+        return out
+
+    def _type_of(self, head: int) -> str | None:
+        raw = self.mem.read(head + TYPE_AT, 8)
+        if raw is None:
+            return None
+        off = struct.unpack("<Q", raw)[0]
+        if not 0 < off < 1 << 26:
+            return None
+        text = self.mem.read(head + off, 64)
+        if text is None or b"\0" not in text:
+            return None
+        name = text.split(b"\0", 1)[0]
+        return name.decode("ascii") if name and all(32 < c < 127 for c in name) else None
+
+    def _name(self, out: list[Seen]) -> None:
+        """Give every file its table: alone of its kind; else by the digest of its rows; else by the name next to its slot."""
+        for s in out:
+            if len(s.candidates) == 1:
+                s.table = s.candidates[0]
+            elif not s.candidates:
+                s.why = f"no table of type {s.ptype} with {s.rows} rows"
+        for s in [s for s in out if len(s.candidates) > 1]:
+            digest = self._digest(s)
+            hits = [n for n in s.candidates if LAYOUTS[n].get("digest") and LAYOUTS[n]["digest"] == digest]
+            if len(hits) != 1:
+                hits = self._named_next_to_slot(s)
+            if len(hits) == 1:
+                s.table = hits[0]
+            else:
+                s.why = f"fits {', '.join(s.candidates)}: they cannot be told apart in memory"
+        taken: dict[str, Seen] = {}
+        for s in out:
+            if s.table is None:
+                continue
+            if s.table in taken:                  # the same table twice: neither is trusted
+                taken[s.table].why = s.why = f"two slots look like {s.table}"
+                taken[s.table].table = None
+                s.table = None
+                continue
+            taken[s.table] = s
+
+    def _digest(self, s: Seen) -> str | None:
+        if s.stride is None or s.rows < 2 or s.rows * s.stride > 1 << 16:
+            return None
+        lay = self.store.spec.layout
+        raw = self.mem.read(s.head + lay.descriptors, s.rows * lay.descriptor_size)
+        if raw is None:
+            return None
+        offs = [struct.unpack_from("<Q", raw, i * lay.descriptor_size + lay.descriptor_data_offset)[0] for i in range(s.rows)]
+        lo, hi = min(offs), max(offs) + s.stride
+        blob = self.mem.read(s.head + lo, hi - lo)
+        if blob is None:
+            return None
+        return hashlib.sha256(b"".join(blob[o - lo:o - lo + s.stride] for o in offs)).hexdigest()[:16]
+
+    def _near_slot(self, s: Seen) -> list[bytes]:
+        """The bytes of the slot's object and of what each pointer in it points to (where the game may keep the table's name)."""
+        obj = read_ptr(self.mem, self.base + self.repository.rva)
+        slot = read_ptr(self.mem, obj + self.repository.first + s.slot * self.repository.stride) if obj else None
+        if not slot or not is_user_ptr(slot):
+            return []
+        raw = self.mem.read(slot, NAME_SPAN) or b""
+        texts = [raw]
+        for i in range(0, len(raw) - 7, 8):
+            p = struct.unpack_from("<Q", raw, i)[0]
+            if is_user_ptr(p):
+                texts.append(self.mem.read(p, 128) or b"")
+        return texts
+
+    def _named_next_to_slot(self, s: Seen) -> list[str]:
+        """The candidates whose name (UTF-16, as the game keeps resource names) is in the slot's object or behind a pointer in it."""
+        texts = self._near_slot(s)
+        return [n for n in s.candidates if any(n.encode("utf-16-le") + b"\0\0" in t for t in texts)]
+
+    def texts_next_to_slot(self, s: Seen) -> list[str]:
+        """Every UTF-16 text of 4 letters or more next to the slot, in the order found (for `probe`: where the names are)."""
+        out: list[str] = []
+        for raw in self._near_slot(s):
+            for m in _UTF16.finditer(raw):
+                text = m.group().decode("utf-16-le")
+                if text not in out:
+                    out.append(text)
+        return out
+
+    def chain_of(self, table: str):
+        """The chain to `table`'s file: the measured one of `catalog`, else the slot of the list it was found at."""
+        table = table_name(table)
+        chain = self.catalog.get(table)
+        if chain is not None:
+            return chain
+        for s in self.found():
+            if s.table == table:
+                return self.repository.chain(s.slot)
+        why = next((s.why for s in self.found() if table in s.candidates and s.why), None)
+        if why is None and self.repository is None:
+            why = "no params.repository in offsets.json"
+        raise ParamError(f"{table} not found in the game's memory" + (f" ({why})" if why else ""))
+
+    def index(self) -> dict[str, dict]:
+        """{table: {"rows": n}} of every table found (the document's `params` before a table is named), in the order of the game's file."""
+        out: dict[str, dict] = {}
+        for table in LAYOUTS:
+            if table not in self.catalog and not any(s.table == table for s in self.found()):
+                continue
+            try:
+                _head, count, _data = self._head(table)
+            except ParamError:
+                continue
+            out[table] = {"rows": count}
+        return out
+
+    # -- one table -----------------------------------------------------------------------------------------------
     def _head(self, table: str) -> tuple[int, int, int]:
         """(head, row count, data start) of `table`: the chain followed again and the file's header checked, every time."""
-        chain = self.catalog.get(table)
-        if chain is None:
-            raise ParamError(f"{table}: no chain in params.catalog")
+        chain = self.chain_of(table)
         head, reason = self.store._follow(None, chain)
         if head is None:
             raise ParamError(f"{table} not found ({reason})")
@@ -108,6 +315,7 @@ class Tables:
 
     def locate(self, table: str) -> tuple[int, int, int, bytes]:
         """(head, row count, data start, the descriptor table) of `table`, after the file and row-size checks."""
+        table = table_name(table)
         head, count, data_start = self._head(table)
         lay = self.store.spec.layout
         raw = self.mem.read(head + lay.descriptors, count * lay.descriptor_size)
@@ -116,16 +324,22 @@ class Tables:
         offs = [struct.unpack_from("<Q", raw, i * lay.descriptor_size + lay.descriptor_data_offset)[0]
                 for i in range(min(count, SAMPLE_ROWS))]
         size = row_size_of(offs)
-        if size is not None and size != LAYOUTS[table]["size"]:
-            raise ParamError(f"{table}: the file's rows are {size} bytes, the layout says {LAYOUTS[table]['size']}: "
+        if size is not None and size != LAYOUTS[table]["stride"]:
+            raise ParamError(f"{table}: the file's rows are {size} bytes, the layout says {LAYOUTS[table]['stride']}: "
                              "wrong table or another game version")
         return head, count, data_start, raw
+
+    def ids(self, table: str) -> list[int]:
+        """The row ids of `table`, in the file's order."""
+        _head, count, _data, raw = self.locate(table)
+        lay = self.store.spec.layout
+        return [struct.unpack_from("<I", raw, i * lay.descriptor_size + lay.descriptor_id)[0] for i in range(count)]
 
     def _check_offset(self, table: str, row_id: int, off: int, count: int, data_start: int, head: int = 0) -> None:
         """The descriptor of a row must point to a row-sized slot in the gap (a row a design added), in the old data, or, for a
         table a design grew at its END (AtkParam_Pc: the descriptors grew into the front of the data, the first rows were copied
         behind the strings), in the old data counted back from the strings or in the rows behind the strings."""
-        lay, size = self.store.spec.layout, LAYOUTS[table]["size"]
+        lay, size = self.store.spec.layout, LAYOUTS[table]["stride"]
         first = lay.descriptors + count * lay.descriptor_size
         in_gap = first <= off and off + size <= data_start
         in_data = off >= data_start and (off - data_start) % size == 0 and off + size <= data_start + count * size
@@ -139,11 +353,18 @@ class Tables:
         raw = self.mem.read(head, 4)
         return struct.unpack("<I", raw)[0] if raw else 0
 
+    def _need_fields(self, table: str) -> int:
+        if not has_fields(table):
+            raise ParamError(f"{table}: its rows cannot be decoded ({LAYOUTS[table]['why']})")
+        return LAYOUTS[table]["size"]
+
     def row_address(self, table: str, row_id: int) -> tuple[int, bytes]:
         """(address of the row, its bytes). The chain and the header are checked every time; the whole descriptor table (hundreds of
         KB for SpEffect) is read only the first time and when the table changed (another head, another row count): after that, ONE
         descriptor, the row's own, is read and must still name the row (1.7.2: the scripts read a few rows several times a second)."""
-        lay, size = self.store.spec.layout, LAYOUTS[table]["size"]
+        table = table_name(table)
+        size = self._need_fields(table)
+        lay = self.store.spec.layout
         head, count, data_start = self._head(table)
         known = self._index.get(table)
         off = None
@@ -170,8 +391,10 @@ class Tables:
 
     def all_rows(self, table: str) -> dict[int, bytes]:
         """{row id: the row's bytes} of the whole table, read in a few big pieces (checked like `row_address`)."""
+        table = table_name(table)
+        size = self._need_fields(table)
         head, count, data_start, raw = self.locate(table)
-        lay, size = self.store.spec.layout, LAYOUTS[table]["size"]
+        lay = self.store.spec.layout
         offs: dict[int, int] = {}
         for i in range(count):
             base = i * lay.descriptor_size
@@ -192,3 +415,7 @@ class Tables:
 
     def read_row(self, table: str, row_id: int) -> dict:
         return decode_row(table, self.row_address(table, row_id)[1])
+
+    def read_table(self, table: str) -> dict[int, dict]:
+        """{row id: {field: value}} of every row of `table`."""
+        return {rid: decode_row(table, raw) for rid, raw in self.all_rows(table).items()}

@@ -121,7 +121,9 @@ def test_read_words_parse_into_what_read_does(monkeypatch):
     assert cli.main(["read", "params.Magic.6230", "params.SpEffect.1621000.effectEndurance"]) == 0
     assert seen["param"] == ["params.Magic.6230", "params.SpEffect.1621000.effectEndurance"] and seen["query"] is None
     seen.clear()
-    assert cli.main(["read", "params.effects.1621000"]) == 0 and seen["query"] == ["params.effects.1621000"] and not seen["param"]
+    assert cli.main(["read", "params.NpcParam"]) == 0 and seen["param"] == ["params.NpcParam"] and seen["query"] is None
+    seen.clear()
+    assert cli.main(["read", "params"]) == 0 and seen["query"] == ["params"] and not seen["param"]      # the index of the tables
     seen.clear()
     for whole in (["read"], ["read", "*"], ["read", "all"], ["read", "--tree"]):
         cli.main(whole)

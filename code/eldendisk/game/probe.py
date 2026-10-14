@@ -17,6 +17,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from .memory import is_user_ptr, read_ptr
+from .paramlayouts import LAYOUTS
 from .params import MAX_ROWS, ParamStore
 
 SCAN_SPAN = 0x4000       # bytes of the object that holds the entries, from its start
@@ -169,4 +170,37 @@ def lines(result: ProbeResult) -> list[str]:
     out += ["", f"other param files found ({len(others)}), by slot:"]
     for h in sorted(others, key=lambda x: (x.root_rva, x.slot)):
         out.append(f"  0x{h.root_rva:X} +0x{h.slot:X}: {h.count} rows, row size {h.row_size}, first ids {h.first_ids}")
+    return out
+
+
+# ---- 1.8.0 part 4: every slot of params.repository and the table it was named as --------------------------------
+def walk_report(tables) -> dict:
+    """What `Tables` found in every slot of the list: the table, or why none, and the texts next to the slot (where the game
+    may keep the table's name; this is what tells tables of identical rows apart). Tables of the game no slot was named as
+    are listed as missing."""
+    rep = tables.repository
+    seen = tables.found()
+    named = {s.table for s in seen if s.table}
+    return {
+        "list": f"exe+0x{rep.rva:X} -> +0x{rep.first:X} + n*0x{rep.stride:X} -> " + " -> ".join(f"+0x{o:X}" for o in rep.tail),
+        "slots": [{"slot": s.slot, "table": s.table, "type": s.ptype, "rows": s.rows, "row_size": s.stride,
+                   "first": s.first, "last": s.last, "why": s.why or None, "candidates": s.candidates,
+                   "texts": tables.texts_next_to_slot(s)[:8]} for s in seen],
+        "missing": [t for t in LAYOUTS if t not in named],
+    }
+
+
+def walk_lines(report: dict) -> list[str]:
+    """The text the author reads (and pastes back): one line per slot, then the tables not found."""
+    slots = report["slots"]
+    named = [s for s in slots if s["table"]]
+    out = ["", f"every table of the list {report['list']}: {len(slots)} param file(s), {len(named)} named"]
+    for s in slots:
+        name = s["table"] or "?"
+        out.append(f"  slot {s['slot']:>3}  {name:<36} {s['rows']} rows, row size {s['row_size']}, ids {s['first']}..{s['last']},"
+                   f" type {s['type']}")
+        if s["table"] is None:
+            out.append(f"      {s['why']}")
+            out.append(f"      texts next to the slot: {', '.join(s['texts']) or '(none)'}")
+    out.append(f"tables of the game not found ({len(report['missing'])}): {', '.join(report['missing']) or '(none)'}")
     return out

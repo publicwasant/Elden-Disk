@@ -453,7 +453,15 @@ A profile is pinned to one `eldenring.exe` hash, so nothing is borrowed from ano
 }
 ```
 
-- **`tables.<name>`:** the name is what you type and what `disk.json` shows: `params.effects.<row id>.<field>`.
+- **`tables.<name>`:** since 1.8.0 no longer a name you type (`params.effects` is gone): its chains are where `probe` starts looking.
+- **`catalog` (1.8.0):** a measured chain per table, by the game's name of the table: `"SpEffectParam": { "rva": "0x3D85F58", "offsets":
+  ["0x4C0", "0x80", "0x80"] }`. Six are measured (EquipParamGoods, Magic, SpEffectParam, Bullet, AtkParam_Pc, ShopLineupParam); they win
+  for their tables. A name that is not a table of the game is refused.
+- **`repository` (1.8.0):** the list the game keeps every table in, for every other table: `{ "rva": "0x3D85F58", "first": "0x88",
+  "stride": "0x48", "slots": 256, "tail": ["0x80", "0x80"] }`. Slot n is `[[base + rva] + first + n * stride]`, then the `tail` to the
+  file. The tool walks every slot and names each file by its param type, rows, ids, the digest of its rows or the name next to its slot
+  (spec 1.8.0 Part 4); `probe` prints every slot with its table, so a new game version can be checked at once. The catalog's chains are
+  slots of this list: their offsets give `first` and `stride`.
 - **`file_layout`:** a param file in memory starts with a header (row count as `u16`, data start as `u64`), then a table of row descriptors (`descriptor_size` bytes each: row id `u32`, offset of the row data from the file start `u64`), then the rows (`row_size` bytes each). The tool requires `data_start == descriptors + row_count * descriptor_size`; this is how it knows a chain really leads to a param file. Other param files of the game have the same layout, a different `row_size` and different chains.
 - **`head_chains`:** `[...[[base + rva] + o1] + o2 ...]` is the **start of the file**: read an 8-byte pointer at `base + rva`, add `o1`, read a pointer there, and so on; the last pointer read is the file head. Cheat Engine lists these offsets the other way round (last applied first) and its final entry is the row field offset, not part of the chain. Give several chains: the first that leads to a valid file is used.
 - **`fields`:** offset inside a row, type (`f32` or `s32`), `writable`. A writable field needs `min` and `max` (the range `write` clamps to). Offsets come from the Paramdex definition of the param (`Defs/<Param>.xml`) and are reliable for the fields the definition lists; check one in the game before trusting it.

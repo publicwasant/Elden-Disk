@@ -17,8 +17,8 @@ from ..game.paramlayouts import LAYOUTS
 from ..game.paramtables import decode_row
 
 # workbench table -> the name of its file inside the archive
-FILES = {"Goods": "EquipParamGoods", "Magic": "Magic", "SpEffect": "SpEffectParam", "Bullet": "Bullet",
-         "AtkParam_Pc": "AtkParam_Pc", "ShopLineup": "ShopLineupParam"}
+FILES = {"EquipParamGoods": "EquipParamGoods", "Magic": "Magic", "SpEffectParam": "SpEffectParam", "Bullet": "Bullet",
+         "AtkParam_Pc": "AtkParam_Pc", "ShopLineupParam": "ShopLineupParam"}
 SHOWN_ROWS = 20          # rows with differences printed per table (all of them are in --json)
 SHOWN_FIELDS = 8         # differing fields printed per row
 

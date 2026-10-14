@@ -89,7 +89,7 @@ def test_a_pattern_sets_several_fields_and_an_id_field_gets_a_note(world, capsys
     ("params.Magic.6230.mpp=1", "did you mean mp"),
     ("params.Magic.6230=1", "name one field"),
     ("params.Magic.x.mp=1", "one number"),
-    ("params.Nothing.1.mp=1", "unknown name"),
+    ("params.Nothing.1.mp=1", "not a table of the game"),
     ("params.Magic.6230.mp=1", None),                          # control: this one is fine
 ])
 def test_a_value_that_does_not_fit_or_a_wrong_name_writes_nothing(world, capsys, assign, why):
@@ -110,10 +110,13 @@ def test_a_row_that_is_not_in_the_game_is_not_applied(world, capsys):
     assert "not in the file" in capsys.readouterr().err and mem.log == []
 
 
-def test_old_and_new_names_work_in_one_command(world):
+def test_the_short_and_the_games_names_of_a_table_work_in_one_command_and_effects_is_gone(world, capsys):
     vault, mem, args = world
-    assert wcmd.cmd_write(args("params.effects.1621000.effectEndurance=-1", "params.Magic.6230.mp=10", "level=150")) == 0
-    assert row(mem, "Magic", 6230)["mp"] == 10
+    assert wcmd.cmd_write(args("params.SpEffect.1621000.effectEndurance=-1", "params.Magic.6230.mp=10", "level=150")) == 0
+    assert row(mem, "Magic", 6230)["mp"] == 10 and row(mem, "SpEffectParam", 1621000)["effectEndurance"] == -1.0
+    mem.log.clear()
+    assert wcmd.cmd_write(args("params.effects.1621000.effectEndurance=-1")) == 1 and mem.log == []
+    assert "params.SpEffectParam.1621000.effectEndurance" in capsys.readouterr().err       # where the rows went (1.8.0)
 
 
 # ---- resetting ----
@@ -131,7 +134,7 @@ def test_reset_puts_the_game_value_back_and_forgets_it(world, capsys):
 def test_reset_of_a_row_a_table_a_pattern_and_all(world):
     vault, mem, args = world
     wcmd.cmd_write(args("params.Magic.6230.mp=1", "params.Magic.6230.stamina=1", "params.Magic.6210.mp=1",
-                        "params.SpEffect.1621000.effectEndurance=-1", "params.effects.1621000.effectEndurance=-1"))
+                        "params.SpEffect.1621000.effectEndurance=-1"))
     assert wcmd.cmd_write(args(set=[], reset=["params.Magic.6230"])) == 0
     r = row(mem, "Magic", 6230)
     assert (r["mp"], r["stamina"], row(mem, "Magic", 6210)["mp"]) == (21, 0, 1)

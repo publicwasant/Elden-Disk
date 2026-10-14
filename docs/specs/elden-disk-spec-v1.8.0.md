@@ -4,7 +4,8 @@
 > read, Mohg brought back with his intro, runes and Remembrance, the save restored byte for byte). Part 2 IMPLEMENTED on 2026-10-14 (unit
 > tests: 1,700+; not yet tried in the game): the commands, the names and the document as Part 2 says; the notes at its end say what the
 > code decided where Part 2 left a choice. Part 3 (optimization) IMPLEMENTED on 2026-10-15 for what needs no decision and no
-> game; the rest is listed there.  
+> game; the rest is listed there. Part 4 (every param table in the disk) IMPLEMENTED on 2026-10-15 (unit tests; the walk of the list
+> not yet checked in the game: `probe`).  
 > **Last Updated:** _2026-10-15_
 
 # Elden-Disk spec 1.8.0: `resurrect great-enemies`
@@ -921,3 +922,104 @@ All tests pass, the 92 golden ones on the game's original `regulation.bin` inclu
 |:-------------------------------------------------------------------------------------------------|:-----------|:----------------------------------------------------------------------------------------------------------------------------------|
 | `read`, `read --live`, `export --live`, the creative block, the scans of `apply` inside the game | unknown    | the logs of a session (`run -v`, then `read -v`, `export --live -v`, `read monitor -v` from another terminal), sent by the author |
 | the tests (1,700+, about 50 s)                                                                   | about half | `pytest-xdist` (not installed)                                                                                                    |
+
+
+# Part 4: Every param table in the disk
+
+Written 2026-10-15. Until now the disk's `params` held four rows of one table (`params.effects`: Black Flame), and six tables of the
+workbench could be read and written by name outside it. The game holds far more: its `regulation.bin` (1.17.1) has **194 tables,
+170,966 rows** (49 MB of row data): every weapon, armour, item, spell, effect, bullet, attack, enemy, drop, shop line, grace, cutscene ...
+Part 4 puts **all of them** in the disk, to read and write freely, as every other value.
+
+Decided by the author (2026-10-14): every table; read when named (lazy); `params.effects` folded into the tables; the layouts from
+Paramdex.
+
+## The names
+
+`params.<Table>.<row id>.<field>`, the same as every path of the disk.
+
+- **Table:** the game's own name, as in its `regulation.bin` (`EquipParamWeapon`, `EquipParamGoods`, `Magic`, `SpEffectParam`, `Bullet`,
+  `AtkParam_Pc`, `NpcParam`, `ItemLotParam_map`, `ShopLineupParam`, `BonfireWarpParam` ...), in any letter case. The short names of the
+  workbench still work (`Goods`, `SpEffect`, `ShopLineup`), as do Paramdex's (`MagicParam`, `BulletParam`, `AtkParam`, and `AtkPc`,
+  `AtkNpc`) (`eldendisk/game/paramnames.py`).
+- **Row:** the row's id in the game, a number.
+- **Field:** Paramdex's name (`effectEndurance`, `mp`, `hp`, `iconId`), in any letter case; `*` and `?` work.
+
+`params.effects` is gone: `params.SpEffectParam.1621000.effectEndurance` is Black Flame's duration, and a name under `params.effects`
+says so. (The four rows had a hand-made range and two locked fields each; a field of the tables is checked by its type and bit width, and
+an id that points at another row gets a note.)
+
+## Read when named (lazy)
+
+All the rows of all the tables would be hundreds of MB to gigabytes of JSON: the disk cannot build that every second, nor write it in one
+file. So the disk holds every table, and reads its rows only when they are named.
+
+| **Name**                                        | **What `read` gives**                                                                                                  |
+|:------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------|
+| `params`                                        | every table found with its number of rows (`{"NpcParam": {"rows": 7045}, ...}`): what the disk holds before a table is named |
+| `params.NpcParam`                               | every row of the table (all its fields)                                                                                |
+| `params.NpcParam.10000000`                      | one row                                                                                                                |
+| `params.NpcParam.10000000.hp`                   | one field                                                                                                              |
+| `params.NpcParam.*.hp`, `params.Magic.6230.mp*` | a field of every row, the fields that match                                                                            |
+
+- `read` of the whole disk and `export` hold the index (the tables and their rows), not the rows themselves. The index is looked at about
+  once a second, like the rest of `params` before.
+- A script reads a row when it touches it: `x.params.NpcParam[10000000].hp`; `tools.write(x)` writes what it changed. A row that is not
+  in the table says so in one line (not the list of every id).
+- A row is read again at every `read`: a value `write` changed shows at once.
+
+## Write
+
+`write params.<Table>.<id>.<field>=VALUE`, `=default` (the value of the first change in this game process), `write params=default`
+(every one). The same portal, gate and checks as every write: the field's type and bit width, the row must be in the file. What a row
+change does in the game is the game's: a Magic row is read at the cast, a Bullet row when the bullet is created (Part 1 of spec 1.6.3).
+
+## The layouts
+
+`tools/gen_paramdefs.py <Paramdex>/ER/Defs <the game's regulation.bin>` writes `eldendisk/game/paramlayouts.py`: for each table of the
+file its param type, its row size, its rows, its first and last id in the original 1.17.1 file, the digest of its rows (tables of 64 KB
+or less), and its fields (name, type, offset, bits, array) from the Paramdex def of its param type. Only the facts are copied, not the
+descriptions.
+
+- **188 of the 194 tables** have a def whose size is the file's row size (single-row tables padded up to 16 bytes included).
+- **6 do not** (the game's rows are longer than the def: fields the def does not know yet): `BuddyParam`, `ChrModelParam`,
+  `GameSystemCommonParam`, `PostureControlParam_WepRight`, `SignPuddleParam`, `SoundCutsceneParam`. They are in the index with their
+  rows; reading a row of one says why it cannot be decoded, and nothing of them can be written.
+
+## Finding the tables in memory
+
+The game keeps every table in one list. The six chains of `params.catalog` are slots of it: one global (`exe + 0x3D85F58`), the slot
+(`0x88 + n * 0x48`: Goods n = 3, AtkParam_Pc 8, Bullet 10, Magic 14, SpEffect 15, ShopLineup 27), then `+0x80`, `+0x80` to the file.
+The profile gets the list as a block of its own:
+
+```json
+"repository": { "rva": "0x3D85F58", "first": "0x88", "stride": "0x48", "slots": 256, "tail": ["0x80", "0x80"] }
+```
+
+Each slot that ends in a valid param file (the same header checks as every read) is named, in this order:
+
+1. by the param type the file gives (at `+0x10`) and its rows: a table that a build grew (Goods, Magic, SpEffect, Bullet, AtkParam_Pc,
+   ShopLineup) has up to 200 rows more;
+2. tables of the same type (`AtkParam_Pc` / `AtkParam_Npc`, `ItemLotParam_map` / `_enemy`, `GrassTypeParam_Lv1` / `_Lv2` ...) by their
+   rows, row size, first and last row id;
+3. then by the digest of their rows (`HPEstusFlaskRecoveryParam` / `MPEstusFlaskRecoveryParam`);
+4. then by the table's name, in UTF-16, in the slot's object or behind a pointer in it.
+
+What is left is not guessed: a slot that fits no table, or more than one, is left out with the reason, and two slots that look like one
+table are both left out. Tables whose rows are the same byte for byte need step 4: `KeyAssignParam_TypeB` / `_TypeC`, the
+`LoadBalancer...` tables of the other platforms, `MultiHPEstusFlaskBonusParam` / `MultiMPEstusFlaskBonusParam`, and
+`WwiseValueToStrParam_Switch_PlayerEquipmentBottoms` / `_Tops`. Whether the PC game loads the tables of the other platforms at all is
+for `probe` to show.
+
+- The list is walked once (about 200 small reads); a walk that found nothing (the game was still loading) is made again after 5 s.
+- The six chains of `params.catalog` stay: they win for their tables.
+- **To check in the game:** `probe` lists every slot with the table it was named as, the reason for the ones left out with the texts next
+  to their slot, and the tables of the game not found. The layout of the list is read off the six chains measured in the game, not
+  measured itself yet.
+
+## Tests
+
+`tests/test_param_walk.py`: a fake list with files that say their type; a table named by type and rows, a grown one, one type told apart
+by rows and ids, by digest, by the name next to the slot; identical tables and two slots of one table left out; the walk again after
+5 s; `read params.<Table>` and `params.<Table>.*.<field>` through the list; `probe` (text and JSON, read-only); a script's table read
+row by row. The tests of `params.effects` became tests of `params.SpEffectParam` (the same rows, the same checks).

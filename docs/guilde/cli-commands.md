@@ -182,8 +182,9 @@ handle and works with or without `run` (it waits for `eldenring.exe` and for a l
 | `read hp attrs.* character.runes` | one or several values or groups |
 | `read creative.resurrect.great_enemies` | the great enemies defeated now; a boss by name: `read creative.resurrect.great_enemies.margit` |
 | `read creative.innovate_spells.reverse_cursed_technique` | a spell of the last build (by its name or its goods id) |
-| `read params.effects.1621000` | the rows `offsets.json` names (Black Flame) |
-| `read params.Magic.6230`, `read params.Magic.6230.mp*` | any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup (a field or a pattern); once, not with `--live` |
+| `read params` | every table of the game (194 in 1.17.1) with its number of rows: what the document holds until a table is named |
+| `read params.NpcParam`, `read params.SpEffectParam.1621000` | every row of a table, one row (Black Flame), read from the game now; once, not with `--live` |
+| `read params.Magic.6230.mp*`, `read params.NpcParam.*.hp` | the fields of a row that match, a field of every row |
 | `--live` | keep the values current at `--hz` (on a terminal the tree is redrawn and a changed value lights up; elsewhere one line per change) |
 | `--tree` (default), `--flat`, `--json` | a tree; one `full.path  value` row per value; JSON (not with `--live`) |
 
@@ -216,8 +217,7 @@ through the gate and reads back.
 | `runes` | 0 - 999,999,999 | the runes held (`character.runes.total`) |
 | `vigor`, `mind`, `endurance`, `strength`, `dexterity`, `intelligence`, `faith`, `arcane` | 1 - 99 | the attributes (`attrs.*` for all) |
 | `hp`, `fp`, `stamina` | 0 - maximum | the current value; a number above the maximum is the maximum (`write hp=99999` fills it) |
-| `params.effects.<id>.<field>` | the field's type, or `default` | the rows `offsets.json` names; `params.effects.*.effectEndurance` writes every row |
-| `params.<Table>.<id>.<field>` | the field's type, or `default` | any numeric field of any row of the six tables |
+| `params.<Table>.<id>.<field>` | the field's type, or `default` | any numeric field of any row of any table of the game (`params.SpEffectParam.1621000.effectEndurance`; a pattern: `params.Magic.6230.mp*`) |
 | `params=default` | | every `params` value changed in this game process back to the game's own |
 | `creative.innovate_spells.<goods id>.design.<path>` | as `creative.json` says | the spells of the last build: `requires.*`, `locations.*`, `customs.basic.*`, `customs.advanced.texts.*`, `customs.advanced.colors.*` |
 | `creative.resurrect.great_enemies.<id or name>.defeated` | `false` | brings a defeated boss back (`true` is refused: only the game marks a boss defeated) |
@@ -226,8 +226,11 @@ through the gate and reads back.
 - `NAME=default` puts back the value the game had **before the first change in this game process** (kept in `<vault>\params-snapshot.json`,
   tied to the game's pid and start time); a field, a row (`params.Magic.6230=default`), a pattern, or `params=default`. Only `params`
   names have a default; the character's values are your save's own (write the number).
-- A `params` value is checked against the field's type and bit width (an error, not a clamp). `atkOccurrenceSpEffectId`, `vfxId` and other
-  ids that can crash the game are read-only (exit `2`); a pattern skips them and says so.
+- A `params` value is checked against the field's type and bit width (an error, not a clamp). A field that names another row
+  (`vfxId`, `refId1` ...) is written with a note: an id that matches nothing can crash the game when the row is used.
+- A table is the game's own name (`EquipParamWeapon`, `SpEffectParam`, `NpcParam`, `ItemLotParam_map` ...) in any letter case; the short
+  names `Goods`, `SpEffect`, `ShopLineup`, `MagicParam`, `BulletParam`, `AtkParam` still work. `params.effects` is gone (1.8.0): its rows
+  are `params.SpEffectParam.<id>`.
 - What changes acts on what is created afterwards: a Magic row is read at the cast, a Bullet row when the bullet is created. A value stays
   through Quit to Title and is gone when the game process ends.
 - **Offline only.** Params are what the game trusts; with anti-cheat active or online a change can get an account banned. `run` starts the
@@ -264,7 +267,7 @@ class BossRush(Interface):
 | **Name** | **Does** |
 |:---|:---|
 | `Interface` | the base of a script: `setup()` once, `loop()` every `every` s, `teardown()` at the end; `enabled = False` keeps it off |
-| `tools.read()` | the document as an object (`x.character.runes.total`, `x.params.effects[1621000]`) |
+| `tools.read()` | the document as an object (`x.character.runes.total`, `x.params.SpEffectParam[1621000].effectEndurance`: a row of a table is read from the game when it is touched) |
 | `tools.write(x)` | writes what changed in it, through the portal, as `write` does; `True` when everything stuck |
 | `tools.log(text, level)` | a line in the log and on the `run` console, under the script's name |
 | `tools.dead()` | ends this script now |
@@ -358,7 +361,7 @@ python -m eldendisk probe [--json]
 | `export` | the whole document to `<TOOLS-DIR>\output\disk.json`, once. `--live`: again each time it changes (at most every `--export-interval` s, 0.5; a change that is only a buff countdown at most every `--timer-interval` s, 2; it pauses while the game window is not in front unless `--no-idle`) |
 | `reset` | the game's values now become the read baselines: `runes` (`character.runes.baseline` = the total now, `delta` = 0), `buffs` / `animations` (`monitor`: both; the monitors' history of what has ended is cleared). Nothing is written to the game: a small file (`<TOOLS-DIR>\baselines.json`, for this game process) that every reader takes within a few seconds |
 | `check` | decode a `regulation.bin` (the one in the game folder by default: what the game loaded) and compare the six tables with the game's, row by row; exit `0` only when they agree |
-| `probe` | find where the game's param tables lie in memory and check them against the profile's chains (for a new game version) |
+| `probe` | find where the game's param tables lie in memory and check them against the profile's chains; then every slot of the game's list of tables with the table it was named as, and the tables not found (for a new game version) |
 
 ---
 
@@ -485,7 +488,7 @@ python -m eldendisk read monitor-buffs --mapped
 # write (inside the portal)
 python -m eldendisk write
 python -m eldendisk write vigor=99 level=150 hp=99999
-python -m eldendisk write params.effects.1621000.effectEndurance=-1
+python -m eldendisk write params.SpEffectParam.1621000.effectEndurance=-1
 python -m eldendisk write params.Magic.6230.mp=0
 python -m eldendisk write params=default
 

@@ -29,6 +29,7 @@ def rig(tmp_path, monkeypatch):
     mem.b = full_world().b
     pf.build_file(mem, pf.small_ids(), rows={1622000: pf.row_bytes(effect_endurance=7.5, vfx=1)})   # the game's params
     pf.wire(mem, 0)
+    pf.wire(mem, 2)                      # the chain of params.catalog to SpEffectParam (1.8.0 part 4: every table by its name)
     box = {"opened": 0, "closed": 0, "host_started": HOST_STARTED, "locate": None}
     mem.close = lambda: box.__setitem__("closed", box["closed"] + 1)
     target = Target(GAME_PID, GAME_STARTED, Module("eldenring.exe", BASE, str(tmp_path / "eldenring.exe")), EXE_SHA, pf.params_profile())
@@ -166,15 +167,16 @@ def test_a_bad_policy_is_reported_before_anything_is_looked_at(rig, capsys):
     assert "bogus" in capsys.readouterr().err and box["opened"] == 0
 
 
-# ---- game params (spec 1.6.3): `write params...=VALUE`, `=default`, the same authorisation as every other edit ----
-from eldendisk.game.params import ParamStore   # noqa: E402
+# ---- game params (spec 1.6.3; 1.8.0 part 4: every table, `params.effects` folded into SpEffectParam): `write params...=VALUE`,
+# `=default`, the same authorisation as every other edit ----
+from eldendisk.game.paramtables import Tables   # noqa: E402
 
-BF = "params.effects.1621000"
+BF = "params.SpEffectParam.1621000"
 
 
 def rows_of(mem):
-    res = ParamStore(mem, pf.params_profile(), BASE).resolve("effects").rows
-    return {name: res[str(rid)] for name, rid in pf.ROWS.items()}      # the tests call the rows by their short names
+    t = Tables(mem, pf.params_profile(), BASE)
+    return {name: t.row_address("SpEffectParam", rid)[0] for name, rid in pf.ROWS.items()}      # the rows by their short names
 
 
 def snapshot(mem):
@@ -205,7 +207,7 @@ def test_a_param_edit_changes_that_field_and_nothing_else(rig, capsys):
     assert set(diff) == {"black_flame"} and set(diff["black_flame"]) <= {8, 9, 10, 11}   # inside the four bytes of one field
     assert mem.read(rows_of(mem)["black_flame"] + pf.ROW, pf.ROW) == other
     assert f32(mem, "scouring_black_flame") == 2.0 and level(mem) == 386
-    assert f"{BF}.effectEndurance = -1.0" in capsys.readouterr().err
+    assert f"{BF}.effectEndurance = -1" in capsys.readouterr().err
     assert box["opened"] == 1 and box["closed"] == 1
 
 
@@ -217,43 +219,27 @@ def test_params_and_character_values_are_edited_in_one_command(rig):
     assert f32(mem, "black_flame", 0x9C) == pytest.approx(0.5)
 
 
-def test_a_pattern_edits_every_row_it_matches_and_says_so(rig, capsys):
+def test_a_field_pattern_edits_every_field_it_matches_and_says_so(rig, capsys):
     vault, mem, box, open_session, args = rig
     open_session()
-    assert wcmd.cmd_write(args("params.effects.*.effectEndurance=-1")) == 0
-    assert [f32(mem, r) for r in pf.ROWS] == [-1.0] * 4
-    assert "matches 4 values" in capsys.readouterr().err
+    assert wcmd.cmd_write(args(f"{BF}.changeHp*=1")) == 0
+    assert s32(mem, "black_flame", 0xA0) == 1 and f32(mem, "black_flame", 0x9C) == 1.0
+    assert "changeHpRate" in capsys.readouterr().err
 
 
-def test_locked_fields_are_skipped_by_a_pattern_and_never_written(rig, capsys):
+def test_a_field_that_names_another_row_is_written_with_a_note(rig, capsys):
     vault, mem, box, open_session, args = rig
     open_session()
-    before = snapshot(mem)
-    assert wcmd.cmd_write(args(f"{BF}.*=1")) == 0
-    err = capsys.readouterr().err
-    assert "skipped (locked)" in err and "vfxId" in err and "atkOccurrenceSpEffectId" in err
-    after = snapshot(mem)
-    assert s32(mem, "black_flame", 0x170) == 9010 and s32(mem, "black_flame", 0x12C) == -1
-    assert set(changed_bytes(before, after)) == {"black_flame"}
-    assert all(i < 0xA4 for i in changed_bytes(before, after)["black_flame"])      # only the four writable fields
+    assert wcmd.cmd_write(args(f"{BF}.vfxId=9011")) == 0                  # 1.8.0 part 4: no hand-made locks; an id gets a note
+    assert s32(mem, "black_flame", 0x170) == 9011
+    assert "id" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("field", ["vfxId", "atkOccurrenceSpEffectId", "VFXID", "name"])
-@pytest.mark.parametrize("session", [True, False])
-def test_a_locked_field_is_refused_with_exit_2_whatever_the_session(rig, field, session, capsys):
-    vault, mem, box, open_session, args = rig
-    if session:
-        open_session()
-    refused(box, mem, 2, wcmd.cmd_write(args(f"{BF}.{field}=1")))
-    assert "locked" in capsys.readouterr().err
-    assert wcmd.cmd_write(args(set=[], reset=[f"{BF}.{field}"])) == 2
-
-
-def test_a_locked_name_stops_the_whole_command(rig):
+def test_params_effects_is_gone_and_says_where_its_rows_are(rig, capsys):
     vault, mem, box, open_session, args = rig
     open_session()
-    refused(box, mem, 2, wcmd.cmd_write(args("level=150", f"{BF}.effectEndurance=-1", f"{BF}.vfxId=1")))
-    assert level(mem) == 386 and f32(mem, "black_flame") == 2.0
+    refused(box, mem, 1, wcmd.cmd_write(args("params.effects.1621000.effectEndurance=-1")))
+    assert "params.SpEffectParam.1621000.effectEndurance" in capsys.readouterr().err
 
 
 def test_a_param_edit_without_a_session_writes_nothing(rig, capsys):
@@ -269,8 +255,9 @@ def test_a_param_edit_without_a_session_writes_nothing(rig, capsys):
     (f"{BF}.effectEndurance=abc", "takes a number"),
     (f"{BF}.changeHpPoint=1.5", "whole number"),
     (f"{BF}.changeHpPoint=", "NAME=VALUE"),
-    ("params.effects.black_flam.effectEndurance=-1", "did you mean"),
-    ("params.effects.1621000=1", "is a group"),
+    (f"{BF}.changeHpPoint=99999999999", "takes"),                       # checked against its type, never clamped
+    ("params.SpEffectParam.1621000.nothing=1", "no field"),
+    ("params.Nothing.1621000.effectEndurance=-1", "not a table"),
 ])
 def test_a_bad_param_edit_is_an_error_and_nothing_is_written(rig, bad, why, capsys):
     vault, mem, box, open_session, args = rig
@@ -279,21 +266,12 @@ def test_a_bad_param_edit_is_an_error_and_nothing_is_written(rig, bad, why, caps
     assert why in capsys.readouterr().err
 
 
-def test_a_value_outside_the_range_is_clamped_and_the_user_is_told(rig, capsys):
-    vault, mem, box, open_session, args = rig
-    open_session()
-    assert wcmd.cmd_write(args(f"{BF}.effectEndurance=-5", f"{BF}.motionInterval=0", f"{BF}.changeHpPoint=100000")) == 0
-    err = capsys.readouterr().err
-    assert f32(mem, "black_flame") == -1.0 and f32(mem, "black_flame", 0xC) == pytest.approx(0.01)
-    assert s32(mem, "black_flame", 0xA0) == 999 and err.count("clamped") == 3
-
-
 def test_reset_puts_the_games_own_values_back_at_three_levels(rig):
     vault, mem, box, open_session, args = rig
     open_session()
     original = snapshot(mem)
     everything = [f"{BF}.effectEndurance=-1", f"{BF}.motionInterval=5", f"{BF}.changeHpRate=-3", f"{BF}.changeHpPoint=7",
-                  "params.effects.1623000.effectEndurance=-1", "level=150"]
+                  "params.SpEffectParam.1623000.effectEndurance=-1", "level=150"]
     assert wcmd.cmd_write(args(*everything)) == 0
     assert wcmd.cmd_write(args(set=[], reset=[f"{BF}.effectEndurance"])) == 0         # one field
     assert f32(mem, "black_flame") == 2.0 and f32(mem, "black_flame", 0xC) == 5.0
@@ -312,7 +290,7 @@ def test_reset_with_nothing_to_reset_says_so_and_is_not_an_error(rig, capsys):
     assert "values already match" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("reset", [["level"], ["hp"], ["params.effects.1621000.effectEndurance=2"], ["bogus"]])
+@pytest.mark.parametrize("reset", [["level"], ["hp"], ["params.SpEffectParam.1621000.effectEndurance=2"], ["bogus"]])
 def test_only_params_can_be_reset(rig, reset, capsys):
     vault, mem, box, open_session, args = rig
     open_session()
@@ -323,7 +301,7 @@ def test_only_params_can_be_reset(rig, reset, capsys):
 def test_the_same_field_cannot_be_set_twice_or_set_and_reset(rig):
     vault, mem, box, open_session, args = rig
     open_session()
-    assert wcmd.cmd_write(args(f"{BF}.effectEndurance=-1", "params.effects.*.effectEndurance=3")) == 1
+    assert wcmd.cmd_write(args(f"{BF}.effectEndurance=-1", f"{BF}.effect*=3")) == 1
     assert wcmd.cmd_write(args(f"{BF}.effectEndurance=-1", reset=[BF])) == 1
     assert wcmd.cmd_write(args(f"{BF}.effectEndurance=-1", f"{BF}.effectEndurance=2")) == 1
     assert mem.log == [] and f32(mem, "black_flame") == 2.0

@@ -1,5 +1,5 @@
-"""Planning edits of any numeric field of the six workbench tables (`write --set params.Magic.6230.mp=10`) and the snapshot
-of the game's own values that `--reset` puts back. No memory is touched here: the writer (writer.py) does that.
+"""Planning edits of any numeric field of any table of the game (`write params.Magic.6230.mp=10`; 1.8.0 part 4: every table) and the
+snapshot of the game's own values that `NAME=default` puts back. No memory is touched here: the writer (writer.py) does that.
 
 A name is `params.<Table>.<id>.<field>`; the table is one of paramlayouts.LAYOUTS (any spelling paramtables knows), the id is
 one row, the field is a name or a pattern (`ref*`). A value is checked against the field's type, not clamped. A field that
@@ -50,7 +50,7 @@ class CatalogEdit:
 
 
 def is_catalog_name(name: str, profile_keys) -> bool:
-    """True for `params.<Table>...` where Table is one of the six and not a table key of the profile (`effects`)."""
+    """True for `params.<Table>...` where Table is a table of the game (any name paramnames knows) and not a key of `profile_keys`."""
     parts = name.strip().split(".")
     return len(parts) >= 2 and parts[0].lower() == "params" and parts[1].lower() in TABLES \
         and parts[1].lower() not in {k.lower() for k in profile_keys}
@@ -73,6 +73,8 @@ def _split(name: str, *, need_field: bool) -> tuple[str, str | None, str | None]
 def fields_matching(table: str, pattern: str) -> list[str]:
     """The fields of `table` named by `pattern` (letter case does not matter), in the layout's order."""
     fields = LAYOUTS[table]["fields"]
+    if fields is None:
+        raise ParamNameError(f"{table}: its rows cannot be written ({LAYOUTS[table]['why']})")
     low = pattern.lower()
     if any(c in pattern for c in "*?["):
         hits = [f for f in fields if fnmatchcase(f.lower(), low)]

@@ -130,6 +130,8 @@ class Node:
         k = str(key)
         if k in data:
             return k
+        if getattr(data, "_lazy_rows", False):            # a table of the game: a row is there or not (its rows are read when touched)
+            raise KeyError(f"{'.'.join(map(str, self._path + (k,)))}: no such row (the table has {len(data)} rows)")
         low = {str(x).lower(): x for x in data}
         if k.lower() in low:
             return low[k.lower()]

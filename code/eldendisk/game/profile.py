@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .paramlayouts import LAYOUTS
+from .paramnames import canonical
 
 TIMER_MODES = {"elapsed", "remaining"}
 
@@ -123,10 +124,25 @@ class ParamTable:
 
 
 @dataclass(frozen=True)
+class ParamRepository:
+    """The list the game keeps every param table in (1.8.0 part 4): slot n is [[exe + rva] + first + n * stride], and `tail` leads
+    from it to the table's file, like the chains of `catalog` (which are slots of it)."""
+    rva: int
+    first: int
+    stride: int
+    slots: int
+    tail: tuple[int, ...]
+
+    def chain(self, n: int) -> "ParamChain":
+        return ParamChain(self.rva, (self.first + n * self.stride, *self.tail))
+
+
+@dataclass(frozen=True)
 class ParamsProfile:
     layout: ParamFileLayout
     tables: dict[str, ParamTable]
-    catalog: dict[str, ParamChain] = field(default_factory=dict)   # table name (paramlayouts.LAYOUTS) -> chain to its file
+    catalog: dict[str, ParamChain] = field(default_factory=dict)   # the game's table name (paramlayouts.LAYOUTS) -> chain to its file
+    repository: ParamRepository | None = None                      # every table (1.8.0 part 4): found by walking this list
 
 
 @dataclass(frozen=True)
@@ -267,7 +283,7 @@ def _number(value, name: str, lo=None, hi=None) -> float | int:
 
 
 def _parse_catalog(raw) -> dict[str, ParamChain]:
-    """`params.catalog`: one chain per table of paramlayouts.LAYOUTS, found with `probe`. Absent = none."""
+    """`params.catalog`: one chain per table (the game's name, or a short name of the workbench), found with `probe`. Absent = none."""
     if raw is None:
         return {}
     if not isinstance(raw, dict):
@@ -275,12 +291,29 @@ def _parse_catalog(raw) -> dict[str, ParamChain]:
     out: dict[str, ParamChain] = {}
     for name, c in raw.items():
         where = f"params.catalog.{name}"
-        if name not in LAYOUTS:
-            raise Incomplete(f"{where}: not a table of the workbench (one of {', '.join(LAYOUTS)})")
+        table = canonical(name)
+        if table is None:
+            raise Incomplete(f"{where}: not a table of the game (`read params` lists them)")
         if not isinstance(c, dict) or not c.get("offsets"):
             raise Incomplete(f"{where} must be {{rva, offsets}} with at least one offset")
-        out[name] = ParamChain(_num(c.get("rva"), f"{where}.rva"), tuple(_num(o, f"{where}.offsets") for o in c["offsets"]))
+        out[table] = ParamChain(_num(c.get("rva"), f"{where}.rva"), tuple(_num(o, f"{where}.offsets") for o in c["offsets"]))
     return out
+
+
+def _parse_repository(raw) -> ParamRepository | None:
+    """`params.repository` (1.8.0 part 4): {rva, first, stride, slots, tail}. Absent = only the tables of `catalog`."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or not isinstance(raw.get("tail"), list):
+        raise Incomplete("params.repository must be {rva, first, stride, slots, tail}")
+    slots = raw.get("slots")
+    if isinstance(slots, bool) or not isinstance(slots, int) or not 1 <= slots <= 1024:
+        raise Incomplete("params.repository.slots must be a whole number from 1 to 1024")
+    stride = _num(raw.get("stride"), "params.repository.stride")
+    if stride <= 0 or stride % 8:
+        raise Incomplete("params.repository.stride must be a positive multiple of 8")
+    return ParamRepository(_num(raw.get("rva"), "params.repository.rva"), _num(raw.get("first"), "params.repository.first"), stride,
+                           slots, tuple(_num(o, "params.repository.tail") for o in raw["tail"]))
 
 
 def _parse_text(d: dict) -> TextProfile | None:
@@ -398,7 +431,7 @@ def _parse_params(d: dict) -> ParamsProfile | None:
         tables[key] = ParamTable(key, str(raw.get("table") or key), row_size, tuple(chains), fields, rows)
     if not tables:
         raise Incomplete("params.tables is empty")
-    return ParamsProfile(layout, tables, _parse_catalog(pr.get("catalog")))
+    return ParamsProfile(layout, tables, _parse_catalog(pr.get("catalog")), _parse_repository(pr.get("repository")))
 
 
 def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | None]:

@@ -11,7 +11,8 @@ from datetime import datetime, timedelta, timezone
 
 from ..game.layout import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout, parse_vitals_block
 from ..game.memory import is_user_ptr, read_ptr, read_u32
-from ..game.params import ParamError, ParamStore
+from ..game.params import ParamError
+from ..game.paramtables import Tables
 from ..game.profile import Profile, StateIds
 
 MAX_BUFFS = 512
@@ -48,7 +49,8 @@ class Sampler(Layout):
         self._last_animation: dict[str, dict] = {}
         self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
         self._world_lost_at: datetime | None = None
-        self.param_store = ParamStore(mem, profile, module_base) if profile.params is not None else None
+        self.tables = Tables(mem, profile, module_base) if profile.params is not None and (
+            profile.params.catalog or profile.params.repository) else None    # 1.8.0 part 4: every table of the game
         self._params: dict | None = None
         self._params_error: str | None = None
         self._params_at: datetime | None = None
@@ -92,14 +94,18 @@ class Sampler(Layout):
 
     # -- main ------------------------------------------------------------
     def read_params(self, now: datetime) -> tuple[dict | None, str | None]:
-        """The param tables (the document's `params`) as (values, None) or (None, why not); read at most every PARAMS_EVERY_S."""
-        if self.param_store is None:
+        """The document's `params` as (value, None) or (None, why not), read at most every PARAMS_EVERY_S: every table of the game
+        with its number of rows ({"NpcParam": {"rows": 7045}, ...}); the rows themselves are read when a table is named (`read
+        params.NpcParam`, a script's x.params.NpcParam[id]), not here (1.8.0 part 4: hundreds of MB in all)."""
+        if self.tables is None:
             return None, None
         gap = PARAMS_EVERY_S if self._params is not None else PARAMS_RETRY_S
         if self._params_at is None or (now - self._params_at).total_seconds() >= gap:
             self._params_at = now
             try:
-                self._params, self._params_error = self.param_store.read_all(), None
+                self._params, self._params_error = self.tables.index() or None, None
+                if self._params is None:
+                    self._params_error = "no param table found yet (the game is still loading them)"
             except ParamError as exc:
                 self._params, self._params_error = None, str(exc)
         return self._params, self._params_error

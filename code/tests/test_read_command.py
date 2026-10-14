@@ -594,7 +594,7 @@ def test_live_on_a_terminal_paints_buff_countdowns_in_their_own_colour(rig, monk
 from tests import paramfile as pf   # noqa: E402
 from tests.test_disk import valid   # noqa: E402
 
-BF = "params.effects.1621000"
+BF = "params.SpEffectParam.1621000"
 
 
 @pytest.fixture
@@ -603,61 +603,66 @@ def prig(rig):
     tmp, mem, target, box, args = rig
     pf.build_file(mem.m, pf.small_ids(), rows={pf.ROWS["black_flame"]: pf.row_bytes(effect_endurance=-1.0)})
     pf.wire(mem.m, 0)
+    pf.wire(mem.m, 2)                       # the chain of params.catalog to SpEffectParam (1.8.0 part 4: every table by its name)
     prof = dataclasses.replace(target.profile, params=pf.params_profile().params)
     box["locate"] = lambda offsets: dataclasses.replace(target, profile=prof)
     return tmp, mem, target, box, args
 
 
-def test_query_a_params_value_and_a_group(prig, capsys):
+def test_a_row_and_a_field_of_a_table_are_read_from_the_game_when_named(prig, capsys):
     tmp, mem, target, box, args = prig
-    assert rcmd.cmd_read(args(query=f"{BF}.effectEndurance")) == 0
+    assert rcmd.cmd_read(args(param=[f"{BF}.effectEndurance"], flat=True)) == 0
     assert capsys.readouterr().out.split() == [f"{BF}.effectEndurance", "-1.0"]
-    assert rcmd.cmd_read(args(query=f"{BF}.vfxId")) == 0
+    assert rcmd.cmd_read(args(param=[f"{BF}.vfxId"], flat=True)) == 0
     assert capsys.readouterr().out.split() == [f"{BF}.vfxId", "9010"]
-    assert rcmd.cmd_read(args(query="PARAMS.effects.1625000")) == 0
+    assert rcmd.cmd_read(args(param=["PARAMS.speffect.1625000"])) == 0
     out = capsys.readouterr().out
-    assert [l.strip() for l in out.splitlines()[:3]] == ["params", "effects", "1625000"]
-    assert re.search(r"\bname\s+Black Flame Ritual\n", out) and re.search(r"\beffectEndurance\s+2\.0\n", out) and re.search(r"\bvfxId\s+9010\n", out)
-    assert rcmd.cmd_read(args(query=[f"{BF}.effectEndurance", "level"])) == 0
-    assert "level" in capsys.readouterr().out
+    assert [l.strip() for l in out.splitlines()[:3]] == ["params", "SpEffectParam", "1625000"]
+    assert re.search(r"\beffectEndurance\s+2\.0\n", out) and re.search(r"\bvfxId\s+9010\n", out)
 
 
-def test_query_with_a_pattern_and_in_json(prig, capsys):
+def test_a_field_of_every_row_and_a_whole_table_and_in_json(prig, capsys):
     tmp, mem, target, box, args = prig
-    assert rcmd.cmd_read(args(query="params.effects.*.effectEndurance", flat=True)) == 0
-    rows = [l.split() for l in capsys.readouterr().out.splitlines()]
-    assert [r[0] for r in rows] == [f"params.effects.{i}.effectEndurance" for i in pf.ROWS.values()]
-    assert [r[1] for r in rows] == ["-1.0", "2.0", "2.0", "2.0"]
-    assert rcmd.cmd_read(args(query=f"{BF}", json=True)) == 0
+    assert rcmd.cmd_read(args(param=["params.SpEffectParam.*.effectEndurance"], flat=True)) == 0
+    rows = dict(l.split() for l in capsys.readouterr().out.splitlines())
+    assert rows[f"{BF}.effectEndurance"] == "-1.0" and rows["params.SpEffectParam.1623000.effectEndurance"] == "2.0"
+    assert len(rows) == len(pf.small_ids())
+    assert rcmd.cmd_read(args(param=["params.SpEffectParam"], json=True)) == 0
+    table = json.loads(capsys.readouterr().out)["params.SpEffectParam"]
+    assert len(table) == len(pf.small_ids()) and table["1621000"]["effectEndurance"] == -1.0
+    assert rcmd.cmd_read(args(param=[f"{BF}"], json=True)) == 0
     assert json.loads(capsys.readouterr().out)[BF]["effectEndurance"] == -1.0
 
 
-def test_no_flag_prints_the_params_too_and_character_stars_do_not(prig, capsys):
+def test_params_effects_is_gone_and_says_where_its_rows_are(prig, capsys):
+    tmp, mem, target, box, args = prig
+    assert rcmd.cmd_read(args(param=["params.effects.1621000"])) == 1
+    assert "params.SpEffectParam.1621000" in capsys.readouterr().err
+
+
+def test_no_flag_prints_the_tables_of_the_game_and_character_stars_do_not(prig, capsys):
     tmp, mem, target, box, args = prig
     assert rcmd.cmd_read(args()) == 0
     out = capsys.readouterr().out
-    assert "params" in out and "1621000" in out and "Scouring Black Flame" in out
+    assert "params" in out and "SpEffectParam" in out and "rows" in out
     assert rcmd.cmd_read(args(query="character.*")) == 0
     assert "params" not in capsys.readouterr().out
 
 
-def test_the_export_has_the_params_block_and_it_is_valid(prig):
+def test_the_export_has_the_index_of_the_tables_and_it_is_valid(prig):
     tmp, mem, target, box, args = prig
     assert rcmd.cmd_read(args(export=True)) == 0
     d = doc(tmp)
     valid(d)
     assert list(d) == ["systems", "character", "params", "creative"] and d["creative"] is None      # no build, no host, no flags here
-    assert d["params"]["effects"]["1621000"] == {"name": "Black Flame", "effectEndurance": -1.0, "motionInterval": 0.1, "changeHpRate": 0.1,
-                                                      "changeHpPoint": 1, "atkOccurrenceSpEffectId": -1, "vfxId": 9010}
-    assert d["params"]["effects"]["1623000"]["effectEndurance"] == 2.0
+    assert d["params"] == {"SpEffectParam": {"rows": len(pf.small_ids())}}       # the rows are read when a table is named
 
 
 def test_params_that_cannot_be_read_are_a_clear_error_and_the_rest_still_works(prig, capsys):
     tmp, mem, target, box, args = prig
     mem.m.put(pf.HEAD + 0x30, b"\0" * 8)                   # the file no longer looks like a param file
-    assert rcmd.cmd_read(args(query=f"{BF}.effectEndurance")) == 1
-    err = capsys.readouterr().err
-    assert "params cannot be read" in err and "data start" in err
+    assert rcmd.cmd_read(args(param=[f"{BF}.effectEndurance"])) == 1
+    assert "data start" in capsys.readouterr().err
     assert rcmd.cmd_read(args(query="level")) == 0
     assert rcmd.cmd_read(args(export=True)) == 0
     assert doc(tmp)["params"] is None and doc(tmp)["character"]["level"] == 386
@@ -665,6 +670,6 @@ def test_params_that_cannot_be_read_are_a_clear_error_and_the_rest_still_works(p
 
 def test_a_game_version_without_params_says_so(rig, capsys):
     tmp, mem, target, box, args = rig
-    assert rcmd.cmd_read(args(query=f"{BF}.effectEndurance")) == 1
+    assert rcmd.cmd_read(args(param=[f"{BF}.effectEndurance"])) == 1
     assert "no params block in offsets.json" in capsys.readouterr().err
     assert rcmd.cmd_read(args(query="level")) == 0

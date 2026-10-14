@@ -56,6 +56,62 @@ class Refused(Exception):
     """A write that was not made; the message says why."""
 
 
+class LazyRows(dict):
+    """A table of the game in a script's document (1.8.0 part 4): its rows are read from the game when one is touched
+    (`x.params.NpcParam[10000000].hp`), not when the document is built: all the tables are hundreds of MB. `read_row(id)` and `ids()`
+    are the backend's. A plain dict to everything else (edstdlib's Node, deepcopy keeps what was read)."""
+    _lazy_rows = True
+
+    def __init__(self, table: str, rows: int, read_row, ids, loaded=None):
+        super().__init__(loaded or {})
+        self.table, self.rows, self._read_row, self._ids, self._known = table, rows, read_row, ids, None
+
+    def _all_ids(self) -> list[str]:
+        if self._known is None:
+            self._known = [str(i) for i in self._ids(self.table)]
+        return self._known
+
+    def __missing__(self, key):
+        k = str(key)
+        if k != key and dict.__contains__(self, k):       # x[10000000] after x["10000000"]: the row already read
+            return dict.__getitem__(self, k)
+        if not k.isdigit() or k not in self._all_ids():
+            raise KeyError(k)
+        row = self._read_row(self.table, int(k))
+        dict.__setitem__(self, k, row)
+        return row
+
+    def __contains__(self, key) -> bool:
+        return str(key) in self._all_ids()
+
+    def __iter__(self):
+        return iter(self._all_ids())
+
+    def __len__(self) -> int:
+        return len(self._all_ids())
+
+    def keys(self):
+        return list(self._all_ids())
+
+    def items(self):
+        return [(k, self[k]) for k in self._all_ids()]
+
+    def values(self):
+        return [self[k] for k in self._all_ids()]
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __deepcopy__(self, memo):
+        import copy
+        out = LazyRows(self.table, self.rows, self._read_row, self._ids, copy.deepcopy(dict(dict.items(self)), memo))     # the rows read so far, not every row
+        out._known = self._known
+        return out
+
+
 def write_values(mem, target, gate, snapshot, values: dict, say, tables=None) -> dict:
     """{name `write --set` takes: number} through the MemoryWriter -> {name: value} written. Refused when anything was not applied."""
     sets = [f"{k}={v!r}" if isinstance(v, float) else f"{k}={v}" for k, v in values.items()]
@@ -89,11 +145,11 @@ class CreativeLive:
         self.mem, self.target, self.vault_root, self.resolved_path = mem, target, vault_root, resolved_path
         self.status_path = status_path         # the scripts' host writes its status there (scripts_block)
         self.gate, self.snapshot, self.say = gate, snapshot, say
-        self.tables = None                     # the six tables, opened the first time a value of them is read
+        self.tables = None                     # the game's tables, opened the first time a value of them is read
         self._files: dict = {}                 # path -> (stat key, what was read): a file is read again only when it changed
 
     def table_index(self):
-        """The six tables with their row index, kept for this game process (None for a game version without params.catalog)."""
+        """The game's tables with their row index, kept for this game process (None for a game version without params)."""
         if self.tables is None:
             try:
                 self.tables = Tables(self.mem, self.target.profile, self.target.base)
@@ -473,6 +529,10 @@ class LiveBackend:
                                  buffs_supported=p.sp_effect is not None, animations_supported=p.anim is not None, sample=s,
                                  mode="creative", read_only=False, creative=True)
             doc["creative"] = self.creative.block()
+            tables = self.creative.table_index()
+            if tables is not None and isinstance(doc.get("params"), dict):     # every table, its rows read when touched
+                doc["params"] = {t: LazyRows(t, v.get("rows", 0) if isinstance(v, dict) else 0, tables.read_row, tables.ids)
+                                 for t, v in doc["params"].items()}
             self._doc, self._doc_at = doc, now
             return doc
 

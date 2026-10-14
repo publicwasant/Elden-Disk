@@ -169,28 +169,9 @@
     },
     "params": {
       "type": ["object", "null"],
-      "description": "Tables of the game itself (params.<table>.<row id>.<field>); null with no game attached.",
-      "properties": {
-        "effects": {
-          "type": "object",
-          "description": "SpEffectParam rows listed in offsets.json, by row id",
-          "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
-          "additionalProperties": {
-            "type": "object",
-            "required": ["name", "effectEndurance", "motionInterval", "changeHpRate", "changeHpPoint",
-                         "atkOccurrenceSpEffectId", "vfxId"],
-            "properties": {
-              "name": { "type": "string" },
-              "effectEndurance": { "type": "number" },
-              "motionInterval": { "type": "number" },
-              "changeHpRate": { "type": "number" },
-              "changeHpPoint": { "type": "integer" },
-              "atkOccurrenceSpEffectId": { "type": "integer" },
-              "vfxId": { "type": "integer" }
-            }
-          }
-        }
-      }
+      "description": "1.8.0 part 4: every table of the game (params.<Table>.<row id>.<field>), by the name its regulation.bin gives it. The disk holds each table as {\"rows\": n} until it is named (`read params.NpcParam`): its rows are read then. null with no game attached.",
+      "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+      "additionalProperties": { "type": "object" }
     },
     "creative": {
       "type": ["object", "null"],

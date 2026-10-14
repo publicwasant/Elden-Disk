@@ -79,7 +79,7 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 |:---|:---|:---|
 | the portal | `run [--vault-on \| --vault-off]` | back up the save files, swap in the build of `creative.json`, launch offline; once a character is in the world `innovate-spells apply`, `resurrect` (the list of `creative.json`) and `scripts start *`; restore everything when the game closes |
 | 1st: vault | `vault status \| list \| verify \| restore \| keep \| prune` | the snapshots and the session record; `restore` after a session cut short, `keep --yes` to keep the current save |
-| 2nd: core | `read [* \| all \| NAME \| ID \| PATH ...] [--live] [--tree \| --flat \| --json]` | the document, or a part of it: `hp`, `attrs.*`, `params.Magic.6230.mp`, `creative.resurrect.great_enemies.margit` |
+| 2nd: core | `read [* \| all \| NAME \| ID \| PATH ...] [--live] [--tree \| --flat \| --json]` | the document, or a part of it: `hp`, `attrs.*`, `params.NpcParam.10000000.hp`, `creative.resurrect.great_enemies.margit` |
 | 2nd: core | `read monitor \| monitor-buffs \| monitor-animations [--mapped \| --unmapped]` | one row per buff / animation id that appears (`--unmapped`, the default: the ids `names.json` does not name yet) |
 | 2nd: core | `write NAME=VALUE ...`, `write NAME=default`, `write` | change a value the document shows; `default` = the game's own value; `write` alone lists the names and their ranges |
 | 3rd: creative | `scripts [* \| all]`, `scripts start \| restart \| stop \| status [NAME[:ID[:PROCESS_ID]]]`, `scripts add \| remove \| change PATH` | your Python scripts next to the game, controlled from another terminal |
@@ -119,7 +119,7 @@ eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID
 eldendisk.exe read runes hp attrs.*                              # once
 eldendisk.exe read character.runes --live                        # kept current
 eldendisk.exe write vigor=99 level=150                           # inside the portal
-eldendisk.exe write params.effects.1621000.effectEndurance=-1    # Black Flame burns until the target dies
+eldendisk.exe write params.SpEffectParam.1621000.effectEndurance=-1    # Black Flame burns until the target dies
 eldendisk.exe write params=default                               # the game's own values back
 eldendisk.exe resurrect "mohg lord"                              # rest at a Site of Grace: he is there
 eldendisk.exe scripts                                            # your scripts and their state

@@ -23,6 +23,7 @@ OBJ = 0x330000000
 
 def encode(table, **values) -> bytes:
     """A row of `table` with these fields set (bit fields included); the rest is zero."""
+    table = PT.table_name(table)
     raw = bytearray(LAYOUTS[table]["size"])
     for name, v in values.items():
         ftype, off, _size, bpos, bits, _arr = LAYOUTS[table]["fields"][name]
@@ -38,6 +39,7 @@ def encode(table, **values) -> bytes:
 def put_table(mem, table, rows, *, new_rows=(), pad=0, size=None, index=0):
     """Fake file of `table` wired at its catalog chain. rows / new_rows: {id: bytes}. New rows (a design's) sit in the gap
     in front of the old data, `pad` bytes after them, like the real grown files."""
+    table = PT.table_name(table)
     size = size or LAYOUTS[table]["size"]
     ids = sorted({*rows, *new_rows})
     n = len(ids)
@@ -65,8 +67,9 @@ def put_table(mem, table, rows, *, new_rows=(), pad=0, size=None, index=0):
     obj = mem.read(BASE + chain.rva, 8)
     if obj is None:
         mem.put(BASE + chain.rva, struct.pack("<Q", OBJ))
+    obj = struct.unpack("<Q", mem.read(BASE + chain.rva, 8))[0]       # the global may lead elsewhere already (paramfile.wire)
     cells = 0x340000000 + index * 0x10000
-    mem.put(OBJ + chain.offsets[0], struct.pack("<Q", cells))
+    mem.put(obj + chain.offsets[0], struct.pack("<Q", cells))
     mem.put(cells + chain.offsets[1], struct.pack("<Q", cells + 0x1000))
     mem.put(cells + 0x1000 + chain.offsets[2], struct.pack("<Q", head))
     return head
@@ -81,10 +84,11 @@ MAGIC = {4000: encode("Magic", mp=10), 6210: encode("Magic", mp=18, refCategory1
 
 
 # ---- names ----
-@pytest.mark.parametrize("text,table", [("Magic", "Magic"), ("magicparam", "Magic"), ("EquipParamGoods", "Goods"),
-                                        ("SPEFFECT", "SpEffect"), ("SpEffectParam", "SpEffect"), ("bullet", "Bullet"),
-                                        ("AtkParam", "AtkParam_Pc"), ("atkparam_pc", "AtkParam_Pc"),
-                                        ("ShopLineupParam", "ShopLineup")])
+@pytest.mark.parametrize("text,table", [("Magic", "Magic"), ("magicparam", "Magic"), ("EquipParamGoods", "EquipParamGoods"),
+                                        ("goods", "EquipParamGoods"), ("SPEFFECT", "SpEffectParam"), ("SpEffectParam", "SpEffectParam"),
+                                        ("bullet", "Bullet"), ("AtkParam", "AtkParam_Pc"), ("atkparam_pc", "AtkParam_Pc"),
+                                        ("ShopLineup", "ShopLineupParam"), ("npcparam", "NpcParam"),
+                                        ("ItemLotParam_map", "ItemLotParam_map")])
 def test_a_table_can_be_typed_any_way_a_person_knows_it(text, table):
     assert PT.table_name(text) == table
 
@@ -92,7 +96,9 @@ def test_a_table_can_be_typed_any_way_a_person_knows_it(text, table):
 def test_a_reference_is_table_id_and_optionally_a_field():
     assert PT.parse_ref("Magic.6230") == ("Magic", 6230, None)
     assert PT.parse_ref("params.magic.6230.mp*") == ("Magic", 6230, "mp*")
-    for bad in ("Magic", "Magic.x", "Nothing.1", "Magic.1.a.b", ""):
+    assert PT.parse_ref("params.NpcParam") == ("NpcParam", None, None)             # 1.8.0 part 4: a whole table
+    assert PT.parse_ref("params.npcparam.*.hp") == ("NpcParam", "*", "hp")         # a field of every row
+    for bad in ("Magic.x", "Nothing.1", "Magic.1.a.b", "", "effects.1621000"):
         with pytest.raises(ParamNameError):
             PT.parse_ref(bad)
 
@@ -166,8 +172,9 @@ def put_end_grown(mem, table, old_rows, new_rows, relocate, index=0):
     obj = mem.read(BASE + chain.rva, 8)
     if obj is None:
         mem.put(BASE + chain.rva, struct.pack("<Q", OBJ))
+    obj = struct.unpack("<Q", mem.read(BASE + chain.rva, 8))[0]       # the global may lead elsewhere already (paramfile.wire)
     cells = 0x340000000 + index * 0x10000
-    mem.put(OBJ + chain.offsets[0], struct.pack("<Q", cells))
+    mem.put(obj + chain.offsets[0], struct.pack("<Q", cells))
     mem.put(cells + chain.offsets[1], struct.pack("<Q", cells + 0x1000))
     mem.put(cells + 0x1000 + chain.offsets[2], struct.pack("<Q", head))
     return head
@@ -200,10 +207,11 @@ def test_a_row_far_behind_the_strings_or_in_front_of_the_data_is_still_refused()
 
 def test_every_table_is_reached_through_its_own_chain():
     m = pf.Pages()
-    for i, table in enumerate(LAYOUTS):
+    from eldendisk.game.paramnames import WORKBENCH
+    for i, table in enumerate(WORKBENCH):
         put_table(m, table, {7: encode(table)}, index=i)
     t = tables(m)
-    assert all(t.read_row(table, 7) for table in LAYOUTS)
+    assert all(t.read_row(table, 7) for table in WORKBENCH)
 
 
 def test_a_missing_row_a_wrong_row_size_and_a_row_outside_the_data_are_errors_not_guesses():
@@ -263,8 +271,12 @@ def test_the_command_fails_clearly(capsys):
 
 
 # ---- the profile and the layouts ----
-def test_the_profile_has_a_chain_for_each_of_the_six_tables():
-    assert set(pf.params_profile().params.catalog) == set(LAYOUTS)
+def test_the_profile_has_a_chain_for_each_of_the_six_tables_and_the_list_of_every_table():
+    from eldendisk.game.paramnames import WORKBENCH
+    params = pf.params_profile().params
+    assert set(params.catalog) == set(WORKBENCH)
+    assert params.repository is not None and params.repository.chain(3) == params.catalog["EquipParamGoods"]      # a slot of the list
+    assert params.repository.chain(15) == params.catalog["SpEffectParam"]
 
 
 def test_a_catalog_with_an_unknown_table_is_refused(tmp_path):
@@ -278,7 +290,7 @@ def test_a_catalog_with_an_unknown_table_is_refused(tmp_path):
 
 def test_the_layouts_agree_with_the_ones_innovate_items_uses():
     from eldendisk.creative.innovate_spells.paramdefs import PARAMDEFS
-    for ext, ours in {"goods": "Goods", "magic": "Magic", "sp": "SpEffect", "shop": "ShopLineup"}.items():
+    for ext, ours in {"goods": "EquipParamGoods", "magic": "Magic", "sp": "SpEffectParam", "shop": "ShopLineupParam"}.items():
         assert PARAMDEFS[ext]["size"] == LAYOUTS[ours]["size"]
         assert PARAMDEFS[ext]["fields"] == LAYOUTS[ours]["fields"]
 

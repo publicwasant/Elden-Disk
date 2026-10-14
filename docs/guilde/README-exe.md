@@ -29,7 +29,7 @@ can be anywhere and replacing it loses nothing. `--save-dir` and `--vault` are r
 3. Terminal 1, once a character is loaded: `.\eldendisk.exe read` (the whole document once), `read runes hp attrs.*`, `read hp --live`,
    `read monitor` (the buff and animation ids that appear).
 4. Terminal 2: `.\eldendisk.exe write` lists what can be written; `write vigor=99 level=150`, `write hp=99999` (full),
-   `write params.effects.1621000.effectEndurance=-1` (Black Flame burns until the target dies), `write params=default` (the game's own
+   `write params.SpEffectParam.1621000.effectEndurance=-1` (Black Flame burns until the target dies), `write params=default` (the game's own
    values back).
 5. Creative: `.\eldendisk.exe resurrect "mohg lord"` (a beaten boss alive again; rest at a Site of Grace), `read
    creative.resurrect.great_enemies` (the ones you can bring back), `scripts` (your scripts and their state), `innovate-spells` (your

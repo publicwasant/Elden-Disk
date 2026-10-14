@@ -203,61 +203,38 @@ def parse_policy(set_args: list[str] | None, refill: str | None, reset: list[str
                       tuple(dict.fromkeys(resets)))
 
 
+FOLDED = "effects"          # `params.effects` before 1.8.0 part 4: the four Black Flame rows, now rows of SpEffectParam
+
+
 def plan_params(spec: ParamsProfile | None, policy: EditPolicy, snapshot: Snapshot | None = None
                 ) -> tuple[EditPolicy, list[str]]:
-    """Resolve the `params` names of `policy` against the profile: (policy with `param_edits` and `catalog_edits`, notes).
+    """Resolve the `params` names of `policy` against the game's tables: (policy with `catalog_edits`, notes).
 
-    Two kinds of names: `params.effects.…` (the rows the profile lists, with the game's values written in it) and
-    `params.<Table>.<id>.<field>` (any row of the six workbench tables; `--reset` puts back what `snapshot` remembers).
-    ParamLockedError (a read-only field named exactly) and ParamNameError (unknown name, bad value, a field set twice
-    or both set and reset) mean nothing may be written. Nothing here touches the game.
+    A name is `params.<Table>.<id>.<field>`: any field of any row of any table of the game (1.8.0 part 4: every table; the
+    `params.effects` of the profile is folded into SpEffectParam). `NAME=default` puts back what `snapshot` remembers (the value of
+    the first change in this game process); `params=default` every one. ParamNameError (an unknown name, a bad value, a field set
+    twice or both set and put back) means nothing may be written. Nothing here touches the game.
     """
     if not (policy.param_sets or policy.param_resets):
         return policy, []
     if spec is None:
         raise ParamNameError("this game version has no params in offsets.json")
-    keys = set(spec.tables)
-    cat_sets = [(n, r) for n, r in policy.param_sets if is_catalog_name(n, keys)]
-    cat_resets = [n for n in policy.param_resets if n != "all" and is_catalog_name(n, keys)]
+    for name in [n for n, _r in policy.param_sets] + [n for n in policy.param_resets if n != "all"]:
+        parts = name.strip().split(".")
+        if len(parts) >= 2 and parts[1].lower() == FOLDED:
+            raise ParamNameError(f"{name.strip()}: `params.effects` is gone (1.8.0): the rows are SpEffectParam's, for example "
+                                 f"params.SpEffectParam.{parts[2] if len(parts) > 2 else '1621000'}"
+                                 + (f".{'.'.join(parts[3:])}" if len(parts) > 3 else ""))
+        if not is_catalog_name(name, ()):
+            raise ParamNameError(f"{name.strip()}: not a table of the game (`read params` lists them)")
+    cat_sets = list(policy.param_sets)
+    cat_resets = [n for n in policy.param_resets if n != "all"]
     if "all" in policy.param_resets and snapshot is not None:
         cat_resets += [f"params.{k}" for k in snapshot.keys()]
-    if (cat_sets or cat_resets) and not spec.catalog:
-        raise ParamNameError("this game version has no params.catalog in offsets.json (run `probe`)")
-    cat_edits, cat_notes = plan_catalog(cat_sets, cat_resets, snapshot) if (cat_sets or cat_resets) else ([], [])
-    policy = replace(policy, param_sets=tuple(x for x in policy.param_sets if x not in cat_sets),
-                     param_resets=tuple(n for n in policy.param_resets if n not in cat_resets or n == "all"),
-                     catalog_edits=tuple(cat_edits))
-    if not (policy.param_sets or policy.param_resets):
-        return policy, cat_notes
-    edits: dict[tuple[str, str, str], ParamEdit] = {}
-    notes: list[str] = list(cat_notes)
-
-    def short(hits) -> str:
-        names = [f"{row}.{field}" for _t, row, field in hits]
-        return ", ".join(names[:6]) + (f", … ({len(names)})" if len(names) > 6 else "")
-
-    for name, raw in policy.param_sets:
-        hits, skipped = match_names(spec, name, reset=False)
-        for key, row, field in hits:
-            value = parse_value(spec.tables[key].fields[field], raw)
-            if (key, row, field) in edits:
-                raise ParamNameError(f"params.{key}.{row}.{field} is set twice")
-            edits[(key, row, field)] = ParamEdit(key, row, field, value)
-        if len(hits) > 1 or skipped:
-            notes.append(f"{name} matches {len(hits)} values: {short(hits)}")
-        if skipped:
-            notes.append(f"skipped (locked): {', '.join(s.removeprefix('params.') for s in skipped)}")
-    for name in policy.param_resets:
-        if name == "all":
-            hits = [(k, r, f) for k, tb in spec.tables.items() for r in tb.rows
-                    for f, fd in tb.fields.items() if fd.writable]
-        else:
-            hits, _skipped = match_names(spec, name, reset=True)
-        for key, row, field in hits:
-            if (key, row, field) in edits:
-                raise ParamNameError(f"params.{key}.{row}.{field} is both in --set and --reset")
-            edits[(key, row, field)] = ParamEdit(key, row, field, None)
-    return replace(policy, param_edits=tuple(edits.values())), notes
+    if (cat_sets or cat_resets) and not (spec.catalog or spec.repository):
+        raise ParamNameError("this game version has no params.catalog or params.repository in offsets.json (run `probe`)")
+    cat_edits, notes = plan_catalog(cat_sets, cat_resets, snapshot) if (cat_sets or cat_resets) else ([], [])
+    return replace(policy, param_sets=(), param_resets=(), catalog_edits=tuple(cat_edits)), notes
 
 
 def _clamp(name: str, value: int, maximum: int | None = None) -> int:

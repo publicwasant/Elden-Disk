@@ -1,5 +1,5 @@
 {
-  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. text (optional): the tables `write --text` replaces. files: table name -> number N of its text file (the pointer to that table sits at array + N * 8, in an array the tool finds by scanning the game's memory); sizes: the size in bytes of the game's own table (its file) in the language the game is played in; a table of that size and shape is the one wanted. No fixed address is kept. params (optional): the game's own tables (SpEffectParam), see docs/adding-a-profile.md. equipment (optional, 1.7.2): the spells memorised in the magic slots: [PlayerGameData + game_data_to_magic] -> magic_slot_count slots of magic_slot_size bytes from magic_slots (the Magic id as a 32-bit number, -1 for an empty slot); the slot that is selected (0 = the first) is a 32-bit number at magic_selected. See README section 'Adding a profile'. event_flags (optional, 1.8.0): the game's event flags (CSEventFlagMan) for resurrect great-enemies: the pointer to the manager at man_rva; the manager must hold divisor (1000) and holder_size (125), else the game version moved it.",
+  "_readme": "Key = SHA-256 of eldenring.exe (python -m eldendisk hash). Hex strings. null = not set yet. anim: pointer chain to player's CSChrTimeActModule (anim_id = u32 at time_act + queue + read_idx * entry_size). at_grace: source 'anim' compares current anim_id against 'equals'. text (optional): the tables `write --text` replaces. files: table name -> number N of its text file (the pointer to that table sits at array + N * 8, in an array the tool finds by scanning the game's memory); sizes: the size in bytes of the game's own table (its file) in the language the game is played in; a table of that size and shape is the one wanted. No fixed address is kept. params (optional): the game's own tables; catalog: a measured chain per table (by the game's name of the table); repository: the list the game keeps every table in (slot n at [exe + rva] + first + n * stride, then tail), walked for every other table (1.8.0); tables: the chains `probe` starts from. See docs/handbook/adding-a-profile.md. equipment (optional, 1.7.2): the spells memorised in the magic slots: [PlayerGameData + game_data_to_magic] -> magic_slot_count slots of magic_slot_size bytes from magic_slots (the Magic id as a 32-bit number, -1 for an empty slot); the slot that is selected (0 = the first) is a 32-bit number at magic_selected. See README section 'Adding a profile'. event_flags (optional, 1.8.0): the game's event flags (CSEventFlagMan) for resurrect great-enemies: the pointer to the manager at man_rva; the manager must hold divisor (1000) and holder_size (125), else the game version moved it.",
   "profiles": {
     "1a3547101327f65d0c76da2f9190ac0aa66871ea42bae2aecc61e11a8b597891": {
       "label": "Elden Ring 1.17.1",
@@ -34,13 +34,14 @@
           "descriptor_size": "0x18", "descriptor_id": "0x0", "descriptor_data_offset": "0x8"
         },
         "catalog": {
-          "Goods":       { "rva": "0x3D85F58", "offsets": ["0x160", "0x80", "0x80"] },
-          "Magic":       { "rva": "0x3D85F58", "offsets": ["0x478", "0x80", "0x80"] },
-          "SpEffect":    { "rva": "0x3D85F58", "offsets": ["0x4C0", "0x80", "0x80"] },
-          "Bullet":      { "rva": "0x3D85F58", "offsets": ["0x358", "0x80", "0x80"] },
-          "AtkParam_Pc": { "rva": "0x3D85F58", "offsets": ["0x2C8", "0x80", "0x80"] },
-          "ShopLineup":  { "rva": "0x3D85F58", "offsets": ["0x820", "0x80", "0x80"] }
+          "EquipParamGoods": { "rva": "0x3D85F58", "offsets": ["0x160", "0x80", "0x80"] },
+          "Magic":           { "rva": "0x3D85F58", "offsets": ["0x478", "0x80", "0x80"] },
+          "SpEffectParam":   { "rva": "0x3D85F58", "offsets": ["0x4C0", "0x80", "0x80"] },
+          "Bullet":          { "rva": "0x3D85F58", "offsets": ["0x358", "0x80", "0x80"] },
+          "AtkParam_Pc":     { "rva": "0x3D85F58", "offsets": ["0x2C8", "0x80", "0x80"] },
+          "ShopLineupParam": { "rva": "0x3D85F58", "offsets": ["0x820", "0x80", "0x80"] }
         },
+        "repository": { "rva": "0x3D85F58", "first": "0x88", "stride": "0x48", "slots": 256, "tail": ["0x80", "0x80"] },
         "tables": {
           "effects": {
             "table": "SpEffectParam",

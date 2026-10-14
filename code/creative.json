@@ -45,10 +45,10 @@
               "goods_caption": "The nature of a curse is to erode, corrupt, and destroy. Yet, this paradox dictates a terrifying truth: when two currents of profound malice are forced to violently collide and multiply, they do not bring absolute ruin. Instead, the multiplied negativity gives birth to a vibrant, positive spark of life capable of reversing death's approach.\n\nThis alien logic was introduced to the Lands Between by an Unknown Sorcerer—a wanderer who fell through the cracks of reality from a universe entirely unalike our own. They wore strange garments, swore fealty to no sovereign, and manipulated an unseen energy that defied every natural law of this world. To them, the impossible was merely a matter of calculation.\n\nThe sorcerer lingered only briefly before the fabric of space swallowed them once more, returning them to their distant home. In their wake, they left nothing but the formula for this absolute contradiction. Perhaps it was a deliberate miracle gifted to those who suffer, or perhaps, to a being who walks between dimensions, rewriting the rules of mortality was simply a fleeting whim"
             },
             "colors": {
-              "__info__": "Base of Light Blue Color Palette from https://www.figma.com/colors/light-blue/, I've adjusted the Color harmonies - Split Color Palette Sets, using #FF909E as the Negative Cursed Energy, and #90D5FF as the Positive Cursed Energy for the concept.",
+              "__info__": "Base of Light Blue Color Palette from https://www.figma.com/colors/light-blue/, I've adjusted Monochromatic Color Palette Sets, using #E0F3FF as the Negative Cursed Energy, and #90D5FF as the Positive Cursed Energy for the concept.",
               "Magic.6421.castSfxId": {
                 "main": "#90D5FF",
-                "accent": "#FF909E"
+                "accent": "#E0F3FF"
               },
               "SpEffect.1642100": "#90D5FF"
             }

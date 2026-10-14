@@ -204,16 +204,16 @@ def test_parse_policy_rejects_bad_params_input(sets, reset):
         parse_policy(sets, None, reset)
 
 
-def test_plan_params_turns_names_into_edits():
+def test_plan_params_turns_names_into_edits_of_the_tables():
+    """1.8.0 part 4: every name is a table of the game; `params.effects` is folded into SpEffectParam."""
     spec = _pf.params_profile().params
-    p, notes = plan_params(spec, parse_policy([f"{BFE}=-1", "params.effects.1621000.changeHpPoint=3"], None,
-                                              ["params.effects.1623000"]))
-    assert [(e.row, e.field, e.value) for e in p.param_edits] == [
-        ("1621000", "effectEndurance", -1.0), ("1621000", "changeHpPoint", 3),
-        ("1623000", "effectEndurance", None), ("1623000", "motionInterval", None),
-        ("1623000", "changeHpRate", None), ("1623000", "changeHpPoint", None)]
-    assert p.param_edits[0].name == BFE and notes == []          # a reset of a row quietly leaves its locked fields alone
-    assert isinstance(p.param_edits[0].value, float) and isinstance(p.param_edits[1].value, int)
+    p, notes = plan_params(spec, parse_policy(["params.SpEffectParam.1621000.effectEndurance=-1",
+                                               "params.SpEffect.1621000.changeHpPoint=3"], None))
+    assert [(e.table, e.row, e.field, e.value) for e in p.catalog_edits] == [
+        ("SpEffectParam", 1621000, "effectEndurance", -1.0), ("SpEffectParam", 1621000, "changeHpPoint", 3)]
+    assert p.param_edits == () and p.param_sets == ()
+    with pytest.raises(_P.ParamNameError, match="params.SpEffectParam.1621000.effectEndurance"):
+        plan_params(spec, parse_policy([f"{BFE}=-1"], None))
 
 
 def test_plan_params_leaves_a_policy_without_params_alone_and_needs_a_profile_for_the_rest():
@@ -225,27 +225,27 @@ def test_plan_params_leaves_a_policy_without_params_alone_and_needs_a_profile_fo
         plan_params(None, parse_policy([], None, ["all"]))
 
 
-def test_plan_params_reports_what_a_pattern_matched_and_skipped():
+def test_plan_params_reports_what_a_field_pattern_matched():
     spec = _pf.params_profile().params
-    _, notes = plan_params(spec, parse_policy(["params.effects.*.*=1"], None))
-    # 4 rows x 4 writable fields; the two id fields are listed as locked, the row's `name` is not mentioned at all
-    assert any("matches 16 values" in n for n in notes)
-    locked = [n for n in notes if n.startswith("skipped (locked)")]
-    assert len(locked) == 1 and "vfxId" in locked[0] and ".name" not in locked[0]
+    p, notes = plan_params(spec, parse_policy(["params.SpEffectParam.1621000.changeHp*=1"], None))
+    assert {e.field for e in p.catalog_edits} >= {"changeHpRate", "changeHpPoint"}
 
 
-def test_param_edits_wait_for_the_gate_like_every_other_write():
+def test_param_edits_wait_for_the_gate_like_every_other_write(tmp_path):
+    from eldendisk.writer.paramedit import Snapshot
     m = WMem()
     m.b = full_world().b
     _pf.build_file(m, _pf.small_ids())
-    _pf.wire(m, 0)
+    _pf.wire(m, 2)
     spec = _pf.params_profile()
-    policy, _ = plan_params(spec.params, parse_policy([f"{BFE}=-1"], None))
+    name = "params.SpEffectParam.1621000.effectEndurance"
+    policy, _ = plan_params(spec.params, parse_policy([f"{name}=-1"], None))
     gate = WriteGate()
-    w = MemoryWriter(m, Sampler(m, spec, state_ids(), BASE), policy, gate, clock=lambda: 0.0)
+    w = MemoryWriter(m, Sampler(m, spec, state_ids(), BASE), policy, gate, clock=lambda: 0.0,
+                     snapshot=Snapshot(tmp_path / "snap.json", 1, 1))
     assert w.tick() == [] and m.log == []
     gate.open()
-    assert [(r.name, r.value, r.wrote) for r in w.tick()] == [(BFE, -1.0, True)]
+    assert [(r.name, r.wrote) for r in w.tick()] == [(name, True)]
 
 
 def test_a_param_edit_the_profile_marks_read_only_is_refused_even_if_it_gets_this_far():
