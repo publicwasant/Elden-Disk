@@ -120,8 +120,8 @@ def test_the_shipped_design_is_written_in_the_new_structure_and_holds_its_hex_co
     raw = doc["innovate_spells"]["slots"]["reverse_cursed_technique"]
     assert {"__info__", "requires", "locations", "customs"} <= set(raw) and {"basic", "advanced"} == set(raw["customs"])
     got = spec.normalise(doc)["spells"][0]
-    assert raw["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"] == {"main": "#90D5FF", "accent": "#FF909E"}
-    assert got["flame_color"] == [0x90 / 255, 0xD5 / 255, 1.0] and got["flame_accent_color"] == [1.0, 0x90 / 255, 0x9E / 255]
+    assert raw["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"] == {"main": "#90D5FF", "accent": "#E0F3FF"}
+    assert got["flame_color"] == [0x90 / 255, 0xD5 / 255, 1.0] and got["flame_accent_color"] == [0xE0 / 255, 0xF3 / 255, 255 / 255]
     assert got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100", "color": [0x90 / 255, 0xD5 / 255, 1.0]}
     assert got["requires"] == {"intelligence": 0, "faith": 60, "arcane": 10} and got["fp_cost"] == 120 and got["shop"] == {"price": 34590, "stock": 1}
 
