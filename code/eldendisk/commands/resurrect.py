@@ -21,7 +21,8 @@ from pathlib import Path
 
 from ..console import require_windows_x64
 from ..creative.resurrect.great_enemies import TableError, load
-from ..creative.resurrect.great_enemies.table import creative_list
+from ..creative.resurrect.great_enemies.table import creative_list, resurrected
+from ..creative.resurrect.great_enemies.table import facts as _facts
 from ..game.attach import EXIT_NO_SESSION, EXIT_UNSUPPORTED, AttachError, locate, open_read
 from ..game.eventflags import EventFlagError, EventFlags
 from ..logbook import CREATIVE_TAG, book
@@ -29,7 +30,6 @@ from ..writer.eventflags import FlagRefused, turn_off
 from ..writer.writer import WritableProcessMemory, WriteGate
 from .. import ui
 
-APPEARS = "it appears once its area loads again: warp to a grace in another region, then come back"
 
 
 def _states(table, mem, target) -> dict[int, bool | None]:
@@ -38,10 +38,6 @@ def _states(table, mem, target) -> dict[int, bool | None]:
     return {rid: got[f] for rid, f in table.defeated_flags().items()}
 
 
-def _facts(r: dict) -> str:
-    grace = f"grace: {r['grace']['name']}" if r.get("grace") else "grace: (none in its map)"
-    drop = ", ".join(r.get("drop") or []) or "drop: (unknown)"
-    return f"{r.get('place') or r['map']} \u00b7 {grace} \u00b7 {r['runes']:,} runes \u00b7 {drop}"
 
 
 def activate(table, rids: list[int], mem, target, gate, every: bool = False) -> int:
@@ -68,7 +64,7 @@ def activate(table, rids: list[int], mem, target, gate, every: bool = False) -> 
             book.e(CREATIVE_TAG, f"{r['name']}: not resurrected: {', '.join(bad)}")
             continue
         done.append(rid)
-        book.i(CREATIVE_TAG, f"{r['name']} alive again: {_facts(r)}")
+        book.i(CREATIVE_TAG, resurrected(r))
         if r.get("story"):
             story.append(r["name"])
     if every:
@@ -76,8 +72,6 @@ def activate(table, rids: list[int], mem, target, gate, every: bool = False) -> 
     else:
         for rid in alive:
             book.i(CREATIVE_TAG, f"{table.rows[rid]['name']}: already alive")
-    if done:
-        book.i(CREATIVE_TAG, f"{len(done)} great enem{'y' if len(done) == 1 else 'ies'} alive again; {APPEARS}")
     if story:
         book.w(CREATIVE_TAG, f"{', '.join(story)}: story boss{'es' if len(story) > 1 else ''}: what the death started (a Great Rune, the people "
                            "who speak of it) may look odd until the game closes; the vault puts your save back then")

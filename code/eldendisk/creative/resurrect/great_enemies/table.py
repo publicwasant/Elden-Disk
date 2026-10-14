@@ -125,6 +125,21 @@ def load(path: Path | str | None = None) -> Table:
     return Table(rows, str(doc.get("game", "")))
 
 
+ACTIVATE = "(Rest at Site of Grace to activate)"
+
+
+def facts(r: dict) -> str:
+    """A row of the table in a line: its place, the nearest grace, the runes and the drop."""
+    grace = f"grace: {r['grace']['name']}" if r.get("grace") else "grace: (none in its map)"
+    drop = ", ".join(r.get("drop") or []) or "drop: (unknown)"
+    return f"{r.get('place') or r['map']} \u00b7 {grace} \u00b7 {r['runes']:,} runes \u00b7 {drop}"
+
+
+def resurrected(r: dict) -> str:
+    """The line said when a boss has been brought back (`resurrect`, `write ...defeated=false`, a script)."""
+    return f"{r['name']} has been resurrected: {facts(r)}; {ACTIVATE}"
+
+
 def creative_list(design: dict) -> list[str] | None:
     """creative.json's `resurrect.great_enemies.activate` (spec 1.8.0): a list of names, or ["all"]; None without one."""
     block = ((design or {}).get("resurrect") or {}).get("great_enemies")

@@ -31,7 +31,7 @@ can be anywhere and replacing it loses nothing. `--save-dir` and `--vault` are r
 4. Terminal 2: `.\eldendisk.exe write` lists what can be written; `write vigor=99 level=150`, `write hp=99999` (full),
    `write params.effects.1621000.effectEndurance=-1` (Black Flame burns until the target dies), `write params=default` (the game's own
    values back).
-5. Creative: `.\eldendisk.exe resurrect "mohg lord"` (a beaten boss alive again; warp to another region and back), `read
+5. Creative: `.\eldendisk.exe resurrect "mohg lord"` (a beaten boss alive again; rest at a Site of Grace), `read
    creative.resurrect.great_enemies` (the ones you can bring back), `scripts` (your scripts and their state), `innovate-spells` (your
    spells).
 6. Quit the game. Everything is rolled back. To **keep** the save instead: let the game save (rest at a grace or quit to title), close the

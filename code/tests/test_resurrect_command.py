@@ -47,8 +47,9 @@ def test_activate_turns_the_bosses_flags_off_and_says_where_they_are(rig, capsys
     assert run("mohg lord", "fell omen") == 0
     assert not any(rig.mem.get(f) for f in (*MARGIT, *MOHG))
     out = "".join(capsys.readouterr())
-    assert "Mohg, Lord of Blood alive again: Mohgwyn Palace" in out and "Dynasty Mausoleum Midpoint" in out and "420,000 runes" in out
-    assert "2 great enemies alive again" in out and "warp to a grace in another region" in out
+    assert "Mohg, Lord of Blood has been resurrected: Mohgwyn Palace" in out and "Dynasty Mausoleum Midpoint" in out
+    assert "420,000 runes" in out and out.count("; (Rest at Site of Grace to activate)") == 2       # one line per boss, no summary
+    assert "alive again" not in out
     assert "story bosses" in out                                                     # Mohg and Margit are story bosses
 
 
@@ -81,7 +82,8 @@ def test_a_flag_that_does_not_stick_is_an_error(rig, capsys):
 def test_all_brings_back_every_defeated_one(rig, capsys):
     assert run("all") == 0
     assert not rig.mem.get(10000850) and not rig.mem.get(12050800)
-    assert "2 great enemies alive again" in "".join(capsys.readouterr())         # the others were alive (or not held) already
+    out = "".join(capsys.readouterr())                                        # the others were alive (or not held) already
+    assert out.count("has been resurrected") == 2 and "Margit, the Fell Omen has been resurrected" in out
 
 
 def test_a_boss_is_named_by_its_path_in_the_document_too(rig):

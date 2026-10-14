@@ -121,7 +121,7 @@ eldendisk.exe read character.runes --live                        # kept current
 eldendisk.exe write vigor=99 level=150                           # inside the portal
 eldendisk.exe write params.effects.1621000.effectEndurance=-1    # Black Flame burns until the target dies
 eldendisk.exe write params=default                               # the game's own values back
-eldendisk.exe resurrect "mohg lord"                              # warp to another region and back: he is there
+eldendisk.exe resurrect "mohg lord"                              # rest at a Site of Grace: he is there
 eldendisk.exe scripts                                            # your scripts and their state
 ```
 

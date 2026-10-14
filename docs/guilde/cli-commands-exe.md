@@ -331,7 +331,7 @@ eldendisk.exe resurrect NAME | ID | PATH ... | * | all [--dry-run] [--when-loade
 
 A boss you have beaten (any of the 212 great enemies, the DLC included) alive again for the session: its event flags (the defeat, its
 Remembrance's play-log trigger, its drops, its intro) are turned off in the game's memory only. It appears once its area loads again:
-warp to a grace in another region and come back. When the game closes the vault puts the save back and the boss is dead again.
+rest at a Site of Grace. When the game closes the vault puts the save back and the boss is dead again.
 
 - `read creative.resurrect.great_enemies` shows the bosses that are defeated now (the ones that can come back), with the place, the nearest
   grace, the runes and the drop. There is no list command: the document is the list.

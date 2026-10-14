@@ -241,8 +241,8 @@ class CreativeLive:
                 if bad:
                     raise Refused(f"{table.rows[rid]['name']}: not resurrected: {', '.join(bad)}")
                 done[f"creative.resurrect.great_enemies.{rid}.defeated"] = False
-            self.say("I", f"{table.rows[rids[0]]['name']} alive again: it appears once its area loads again (warp to another region, "
-                          "then come back)")
+            from ..resurrect.great_enemies.table import resurrected
+            self.say("I", resurrected(table.rows[rids[0]]))
             return done
         except (EventFlagError, FlagRefused) as exc:
             raise Refused(f"great enemies: {exc}") from None
