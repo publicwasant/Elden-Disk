@@ -1,4 +1,4 @@
-"""What `--live-buffs` and `--live-animations` have in common: a ledger of ids, a filter, and two views of it.
+"""What `read monitor-buffs` and `read monitor-animations` have in common: a ledger of ids, a filter, and two views of it.
 
 A monitor reads the game once per tick and updates its ledger. A console that cannot redraw gets the transitions as
 lines through `out` (`+ id  name  time`); a terminal gets `lines(now)` and `summary()` to draw as a table.
@@ -34,7 +34,7 @@ class LedgerMonitor:
 
     @property
     def table(self) -> dict:
-        """The names of this monitor's ids (`chr_state_ids.json`: buffs or animations)."""
+        """The names of this monitor's ids (`names.json`: buffs or animations)."""
         raise NotImplementedError
 
     def is_mapped(self, eid: int) -> bool:
@@ -46,7 +46,7 @@ class LedgerMonitor:
     # -- shared -----------------------------------------------------------
     def start(self) -> None:
         if self.out:
-            self.out("Format: + appeared, - disappeared | id | name (Unknown = not in chr_state_ids.json) | time")
+            self.out("Format: + appeared, - disappeared | id | name (Unknown = not in names.json) | time")
 
     def _shown(self, eid: int) -> bool:
         return self.show == "all" or (self.show == "mapped") == self.is_mapped(eid)

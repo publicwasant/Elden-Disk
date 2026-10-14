@@ -1,4 +1,4 @@
-"""One way to look through the running game's memory for something, shared by `write --flame-color` and `write --text`.
+"""One way to look through the running game's memory for something, shared by the colours and the texts of `innovate-spells apply`.
 
 What the logs of 1.17.1 showed (nothing is assumed beyond them):
 - The effect files and the text tables are loaded by the game early and stay where they were put, in the game's own private heap.

@@ -1,5 +1,5 @@
-"""Developer tool (not shipped): the great-enemies table of `resurrect great-enemies` (spec 1.8.0 section 4) from the game's own
-files, read-only. Writes eldendisk/design/resurrect/great_enemies/great_enemies.json.
+"""Developer tool (not shipped): the great-enemies table of `resurrect` (spec 1.8.0 section 4) from the game's own
+files, read-only. Writes eldendisk/creative/resurrect/great_enemies/great_enemies.json.
 
     python tools/gen_great_enemies.py [--game DIR] [--out FILE]
 
@@ -31,12 +31,12 @@ sys.path.insert(0, str(HERE))
 
 import gamearchive as ga  # noqa: E402
 from dump_msgbnd import bnd4_files, undcx  # noqa: E402
-from eldendisk.design.innovate_items import container, zstd  # noqa: E402
-from eldendisk.design.innovate_items.container import Bnd4  # noqa: E402
-from eldendisk.design.innovate_items.fmg import Fmg  # noqa: E402
+from eldendisk.creative.innovate_spells import container, zstd  # noqa: E402
+from eldendisk.creative.innovate_spells.container import Bnd4  # noqa: E402
+from eldendisk.creative.innovate_spells.fmg import Fmg  # noqa: E402
 
 DEFAULT_GAME = Path(r"C:\Program Files (x86)\Steam\steamapps\common\ELDEN RING\Game")
-OUT = HERE.parent / "eldendisk" / "design" / "resurrect" / "great_enemies" / "great_enemies.json"
+OUT = HERE.parent / "eldendisk" / "creative" / "resurrect" / "great_enemies" / "great_enemies.json"
 DLC_AREAS = {20, 21, 22, 25, 28, 40, 41, 42, 43, 61}
 # the bosses whose death the story waits on (spec 1.8.0 section 4, accepted 2026-10-13), by the name the game shows
 STORY = ("Margit, the Fell Omen", "Godrick the Grafted", "Rennala", "Starscourge Radahn", "Morgott", "Rykard", "Malenia", "Mohg, Lord of Blood",

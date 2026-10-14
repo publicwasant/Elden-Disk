@@ -8,8 +8,8 @@ from datetime import datetime
 import pytest
 
 from eldendisk import ui
-from eldendisk.commands import design as ext
-from eldendisk.logbook import DESIGN_TAG, book, format_line
+from eldendisk.commands import innovate as ext
+from eldendisk.logbook import CREATIVE_TAG, book, format_line
 
 
 class Stream(io.StringIO):
@@ -31,24 +31,24 @@ def lines(monkeypatch):
 
 
 def test_without_animation_a_step_is_a_start_line_and_an_end_line_with_the_time(lines):
-    with ui.working(DESIGN_TAG, "building", animate=False) as w:
+    with ui.working(CREATIVE_TAG, "building", animate=False) as w:
         w.done("built")
-    assert lines[0] == "I design: building" and re.fullmatch(r"I\+design: built  \(\d+\.\d s\)", lines[1])
+    assert lines[0] == "I creative: building" and re.fullmatch(r"I\+creative: built  \(\d+\.\d s\)", lines[1])
 
 
 def test_a_step_that_fails_leaves_no_end_line_and_no_status_line(lines):
     err = Stream()
     with pytest.raises(ValueError):
-        with ui.working(DESIGN_TAG, "building", stream=err, animate=True):
+        with ui.working(CREATIVE_TAG, "building", stream=err, animate=True):
             raise ValueError("boom")
-    assert ui._live is None and lines == ["D design: building"]          # only the file line; no end line
+    assert ui._live is None and lines == ["D creative: building"]          # only the file line; no end line
     assert err.getvalue().endswith("\r\x1b[2K")                    # the status line is wiped
 
 
 def test_the_status_line_spins_counts_the_seconds_and_lets_other_lines_through_above_it(lines, monkeypatch):
     err = Stream()
     clock = [0.0]
-    with ui.working(DESIGN_TAG, "the long text goes to the log", short="building x", stream=err, animate=True, clock=lambda: clock[0],
+    with ui.working(CREATIVE_TAG, "the long text goes to the log", short="building x", stream=err, animate=True, clock=lambda: clock[0],
                     interval=0.01) as w:
         clock[0] = 12.3
         time.sleep(0.05)
@@ -58,14 +58,14 @@ def test_the_status_line_spins_counts_the_seconds_and_lets_other_lines_through_a
         i = out.index(" other line")
         assert out[:i].endswith("\r\x1b[2K") and out[i:].count("building x") >= 1      # wiped, the line, then the status line again
         w.done("built")
-    assert ui._live is None and lines[0] == "D design: the long text goes to the log"      # the file has the long text; not on the console
-    assert lines[-1].startswith("I+design: built  (12.3 s)")
+    assert ui._live is None and lines[0] == "D creative: the long text goes to the log"      # the file has the long text; not on the console
+    assert lines[-1].startswith("I+creative: built  (12.3 s)")
 
 
 def test_only_one_status_line_at_a_time(lines):
     err = Stream()
-    with ui.working(DESIGN_TAG, "first", stream=err, animate=True):
-        with ui.working(DESIGN_TAG, "second", stream=err, animate=True) as inner:
+    with ui.working(CREATIVE_TAG, "first", stream=err, animate=True):
+        with ui.working(CREATIVE_TAG, "second", stream=err, animate=True) as inner:
             assert not inner.animated
     assert ui._live is None
 
@@ -73,7 +73,7 @@ def test_only_one_status_line_at_a_time(lines):
 def test_the_spinner_uses_ascii_on_a_legacy_code_page(lines):
     err = Stream()
     err.encoding = "cp874"
-    with ui.working(DESIGN_TAG, "building", stream=err, animate=True):
+    with ui.working(CREATIVE_TAG, "building", stream=err, animate=True):
         pass
     assert "|" in err.getvalue() and "⠋" not in err.getvalue()
 
@@ -91,11 +91,11 @@ def test_a_card_shows_the_rows_and_has_an_ascii_fallback(monkeypatch):
 
 def test_the_diff_is_a_tree_and_says_how_many_more(lines, monkeypatch):
     ext._show_diff(["a  1 -> 2", "b  3 -> 4"])
-    assert lines == ["I design:   ├─ a  1 -> 2", "I design:   └─ b  3 -> 4"]
+    assert lines == ["I creative:   ├─ a  1 -> 2", "I creative:   └─ b  3 -> 4"]
     lines.clear()
     monkeypatch.setattr(ext, "MAX_DIFF_LINES", 1)
     ext._show_diff(["a  1 -> 2", "b  3 -> 4", "c  5 -> 6"])
-    assert lines[0] == "I design:   ├─ a  1 -> 2" and lines[1].startswith("I design:   └─ … and 2 more")
+    assert lines[0] == "I creative:   ├─ a  1 -> 2" and lines[1].startswith("I creative:   └─ … and 2 more")
 
 
 def test_the_rows_of_a_spell_hold_only_what_the_design_says_in_its_own_words():

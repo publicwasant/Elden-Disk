@@ -1,7 +1,7 @@
 """Any row of the six workbench tables, any field by name (`read --param Magic.6230`). Read-only.
 
 The field layouts are Paramdex's (`paramlayouts.py`, generated); where a table's file is comes from `params.catalog` in
-offsets.json (found with `read --probe-params`). The same decoder serves a row from the running game and a row from a
+offsets.json (found with `probe`). The same decoder serves a row from the running game and a row from a
 regulation.bin file (`decode_row` takes the row's bytes), so the two can be compared field for field.
 
 Correct-or-silent, like `params.py`: the file header must pass the same checks, the row size found in the file must be the
@@ -88,7 +88,7 @@ def pick(row: dict, pattern: str | None) -> dict:
 class Tables:
     def __init__(self, mem, profile, module_base: int):
         if profile.params is None or not profile.params.catalog:
-            raise ParamError("this exe version has no params.catalog in offsets.json (run `read --probe-params`)")
+            raise ParamError("this exe version has no params.catalog in offsets.json (run `probe`)")
         self.store = ParamStore(mem, profile, module_base)
         self.mem, self.catalog = mem, profile.params.catalog
         self._index: dict = {}         # table -> (head, count, data start, {row id: descriptor number}): see row_address

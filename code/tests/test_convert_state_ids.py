@@ -1,4 +1,4 @@
-"""tools/convert_state_ids.py: the old flat chr_state_ids.json becomes {"buffs": ..., "animations": ...} without `sources`."""
+"""tools/convert_state_ids.py: the old flat names.json becomes {"buffs": ..., "animations": ...} without `sources`."""
 import json
 import sys
 from pathlib import Path
@@ -26,10 +26,10 @@ def test_convert_splits_by_sources_and_drops_the_field():
 
 
 def test_the_command_keeps_a_backup_and_the_result_loads(tmp_path, capsys):
-    f = tmp_path / "chr_state_ids.json"
+    f = tmp_path / "names.json"
     f.write_text(json.dumps(OLD), encoding="utf-8")
     assert conv.main([str(f)]) == 0
-    assert json.loads((tmp_path / "chr_state_ids.json.bak").read_text(encoding="utf-8")) == OLD
+    assert json.loads((tmp_path / "names.json.bak").read_text(encoding="utf-8")) == OLD
     ids = load_state_ids(f)
     assert set(ids.buffs) == {311100, 5} and set(ids.animations) == {2000000}
     assert conv.main([str(f)]) == 1 and "already in the new shape" in capsys.readouterr().err

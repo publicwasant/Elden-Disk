@@ -11,7 +11,7 @@ from .logbook import LOG_NAME, book
 from .vault import VaultError, resolve_vault
 
 STARTED_BY = "ELDENDISK_STARTED_BY"   # set by `run` for the steps it starts (their command line is in run's own log line)
-LONG_RUNNING = ("run", "read")   # commands that stay open: their console lines carry the time
+LONG_RUNNING = ("run", "read", "export", "scripts")   # commands that stay open: their console lines carry the time
 
 
 def _short_program(prog: str) -> str:

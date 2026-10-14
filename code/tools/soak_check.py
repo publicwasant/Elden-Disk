@@ -1,4 +1,4 @@
-"""V-06 helper: watch %LOCALAPPDATA%\\EldenDisk\\output\\disk-state.json and report anything wrong. Stdlib only.
+"""V-06 helper: watch %LOCALAPPDATA%\\EldenDisk\\output\\disk.json and report anything wrong. Stdlib only.
 
     python tools/soak_check.py [path] [--interval 0.1]
 
@@ -155,7 +155,7 @@ def _loop(path, interval, end, stats, out, st_):
             last_hash, last_change = cur_hash, mono
 
 
-DEFAULT_PATH = (Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "EldenDisk" / "output" / "disk-state.json")
+DEFAULT_PATH = (Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "EldenDisk" / "output" / "disk.json")
 
 
 def main() -> int:

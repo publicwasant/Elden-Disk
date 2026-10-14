@@ -1,4 +1,4 @@
-"""`read`: print / --query / --export once, or --live; read-only (spec 1.6.2 section 5)."""
+"""`read` (the whole document or names), `export`, once or --live; read-only (spec 1.6.2 section 5; 1.8.0 part 2 names)."""
 import argparse
 import dataclasses
 import json
@@ -63,7 +63,7 @@ def rig(tmp_path, monkeypatch):
 
 
 def doc(tmp_path):
-    return json.loads((tmp_path / "out" / "disk-state.json").read_text())
+    return json.loads((tmp_path / "out" / "disk.json").read_text())
 
 
 # ---- one-shot: print and --query ----
@@ -137,9 +137,9 @@ def test_export_writes_one_document_and_stops(rig, capsys):
     assert rcmd.cmd_read(args(export=True)) == 0
     d = doc(tmp)
     assert d["systems"]["status"]["tool_state"] == "CONNECTED" and d["character"]["level"] == 386
-    assert d["systems"]["session"] == {**d["systems"]["session"], "read_only": True, "sandbox": False}
+    assert d["systems"]["session"] == {"mode": "telemetry", "read_only": True, "creative": False}
     err = capsys.readouterr().err
-    assert "disk-state.json" in err and "KB" in err and "written to" in err
+    assert "disk.json" in err and "KB" in err and "written to" in err
     assert mem.closed == 1 and box["sleeps"] == 0                     # no loop
 
 
@@ -155,7 +155,7 @@ def test_export_is_labelled_while_a_valid_session_covers_this_game(rig):
     vault.update_session(state=SessionState.RUNNING, game_pid=GAME_PID, game_started=GAME_STARTED)
     assert rcmd._in_session(vault.root, target) is True
     assert rcmd.cmd_read(args(export=True)) == 0
-    assert doc(tmp)["systems"]["session"]["sandbox"] is True
+    assert doc(tmp)["systems"]["session"]["creative"] is True
     vault.update_session(game_pid=1)                                  # another game process: no longer this session
     assert rcmd._in_session(vault.root, target) is False
 
@@ -357,9 +357,9 @@ def test_on_a_terminal_the_monitors_draw_one_table_each_in_place(rig, monkeypatc
     assert not _lines(out, "+") and "Format:" not in out       # nothing is printed as a stream
 
 
-def test_chr_state_ids_is_reloaded_when_it_changes(rig, monkeypatch, capsys):
+def test_names_json_is_reloaded_when_it_changes(rig, monkeypatch, capsys):
     tmp, mem, target, box, args = rig
-    names = tmp / "chr_state_ids.json"
+    names = tmp / "names.json"
     names.write_text(json.dumps({"buffs": {"100": {"name": "Golden Vow"}}}), encoding="utf-8")
     mem.ticks = 6
     from eldendisk.game.profile import load_state_ids as real_load
@@ -381,12 +381,12 @@ def test_chr_state_ids_is_reloaded_when_it_changes(rig, monkeypatch, capsys):
     monkeypatch.setattr(rcmd.time, "sleep", sleep)
     assert rcmd.cmd_read(args(live_buffs=True, state_ids=str(names), unmapped=False)) == 0
     err = capsys.readouterr().err
-    assert "changed but cannot be read" in err and "chr_state_ids.json reloaded (2 buffs, 1 animations)" in err
+    assert "changed but cannot be read" in err and "names.json reloaded (2 buffs, 1 animations)" in err
 
 
-def test_an_old_flat_chr_state_ids_file_is_a_clear_error_before_the_game_is_looked_for(rig, monkeypatch, capsys):
+def test_an_old_flat_names_file_is_a_clear_error_before_the_game_is_looked_for(rig, monkeypatch, capsys):
     tmp, mem, target, box, args = rig
-    names = tmp / "chr_state_ids.json"
+    names = tmp / "names.json"
     names.write_text(json.dumps({"100": {"name": "Golden Vow", "sources": "EFFECTS"}}), encoding="utf-8")
     from eldendisk.game.profile import load_state_ids as real_load
     monkeypatch.setattr(rcmd, "load_state_ids", real_load)
@@ -646,7 +646,7 @@ def test_the_export_has_the_params_block_and_it_is_valid(prig):
     assert rcmd.cmd_read(args(export=True)) == 0
     d = doc(tmp)
     valid(d)
-    assert list(d) == ["systems", "character", "params", "design"] and d["design"] is None      # 1.7.2: no build in this vault
+    assert list(d) == ["systems", "character", "params", "creative"] and d["creative"] is None      # no build, no host, no flags here
     assert d["params"]["effects"]["1621000"] == {"name": "Black Flame", "effectEndurance": -1.0, "motionInterval": 0.1, "changeHpRate": 0.1,
                                                       "changeHpPoint": 1, "atkOccurrenceSpEffectId": -1, "vfxId": 9010}
     assert d["params"]["effects"]["1623000"]["effectEndurance"] == 2.0

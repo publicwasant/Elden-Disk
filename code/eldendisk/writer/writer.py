@@ -12,9 +12,9 @@ Rules enforced here:
   * writes run at a bounded rate and every value is clamped to a sane range                                       MW-5
   * offsets come from the profile that matched the exe hash (the Layout's profile)                                MW-6
   * nothing is written unless the WriteGate is open (session authorised, no anti-cheat, known exe)               FR-14
-  * since 1.7.1 the one allocation: `alloc` gives `write --text` room in the game for a text table (writer/text.py);
+  * since 1.7.1 the one allocation: `alloc` gives `innovate-spells apply` room in the game for a text table (writer/text.py);
     the game's own memory is never freed or resized
-  * since 1.7.1 `regions` lists the game's readable memory (VirtualQueryEx), so `write --flame-color` can find the game's copies
+  * since 1.7.1 `regions` lists the game's readable memory (VirtualQueryEx), so `innovate-spells apply` can find the game's copies
     of three effect files (writer/fxr.py)
 """
 from __future__ import annotations
@@ -149,21 +149,22 @@ class EditPolicy:
 
 
 def parse_policy(set_args: list[str] | None, refill: str | None, reset: list[str] | None = None) -> EditPolicy:
-    """`--set NAME=VALUE...`, `--refill hp,fp,stamina` and `--reset NAME...`; ValueError on anything unknown.
+    """`write NAME=VALUE...` (`set_args`), a refill of hp, fp, stamina to their maximum (`refill`, "hp,fp"; no command gives it since
+    1.8.0) and `write NAME=default` (`reset`: the names); ValueError on anything unknown.
 
     NAME is a name of `game.values` (full or short: `hp` / `hit_point`, `attrs.faith`), or a pattern naming a group
     (`attributes.*`). A name under `params.` is only checked for its shape here; which rows and fields exist is
-    known once the game is found (plan_params). `--reset` takes `params.…` names or `all`.
+    known once the game is found (plan_params). `reset` takes `params.…` names or `all`.
     """
     sets: dict[str, int] = {}
     param_sets: dict[str, str] = {}
     for item in set_args or []:
         name, sep, raw = item.partition("=")
         if not sep or not name.strip():
-            raise ValueError(f"--set {item!r}: expected NAME=VALUE")
+            raise ValueError(f"{item!r}: expected NAME=VALUE")
         if is_param_name(name):
             if not raw.strip():
-                raise ValueError(f"--set {item!r}: expected NAME=VALUE")
+                raise ValueError(f"{item!r}: expected NAME=VALUE")
             if name.strip().lower() in {n.lower() for n in param_sets}:
                 raise ValueError(f"{name.strip()} is set twice")
             param_sets[name.strip()] = raw.strip()
@@ -171,9 +172,9 @@ def parse_policy(set_args: list[str] | None, refill: str | None, reset: list[str
         try:
             value = int(raw.strip().replace("_", ""))
         except ValueError:
-            raise ValueError(f"--set {item!r}: value must be an integer") from None
+            raise ValueError(f"{item!r}: value must be an integer") from None
         if value < 0:
-            raise ValueError(f"--set {item!r}: value must not be negative")
+            raise ValueError(f"{item!r}: value must not be negative")
         for key in write_targets(name):
             if key in sets:
                 raise ValueError(f"{key} is set twice")
@@ -191,13 +192,13 @@ def parse_policy(set_args: list[str] | None, refill: str | None, reset: list[str
     resets: list[str] = []
     for n in reset or []:
         if "=" in n:
-            raise ValueError(f"--reset {n!r}: a name only, the game's own value goes back (no =VALUE)")
+            raise ValueError(f"{n!r}: a name only, the game's own value goes back (no =VALUE)")
         if n.strip().lower() == "all":
             resets.append("all")
         elif is_param_name(n) and n.strip():
             resets.append(n.strip())
         else:
-            raise ValueError(f"--reset {n!r}: only params can be reset (a params.… name, or all)")
+            raise ValueError(f"{n!r}=default: only params have a default of the game (a params.… name, or params)")
     return EditPolicy(tuple(sets.items()), tuple(dict.fromkeys(names)), tuple(param_sets.items()),
                       tuple(dict.fromkeys(resets)))
 
@@ -221,7 +222,7 @@ def plan_params(spec: ParamsProfile | None, policy: EditPolicy, snapshot: Snapsh
     if "all" in policy.param_resets and snapshot is not None:
         cat_resets += [f"params.{k}" for k in snapshot.keys()]
     if (cat_sets or cat_resets) and not spec.catalog:
-        raise ParamNameError("this game version has no params.catalog in offsets.json (run `read --probe-params`)")
+        raise ParamNameError("this game version has no params.catalog in offsets.json (run `probe`)")
     cat_edits, cat_notes = plan_catalog(cat_sets, cat_resets, snapshot) if (cat_sets or cat_resets) else ([], [])
     policy = replace(policy, param_sets=tuple(x for x in policy.param_sets if x not in cat_sets),
                      param_resets=tuple(n for n in policy.param_resets if n not in cat_resets or n == "all"),

@@ -1,4 +1,4 @@
-"""`read --live-animations`: the character's animation ids over time (for chr_state_ids.json)."""
+"""`read monitor-animations`: the character's animation ids over time (for names.json)."""
 from __future__ import annotations
 
 from datetime import datetime

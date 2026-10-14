@@ -1,4 +1,4 @@
-"""`write --flame-color`: recolour the fire of Flame, Grant Me Strength in the running game (spec 1.7.1). Memory only.
+"""`innovate-spells apply`: recolour the fire of Flame, Grant Me Strength in the running game (spec 1.7.1). Memory only.
 
 What tools/fxr_recolor.py showed on 1.17.1 (checked in the game): the game keeps each SFX file (f000<id>.fxr) in memory exactly as
 it is in the file, the colours as four little-endian floats (RGBA). Two files make the fire that is recoloured: 524400 (the fire while
@@ -20,8 +20,8 @@ game session.
 The same is done for the glowing eyes (`positive_curse_energy_eyes` of the design): f000004866 (EYES_PLANS), the eyes of a human NPC of the DLC, with
 their own colour, in the same look. That file is shared with that NPC too.
 
-This module knows bytes only. The design's colour is read by the command (design/.../service.py: flame_color); the writer
-package may not import the design package.
+This module knows bytes only. The design's colour is read by the command (creative/innovate_spells/service.py: flame_color); the writer
+package may not import the creative package.
 """
 from __future__ import annotations
 

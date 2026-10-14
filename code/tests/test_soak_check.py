@@ -20,7 +20,7 @@ def doc(state="CONNECTED", **over):
           "buffs": {}, "animations": {}}
     d = {"systems": {
             "profile": {"sha256": "abc", "game": "eldenring.exe", "version": "1.17.1"},
-            "features": {"buffs_supported": True, "animations_supported": True, "sandbox_supported": True},
+            "features": {"buffs_supported": True, "animations_supported": True, "creative_supported": True},
             "status": {"pid": 1234, "tool_state": state, "anti_cheat_state": "DISABLED_OFFLINE", "game_connected": True, "ignored": {"buffs": 0, "animations": 0}},
             "session": {"mode": "telemetry", "read_only": True, "sandbox": False}
          },

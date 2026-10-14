@@ -69,8 +69,9 @@ def test_v_is_accepted_on_the_group_on_the_verb_and_on_every_command(env, capsys
         cli.main(argv)
         assert " D client" in capsys.readouterr().err, argv
     parser = cli.build_parser()
-    for argv in (["run", "-v"], ["read", "--live-buffs", "-v"], ["write", "-v", "--refill", "hp"], ["write", "--refill", "hp", "-v"],
-                 ["hash", "-v"]):
+    for argv in (["run", "-v"], ["read", "monitor-buffs", "-v"], ["write", "-v", "hp=1"], ["write", "hp=1", "-v"], ["hash", "-v"],
+                 ["scripts", "status", "-v"], ["innovate-spells", "build", "-v"], ["resurrect", "-v", "margit"], ["export", "-v"],
+                 ["reset", "-v"], ["check", "-v"], ["probe", "-v"]):
         assert parser.parse_args(argv).verbose is True, argv
     assert parser.parse_args(["vault", "status"]).verbose is False
 
@@ -153,8 +154,9 @@ def test_run_marks_the_steps_it_starts(tmp_path):
     from eldendisk.logsetup import STARTED_BY
     args = cli.build_parser().parse_args(["run"])
     seen = []
-    run_cmd.start_text(args, tmp_path, spawn=lambda c, **kw: seen.append(kw))
-    assert seen[0]["env"][STARTED_BY] == "run"
+    for start in (run_cmd.start_apply, run_cmd.start_enemies, run_cmd.start_scripts):
+        start(args, tmp_path, spawn=lambda c, **kw: seen.append(kw))
+    assert [s["env"][STARTED_BY] for s in seen] == ["run"] * 3
 
 
 

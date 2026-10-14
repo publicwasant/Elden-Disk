@@ -1,4 +1,4 @@
-"""`read --export`: the disk-state.json document and the policy for writing it.
+"""`export`: the document (`disk.json`, the single source of truth) and the policy for writing it.
 
 Write policy (spec 1.6.2 section 5): sample at the loop rate, but write only when the document changed, never more
 often than `interval`, and a change that arrives inside the interval is written when it elapses. A change that is only
@@ -24,7 +24,7 @@ RETRY_DELAY_S = 0.01
 class JsonLogger:
     """Atomic JSON writer. Refuses to write inside the game folder."""
 
-    def __init__(self, out_dir: Path, game_dir: Path | None = None, filename: str = "disk-state.json"):
+    def __init__(self, out_dir: Path, game_dir: Path | None = None, filename: str = "disk.json"):
         out = Path(out_dir).resolve()
         if game_dir is not None:
             g = Path(game_dir).resolve()
@@ -51,12 +51,12 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
                    exe_sha256: str | None, profile_label: str | None,
                    buffs_supported: bool = True,
                    animations_supported: bool = True,
-                   sandbox_supported: bool = True,
+                   creative_supported: bool = True,
                    sample: Sample | None,
                    note: str | None = None, last_character: dict | None = None,
                    mode: str = "telemetry",
                    read_only: bool = True,
-                   sandbox: bool = False) -> dict:
+                   creative: bool = False) -> dict:
     has_character = sample is not None and sample.character is not None
     game_connected = state in ("CONNECTED", "IDLE")
 
@@ -80,7 +80,7 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
     features = {
         "buffs_supported": buffs_supported,
         "animations_supported": animations_supported,
-        "sandbox_supported": sandbox_supported,
+        "creative_supported": creative_supported,
     }
 
     status = {
@@ -97,7 +97,7 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
     session = {
         "mode": mode,
         "read_only": read_only,
-        "sandbox": sandbox,
+        "creative": creative,
     }
 
     systems: dict = {
@@ -158,7 +158,7 @@ class ExportWriter:
         self.label: str | None = None
         self.buffs_supported = False
         self.animations_supported = False
-        self.sandbox = False                      # a valid RUNNING session record exists (set by the reader loop)
+        self.creative = False                     # a valid RUNNING session record exists: the portal is open (set by the reader loop)
         self.writes = 0
         self._last_character: dict | None = None
         self._last_doc: dict | None = None
@@ -167,7 +167,7 @@ class ExportWriter:
         self._latest: dict | None = None
         self._busy_warned = False
         self._last_verbose: tuple | None = None
-        self.design: Callable[[], dict | None] | None = None    # the `design` block (1.7.2), when the command gives one
+        self.creative_block: Callable[[], dict | None] | None = None    # the `creative` block (1.8.0), when the command gives one
 
     def _due(self, doc: dict, now: float) -> bool:
         if self._last_doc is None:
@@ -198,10 +198,10 @@ class ExportWriter:
             state=state, pid=self.pid, anti_cheat=self.anti_cheat, exe_sha256=self.sha, profile_label=self.label,
             buffs_supported=self.buffs_supported, animations_supported=self.animations_supported,
             sample=sample, last_character=self._last_character, note=note,
-            mode="sandbox" if self.sandbox else "telemetry", read_only=True, sandbox=self.sandbox,
+            mode="creative" if self.creative else "telemetry", read_only=not self.creative, creative=self.creative,
         )
-        if self.design is not None:
-            doc["design"] = self.design()
+        if self.creative_block is not None:
+            doc["creative"] = self.creative_block()
         return doc
 
     def emit(self, state: str, sample: Sample | None = None, note: str | None = None, now: float | None = None) -> None:

@@ -1,4 +1,4 @@
-"""`write --text`: give the running game a rebuilt text table (spec 1.7.1). Memory only; the table's contents are not read here.
+"""`innovate-spells apply`: give the running game a rebuilt text table (spec 1.7.1). Memory only; the table's contents are not read here.
 
 What tools/probe_text.py and the logs of 1.17.1 showed: the game keeps each text table (FMG) in memory as it is in its file, except
 that the 8 bytes at 0x18 (where the string offsets are) hold an ADDRESS (the table's base + the offset), and ONE pointer, in an array
@@ -17,8 +17,8 @@ the tables and the array are FOUND, by what they are (writer/scan.py does the lo
     by chance. Only the first is searched for; the other two slots are read where one is seen. The search starts around the tables
     (scan.py `near`) and ends at the first whole array.
 
-This module knows bytes only. Building the new table (ids -> text) is done by the command with design/innovate_items/fmg.py:
-the writer package may not import the design package, and the design knows nothing of the game.
+This module knows bytes only. Building the new table (ids -> text) is done by the command with creative/innovate_spells/fmg.py:
+the writer package may not import the creative package, and the creative package knows nothing of the game.
 """
 from __future__ import annotations
 

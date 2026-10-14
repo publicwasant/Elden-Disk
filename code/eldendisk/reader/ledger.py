@@ -30,7 +30,7 @@ class Line(NamedTuple):
     """One row of the table, ready to draw."""
     active: bool
     id: int
-    name: str | None            # None = not mapped in chr_state_ids.json
+    name: str | None            # None = not mapped in names.json
     detail: str
     stamp: str                  # HH:MM:SS.mmm of the last change
     hot: bool
@@ -62,6 +62,13 @@ class Ledger:
                 e.active, e.changed, e.detail = False, now, None
                 events.append(("-", e))
         return events
+
+    def forget(self) -> int:
+        """`reset` (1.8.0): the history starts again from now: what has ended is dropped, what is active stays. -> how many were dropped."""
+        gone = [eid for eid, e in self.entries.items() if not e.active]
+        for eid in gone:
+            del self.entries[eid]
+        return len(gone)
 
     def ordered(self) -> list[Entry]:
         return sorted(self.entries.values(),

@@ -1,7 +1,7 @@
-"""One-off: turn an old flat chr_state_ids.json (`{id: {name, sources, ...}}`) into the 1.6.3 shape
+"""One-off: turn an old flat names.json (`{id: {name, sources, ...}}`) into the 1.6.3 shape
 (`{"buffs": {id: {...}}, "animations": {id: {...}}}`, no `sources`). Stdlib only.
 
-    python tools/convert_state_ids.py chr_state_ids.json            # writes chr_state_ids.json.bak, then the new file
+    python tools/convert_state_ids.py names.json            # writes names.json.bak, then the new file
     python tools/convert_state_ids.py old.json --out new.json       # leaves old.json alone
 
 An entry whose `sources` is ANIMATIONS goes to `animations`, every other one (EFFECTS, a missing `sources`) to `buffs`.

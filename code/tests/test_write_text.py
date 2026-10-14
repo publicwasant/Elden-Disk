@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import eldendisk.commands.write as wcmd
-from eldendisk.design.innovate_items.fmg import Fmg
+from eldendisk.creative.innovate_spells.fmg import Fmg
 from eldendisk.game.attach import EXIT_NO_SESSION, EXIT_UNSUPPORTED, AttachError, Target
 from eldendisk.game.memory import Module
 from eldendisk.game.profile import TextProfile
@@ -286,6 +286,11 @@ def test_new_table_adds_changes_and_removes_and_says_none_when_nothing_changes()
 
 
 # --------------------------------------------------------------------------------------------------------- the command
+def step(args):
+    """`innovate-spells apply` runs these two steps (1.8.0; `write --text` and `write --flame-color` before)."""
+    return wcmd.cmd_write_flame(args) if args.flame_color else wcmd.cmd_write_text(args)
+
+
 @pytest.fixture
 def rig(tmp_path, monkeypatch):
     live = tmp_path / "Users" / "me" / "EldenRing" / "1"
@@ -312,9 +317,9 @@ def rig(tmp_path, monkeypatch):
     monkeypatch.setattr(wcmd, "locate", lambda offsets: box["locate"](offsets))
     monkeypatch.setattr(wcmd, "process_started", lambda pid: HOST_STARTED if pid == HOST_PID else None)
     monkeypatch.setattr(wcmd, "WritableProcessMemory", lambda pid: game)
-    monkeypatch.setattr(wcmd, "design_folder", lambda args: tmp_path / "ext")
-    monkeypatch.setattr(wcmd, "spec_file", lambda args: tmp_path / "design.json")
-    monkeypatch.setattr(wcmd.design, "open_spells", lambda d, s: design)
+    monkeypatch.setattr(wcmd, "creative_folder", lambda args: tmp_path / "ext")
+    monkeypatch.setattr(wcmd, "spec_file", lambda args: tmp_path / "creative.json")
+    monkeypatch.setattr(wcmd.creative, "open_spells", lambda d, s: design)
     monkeypatch.setattr(wcmd, "_sleep", sleep)
     monkeypatch.setattr(wcmd, "_clock", lambda: clock["t"])
     monkeypatch.setattr(scan, "_sleep", lambda s: None)
@@ -326,7 +331,7 @@ def rig(tmp_path, monkeypatch):
 
     def args(**kw):
         d = dict(text=True, flame_color=False, wait=0, set=[], refill=None, reset=[], verbose=False, vault=str(vault.root), offsets="x",
-                 spec=None, design_dir=None)
+                 spec=None, creative_dir=None)
         return argparse.Namespace(**{**d, **kw})
 
     return SimpleNamespace(vault=vault, game=game, box=box, open_session=open_session, args=args, clock=clock)
@@ -336,7 +341,7 @@ def rig(tmp_path, monkeypatch):
 
 def test_the_text_of_the_design_reaches_the_three_tables(rig):
     rig.open_session()
-    assert wcmd.cmd_write(rig.args()) == 0
+    assert step(rig.args()) == 0
     assert entries(rig.game, "GoodsName")[G1] == "Reverse Curse Technique" and G2 not in entries(rig.game, "GoodsName")
     assert entries(rig.game, "GoodsInfo")[G1] == "Heals over time"
     assert entries(rig.game, "GoodsCaption")[G1] == "Long text\nsecond line"
@@ -346,36 +351,36 @@ def test_the_text_of_the_design_reaches_the_three_tables(rig):
 
 def test_a_second_run_in_the_same_game_finds_no_array_that_points_at_the_game_tables_and_says_so(rig, monkeypatch):
     rig.open_session()
-    assert wcmd.cmd_write(rig.args()) == 0
+    assert step(rig.args()) == 0
     seen = []
     monkeypatch.setattr(wcmd.book, "e", lambda tag, msg: seen.append(msg))
-    assert wcmd.cmd_write(rig.args()) == 1 and rig.game.allocs == 3
+    assert step(rig.args()) == 1 and rig.game.allocs == 3
     assert "set already in this session" in seen[-1]
 
 
 def test_no_session_no_write(rig):
-    assert wcmd.cmd_write(rig.args()) == EXIT_NO_SESSION
+    assert step(rig.args()) == EXIT_NO_SESSION
     assert rig.game.allocs == 0
 
 
 def test_a_session_of_another_game_process_is_refused(rig):
     rig.open_session()
     rig.vault.update_session(game_pid=GAME_PID + 1)
-    assert wcmd.cmd_write(rig.args()) == EXIT_NO_SESSION and rig.game.allocs == 0
+    assert step(rig.args()) == EXIT_NO_SESSION and rig.game.allocs == 0
 
 
 def test_a_game_version_without_a_text_block_is_unsupported(rig):
     rig.open_session()
     t = rig.box["locate"](None)
     rig.box["locate"] = lambda o: replace(t, profile=replace(t.profile, text=None))
-    assert wcmd.cmd_write(rig.args()) == EXIT_UNSUPPORTED
+    assert step(rig.args()) == EXIT_UNSUPPORTED
 
 
 def test_without_wait_tables_that_are_not_there_yet_are_an_error(rig):
     rig.open_session()
     for i in range(3):
         del rig.game.mem[table_base(i)]
-    assert wcmd.cmd_write(rig.args()) == 1 and rig.game.allocs == 0
+    assert step(rig.args()) == 1 and rig.game.allocs == 0
 
 
 def test_wait_looks_again_until_the_game_has_its_text(rig):
@@ -389,7 +394,7 @@ def test_wait_looks_again_until_the_game_has_its_text(rig):
             rig.game.mem.update(saved)                                                    # now it has loaded its text
 
     rig.box["on_sleep"] = later
-    assert wcmd.cmd_write(rig.args(wait=60)) == 0
+    assert step(rig.args(wait=60)) == 0
     assert entries(rig.game, "GoodsName")[G1] == "Reverse Curse Technique"
     assert rig.clock["t"] >= 10.0 + 20.0                                                  # two rests of the schedule (LOOKS) before the third look
 
@@ -400,7 +405,7 @@ def test_wait_gives_up_after_the_looks_and_says_why_with_the_sizes_it_saw(rig, m
     rig.box["locate"] = lambda o: replace(t, profile=replace(t.profile, text=TextProfile(FILES, {**SIZES, "GoodsInfo": SIZES["GoodsInfo"] + 8})))
     seen = []
     monkeypatch.setattr(wcmd.book, "e", lambda tag, msg: seen.append(msg))
-    assert wcmd.cmd_write(rig.args(wait=60)) == 1 and rig.game.allocs == 0
+    assert step(rig.args(wait=60)) == 1 and rig.game.allocs == 0
     assert "GoodsInfo" in seen[-1] and f"{SIZES['GoodsInfo'] + 8} bytes" in seen[-1] and "4 text tables of the game were seen" in seen[-1]
     assert rig.clock["t"] == sum(wcmd.LOOKS)
 
@@ -411,14 +416,14 @@ def test_a_copy_of_a_table_that_nothing_points_at_does_not_stop_the_command(rig)
     blob = wt.live_form(Fmg(GAME_ENTRIES["GoodsName"]).write(), 0x58000100)
     decoy[0x100:0x100 + len(blob)] = blob
     rig.game.mem[0x58000000] = decoy
-    assert wcmd.cmd_write(rig.args()) == 0
+    assert step(rig.args()) == 0
     assert entries(rig.game, "GoodsName")[G1] == "Reverse Curse Technique"
 
 
 def test_a_second_copy_of_the_array_is_left_alone_when_the_first_one_is_whole(rig):
     rig.open_session()
     rig.game.mem[0x50000000] = bytearray(rig.game.mem[OBJ])
-    assert wcmd.cmd_write(rig.args()) == 0
+    assert step(rig.args()) == 0
     assert entries(rig.game, "GoodsName", OBJ)[G1] == "Reverse Curse Technique"
     assert rig.game.allocs == 3
 
@@ -427,7 +432,7 @@ def test_the_log_says_what_each_look_did(rig, monkeypatch):
     rig.open_session()
     seen = []
     monkeypatch.setattr(wcmd.book, "d", lambda tag, msg: seen.append(msg))
-    wcmd.cmd_write(rig.args())
+    step(rig.args())
     assert any(m.startswith("goods text: looked for the tables:") and "MB read" in m and f"{table_base(0):#x}" in m for m in seen)
     assert any(m.startswith("goods text: looked for the array") and "1 pointer(s)" in m and "1 array(s)" in m and "the slowest" in m for m in seen)
     assert any(m.startswith("goods text: array at") and "GoodsName ->" in m for m in seen)
@@ -445,13 +450,13 @@ def test_wait_retries_while_the_game_cannot_be_attached_yet_but_not_when_it_is_n
         return real(o)
 
     rig.box["locate"] = locate
-    assert wcmd.cmd_write(rig.args(wait=30)) == 0 and tries["n"] == 3
+    assert step(rig.args(wait=30)) == 0 and tries["n"] == 3
 
     def gone(o):
         raise AttachError("eldenring.exe is not running")
 
     rig.box["locate"] = gone
-    assert wcmd.cmd_write(rig.args(wait=30)) == 1
+    assert step(rig.args(wait=30)) == 1
 
 
 def test_if_the_game_puts_its_own_tables_back_the_text_is_set_once_more(rig):
@@ -466,7 +471,7 @@ def test_if_the_game_puts_its_own_tables_back_the_text_is_set_once_more(rig):
                 rig.game.write(slot_at(n), struct.pack("<Q", p))
 
     rig.box["on_sleep"] = reset_once
-    assert wcmd.cmd_write(rig.args(wait=30)) == 0 and state["done"]
+    assert step(rig.args(wait=30)) == 0 and state["done"]
     assert entries(rig.game, "GoodsName")[G1] == "Reverse Curse Technique"
 
 
@@ -479,7 +484,7 @@ def test_if_the_game_keeps_replacing_them_it_is_an_error(rig):
             rig.game.write(slot_at(n), struct.pack("<Q", p))
 
     rig.box["on_sleep"] = always
-    assert wcmd.cmd_write(rig.args(wait=30)) == 1
+    assert step(rig.args(wait=30)) == 1
 
 
 def test_text_stands_alone_on_the_command_line():
@@ -501,14 +506,14 @@ def _flame_rig(rig, monkeypatch, colour=(0.2, 0.65, 1.0), note=None):
 def test_the_flame_colour_of_the_design_reaches_the_effects(rig, monkeypatch):
     rig.open_session()
     fg, untouched = _flame_rig(rig, monkeypatch)
-    assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == 0
+    assert step(rig.args(text=False, flame_color=True)) == 0
     assert any(fg.mem[b] != untouched.mem[b] for b in fg.mem) and rig.game.allocs == 0
 
 
 def test_no_colour_in_the_design_means_nothing_is_touched(rig, monkeypatch):
     rig.open_session()
     fg, untouched = _flame_rig(rig, monkeypatch, colour=None)
-    assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == 0
+    assert step(rig.args(text=False, flame_color=True)) == 0
     assert all(fg.mem[b] == untouched.mem[b] for b in fg.mem)
 
 
@@ -519,14 +524,14 @@ def test_the_eyes_colour_of_the_design_reaches_the_positive_curse_energy_eyes_ev
     fg = FlameGame(effects=("524400", "524401", "4866"))
     monkeypatch.setattr(wcmd, "WritableProcessMemory", lambda pid: fg)
     rig.box["flame"], rig.box["eyes"] = (None, None), ((0.2, 0.65, 1.0), None)
-    assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == 0
+    assert step(rig.args(text=False, flame_color=True)) == 0
     assert fxr.find_all(fg, ["4866"], (0.2, 0.65, 1.0)).changed["4866"] == [BASES["4866"]]
     assert bytes(fg.mem[BASES["524400"]]) == bytes(FlameGame().mem[BASES["524400"]])
 
 
 def test_no_session_no_flame_colour(rig, monkeypatch):
     fg, untouched = _flame_rig(rig, monkeypatch)
-    assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == EXIT_NO_SESSION
+    assert step(rig.args(text=False, flame_color=True)) == EXIT_NO_SESSION
     assert all(fg.mem[b] == untouched.mem[b] for b in fg.mem)
 
 
@@ -541,7 +546,7 @@ def test_flame_colour_waits_for_the_game_to_have_its_effects(rig, monkeypatch):
         if n["n"] == 1:
             fg.mem[0x20000000] = saved
     rig.box["on_sleep"] = later
-    assert wcmd.cmd_write(rig.args(text=False, flame_color=True, wait=60)) == 0 and n["n"] == 1      # one rest between two looks
+    assert step(rig.args(text=False, flame_color=True, wait=60)) == 0 and n["n"] == 1      # one rest between two looks
 
 
 def test_flame_colour_stands_alone_on_the_command_line():
@@ -603,7 +608,7 @@ def test_the_text_is_written_once_after_the_world_is_there_and_the_step_ends(rig
             seen.append(G1 in entries(rig.game, "GoodsName"))                      # the title screen: nothing written yet
             st["world"] = True
     st = _world(rig, monkeypatch, script)
-    assert wcmd.cmd_write(rig.args(when_loaded=True)) == 0
+    assert step(rig.args(when_loaded=True)) == 0
     assert seen == [False] and entries(rig.game, "GoodsName")[G1] == "Reverse Curse Technique"
     allocs, looks = rig.game.allocs, st["looks"]
     assert allocs == 3 and looks < 20                                              # three tables, one write, a few looks and no more
@@ -619,19 +624,19 @@ def test_the_flame_colour_is_painted_once_after_the_world_is_there(rig, monkeypa
             seen.append(all(fg.mem[b] == untouched.mem[b] for b in fg.mem))
             st["world"] = True
     _world(rig, monkeypatch, script, game=fg)
-    assert wcmd.cmd_write(rig.args(text=False, flame_color=True, when_loaded=True)) == 0
+    assert step(rig.args(text=False, flame_color=True, when_loaded=True)) == 0
     assert seen == [True] and all(fg.mem[b] != untouched.mem[b] for b in fg.mem)
 
 
 def test_when_the_game_closes_before_a_character_is_there_nothing_is_written(rig, monkeypatch):
     rig.open_session()
     _world(rig, monkeypatch, lambda st: st.update(alive=st["tick"] < 6))
-    assert wcmd.cmd_write(rig.args(when_loaded=True)) == 0 and rig.game.allocs == 0
+    assert step(rig.args(when_loaded=True)) == 0 and rig.game.allocs == 0
 
 
 def test_when_loaded_never_writes_without_a_session(rig, monkeypatch):
     _world(rig, monkeypatch, lambda st: st.update(world=True, alive=st["tick"] < 8))
-    assert wcmd.cmd_write(rig.args(when_loaded=True)) == EXIT_NO_SESSION and rig.game.allocs == 0
+    assert step(rig.args(when_loaded=True)) == EXIT_NO_SESSION and rig.game.allocs == 0
 
 
 def test_when_loaded_goes_with_text_or_flame_colour_only_and_not_with_wait():
@@ -649,7 +654,7 @@ def test_the_second_fire_colour_reaches_the_places_the_first_leaves_out(rig, mon
     fg = FlameGame()
     monkeypatch.setattr(wcmd, "WritableProcessMemory", lambda pid: fg)
     rig.box["flame"], rig.box["accent"] = ((0.2, 0.65, 1.0), None), ((0.55, 0.2, 1.0), None)
-    assert wcmd.cmd_write(rig.args(text=False, flame_color=True)) == 0
+    assert step(rig.args(text=False, flame_color=True)) == 0
     for eid in ("524400", "524401"):
         for at, (_old, new) in fxr.accent_writes(PLANS[eid], (0.55, 0.2, 1.0)).items():
             assert bytes(fg.mem[BASES[eid]][at:at + 16]) == new

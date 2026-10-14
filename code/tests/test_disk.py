@@ -405,8 +405,8 @@ def test_the_flat_file_error_says_how_to_convert_it(tmp_path):
         load_state_ids(write_json(tmp_path, "old.json", {"100": {"name": "A", "sources": "EFFECTS"}}))
 
 
-def test_the_shipped_chr_state_ids_json_loads_and_has_no_sources():
-    path = Path(eldendisk.__file__).parent.parent / "chr_state_ids.json"
+def test_the_shipped_names_json_loads_and_has_no_sources():
+    path = Path(eldendisk.__file__).parent / "reader" / "names.json"      # 1.8.0: the reader's (chr_state_ids.json next to offsets.json before)
     ids = load_state_ids(path)
     assert ids.buffs and ids.animations
     assert "sources" not in path.read_text(encoding="utf-8")
@@ -427,7 +427,7 @@ def test_write_capability_is_confined_to_the_writer_package():
             assert "VirtualAllocEx" not in text, f"VirtualAllocEx found in {rel}"   # 1.7.1: the one allocation, for a text table
             assert "WriteProcessMemory" not in text, f"WriteProcessMemory found in {rel}"
             assert "PROCESS_VM_WRITE" not in text, f"PROCESS_VM_WRITE found in {rel}"
-        if rel not in ("writer/writer.py", "commands/write.py", "design/external_scripts/backend.py",     # 1.7.2: the scripts' backend
+        if rel not in ("writer/writer.py", "commands/write.py", "creative/scripts/backend.py",     # 1.7.2: the scripts' backend
                        "commands/resurrect.py"):                                                              # 1.8.0: event flags OFF
             assert "WritableProcessMemory" not in text, f"{rel} must not use the write handle"
 
@@ -439,7 +439,7 @@ def test_logger_refuses_game_dir_and_writes_atomically(tmp_path):
         JsonLogger(game / "out", game)
     lg = JsonLogger(tmp_path / "out", game)
     assert lg.write({"a": 1}) and json.loads(lg.path.read_text()) == {"a": 1}
-    assert not (tmp_path / "out" / "disk-state.json.tmp").exists()
+    assert not (tmp_path / "out" / "disk.json.tmp").exists()
 
 
 def test_raw_buffs_lists_everything_unclassified():

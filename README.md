@@ -1,27 +1,41 @@
 # Elden-Disk
 
-> **Elden-Disk Memory I/O (Read / Write) Tools: offline save guard + live memory reader and writer for Elden Ring 1.17.1**  
-> **Version:** `1.7.2` | **Spec Version:** `1.7.2` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable (`eldendisk.exe`) or Python 3.11+
+> **Elden-Disk is the Elden Ring Memory Disk I/O Tools: a portal into a parallel world of Elden Ring 1.17.1**  
+> **Version:** `1.8.0` | **Spec Version:** `1.8.0` | **Platform:** Windows 10/11 (x64) | **Runtime:** Standalone Executable (`eldendisk.exe`) or Python 3.11+
 
-Five parts with one job each:
+Elden-Disk works as **CLI commands in a console** and has no user interface it does not need: you open a terminal, run a command, it does its
+work and ends. Everything the tool can do is a command, and every command reads the same way.
 
-- **Host (`run`):** takes a SHA-256 verified snapshot of your save, launches `eldenring.exe` **offline**, waits, and restores the save **byte for byte** when the game exits. It never opens the game's memory and writes no JSON.
-- **Vault (`vault`):** snapshots, the session record, restore and recovery. It is the part that must not fail: a restore that could not finish leaves a record, and the next `run` refuses until `vault restore` has been run.
-- **Reader (`read`):** prints every value once and exits; `--query NAME [NAME ...]` values or groups, shown as the same tree (`--flat`: one `full.path  value` row each); `--export` writes `disk-state.json` once; `--live` keeps going; `--live-buffs` / `--live-animations` are the monitors: one row per id, mapped or `Unknown`, `--mapped` / `--unmapped` to filter. `--param Magic.6230` shows any row of six of the game's tables (the params workbench), `--probe-params` finds where those tables are in memory, `--param-check [FILE]` compares a `regulation.bin` with the running game row by row. Values are addressed by **name** only. Read-only; works with or without `run`.
-- **Writer (`write`):** `write --set NAME=VALUE ...` / `write --refill LIST` / `write --reset NAME ...`, applied once, by value name (`vigor`, `attrs.vigor`, `hp`, ...; and the game's own tables: `params.effects.1621000.effectEndurance`, or any numeric field of any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup: `params.Magic.6230.mp`). `--reset` puts the game's own value back. `write --text` (1.7.1) gives the running game the **text of your spells** (name, short line, description) and `write --flame-color` the **colour of the fire** of Flame, Grant Me Strength; `run` starts both by itself once a character is in the world. It **refuses to write** unless `run`'s session record is valid for this very game process (exit code `5`), so every edit is covered by a snapshot.
-- **Design (`design`):** builds things for the game outside the game. The first one, `innovate-items spells`, turns `design.json` into a `regulation.bin` with your own incantation (design → built → secured, judged by a gate). With the vault ON, `run` swaps it in for one session and the vault puts the game's own file back with the save. `external-scripts` (1.7.2) runs **your own Python scripts** next to the game (edstdlib: read the game as one document, write back what you change).
-- **Zero configuration files:** `--save-dir` and `--vault` are remembered in the Windows Registry (`HKCU\Software\EldenDisk`). The vault lives in `%LOCALAPPDATA%\EldenDisk\vault` by default, never next to the exe, so a rebuild cannot delete it.
+**Philosophy: the portal.** Elden-Disk is a portal into a parallel world of the real game world (Elden Ring, the Lands Between). Through the
+portal the world mirrors everything of the game, and you can play with it in **creative ways**: new spells you design, great enemies
+brought back, scripts that change the game while it runs. When you leave through the portal, the real world is back exactly as it was:
+**nothing you did inside comes back with you.** The vault is the portal: it keeps the real world (the save files `ER0000.sl2`,
+`ER0000.sl2.bak`, `ER0000.err`, `ER0000.err.bak`, `steam_autocloud.vdf`, and the game's own files) before you go in, and puts it back,
+byte for byte, when you come out.
 
 > [!IMPORTANT]
-> **Parallel dimension:** edits made through `write`, and the `regulation.bin` a design builds, exist only during the session. When the game closes, `run` restores the save taken before launch and the game's own `regulation.bin`, and verifies both byte for byte. The real playthrough is never changed by the sandbox.
+> **Offline only.** `run` starts the game offline; with the anti-cheat running the tool refuses (exit `3`). Changing the game's own data
+> online can get an account banned.
 >
-> **Steam Cloud:** Elden Ring supports it, and it can sync the save when the game exits. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session; `run` prints a reminder when Steam is running. Sync behaviour during a host session is **not verified** (spec test T10).
+> **Steam Cloud** may sync the save when the game exits; this is not verified. Use Steam's offline mode or turn Steam Cloud off for Elden
+> Ring during a session; `run` says so when Steam is running.
 >
-> **Real-game status (author, 1.17.1):** used on the real game: `run` restore (byte-identical), hard-kill recovery (`vault restore`), `write --set` by name, `read --live` and the two monitors, `write` of game params (`effectEndurance = -1` makes all four Black Flame rows burn without end), the params workbench (2026-10-09: `read --param`, `read --probe-params`, `read --param-check`, and `write --set params.<Table>.<id>.<field>` with `--reset` on six tables: a spell's FP cost and a bullet's life changed in the game and put back; a Black Flame that heals instead of burning; the slot-1 build equal to the game on every row of the six tables), and (2026-10-09) the **other world**: a `regulation.bin` built by the tool (`innovate-items spells`, gate passed, second decoder agreed on Python 3.14) swapped in by `run`, an own incantation sold, cast and healing, a boss beaten with infinite Black Flame, save and `regulation.bin` restored byte-identical; `innovate-items spells --secure` ran and wrote the secured copy. **Not tried in the game yet:** the poise part of the item (manual plan SW10), `run` using the secured copy (SC3-SC10), `motionInterval` on its own, and the Steam Cloud sync on exit (T10). Everything else is verified by unit tests with fake Windows and memory layers (about 1,000 tests; the 49 golden tests need the game's original `regulation.bin`). Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
+> Keep a manual copy of your save folder **and** of the game's own `regulation.bin`.
 
 ---
 
-## Three terminals
+## The backbone: running the game ⟶ loading the world ⟶ playing ⟶ quitting the game
+
+```text
+vault: back up the save files (and swap in the regulation.bin built from creative.json)      `run`, the portal opens
+ │
+ ├─ read      the game's memory through the pointer chains of the profile (offsets.json); every value is a name in ONE document
+ ├─ write     the game's memory through the same chains, only inside the session `run` started (vault ON)
+ ├─ creative  what is built and run next to the game: scripts, innovate-spells, resurrect
+ ├─ data      export, reset, check, probe
+ │
+vault: restore the save files and the game's own files (byte for byte)                      the game closes, the portal closes
+```
 
 ```mermaid
 sequenceDiagram
@@ -29,46 +43,63 @@ sequenceDiagram
     participant T0 as Terminal 0 (run)
     participant V as Vault
     participant G as eldenring.exe
-    participant T1 as Terminal 1 (read)
-    participant T2 as Terminal 2 (write)
+    participant T1 as Terminal 1 (read, write, creative, data)
 
-    T0->>V: snapshot + verify, session record READY
-    T0->>G: launch offline
-    T0->>V: record RUNNING (game pid + start time)
-    T1->>G: read --live / --live-buffs / --export
-    T2->>V: authorised? (record RUNNING, same game, host alive)
-    T2->>G: --set / --refill once, then exit
-    G->>T0: game exits
-    T0->>V: restore, verify byte-identical, remove record
+    T0->>V: snapshot + verify the save files, the game's regulation.bin
+    T0->>G: swap in the build of creative.json, launch offline
+    T0->>V: session record RUNNING (game pid, start time, exe hash)
+    T0->>G: in the world: innovate-spells apply, resurrect, scripts start *
+    T1->>G: read / read --live / read monitor / export
+    T1->>V: authorised? (record RUNNING, this very game)
+    T1->>G: write NAME=VALUE, resurrect NAME, scripts restart NAME
+    G->>T0: the game exits
+    T0->>V: restore, verify byte-identical, close the record
 ```
 
-```commandline
-eldendisk.exe run                                      (Terminal 0, leave open)
-eldendisk.exe read --live                              (Terminal 1: every value, redrawn in place)
-eldendisk.exe write --set vigor=99 level=150           (Terminal 2)
-eldendisk.exe write --refill hp,fp,stamina             (Terminal 2)
-eldendisk.exe write --set params.effects.1621000.effectEndurance=-1   (Terminal 2: Black Flame burns until the target dies)
-eldendisk.exe write --reset all                        (Terminal 2: the game's own params back)
-eldendisk.exe read --query attrs.*                     (any terminal: print once, exit)
-```
+Rules every command follows:
 
-To **keep** what `write` changed instead of rolling it back: let the game save (rest at a grace or quit to title), stop the host, close the game, then `eldendisk.exe vault keep --yes`.
-
-If the session is cut short (power loss, host killed, console closed, second Ctrl+C), close the game and run `eldendisk.exe vault restore`.
+1. **One document.** Whatever the tool knows of the running game is a path in one document (`systems`, `character`, `params`,
+   `creative`). `read` shows it, `write` and the scripts' `tools.write` change it, `export` writes it as `output\disk.json`.
+2. **Read anywhere, write only through the portal.** Reading needs no session. Every write (a value, a param, a text, a colour, a flag)
+   needs the session `run` started with the vault ON, for this very game process, and goes through the same gate (exit `5` otherwise).
+3. **Memory only.** Nothing is written to the game folder or to the save files; what is built from `creative.json` (`regulation.bin`) is
+   swapped in and put back by the vault.
+4. **One command, one job, then it ends.** What stays open is what must: `run`, `read --live`, the monitors, `export --live`, the scripts'
+   host.
+5. **The game's own data first.** Ids, names, flags and places come from the game's files (its params, event scripts and text); a list
+   made by hand is the exception, and a test checks it against the game.
 
 ---
 
-## Safety architecture
+## Commands
 
-1. **Host and vault never touch game memory.** `run` only queries a process start time; boundaries are enforced by `test_architecture.py` (module imports are checked by AST).
-2. **Write capability lives in one file** (`writer/writer.py`) and is reached only from `write`, after `authorise()`.
-3. **Invariant:** at every instant either the live save equals the snapshot and there is no record, or a record exists whose snapshot is verified.
-4. **Restore never destroys unarchived data:** a modified save is copied into the vault before it is overwritten (`--no-archive-contaminated` to skip).
-5. **Interrupts:** first Ctrl+C is absorbed (the game keeps running); second, console close, logoff or shutdown leave `RESTORE_PENDING`.
-6. **No automatic recovery:** `run` with an owed restore exits `4` and prints the one command to run.
-7. **No changes in the game folder,** with one exception: the `regulation.bin` that `innovate-items spells` built (or `--regulation FILE`) is swapped in for a `run --vault-on` session and the game's own file is put back, hash-checked, with the save (see below). `read --export` refuses to write there.
-8. **EAC guard:** `read` and `write` stop when EasyAntiCheat is loaded; `run` refuses when anti-cheat processes are running.
-9. **Few disk writes:** the export is written only when its content changed, at most every `--export-interval` (0.5 s); buff countdowns at most every `--timer-interval` (2 s).
+Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [options]`.
+
+| **Level** | **Command** | **What it does** |
+|:---|:---|:---|
+| the portal | `run [--vault-on \| --vault-off]` | back up the save files, swap in the build of `creative.json`, launch offline; once a character is in the world `innovate-spells apply`, `resurrect` (the list of `creative.json`) and `scripts start *`; restore everything when the game closes |
+| 1st: vault | `vault status \| list \| verify \| restore \| keep \| prune` | the snapshots and the session record; `restore` after a session cut short, `keep --yes` to keep the current save |
+| 2nd: core | `read [* \| all \| NAME \| ID \| PATH ...] [--live] [--tree \| --flat \| --json]` | the document, or a part of it: `hp`, `attrs.*`, `params.Magic.6230.mp`, `creative.resurrect.great_enemies.margit` |
+| 2nd: core | `read monitor \| monitor-buffs \| monitor-animations [--mapped \| --unmapped]` | one row per buff / animation id that appears (`--unmapped`, the default: the ids `names.json` does not name yet) |
+| 2nd: core | `write NAME=VALUE ...`, `write NAME=default`, `write` | change a value the document shows; `default` = the game's own value; `write` alone lists the names and their ranges |
+| 3rd: creative | `scripts [* \| all]`, `scripts start \| restart \| stop \| status [NAME[:ID[:PROCESS_ID]]]`, `scripts add \| remove \| change PATH` | your Python scripts next to the game, controlled from another terminal |
+| 3rd: creative | `innovate-spells`, `innovate-spells build [all \| NAME \| ID ...] \| secure \| apply` | new spells: `creative.json` ⟶ a `regulation.bin` judged by a gate ⟶ secured; their texts and colours into the game |
+| 3rd: creative | `resurrect NAME \| ID \| PATH ... \| all [--dry-run]` | a boss you have beaten, alive again for the session |
+| data | `export [--live]` | the document to `%LOCALAPPDATA%\EldenDisk\output\disk.json` |
+| data | `reset [all \| runes \| buffs \| animations \| monitor]` | the read baselines start again from now (`runes.delta` = 0, the monitors' history); nothing is written to the game |
+| data | `check [FILE]` | a `regulation.bin` against the game, row by row |
+| data | `probe` | where the game's param tables lie in memory (for a new game version) |
+| tooling | `hash`, `--version` | SHA-256 of `eldenring.exe` (the key of its profile), the tool's version |
+
+**Naming.** Everywhere a thing is named, three forms work: the **path** in the document (`creative.resurrect.great_enemies.12050800`),
+the **id** (`12050800`) and the **name** in any letter case or a part of it (`mohg lord`). `*` and `all` mean every one.
+
+**Exit codes:** `0` done · `1` error / not applied · `2` not supported · `3` anti-cheat running · `4` restore pending · `5` no portal ·
+`130` interrupted.
+
+**Full references:** [docs/guilde/cli-commands.md](docs/guilde/cli-commands.md) (Python source) ·
+[docs/guilde/cli-commands-exe.md](docs/guilde/cli-commands-exe.md) (executable) · [spec 1.8.0](docs/specs/elden-disk-spec-v1.8.0.md) ·
+[changes 1.8.0](docs/wahy/changes-version-1.8.0.md).
 
 ---
 
@@ -77,106 +108,63 @@ If the session is cut short (power loss, host killed, console closed, second Ctr
 Prerequisites: Windows 10/11 x64, Steam (offline mode is fine), Elden Ring 1.17.1 (included profile).
 
 ```commandline
-# Terminal 0: back up, launch offline, restore afterwards
+# Terminal 0: the portal (leave it open)
 eldendisk.exe run
 # several Steam accounts: pass the save folder once (remembered)
 eldendisk.exe run --save-dir "C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>"
 ```
 
 ```commandline
- Elden-Disk 1.7.2 · run
- ────────────────────────────────────────────────────────────────
-   vault  %LOCALAPPDATA%\EldenDisk\vault
-   save   C:\Users\<User>\AppData\Roaming\EldenRing\<SteamID64>
-   game   C:\Program Files (x86)\Steam\steamapps\common\ELDEN RING\Game
- ────────────────────────────────────────────────────────────────
- 12:00:00  ✓  vault  snapshot 20261006-120000, 2 files verified
- 12:00:01  ·  game   launching eldenring.exe offline
- 12:00:09  ✓  game   running, pid 8812; `read` allowed, `write` allowed
- ...                                      (game exits)
- 12:31:40  ·  game   exited
- 12:31:42  ✓  vault  ER0000.sl2 restored, byte-identical to the snapshot
+# Terminal 1, once a character is loaded
+eldendisk.exe read runes hp attrs.*                              # once
+eldendisk.exe read character.runes --live                        # kept current
+eldendisk.exe write vigor=99 level=150                           # inside the portal
+eldendisk.exe write params.effects.1621000.effectEndurance=-1    # Black Flame burns until the target dies
+eldendisk.exe write params=default                               # the game's own values back
+eldendisk.exe resurrect "mohg lord"                              # warp to another region and back: he is there
+eldendisk.exe scripts                                            # your scripts and their state
 ```
 
-Every command prints concise lines like these without any flag. Every event is also logged, logcat style, to `<vault>/eldendisk.log` (every terminal's command line and exit code included); add **`-v`** to a command to see that log live instead (`run -v`, `write --set level=150 -v`, `vault status -v` ...). `run -v` also shows the lines other terminals log.
+To **keep** what you changed instead of rolling it back: let the game save (rest at a grace or quit to title), close the game, end `run`,
+then `eldendisk.exe vault keep --yes`. If the session is cut short (power loss, `run` killed, console closed): close the game and run
+`eldendisk.exe vault restore`. For reading while you farm and keep what you earn: `run --vault-off` (no backup, no restore, nothing
+written).
 
-**Farming (keep the progress):** `eldendisk.exe run --vault-off`, then `eldendisk.exe read --live --query runes` in another terminal. Nothing is backed up or restored, and `write` is refused.
-
----
-
-## CLI overview
-
-Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [options]`.
-
-| Command | Role | Description |
-|:---|:---|:---|
-| `run [--vault-on \| --vault-off]` | **Host** | Snapshot, offline launch, wait, restore, verify. With the vault ON it swaps a `regulation.bin` in for the session: the secured copy when `design.json` is unchanged, otherwise a new build that the gate must pass (or `--regulation FILE`). `--vault-off`: no backup, no restore, no swap (farming with `read`; `write` is refused) |
-| `read [--query NAME [NAME ...]] [--export] [--live] [--live-buffs] [--live-animations] [--param TABLE.ID ...] [--probe-params] [--param-check [FILE]]` | **Reader** | No flag: every value once. `--query` one value or group; `--export` writes `disk-state.json` once; `--live` continuous (with `--export`: sample at `--hz`, write on change); `--live-buffs` / `--live-animations` monitors (`--mapped` / `--unmapped`); `--param` any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup (a tree, `--flat` for one path per value); `--probe-params` where those tables are in memory; `--param-check [FILE]` a `regulation.bin` (default: the one in the game folder) against the game, row by row; `--json`, `--timeout`, `--export-interval`, `--timer-interval` |
-| `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables, any numeric field of any row of six tables); `--reset` puts the game's own params back (it remembers the first value of a field in this game process); exit `5` without a valid session. `write --text [--wait [SEC] \| --when-loaded]` puts the `text` of the design's spells into the running game, `write --flame-color [--wait [SEC] \| --when-loaded]` the `flame_color` of the design (both also started by `run`; `--when-loaded` waits for a character in the world and writes once) |
-| `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
-| `design --list` \| `innovate-items spells --add all\|PATH...\|--secure` | **Design** | Build things for the game outside the game. `innovate-items spells` turns `design.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in; `--add spells.slots.<id> ...` picks which spells `run` builds |
-| `resurrect great-enemies --list \| --activate NAME...` | **Design** | A boss you have beaten, alive again for this session (1.8.0): its event flags turned off in memory; warp to another region and back, it fights as the first time; the vault restores the save |
-| `external-scripts [--run [--when-loaded]] [--scripts-dir PATH ...]` | **Design** | Your Python scripts next to the game (1.7.2): without `--run` it lists them and how each ended; `run` (vault ON) starts them by itself |
-| `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
-
-**Exit codes:** `0` ok · `1` error / not applied · `2` unsupported exe, or a read-only `params` field named in `write` · `3` EAC · `4` restore pending · `5` no valid session · `130` interrupted.
-
-Removed in 1.6.2: `sandbox` (now `write` and `vault`), top-level `effects` / `animations` (now `read --live-buffs` / `--live-animations`), JSON output of `run` (now `read --export`), the verbs `read effects|animations|export`, `write set|refill` (now flags) and `--once` (a read without `--live` is already one shot). Values are addressed by name only; there are no memory addresses or scans.
-
-**Full references:** [spec 1.7.2](docs/specs/elden-disk-spec-v1.7.2.md) · [changes 1.7.2](docs/wahy/changes-version-1.7.2.md) · [spec 1.7.1](docs/specs/elden-disk-spec-v1.7.1.md) · [changes 1.7.1](docs/wahy/changes-version-1.7.1.md) · [manual test plan 1.7.1](docs/manual-tests/manual-test-plan-1.7.1.md) · [docs/guilde/cli-commands-exe.md](docs/guilde/cli-commands-exe.md) (executable) · [docs/guilde/cli-commands.md](docs/guilde/cli-commands.md) (Python source) · [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md) · [changes 1.7.0](docs/wahy/changes-version-1.7.0.md) · [manual test plan 1.7.0](docs/experiments/extensional/innovate-items/spell/level2/docs/manual-test-plan-1.7.0.md) · [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md) · [changes 1.6.4](docs/wahy/changes-version-1.6.4.md) · [manual test plan 1.6.4](docs/manual-tests/manual-test-plan-1.6.4.md) · [spec 1.6.3](docs/specs/elden-disk-spec-v1.6.3.md) · [changes 1.6.3](docs/wahy/changes-version-1.6.3.md) · [manual test plan 1.6.3](docs/manual-tests/manual-test-plan-1.6.3.md) · [params report](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md) · [params workbench (Phase 1)](docs/experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md) · [roadmap: innovate spells, all kinds](docs/experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md)
+Every command prints concise lines. Every event is also logged, logcat style, to `<vault>\eldendisk.log` (every terminal's command line
+and exit code included); add **`-v`** to any command to see that log live instead.
 
 ---
 
-## 🌌 The other world (`regulation.bin`, 1.6.4), designs (1.7.0) and their text and fire colour (1.7.1)
+## Creative
 
-**Principle: the other world never touches the real one.** Everything done in a `run` session (the rules, the items, the values written, the changes to the save) exists for that session only. When the game exits, the vault puts back the save and the game's own `regulation.bin`, byte for byte, checked by hash. Nothing carries over: not the items, not the progress. The real playthrough stays exactly as it was, and it can be finished with no mod at all. The sandbox is for playing around on the days you want to; it is never required, and nothing in the real world can collapse because of it.
+What exists only in the parallel world. Each part depends on the vault, like `write`; `run` starts what `creative.json` names.
 
-The vault keeps *the world as it was*. `innovate-items spells` builds *the world you want to play in*: a `regulation.bin` with your own incantation, made from a JSON file, offline, by the tool itself. With the vault ON, `run` builds it, swaps it in for one session and puts the game's own file back with the save.
-
-```
-design.json (embedded in the exe)  --run (vault ON): build on the game's regulation.bin + gate-->  regulation.bin  --vault swaps-->  the game
-                                        --innovate-items spells --secure (game closed)-->  regulation.secured.bin + spells.commit.json
-next run, design unchanged: regulation.secured.bin is swapped, nothing is built
-<vault>\design\innovate-items\spells\
-  regulation.bin            the latest build (gate passed, not yet confirmed)
-  regulation.secured.bin    the copy you confirmed
-  spells.commit.json        the design behind it + hashes
-%LOCALAPPDATA%\EldenDisk\vault\
-  20261008-0800\save\                 the save as it was
-                bin\regulation.bin     the game's own file, kept to put it back
+```json
+{
+  "innovate_spells": { "maximum": 20, "slots": { "reverse_cursed_technique": { "kind": "projectile", "from": 6421, "...": "..." } } },
+  "scripts": { "added": ["D:\\my-scripts\\boss_rush.py"] },
+  "resurrect": { "great_enemies": { "activate": ["margit", "12050800"] } }
+}
 ```
 
-- **The design is `code/design.json`** (section `innovate_items.spells`: the format allows up to 64 slots and the file in the repository has 20, **7 available in the game** (slots 1-7, the ones with a shop line; slots 8 and above are built but cannot be bought yet, deferred); the JSON schema is `spells.schema.json` in the `innovate_items.spells` package). You edit it; the dev pipeline's build embeds it in the exe (like `offsets.json`). An `design.json` next to the exe, or `--spec FILE`, wins.
-- **Design → built → secured.** `run` builds when there is no secured copy or the design changed (a few seconds; the end line says how long it took) and prints why, with a field-by-field diff. When it worked in the game, close the game and run `innovate-items spells --secure`; after that `run` swaps the secured copy without building. Changing only `text` (below) does not count as a change. Delete `spells.commit.json` to force a build.
-- **Always on the game's own file.** The game's `regulation.bin` is checked against the known 1.17.1 original on every path; a modified file is refused with a `vault restore` hint.
-- **Depends on the vault, like `write`.** No `--design-on` flag: with `--vault-off` nothing is built or swapped. `design --list` and `innovate-items spells --add all` build without starting the game.
-- **The gate judges the finished file, read back from disk.** The frame must decode to the intended bytes, untouched blocks must be the game's own bytes, only the declared rows may change, the id chain, shop range, stock flag and heal sign must be right. Any problem or warning is a stop: nothing is swapped and the game is not started. Necessary, not sufficient: the game is the real test.
-- **Spell kinds.** `buff` (default: a heal-over-time spell, up to 64 slots in the design, slot 1 tested in the game), `clone` (a copy of a game spell with its own cost, requirements, shop line and single values; passed in the game), and, passed in the game 2026-10-10 (E1), `enchant` and `buff` with `from` (a copy of a weapon/shield enchant or of a buff spell together with the template's own SpEffect rows, so its effect can be tuned: `"set": {"SpEffect.1626000.effectEndurance": 600}` makes a Black Flame Blade copy last ten minutes). `projectile` (P1 passed in the game 2026-10-10: a copy of a spell that throws Bullets, with its own Bullet and SpEffect rows, so range, life or the effect on hit can be tuned: `"set": {"SpEffect.1621000.effectEndurance": 30}` on a Black Flame copy burns for 30 s; since Phase 2.4 also with its own AtkParam_Pc rows, so `"AtkParam_Pc.62101.atkFire": ...` sets the damage) and `attack` (a copy of a spell that makes a direct attack, with its own AtkParam_Pc rows; passed in the game 2026-10-11: a copy of sorcery 4440 whose `"set": {"AtkParam_Pc.44400.atkMag": 1800}` hits about ten times as hard). AtkParam_Pc is the sixth table that grows; it grows at its end because a 6 MB table lies in front of it (T8 failed, T9 passed). Rows are appended to the tables, nothing existing changes (spec 1.7.0 sections 4b and 10b). Every kind takes `text` and `flame_color`; a new icon picture and a new model (Level 3) need files inside the game's archives and are refused; an icon the game already has can be reused with `"set": {"Goods.<from>.iconId": N}` (spec 1.7.1 section 2b).
-- **Text (1.7.1).** A spell has a name, a short line and a long description in the game. In the design they are the object `"text": {"goods_name": "", "goods_info": "", "goods_captions": ""}` (before `set`; 80 / 120 / 1000 characters, `\n` is a new line; the long one is shown in the Inventory with the controller's square button). The game reads its text from files inside its archives, and an unpatched game does not read a loose replacement, so the tool does not touch a file: once a character is in the world, `run` starts `write --text --when-loaded` by itself (a separate process, `run` still never opens the game's memory), which **finds** the game's three text tables and the array that points at them by looking through the game's memory (no fixed address from the exe is used: the one that was tried held the right object in 3 of 5 runs), rebuilds the tables in memory and switches the game to them, once. Nothing is saved: the text is gone when the game closes and comes back with the next `run`. A change of text does not rebuild or un-secure anything. Tried in the game 2026-10-11 with English letters, the game in English; other scripts (Thai, ...) and other game languages are not tried (the profile holds the sizes of the English tables).
-- **Fire colour (1.7.1).** `"flame_color": [red, green, blue]` in a spell (each 0 to 2) recolours the fire of Flame, Grant Me Strength: the fire while casting and the burst (the fire on the body is left alone). The effect files are the game's own and shared, so there is **one** colour for the design (the first spell by slot that names one). `run` starts `write --flame-color --when-loaded`, which finds the two effect files in the game's memory by their colours, writes the new colours and reads them back, once; it lasts until the game closes. Tried in the game 2026-10-11 (three sessions): written about 7 s after the character appears, the text about 75 s after.
-- **Second fire colour (1.7.1).** `"flame_accent_color": [red, green, blue]` next to `flame_color` colours the rest of the fire and the ring of runes at the hand (spec 1.7.1 section 2a); the author's spell has a blue fire and a purple ring.
-- **Positive Curse Energy Eyes (1.7.1).** `"positive_curse_energy_eyes": {"on": "SpEffect.<id>", "color": [red, green, blue]}` makes both of the caster's eyes glow while the buff lasts (the game's own effect 4866, on the eyes of the player's model) (built into the buff's SpEffect row and checked by the gate); `color` recolours them in the same step as the fire. The author's `reverse_cursed_technique` has blue eyes. Seen in the game 2026-10-12 (spec 1.7.1 section 1a).
-- `--regulation FILE` swaps another file instead of building. The 1.6.4 folder `<vault>\regulation\` is no longer read.
-- The order is: build, back up the save and the game's file, write the session record, swap, launch. When the game closes, `run` restores the save **and** the game's file and checks both by hash. If either fails, the record stays and the next `run` is refused until `vault restore` finishes (exit `4`). `vault keep` keeps the current *save* only; the game's own file always comes back first.
-- Offline only (as every param change). `write --set params.…` works inside a swapped session, so a new row can be tuned live.
-- Details: [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md), [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md); the research is in the [item-customization handbook](docs/experiments/item-customization/item-customization-handbook.md).
+### `innovate-spells`: new spells
 
----
+`creative.json` (embedded in the exe; one next to it, or `--spec FILE`, wins) describes your spells: the kind (`buff`, `clone`, `enchant`,
+`projectile`, `attack`), the game's spell it is made `from`, what it `requires`, where it is sold, and `customs` (the numbers of the game's
+rows it changes, its texts and colours). `run` builds a `regulation.bin` with them on the game's own file, the **gate** judges the file read
+back from disk (the frame decodes to the intended bytes, untouched blocks are the game's own, only the declared rows change, ...), and the
+vault swaps it in for the session. When it worked in the game, close the game and run `innovate-spells secure`: `run` then swaps the
+secured copy without building while the spells do not change. `innovate-spells apply` (started by `run`) puts the texts and the colours
+(the fire of Flame, Grant Me Strength, the ring of runes, the eyes) into the running game. The files live in `<vault>\creative\innovate-spells\`.
 
-## ⚔️ Great enemies again (`resurrect`, 1.8.0)
+### `resurrect`: great enemies again
 
-`eldendisk resurrect great-enemies --activate "mohg lord"` brings a boss you have beaten back for the session: every enemy fought
-under the big health bar (212, the DLC included) can come back with its intro, its runes and its drop, for practice or a video. Only
-the game's memory changes; when the game closes the vault puts the save back and the boss is dead again. Warp to a grace in another
-region and come back: the boss is there. `--list` shows them all with the nearest grace (`--defeated`, `--area caelid`, `--story`);
-the design can name a list `run` brings back every session. Details: [cli-commands section 4d](docs/guilde/cli-commands.md),
-[spec 1.8.0](docs/specs/elden-disk-spec-v1.8.0.md).
+Any of the 212 great enemies (every enemy fought under the big health bar, the DLC included) that you have beaten can come back for the
+session, with its intro, its runes and its drop: its event flags are turned off in the game's memory only. `read
+creative.resurrect.great_enemies` shows the ones that are defeated now; `resurrect margit` brings one back. When the game closes the vault
+puts the save back and the boss is dead again.
 
----
-
-## 🐍 External scripts (1.7.2)
-
-Your own behaviour next to the game: a Python script that reads the game as one document and writes back what it changes, again and again, while the game runs. `run` (vault ON) starts every script once the text and colour steps are done, each in a thread of its own; they end when the game closes, and nothing a script does keeps the vault from putting the save back.
+### `scripts`: your Python next to the game
 
 ```python
 from edstdlib import *
@@ -185,147 +173,109 @@ class RctColoursFollowTheSpell(Interface):
     every = 0.2                                               # seconds between two calls of loop()
 
     def loop(self):
-        x = tools.read()                                      # the game now, as one object
+        x = tools.read()                                      # the document, as one object
         chosen = x.character.equipment.magic.selected.id == 2230000
-        fire = x.design.innovate_items.spells.reverse_cursed_technique.customs.advanced.colors["Magic.6421.castSfxId"]
+        fire = x.creative.innovate_spells.reverse_cursed_technique.design.customs.advanced.colors["Magic.6421.castSfxId"]
         fire.main = "#90D5FF" if chosen else None             # None: the game's own colour
         tools.write(x)                                        # writes only what changed
 ```
 
-- **Which scripts:** `code\eldendisk\design\external_scripts\defaults\*.py`, embedded in the exe by the build; `--scripts-dir PATH ...` (on `run` too) adds folders or `.py` files written after it. Examples to copy: `code\tests\external_scripts\` (the full colour script above is `rct_colours_follow_the_spell.py`).
-- **The whole document reads and writes:** `read` has a fourth block, `design` (the spells of the last build with the values the game holds now), `read --query "*"` shows everything, and every value `read` shows can be written (`write --set NAME=VALUE` or `tools.write`) except `systems` and what is computed. A text or a colour changes at once: the steps that put them into the game remember where (`<vault>\memory-cache.json`, for that game process only).
-- **`character.equipment.magic`** (1.7.2): the spells in the magic slots and the selected one (`selected.slot`, `selected.id`, `slots.1` ...), read only.
-- **Colours are hex** (`"#90D5FF"`) in the design and in writes; a colour console shows a `#RRGGBB` in its own colour.
-- Details: [spec 1.7.2](docs/specs/elden-disk-spec-v1.7.2.md), [changes 1.7.2](docs/wahy/changes-version-1.7.2.md), [cli-commands section 4c](docs/guilde/cli-commands.md).
+All the scripts of a session run in **one host process**, each in a thread of its own: the defaults the exe carries
+(`code/eldendisk/creative/scripts/defaults/`) and the ones of `scripts.added` (`scripts add PATH`). From another terminal,
+`scripts start | restart | stop NAME` reaches the host through a small request file in `<vault>\creative\` (no port is opened), and
+`scripts status` (or `read creative.scripts`) shows how each is doing. Examples to copy: `code/tests/external_scripts/`.
 
 ---
 
-## 🧪 Editable Attributes & Clamping Ranges
+## The document (the single source of truth)
 
-All edits supplied via `write --set` are clamped to valid game boundaries before writing:
-
-| Attribute Name | Acceptable Range | Description |
-|:---|:---:|:---|
-| `level` | `1` – `713` | Character level number |
-| `runes` | `0` – `999,999,999` | Current held Rune count |
-| `vigor`, `mind`, `endurance`, `strength`, `dexterity`, `intelligence`, `faith`, `arcane` | `1` – `99` | Character stats |
-| `hp` | `1` – `Max HP` | Current HP (cannot drop below 1) |
-| `fp`, `stamina` | `0` – `Max` | Current FP / Stamina |
-| `write --refill hp,fp,stamina` | — | Refills vitals to maximum |
-
-Names: full path (`character.attributes.vigor`), short (`attrs.vigor`, `vigor`) or alias (`rune`, `hp`, `fp`). Groups with a wildcard (`attrs.*`, `vitals.*.current`) set several at once. Bare `*`, `character.*` and `ALL` are refused. Values the game or the tool computes (`hp.maximum`, `hp.base`, ...) are read-only, and the refusal says why. `read --query NAME` uses the same names.
-
----
-
-## 🔥 Game params (`params.…`, new in 1.6.3)
-
-The game keeps its own data tables in memory. `write` can change a field of one row of the `SpEffectParam` table (the game's table of effects: buffs, burns, ...) while the game runs; `read` shows them as the third block of `disk-state.json`, after `systems` and `character`:
-
-```json
-"params": {
-  "effects": {
-    "1621000": { "name": "Black Flame", "effectEndurance": 2.0, "motionInterval": 0.1, "changeHpRate": 0.1,
-                 "changeHpPoint": 1, "atkOccurrenceSpEffectId": -1, "vfxId": 9010 },
-    "1623000": { "name": "Scouring Black Flame", "...": "same fields" },
-    "1625000": { "name": "Black Flame Ritual",    "...": "same fields" },
-    "1626001": { "name": "Black Flame Blade",     "...": "same fields" }
-  }
-}
-```
-
-```commandline
-eldendisk.exe read --query params.effects.1621000
-eldendisk.exe write --set params.effects.1621000.effectEndurance=-1                 # one field
-eldendisk.exe write --set "params.effects.*.effectEndurance=-1"                                  # all four rows
-eldendisk.exe write --reset params.effects.1621000.effectEndurance                  # one field back
-eldendisk.exe write --reset params.effects.1621000                                  # one row back
-eldendisk.exe write --reset all                                                         # every param back
-```
-
-- **`effectEndurance`** is how long the effect lasts, in seconds: `-1` = until it is removed (Black Flame burns until the target dies), `0` = a single instant tick. The game's own value is `2`. `motionInterval` (seconds between ticks), `changeHpRate` and `changeHpPoint` (the size of each tick; see the field reference in the params report folder) can be set too. Values outside the allowed range are clamped and the output says so.
-- **`atkOccurrenceSpEffectId` and `vfxId` are read-only** (`exit 2`): a wrong id can crash the game. A pattern skips them and says so.
-- Names are typed in full, `params.effects.<id>.<field>` (a row is its game id), in any letter case; a `*` pattern sets several values. `name` is the row's text from `offsets.json`: shown, never written. `--reset` takes a field, a row, or `all`, and puts the **game's own values** (from `offsets.json`) back.
-- The rows are listed in `offsets.json`: 1621000 Black Flame, 1623000 Scouring Black Flame, 1625000 Black Flame Ritual, 1626001 Black Flame Blade; another row is one line in the profile.
-- Same safety gate as every `write`: only inside a valid `run --vault-on` session. The edit lives in the game's memory, **not in the save**, and is gone when the game closes.
-- Every call finds the table again through pointer chains and checks it (the header must add up, the row id must be there) before it reads or writes; a check that fails stops the call.
-
-> [!WARNING]
-> **Offline only.** Params are what the game trusts: with anti-cheat active, or online, changing them can get an account banned. `run` starts the game offline for this reason. A burn already on an enemy keeps the duration it had; a new cast uses the new value.
-
-How the table was found and what was and was not tested: [docs/experiments/params/sp-effect-params](docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md).
-
-### Any row of six tables (the params workbench, 2026-10-09)
-
-Besides the four Black Flame rows above, `read` and `write` reach any row of **Goods** (`EquipParamGoods`), **Magic**, **SpEffect**, **Bullet**, **AtkParam_Pc** and **ShopLineup**, with the field names of Paramdex. Offline, inside a `run` session, like every `write`.
-
-```commandline
-eldendisk.exe read --param Magic.6230                       # the whole row as a tree
-eldendisk.exe read --param Magic.6230.mp* Bullet.10621001 --flat      # fields by pattern, one params.<Table>.<id>.<field> path per value
-eldendisk.exe write --set params.Magic.6230.mp=0            # Scouring Black Flame costs 0 FP
-eldendisk.exe write --set params.Bullet.10625002.life=12    # Black Flame Ritual's flame lasts 12 s (-1: never ends)
-eldendisk.exe write --reset params.Magic.6230.mp            # the game's own value back (also: a row, a pattern, all)
-eldendisk.exe read --param-check                            # the regulation.bin in the game folder against the game, row by row
-```
-
-- A value is checked against the field's type and bit width (an error, not a clamp). A field that holds the id of another row gets a note: an id that matches nothing can crash the game.
-- `--reset` puts back the value the game had **before the first change in this game process** (kept in `params-snapshot.json` in the vault folder, tied to the game's pid and start time; a new game process starts with nothing to put back).
-- **What the game reads when** (measured): a **Magic** row at the cast (cost, flags), a **Bullet** row when the bullet is created (`life` is its lifetime in seconds). A value written stays through Quit to Title and Continue and is gone when the game process ends. A change acts on what is created afterwards: a flame already in the world keeps the values it was born with, so `--reset` changes the next cast, not the one burning.
-- `read --param-check` found the slot-1 build equal to the game on every row of all six tables (Goods 2,330, Magic 318, SpEffect 11,356, Bullet 15,475, AtkParam_Pc 11,017, ShopLineup 1,297 rows): the game does not change the param data when it loads the file, and the rows a design added are in the game exactly as built. A value changed with `write` shows as a difference too.
-- Plan and results: [docs/…/spell/docs/phase1-params-workbench.md](docs/experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md); where it leads (spells of every kind): [docs/…/spell/docs/roadmap-innovate-spells.md](docs/experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md).
----
-
-## 📦 Building Standalone Executable & E2E Dev Pipeline
-
-```commandline
-# The E2E pipeline: all tests -> clean build of ./build/dist/eldendisk.exe (the .json configs embedded) -> a status report
-# (where the exe is, size, SHA-256, version, embedded files, time of each step). It ends there; it does not start the game.
-python code/tools/dev_pipeline.py
-
-# Options: --skip-tests, --no-embed (copy the .json files next to the exe), --engine nuitka, --icon ICO,
-# --keep-app-data (by default %LOCALAPPDATA%\EldenDisk, with the vault and its save snapshots, is removed before the build)
-python code/tools/dev_pipeline.py --skip-tests
-
-# Then start it yourself (it can sit anywhere; everything it produces goes to %LOCALAPPDATA%\EldenDisk)
-.\build\dist\eldendisk.exe run -v
-```
-
----
-
-## 📊 Export document (`read --export` → `disk-state.json`)
+`read` shows it, `export` writes it, `tools.read()` gives it to a script; every name above is a path in it.
 
 ```json
 {
   "systems": {
     "profile": { "sha256": "...", "game": "eldenring.exe", "version": "1.17.1" },
-    "features": { "buffs_supported": true, "animations_supported": true, "sandbox_supported": true },
-    "status": { "pid": 1234, "tool_state": "CONNECTED", "anti_cheat_state": "DISABLED_OFFLINE", "game_connected": true, "ignored": { "buffs": 0, "animations": 0 } },
-    "session": { "mode": "telemetry", "read_only": true, "sandbox": false }
+    "features": { "buffs_supported": true, "animations_supported": true, "creative_supported": true },
+    "status": { "pid": 46224, "tool_state": "IDLE", "anti_cheat_state": "DISABLED_OFFLINE", "game_connected": true },
+    "session": { "mode": "creative", "read_only": false, "creative": true }
   },
-  "character": { "level": 386, "vitals": { ... }, "runes": { ... }, "attributes": { ... },
-                 "buffs": { "3971": { "name": "Gold-Pickled Fowl Foot", "categories": "CONSUMABLES", "times": { ... } } },
-                 "animations": { ... }, "equipment": { "magic": { "selected": { "slot": 1, "id": 2230000 }, "slots": { ... } } } },
-  "params": { "effects": { "1621000": { "name": "Black Flame", ... } } },
-  "design": { "innovate_items": { "spells": { "2230000": { "id": "reverse_cursed_technique", "slot": 1, "rows": { ... }, "customs": { ... } } } } }
+  "character": { "level": 386, "vitals": { "...": "..." }, "runes": { "total": 55214603, "baseline": 55214603, "delta": 0 },
+                 "attributes": { "...": "..." }, "buffs": { "...": "..." }, "animations": { "...": "..." }, "equipment": { "...": "..." } },
+  "params": { "effects": { "1621000": { "name": "Black Flame", "effectEndurance": 2.0, "...": "..." } } },
+  "creative": {
+    "scripts": { "host": { "process_id": 26528, "state": "running", "started": "...", "scripts": 1 }, "defaults": { "...": "..." }, "added": {} },
+    "innovate_spells": { "2230000": { "id": "reverse_cursed_technique", "slot": 1, "rows": { "...": "..." }, "design": { "...": "..." } } },
+    "resurrect": { "great_enemies": { "12050800": { "name": "Mohg, Lord of Blood", "place": "Mohgwyn Palace", "defeated": true } } }
+  }
 }
 ```
 
-`character.buffs` and `character.animations` are named from `chr_state_ids.json` (`buffs` and `animations` objects keyed by id; an entry is `name`, optional `categories` and `abilities`):
-
-```json
-{ "buffs":      { "3971":    { "name": "Gold-Pickled Fowl Foot", "categories": "CONSUMABLES", "abilities": "..." } },
-  "animations": { "2020110": { "name": "Running", "categories": "MANNER" } } }
-```
-
-The 1.6.2 file was one flat list with a `sources` field; `python code/tools/convert_state_ids.py chr_state_ids.json` converts it (a backup is kept as `.bak`). `character.effects` is now `character.buffs`, `features.effects_supported` is `buffs_supported`, and `systems.status.ignored.effects` is `.buffs`.
+`character.buffs` and `character.animations` are named from `names.json` (the reader's: `code/eldendisk/reader/names.json`, always in
+the exe; one next to the exe wins). The full document is in [spec 1.8.0 part 2](docs/specs/elden-disk-spec-v1.8.0.md).
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## Safety architecture
+
+1. **The host and the vault never touch the game's memory.** `run` only queries a process start time; the boundaries of the packages are
+   enforced by `tests/test_architecture.py` (imports checked by AST).
+2. **Write capability lives in few places** (the writer, `write`, `resurrect`, the scripts' backend) and is reached only after
+   `authorise()`: the session record must name this very game process (pid, start time, exe hash).
+3. **Invariant:** at every instant either the live save equals the snapshot and there is no record, or a record exists whose snapshot is
+   verified.
+4. **Restore never destroys unarchived data:** a changed save is copied into the vault before it is overwritten.
+5. **Interrupts:** the first Ctrl+C is absorbed (the game keeps running); a second one, a closed console, a logoff or a shutdown leave
+   `RESTORE_PENDING`, and the next `run` exits `4` with the one command to run.
+6. **The game folder is left as it was,** but for the `regulation.bin` the session swaps in and puts back, hash-checked; the game's own
+   file is checked against the known original on every path.
+
+---
+
+## Where things live
+
+```text
+%LOCALAPPDATA%\EldenDisk\                        everything the tool keeps (never next to the exe: a new build cannot delete it)
+ ├─ vault\                                       snapshots, session.json, creative\ (builds, the scripts' status), memory-cache.json,
+ │                                               params-snapshot.json, eldendisk.log
+ ├─ baselines.json                               what `reset` set
+ └─ output\disk.json                             what `export` writes
+<exe folder>\                                    eldendisk.exe; offsets.json, names.json, creative.json when you put them next to it
+```
+
+`offsets.json` holds one **profile** per `eldenring.exe` (by its SHA-256, see `hash`): the pointer chains and the blocks each feature
+needs (`text`, `equipment`, `event_flags`, ...). A new game version: [docs/handbook/adding-a-profile.md](docs/handbook/adding-a-profile.md).
+
+---
+
+## Building the executable
 
 ```commandline
-# Run unit test suite (about 1,000 tests; the 49 golden ones need ELDENDISK_REGULATION_ORIG=<the game's original regulation.bin> and take a few minutes)
+# all tests -> a clean build of ./build/dist/eldendisk.exe (offsets.json and creative.json embedded; names.json, the great-enemies table
+# and the default scripts always) -> a status report (where the exe is, size, SHA-256, version, embedded files, the time of each step)
+python code/tools/dev_pipeline.py
+
+# --skip-tests, --no-embed (offsets.json and creative.json next to the exe), --engine nuitka, --icon ICO,
+# --keep-app-data (by default %LOCALAPPDATA%\EldenDisk, with the vault and its save snapshots, is removed before the build)
+python code/tools/dev_pipeline.py --skip-tests
+
+# then start it yourself (it can sit anywhere)
+.\build\dist\eldendisk.exe run -v
+```
+
+The build writes a `README.md` next to the exe from [docs/guilde/README-exe.md](docs/guilde/README-exe.md) and
+[docs/guilde/cli-commands-exe.md](docs/guilde/cli-commands-exe.md).
+
+---
+
+## Testing
+
+```commandline
+# the unit tests (about 1,700; the golden ones need ELDENDISK_REGULATION_ORIG=<the game's original regulation.bin>)
 python -m pytest
 
-# Run soak stability check (V-06)
+# the soak check of an export kept live (V-06)
 python code/tools/soak_check.py
 ```
+
+Everything is verified by unit tests with fake Windows and memory layers; what was tried in the real game is written in each spec
+(section "Measured") and in the changes of each version ([docs/wahy](docs/wahy)).

@@ -98,7 +98,7 @@ You only need these.
 | **`regulation.bin`** | The game's **recipe book**: one file holding the numbers for every item, spell, enemy, shop. Elden-Disk reads it, builds a new copy with your spells added, and puts it in place while you play. Your original is kept safe and restored afterwards. |
 | **Row / table (param)** | A table is a spreadsheet; a row is one line (one spell, one effect…). A spell is not one row: it is a **chain** of a few rows that point at each other (the item, the spell, its effect…). |
 | **Slot** | A numbered **shelf**. Your spells live on shelves 1, 2, 3… The shelf number decides the game ids your spell uses. |
-| **`design.json`** | The **order form** where you write your spells. |
+| **`creative.json`** | The **order form** where you write your spells. |
 | **JSON** | The way the order form is written. Section below. |
 | **Row / id** | Every line of a game table has a number, its **id**: its address. `6210` is the address of Black Flame. Chapter 3 is the map of these numbers. |
 | **`from`** | "Start from this game spell." It is the spell's id number (its Magic id). |
@@ -140,7 +140,7 @@ Open the file and you meet numbers like `6210`, `1621000`, `44400`. Nothing in t
 
 ### 3.1 Every number is an address
 
-Behind the game there is a handful of giant **tables** (think of phone books with thousands of lines). Every line is a **row**, and every row has an **id**: its phone number. In `design.json`, whenever you point at "that spell" or "that burn" or "that hit", you write its id.
+Behind the game there is a handful of giant **tables** (think of phone books with thousands of lines). Every line is a **row**, and every row has an **id**: its phone number. In `creative.json`, whenever you point at "that spell" or "that burn" or "that hit", you write its id.
 
 | Table (the name written in the file) | One row is… | What the id looks like | Example | Where you write it |
 |:--|:--|:--|:--|:--|
@@ -235,10 +235,10 @@ Which row do I need? Use this:
 The Finders cover every spell the tool accepts, for the game version this handbook was made for. If the game is patched, or you are curious about a row, you can read it yourself (the game must be running):
 
 ```commandline
-eldendisk read --param Magic.6210
+eldendisk read params.Magic.6210
 ```
 
-You will see fields `refCategory1…10` and `refId1…10`: each pair says "I call the row with this id in that table". The category tells you which table: **0 = AtkParam_Pc (a hit), 1 = Bullet, 2 = SpEffect**. Then `read --param Bullet.<id>` shows what *that* row calls, and so on down the chain, exactly like the drawings above.
+You will see fields `refCategory1…10` and `refId1…10`: each pair says "I call the row with this id in that table". The category tells you which table: **0 = AtkParam_Pc (a hit), 1 = Bullet, 2 = SpEffect**. Then `read params.Bullet.<id>` shows what *that* row calls, and so on down the chain, exactly like the drawings above.
 
 Community tools such as Paramdex and Smithbox show the same tables with the same ids; they are a good second opinion.
 
@@ -319,7 +319,7 @@ Total healed: 45 HP × (20 s ÷ 0.5 s) = **1,800 HP**. Blessing's Boon also appl
 
 You will start from the spell that is already there: **Reverse Cursed Technique**, a regenerating incantation that gives back HP, FP and stamina over 15 seconds. We will make it last twice as long.
 
-**Step 1. Open `design.json`** (the one next to `eldendisk.exe`; if there is none the exe uses the copy built into it).
+**Step 1. Open `creative.json`** (the one next to `eldendisk.exe`; if there is none the exe uses the copy built into it).
 
 **Step 2. Find the spell.** Search for `reverse_curse_technique`. It sits on shelf 1. Find the line:
 
@@ -332,7 +332,7 @@ You will start from the spell that is already there: **Reverse Cursed Technique*
 **Step 4. Rehearse.** In a terminal. (With the exe type `eldendisk.exe`; from the source code type `python -m eldendisk`. The examples below write just `eldendisk`.)
 
 ```commandline
-eldendisk innovate-items spells --add all --dry-run
+eldendisk innovate-spells build --dry-run
 ```
 
 It builds in memory (a few seconds) and prints whether the **gate passed**. Nothing is written.
@@ -350,7 +350,7 @@ The tool builds, checks, puts the new file in place and starts the game.
 **Step 7 (when it works).** Close the game and run:
 
 ```commandline
-eldendisk innovate-items spells --secure
+eldendisk innovate-spells secure
 ```
 
 This saves your build as the known-good one.
@@ -471,8 +471,8 @@ What to know:
 
 - ✓ You do nothing extra. `eldendisk run` waits until a character is in the world, then puts the text in by itself, once (you will see `goods text: 1 spell named in the game …`; it takes about a minute and a half after the character appears, because the tool looks through the game's memory for the game's text without freezing the game). Tried in the real game 2026-10-11: the name and short line in the merchant's list, the long description in the inventory.
 - It lasts until the game closes and is not saved anywhere. Every `run` does it again.
-- Changing only the text **does not rebuild** anything and does not un-secure a secured build. The text is put in once per game: to see a new text, close the game and `run` again. (A second `eldendisk write --text` in the same game is refused with `the text was set already in this session`: the tool finds the game's own tables by their shape, and the game no longer points at them.)
-- Words in `text` are only for the spells that are built (the `--add` choice, Chapter 11); a spell that is not built shows nothing.
+- Changing only the text **does not rebuild** anything and does not un-secure a secured build. The text is put in once per game: to see a new text, close the game and `run` again. (A second `eldendisk innovate-spells apply` in the same game is refused with `the text was set already in this session`: the tool finds the game's own tables by their shape, and the game no longer points at them.)
+- Words in `text` are only for the spells that are built (the `innovate-spells build` choice, Chapter 11); a spell that is not built shows nothing.
 - ◦ Only English letters were tried. Thai or other scripts might not exist in the game's font (boxes or blanks); try a short word first.
 - The old fields `name` and `description` of 1.7.0 are errors now; the message tells you where they went (`name` → `text.goods_name`, `description` → `text.goods_info`).
 
@@ -491,7 +491,7 @@ Three numbers, red, green, blue, each from 0 to 2 (1 = the full colour; above 1 
 - It colours **Flame, Grant Me Strength itself**, not only your spell: the game's own spell has the new colour while the game runs. It lasts until the game closes and is not saved anywhere.
 - Editing `flame_color` does not rebuild anything and does not un-secure a secured build.
 - White stays white and black stays black: the colour is applied the way a tint is, so the shape and brightness of the fire are kept.
-- A second colour: `"flame_accent_color": [0.54, 0.4, 0.8]` next to `flame_color` colours the parts of the fire the first colour does not reach and the **ring of runes** at the hand (purple with these numbers; the author's design uses `[1.0, 1.0, 1.0]` since 2026-10-13, a deep red-purple for the negative curse energy, against the blue of the positive). Seen in the game on 2026-10-12. If the ring stays red, cast once and run `eldendisk write --flame-color` (the game had not loaded it yet).
+- A second colour: `"flame_accent_color": [0.54, 0.4, 0.8]` next to `flame_color` colours the parts of the fire the first colour does not reach and the **ring of runes** at the hand (purple with these numbers; the author's design uses `[1.0, 1.0, 1.0]` since 2026-10-13, a deep red-purple for the negative curse energy, against the blue of the positive). Seen in the game on 2026-10-12. If the ring stays red, cast once and run `eldendisk innovate-spells apply` (the game had not loaded it yet).
 
 ### 6.1d Positive Curse Energy Eyes (since 1.7.1, seen in the game 2026-10-12)
 
@@ -628,7 +628,7 @@ Since 1.7.1 a remixed spell can be written so that each part answers one questio
 2. Numbers of the game's rows go in `customs.basic` with the key you would use in `set` (3.3, 7.5); look the row up in the Row Finder first (Appendix B) and read the original value (7.9).
 3. A change in `customs.basic`, `requires` or `locations` builds regulation.bin again (a few seconds); a change in `customs.advanced` does not, it is written into the game after the world loads.
 4. The message of a mistake names the exact place (`...customs.basic.Magic.6422.mp: ...`): fix that line only.
-5. After `run` builds, read the block on the console: the changes (`└─ ...  34590 -> 40000`), then each spell with what the design says. When it works in the game, close it and run `innovate-items spells --secure`.
+5. After `run` builds, read the block on the console: the changes (`└─ ...  34590 -> 40000`), then each spell with what the design says. When it works in the game, close it and run `innovate-spells secure`.
 
 ### 7.1 The two words that matter: `from` and `set`
 
@@ -876,12 +876,12 @@ Field names are the column names of the game's tables. These are the ones used i
 **How to read a value or a field name:**
 
 ```commandline
-eldendisk read --param SpEffect.1621000                      # every field of that row (game running)
-eldendisk read --param SpEffect.1621000.effectEndurance      # one field
-eldendisk read --param-check                                 # after a build: every original row equal, new rows counted
+eldendisk read params.SpEffect.1621000                      # every field of that row (game running)
+eldendisk read params.SpEffect.1621000.effectEndurance      # one field
+eldendisk check                                 # after a build: every original row equal, new rows counted
 ```
 
-`read --param` looks into the **running game**.
+`read params.<Table>.<id>` looks into the **running game**.
 
 ---
 
@@ -905,7 +905,7 @@ Being honest about the frame saves you disappointment.
 |:--|:--|
 | A **name** and **description** that show up in the game | ✓ Since 1.7.1: write them in `text` (6.1b). They are put into the running game each time you start it with `run`; nothing is saved in the game's files. Only English letters are tried; Thai and other scripts may show as boxes ◦. |
 | A different **colour of the fire** of Flame, Grant Me Strength | ✓ Since 1.7.1: `flame_color` (6.1c). The fire of the cast and the burst, put into the running game; the burning on the body keeps its colour. |
-| The **icon of another item** (reuse a picture the game already has) | ◦ Since 1.7.1, for spells made from a game spell (`clone`, `projectile`, `attack`, ...): `"set": {"Goods.<from>.iconId": 6806}` gives the copy the icon whose number you give (6806 = Gravitational Missile). The number is the item's `iconId` in the Goods table (`read --param Goods.<id>.iconId` shows it). The icon must be one the game loads: the DLC icons are in the DLC sheet and need the DLC installed. Tried in the game 2026-10-12 with 6806 on `reverse_cursed_technique`: the icon of Gravitational Missile shows (the author's check; the screens one by one are in manual plan 1.7.1, IC). |
+| The **icon of another item** (reuse a picture the game already has) | ◦ Since 1.7.1, for spells made from a game spell (`clone`, `projectile`, `attack`, ...): `"set": {"Goods.<from>.iconId": 6806}` gives the copy the icon whose number you give (6806 = Gravitational Missile). The number is the item's `iconId` in the Goods table (`read params.Goods.<id>.iconId` shows it). The icon must be one the game loads: the DLC icons are in the DLC sheet and need the DLC installed. Tried in the game 2026-10-12 with 6806 on `reverse_cursed_technique`: the icon of Gravitational Missile shows (the author's check; the screens one by one are in manual plan 1.7.1, IC). |
 | A **new picture** that the game does not have | ✗ Not yet (it needs the game's menu texture archive). |
 | A **new animation** | ✗ The tool cannot make animations. A home-made spell can pick one of two; a copy keeps the original's. |
 | A copy that is a **sorcery instead of an incantation** (or the reverse) | ✗ It keeps its type. |
@@ -941,7 +941,7 @@ What fits (measured offline, and checked in the game for the last row):
 | 16 or more fireball (or strike) spells of the same kind | ✗ |
 | 64 shelves mixed | ✗ |
 
-**Rules of thumb:** plan for **about 20 mixed spells**, with **a few** fireballs and strikes, not a dozen. The weight depends on **how many things you add**, not on the numbers you choose: changing 15 to 30 never makes it heavier. The weight does not grow smoothly (one more spell can jump it), so **always rehearse** with `--add all --dry-run`.
+**Rules of thumb:** plan for **about 20 mixed spells**, with **a few** fireballs and strikes, not a dozen. The weight depends on **how many things you add**, not on the numbers you choose: changing 15 to 30 never makes it heavier. The weight does not grow smoothly (one more spell can jump it), so **always rehearse** with `innovate-spells build --dry-run`.
 
 *For developers:* the gate allows 27 changed 4-KiB blocks, 292,000 bytes of compressed-frame growth and 219,000 bytes of body growth (limits raised only after a bigger file passed in the game; the tested file had 27 blocks and 291,040 bytes). The developer tool `tools/capacity.py --source <original regulation.bin> --mix buff=16,projectile=2,attack=2` prints the numbers of any mix offline.
 
@@ -952,17 +952,17 @@ What fits (measured offline, and checked in the game for the last row):
 ### 11.1 The loop
 
 ```commandline
-eldendisk innovate-items spells --add all --dry-run    # 1. rehearse (a few seconds, writes nothing)
+eldendisk innovate-spells build --dry-run    # 1. rehearse (a few seconds, writes nothing)
 eldendisk run                                                    # 2. build, check, play
-eldendisk innovate-items spells --secure               # 3. after it worked, game closed: keep this build
+eldendisk innovate-spells secure               # 3. after it worked, game closed: keep this build
 ```
 
-- **Build only some spells:** `--add spells.slots.<id>` (the path of the spell in `design.json`) builds just that spell; give several paths to build several, e.g. `--add spells.slots.my_heal spells.slots.my_flame`. `eldendisk run` then goes on building **the same spells** until you type `--add all` (or another `--add`). If you never use `--add`, `run` builds every spell. A rehearsal (`--dry-run`) does not change the choice. The tool always tells you which spells it is building and which it left out.
+- **Build only some spells:** `innovate-spells build <id>` (the key of the spell's slot in `creative.json`) builds just that spell; give several paths to build several, e.g. `innovate-spells build my_heal my_flame`. `eldendisk run` then goes on building **the same spells** until you type `innovate-spells build` (or build another selection). If you never choose, `run` builds every spell. A rehearsal (`--dry-run`) does not change the choice. The tool always tells you which spells it is building and which it left out.
 - `run` uses the **secured** build while your design equals the secured one. If you changed something it says what changed (`reverse_curse_technique.shop.price  34590 -> 40000`) and rebuilds.
 - The files live in `<vault>\design\innovate-items\spells\`: `regulation.bin` (latest build), `regulation.secured.bin`, `spells.commit.json`.
 - With `--vault-off` the spells are not used (and so no text is put in).
-- The text of the spells (6.1b) is put in by `run` once the game is up; `eldendisk write --text` (game running) does it again after you edit it.
-- After a build, `read --param-check` (game running) compares every original row with the game: they must all be equal, and your new rows are counted.
+- The text of the spells (6.1b) is put in by `run` once the game is up; `eldendisk innovate-spells apply` (game running) does it again after you edit it.
+- After a build, `check` (game running) compares every original row with the game: they must all be equal, and your new rows are counted.
 
 ### 11.2 Messages and what to do
 
@@ -988,8 +988,8 @@ The tool lists **every** problem it finds at once.
 | `GATE FAILED … nothing was swapped` | The suitcase is too heavy. | Fewer or lighter spells (Chapter 10). |
 | `.name: renamed in 1.7.1: use text.goods_name` (also `description`) | A 1.7.0 field. | Move the words into the `text` object (6.1b). |
 | `goods text: N spell(s) named in the game …` | The text was put into the running game. | Nothing; open the merchant or the inventory. |
-| `the game's text tables were not found (…)` | The tool looked through the game's memory and did not find them: the game is not fully loaded, or it is another version or language of the game (the profile holds the sizes of the English tables). | Run `eldendisk write --text` once a character is in the world. |
-| `the game replaced its text tables again after they were set` | The game reloaded its text while the tool was done. | Run `eldendisk write --text` again. |
+| `the game's text tables were not found (…)` | The tool looked through the game's memory and did not find them: the game is not fully loaded, or it is another version or language of the game (the profile holds the sizes of the English tables). | Run `eldendisk innovate-spells apply` once a character is in the world. |
+| `the game replaced its text tables again after they were set` | The game reloaded its text while the tool was done. | Run `eldendisk innovate-spells apply` again. |
 
 ---
 
@@ -1020,7 +1020,7 @@ Key = `Table . row id . field : new value`.
 - [ ] `from` is in Appendix A for that workshop and type.
 - [ ] `set` uses **the game's ids**, no link fields.
 - [ ] `shop`: price ≥ 1; stock −1 or 1–99.
-- [ ] `--add all --dry-run` says the gate passed.
+- [ ] `innovate-spells build --dry-run` says the gate passed.
 - [ ] **One new idea** since the last build that worked.
 
 ### 12.2 Home-made spell (all fields; the values shown are the defaults)

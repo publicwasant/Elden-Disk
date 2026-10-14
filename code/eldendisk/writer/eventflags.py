@@ -1,4 +1,4 @@
-"""Turning event flags OFF in the running game (1.8.0, spec 1.8.0 section 3): the one write of `resurrect great-enemies`. Memory
+"""Turning event flags OFF in the running game (1.8.0, spec 1.8.0 section 3): the one write of `resurrect`. Memory
 only; the vault puts the save back when the game closes.
 
 There is no general flag writer: `turn_off` refuses any flag that is not in `allowed` (the flags of the great-enemies table), never

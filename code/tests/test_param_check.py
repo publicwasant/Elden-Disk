@@ -1,4 +1,4 @@
-"""`read --param-check FILE` (Phase 1, step 1.4): the six tables of a regulation.bin against the same tables in the game."""
+"""`check FILE` (Phase 1, step 1.4; `read --param-check FILE` before 1.8.0): the six tables of a regulation.bin against the same tables in the game."""
 import json
 import os
 from pathlib import Path
@@ -141,7 +141,7 @@ def _read_args(**over):
 
 
 def test_without_a_file_the_regulation_bin_in_the_game_folder_is_opened(monkeypatch, tmp_path):
-    """`--param-check` alone: the file the game loaded (a `run` session puts the build there)."""
+    """`check` alone: the file the game loaded (a `run` session puts the build there)."""
     opened = []
     monkeypatch.setattr(read_cmd, "require_windows_x64", lambda: None)
     monkeypatch.setattr(read_cmd.paramcheck, "file_rows", lambda p: opened.append(Path(p)) or (_ for _ in ()).throw(
@@ -161,9 +161,10 @@ def test_a_named_file_is_opened_before_waiting_for_the_game(monkeypatch, tmp_pat
 def test_the_flag_alone_parses_and_a_file_after_it_too(monkeypatch):
     import eldendisk.__main__ as cli
     seen = {}
-    monkeypatch.setattr(cli, "cmd_read", lambda a: seen.update(vars(a)) or 0)
-    assert cli.main(["read", "--param-check"]) == 0 and seen["param_check"] == ""
-    assert cli.main(["read", "--param-check", "x.bin", "--json"]) == 0 and seen["param_check"] == "x.bin" and seen["json"]
+    import eldendisk.commands.read as rcmd
+    monkeypatch.setattr(rcmd, "cmd_read", lambda a: seen.update(vars(a)) or 0)
+    assert cli.main(["check"]) == 0 and seen["param_check"] == ""
+    assert cli.main(["check", "x.bin", "--json"]) == 0 and seen["param_check"] == "x.bin" and seen["json"]
     assert cli.main(["read"]) == 0 and seen["param_check"] is None
 
 

@@ -1,4 +1,4 @@
-"""Loads offsets.json (per exe version) and chr_state_ids.json (buff and animation ID tables)."""
+"""Loads offsets.json (per exe version) and names.json (buff and animation ID tables)."""
 from __future__ import annotations
 
 import json
@@ -114,7 +114,7 @@ class ParamRow:
 
 @dataclass(frozen=True)
 class ParamTable:
-    key: str                    # the name in disk-state.json (`params.<key>.<id>.<field>`)
+    key: str                    # the name in the document (disk.json) (`params.<key>.<id>.<field>`)
     table: str                  # the game's name of the param (SpEffectParam)
     row_size: int
     chains: tuple[ParamChain, ...]
@@ -152,7 +152,7 @@ class EventFlagsLayout:
 
 @dataclass(frozen=True)
 class TextProfile:
-    """The text tables `write --text` changes (measured on 1.17.1, tools/probe_text.py; writer/text.py says how they are found). `files`:
+    """The text tables `innovate-spells apply` changes (measured on 1.17.1, tools/probe_text.py; writer/text.py says how they are found). `files`:
     table name -> the number of its text file (the pointer to the table sits at `array + number * 8`). `sizes`: table name -> the size of
     the game's own file of that table, in bytes, in the language the game is played in."""
     files: dict[str, int]
@@ -175,7 +175,7 @@ class Profile:
     at_grace: AtGraceConfig | None = None
     buffs_note: str | None = None
     params: ParamsProfile | None = None   # None -> params unsupported for this exe
-    text: TextProfile | None = None       # None -> `write --text` unsupported for this exe
+    text: TextProfile | None = None       # None -> `innovate-spells apply` unsupported for this exe
     equipment: EquipmentLayout | None = None   # None -> character.equipment is not read for this exe
     event_flags: EventFlagsLayout | None = None   # None -> resurrect cannot read or change a boss on this exe
 
@@ -267,7 +267,7 @@ def _number(value, name: str, lo=None, hi=None) -> float | int:
 
 
 def _parse_catalog(raw) -> dict[str, ParamChain]:
-    """`params.catalog`: one chain per table of paramlayouts.LAYOUTS, found with `read --probe-params`. Absent = none."""
+    """`params.catalog`: one chain per table of paramlayouts.LAYOUTS, found with `probe`. Absent = none."""
     if raw is None:
         return {}
     if not isinstance(raw, dict):
@@ -446,7 +446,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
 
 @dataclass(frozen=True)
 class StateConfig:
-    """What the tool knows about one buff or one animation id (the entry of `chr_state_ids.json`)."""
+    """What the tool knows about one buff or one animation id (the entry of `names.json`)."""
     name: str
     categories: str | None = None
     abilities: str | None = None
@@ -454,7 +454,7 @@ class StateConfig:
 
 @dataclass(frozen=True)
 class StateIds:
-    """`chr_state_ids.json`: the names of buff ids and of animation ids (two tables; the same number may be in both)."""
+    """`names.json`: the names of buff ids and of animation ids (two tables; the same number may be in both)."""
     buffs: dict[int, StateConfig]
     animations: dict[int, StateConfig]
 

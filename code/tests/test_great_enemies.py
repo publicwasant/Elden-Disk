@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from eldendisk.design.resurrect.great_enemies import TableError, load
-from eldendisk.design.resurrect.great_enemies.table import design_list
+from eldendisk.creative.resurrect.great_enemies import TableError, load
+from eldendisk.creative.resurrect.great_enemies.table import creative_list
 
 T = load()
 
@@ -55,11 +55,11 @@ def test_all_is_every_great_enemy_and_stands_alone():
 
 
 def test_the_design_list():
-    assert design_list({"innovate_items": {}}) is None
-    assert design_list({"resurrect": {"great_enemies": {"activate": ["margit", 10000800]}}}) == ["margit", "10000800"]
-    assert design_list({"resurrect": {"great_enemies": {"activate": "all"}}}) == ["all"]
+    assert creative_list({"innovate_items": {}}) is None
+    assert creative_list({"resurrect": {"great_enemies": {"activate": ["margit", 10000800]}}}) == ["margit", "10000800"]
+    assert creative_list({"resurrect": {"great_enemies": {"activate": "all"}}}) == ["all"]
     with pytest.raises(TableError):
-        design_list({"resurrect": {"great_enemies": {"activate": {"x": 1}}}})
+        creative_list({"resurrect": {"great_enemies": {"activate": {"x": 1}}}})
 
 
 ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
@@ -67,8 +67,8 @@ ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 
 @pytest.mark.skipif(not ORIG, reason="needs ELDENDISK_REGULATION_ORIG (the game's original regulation.bin)")
 def test_golden_the_table_agrees_with_the_games_gamearea_param():
-    from eldendisk.design.innovate_items import container, zstd
-    from eldendisk.design.innovate_items.container import Bnd4
+    from eldendisk.creative.innovate_spells import container, zstd
+    from eldendisk.creative.innovate_spells.container import Bnd4
     dcx = container.decrypt(Path(ORIG).read_bytes())
     csize = struct.unpack(">I", dcx[0x20:0x24])[0]
     blob = Bnd4(zstd.decode_frame(dcx[0x4C:0x4C + csize])).get("GameAreaParam").data

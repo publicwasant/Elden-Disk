@@ -1,4 +1,4 @@
-"""`write set|refill`: only inside a session the record authorises (spec 1.6.2 section 3), never otherwise."""
+"""`write NAME=VALUE | NAME=default`: only inside a session the record authorises (spec 1.6.2 section 3), never otherwise."""
 import argparse
 import struct
 from dataclasses import replace
@@ -49,8 +49,10 @@ def rig(tmp_path, monkeypatch):
         vault.update_session(**{"state": SessionState.RUNNING, "game_pid": GAME_PID, "game_started": GAME_STARTED, **changes})
 
     def args(*assignments, **kw):
-        d = dict(set=list(assignments) or ["level=150"], refill=None, reset=[], verbose=False,
-                 vault=str(vault.root), offsets="x")
+        """`write` as the command line gives it: NAME=VALUE pairs; `reset` names become NAME=default (`all`: params=default)."""
+        sets = list(kw.pop("set")) if "set" in kw else (list(assignments) or ["level=150"])
+        pairs = sets + [("params" if r == "all" else r) + "=default" for r in kw.pop("reset", [])]
+        d = dict(pairs=pairs, verbose=False, vault=str(vault.root), offsets="x")
         return argparse.Namespace(**{**d, **kw})
 
     return vault, mem, box, open_session, args
@@ -84,12 +86,21 @@ def test_an_authorised_edit_is_applied_and_the_handle_is_closed(rig, capsys):
     assert level(mem) == 150 and box["opened"] == 1 and box["closed"] == 1 and "level = 150" in capsys.readouterr().err
 
 
-def test_refill_goes_through_the_same_authorisation(rig):
-    vault, mem, box, open_session, args = rig
+def test_a_vital_above_its_maximum_fills_it_through_the_same_authorisation(rig):
+    vault, mem, box, open_session, args = rig          # 1.8.0: `write hp=<a big number>` is what `--refill hp` was
     open_session()
     mem.put(DATA_MOD + 0x138, struct.pack("<i", 5))
-    assert wcmd.cmd_write(args(set=[], refill="hp")) == 0
+    assert wcmd.cmd_write(args("hp=999999")) == 0
     assert struct.unpack("<i", mem.read(DATA_MOD + 0x138, 4))[0] == struct.unpack("<i", mem.read(DATA_MOD + 0x138 + 4, 4))[0]
+
+
+def test_write_alone_lists_the_names_and_their_ranges_and_writes_nothing(rig, capsys):
+    vault, mem, box, open_session, args = rig
+    assert wcmd.cmd_write(args(set=[])) == 0 and box["opened"] == 0
+    out = capsys.readouterr()
+    text = out.out + out.err
+    for name in ("level", "vigor", "params.<Table>.<id>.<field>", "creative.resurrect.great_enemies", "default"):
+        assert name in text
 
 
 @pytest.mark.parametrize("changes", [
@@ -151,11 +162,11 @@ def test_an_edit_that_could_not_be_applied_is_an_error_not_silence(rig, capsys):
 
 def test_a_bad_policy_is_reported_before_anything_is_looked_at(rig, capsys):
     vault, mem, box, open_session, args = rig
-    assert cli.main(["write", "--set", "bogus=1", "--vault", str(vault.root)]) == 1
+    assert cli.main(["write", "bogus=1", "--vault", str(vault.root)]) == 1
     assert "bogus" in capsys.readouterr().err and box["opened"] == 0
 
 
-# ---- game params (spec 1.6.3): `--set params...`, `--reset`, the same authorisation as every other edit ----
+# ---- game params (spec 1.6.3): `write params...=VALUE`, `=default`, the same authorisation as every other edit ----
 from eldendisk.game.params import ParamStore   # noqa: E402
 
 BF = "params.effects.1621000"
@@ -306,7 +317,7 @@ def test_only_params_can_be_reset(rig, reset, capsys):
     vault, mem, box, open_session, args = rig
     open_session()
     assert wcmd.cmd_write(args(set=[], reset=reset)) == 1 and mem.log == []
-    assert "--reset" in capsys.readouterr().err
+    assert "default" in capsys.readouterr().err
 
 
 def test_the_same_field_cannot_be_set_twice_or_set_and_reset(rig):
@@ -344,8 +355,11 @@ def test_the_game_not_being_in_a_world_does_not_matter_to_params(rig):
     assert wcmd.cmd_write(args(f"{BF}.effectEndurance=-1")) == 0 and f32(mem, "black_flame") == -1.0
 
 
-def test_the_cli_takes_reset_and_the_set_of_params(rig):
+def test_the_cli_takes_name_value_pairs(rig):
     vault, mem, box, open_session, args = rig
-    ns = cli.build_parser().parse_args(["write", "--set", f"{BF}.effectEndurance=-1", "--reset", "all", BF])
-    assert ns.set == [f"{BF}.effectEndurance=-1"] and ns.reset == ["all", BF]
-    assert cli.build_parser().parse_args(["write", "--set", "level=1"]).reset == []
+    ns = cli.build_parser().parse_args(["write", f"{BF}.effectEndurance=-1", "params=default", f"{BF}=default"])
+    assert ns.pairs == [f"{BF}.effectEndurance=-1", "params=default", f"{BF}=default"]
+    assert cli.build_parser().parse_args(["write"]).pairs == []
+    for gone in (["write", "--set", "level=1"], ["write", "--reset", "all"], ["write", "--refill", "hp"], ["write", "--text"]):
+        with pytest.raises(SystemExit):
+            cli.build_parser().parse_args(gone)

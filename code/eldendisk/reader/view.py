@@ -15,7 +15,8 @@ TICKING = (".buff_duration",)     # countdowns: the live views paint them in the
 VOLATILE = (*TICKING, "systems.status.ignored.buffs", "systems.status.ignored.animations")
 # buff countdowns and the counters of ignored buffs / animations change every few frames; the change stream
 # (the fallback for consoles that cannot redraw in place) leaves them out
-LISTS = ("character.buffs", "character.animations")   # these come and go: no match now is not a wrong name
+LISTS = ("character.buffs", "character.animations", "creative.resurrect.great_enemies")   # these come and go (a boss is in the
+# last one only while it is defeated): no match now is not a wrong name
 
 
 class Row(NamedTuple):
@@ -62,15 +63,14 @@ def label(names) -> str:
 
 
 def select(doc: dict, names: str | list[str] | None) -> list[tuple[str, object]]:
-    """[(canonical path, value or subtree)] for one name or several; the whole document (what `disk-state.json`
-    holds) for none. A path selected twice (`runes` and `runes.total`) is listed once, in the order first asked.
+    """[(canonical path, value or subtree)] for one name or several; the whole document (what `disk.json` holds) for none. A path selected twice (`runes` and `runes.total`) is listed once, in the order first asked.
 
     UnknownName if a name matches nothing, except for names inside the buff and animation lists: they are empty
     when nothing is active, so no match there gives nothing.
     """
     wanted = _wanted(names)
     if not wanted:
-        return [("", _compact(doc))]
+        return [("", doc)]
     out: list[tuple[str, object]] = []
     for name in wanted:
         for path, value in _select_one(doc, name):
@@ -90,19 +90,8 @@ def _canonical(leaves: dict[str, object]) -> dict[str, str]:
     return out
 
 
-SPELLS = "design.innovate_items.spells."
-ENEMIES = "design.resurrect.great_enemies."
-
-
-def _compact(doc: dict) -> dict:
-    """The whole document as `read` with no name shows it: the 212 great enemies (1.8.0) as a count; `--query` names them."""
-    enemies = ((doc.get("design") or {}).get("resurrect") or {}).get("great_enemies")
-    if not isinstance(enemies, dict) or not enemies:
-        return doc
-    states = [e.get("defeated") for e in enemies.values() if isinstance(e, dict)]
-    summary = {"defeated": sum(1 for v in states if v is True), "alive": sum(1 for v in states if v is False), "of": len(enemies)}
-    design = dict(doc["design"], resurrect=dict(doc["design"]["resurrect"], great_enemies=summary))
-    return dict(doc, design=design)
+SPELLS = "creative.innovate_spells."
+ENEMIES = "creative.resurrect.great_enemies."
 
 
 def _enemy_key(name: str) -> str:
@@ -110,9 +99,9 @@ def _enemy_key(name: str) -> str:
 
 
 def _by_enemy_name(doc: dict, path: str) -> str:
-    """`design.resurrect.great_enemies.<name>...` -> the same path with the boss's id (`margit`, `mohg_lord_of_blood`)."""
+    """`creative.resurrect.great_enemies.<name>...` -> the same path with the boss's id (`margit`, `mohg_lord_of_blood`)."""
     head, _dot, rest = path[len(ENEMIES):].partition(".")
-    enemies = ((doc.get("design") or {}).get("resurrect") or {}).get("great_enemies") or {}
+    enemies = ((doc.get("creative") or {}).get("resurrect") or {}).get("great_enemies") or {}
     if head in enemies or not head or is_pattern(head):
         return path
     keys = {rid: _enemy_key(e.get("name", "")) for rid, e in enemies.items() if isinstance(e, dict)}
@@ -123,14 +112,14 @@ def _by_enemy_name(doc: dict, path: str) -> str:
 
 
 def _by_label(doc: dict, path: str) -> str:
-    """`design.innovate_items.spells.<label>...` -> the same path with the spell's goods id (a spell is named by both); a great enemy
-    by its name the same way."""
+    """`creative.innovate_spells.<label>...` -> the same path with the spell's goods id (a spell is named by both); a great enemy by
+    its name the same way."""
     if path.startswith(ENEMIES):
         return _by_enemy_name(doc, path)
     if not path.startswith(SPELLS):
         return path
     head, _dot, rest = path[len(SPELLS):].partition(".")
-    spells = ((doc.get("design") or {}).get("innovate_items") or {}).get("spells") or {}
+    spells = (doc.get("creative") or {}).get("innovate_spells") or {}
     if head in spells:
         return path
     for goods, s in spells.items():
@@ -147,13 +136,13 @@ def _select_one(doc: dict, name: str) -> list[tuple[str, object]]:
         if hits:
             return hits
     else:
-        if path.startswith(FULL_ROOTS):   # `params` / `design` names are typed in any letter case (effectEndurance), the rest is lower-case
+        if path.startswith(FULL_ROOTS):   # `params` / `creative` names are typed in any letter case (effectEndurance), the rest is lower-case
             path = _canonical(leaves).get(path, path)
         try:
             return [(path, _walk(path, doc))]
         except KeyError:
             pass
-        if path in leaves:            # a key with dots in it (`design....basic.SpEffect.1642100.effectEndurance`)
+        if path in leaves:            # a key with dots in it (`creative....basic.SpEffect.1642100.effectEndurance`)
             return [(path, leaves[path])]
         under = [(p, v) for p, v in leaves.items() if p.startswith(path + ".")]
         if under:                     # the first parts of such a key (`....colors.Magic.6421.castSfxId`)

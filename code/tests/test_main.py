@@ -92,41 +92,54 @@ def test_run_flags_parse(monkeypatch):
         cli.main(["run", "--keep", "-1"])
 
 
-def test_read_flags_parse_and_several_features_are_accepted(monkeypatch):
+def test_read_words_parse_into_what_read_does(monkeypatch):
+    """1.8.0 part 2: `read [NAME ...]`, `read monitor...`, `export`, `check`, `probe` (no --query / --export / --live-buffs ...)."""
+    import eldendisk.commands.read as rcmd
     seen = {}
-    monkeypatch.setattr(cli, "cmd_read", lambda a: seen.update(vars(a)) or 0)
-    assert cli.main(["read", "--live-buffs", "--live-animations", "-q", "--hz", "30"]) == 0
+    monkeypatch.setattr(rcmd, "cmd_read", lambda a: seen.update(vars(a)) or 0)
+    assert cli.main(["read", "monitor", "-q", "--hz", "30"]) == 0
     assert seen["live_buffs"] and seen["live_animations"] and seen["quiet"] and not seen["live"] and not seen["export"]
-    assert seen["hz"] == 30.0
+    assert seen["hz"] == 30.0 and seen["unmapped"] and not seen["mapped"]          # --unmapped is the default of a monitor
     seen.clear()
-    assert cli.main(["read", "--live-animations", "--unmapped"]) == 0
-    assert seen["unmapped"] and not seen["mapped"]
+    assert cli.main(["read", "monitor-animations"]) == 0
+    assert seen["live_animations"] and not seen["live_buffs"] and seen["unmapped"]
     seen.clear()
-    assert cli.main(["read", "--live-buffs", "--mapped"]) == 0 and seen["mapped"]
+    assert cli.main(["read", "monitor-buffs", "--mapped"]) == 0 and seen["mapped"] and not seen["unmapped"] and seen["live_buffs"]
     seen.clear()
-    assert cli.main(["read", "--export", "--live", "--no-idle", "--export-interval", "1", "--timer-interval", "0"]) == 0
+    assert cli.main(["export", "--live", "--no-idle", "--export-interval", "1", "--timer-interval", "0"]) == 0
     assert seen["export"] and seen["live"] and seen["no_idle"] and seen["query"] is None
-    assert (seen["export_interval"], seen["timer_interval"]) == (1.0, 0.0)
+    assert (seen["export_interval"], seen["timer_interval"]) == (1.0, 0.0) and seen["out"].endswith("output")
     seen.clear()
-    assert cli.main(["read", "--query", "runes", "--json"]) == 0
+    assert cli.main(["read", "runes", "--json"]) == 0
     assert seen["query"] == ["runes"] and seen["json"] and not seen["live"] and not seen["export"]
     seen.clear()
-    assert cli.main(["read", "--query", "attrs.*", "--flat", "--live"]) == 0 and seen["flat"] and seen["live"]
+    assert cli.main(["read", "attrs.*", "--flat", "--live"]) == 0 and seen["flat"] and seen["live"]
     seen.clear()
-    assert cli.main(["read", "--query", "character.runes.*", "character.buffs.*", "--live"]) == 0 and not seen["flat"]
+    assert cli.main(["read", "character.runes.*", "character.buffs.*", "--live"]) == 0 and not seen["flat"]
     assert seen["query"] == ["character.runes.*", "character.buffs.*"] and seen["live"]
     seen.clear()
-    cli.main(["read"])   # no flag: every value once
-    assert (seen["query"], seen["export"], seen["live"], seen["hz"], seen["timeout"]) == (None, False, False, 60.0, 15.0)
+    assert cli.main(["read", "params.Magic.6230", "params.SpEffect.1621000.effectEndurance"]) == 0
+    assert seen["param"] == ["params.Magic.6230", "params.SpEffect.1621000.effectEndurance"] and seen["query"] is None
+    seen.clear()
+    assert cli.main(["read", "params.effects.1621000"]) == 0 and seen["query"] == ["params.effects.1621000"] and not seen["param"]
+    seen.clear()
+    for whole in (["read"], ["read", "*"], ["read", "all"], ["read", "--tree"]):
+        cli.main(whole)
+        assert (seen["query"], seen["export"], seen["live"], seen["hz"], seen["timeout"]) == (None, False, False, 60.0, 15.0)
+        seen.clear()
+    assert cli.main(["check"]) == 0 and seen["param_check"] == ""
+    seen.clear()
+    assert cli.main(["check", "my.bin", "--json"]) == 0 and seen["param_check"] == "my.bin" and seen["json"]
+    seen.clear()
+    assert cli.main(["probe", "--json"]) == 0 and seen["probe_params"] and seen["json"]
 
 
 @pytest.mark.parametrize("argv", [
-    ["read", "--hz", "500"], ["read", "--hz", "0"], ["read", "--export", "--export-interval", "-1"],
-    ["read", "--timeout", "0"], ["read", "--export", "--query", "hp"], ["read", "--live-buffs", "--live"],
-    ["read", "--live-animations", "--export"], ["read", "--live-buffs", "--query", "hp"],
-    ["read", "--json", "--live"], ["read", "--json", "--export"], ["read", "effects"], ["read", "export"], ["read", "--once"],
-    ["read", "--flat", "--export"], ["read", "--flat", "--json"], ["read", "--flat", "--live-buffs"],
-    ["read", "--mapped"], ["read", "--live", "--unmapped"], ["read", "--live-buffs", "--mapped", "--unmapped"],
+    ["read", "--hz", "500"], ["read", "--hz", "0"], ["export", "--export-interval", "-1"], ["export", "--hz", "0"],
+    ["read", "--timeout", "0"], ["read", "--json", "--live"], ["read", "--once"], ["read", "--flat", "--json"],
+    ["read", "--tree", "--flat"], ["read", "monitor", "--mapped", "--unmapped"],
+    ["read", "--query", "hp"], ["read", "--export"], ["read", "--live-buffs"], ["read", "--param", "Magic.6230"],
+    ["read", "--probe-params"], ["read", "--param-check"], ["export", "hp"], ["probe", "x"],
 ])
 def test_read_usage_errors(argv):
     with pytest.raises(SystemExit) as e:
@@ -134,8 +147,19 @@ def test_read_usage_errors(argv):
     assert e.value.code == 2
 
 
+@pytest.mark.parametrize("argv", [
+    ["read", "monitor", "--live"], ["read", "monitor", "hp"], ["read", "--mapped"], ["read", "hp", "--unmapped"],
+    ["read", "*", "hp"], ["read", "params.Magic.6230", "hp"], ["read", "params.Magic.6230", "--live"],
+])
+def test_read_word_errors_are_an_error_line_not_a_usage_error(argv, monkeypatch):
+    import eldendisk.commands.read as rcmd
+    monkeypatch.setattr(rcmd, "cmd_read", lambda a: 0)
+    assert cli.main(argv) == 1
+
+
 def test_old_command_names_are_gone():
-    for argv in (["sandbox", "status"], ["buffs"], ["animations"], ["run", "--attach"], ["run", "--hz", "30"]):
+    for argv in (["sandbox", "status"], ["buffs"], ["animations"], ["run", "--attach"], ["run", "--hz", "30"], ["design"],
+                 ["innovate-items", "spells"], ["external-scripts"], ["run", "--scripts-dir", "x"]):
         with pytest.raises(SystemExit):
             cli.main(argv)
 
@@ -143,29 +167,44 @@ def test_old_command_names_are_gone():
 def test_write_commands_parse(monkeypatch):
     seen = {}
     monkeypatch.setattr(cli, "cmd_write", lambda a: seen.update(vars(a)) or 0)
-    assert cli.main(["write", "--set", "vigor=99", "level=150", "-v"]) == 0
-    assert seen["set"] == ["vigor=99", "level=150"] and seen["refill"] is None and seen["verbose"]
-    assert seen["vault"] is None
-    assert cli.main(["write", "--set", "hp=1", "--set", "attrs.*=50", "--refill", "hp,fp"]) == 0
-    assert seen["set"] == ["hp=1", "attrs.*=50"] and seen["refill"] == "hp,fp"
-    with pytest.raises(SystemExit):
-        cli.main(["write"])                   # nothing to do
-    assert cli.main(["write", "--reset", "params.Magic.6230.mp"]) == 0       # a reset alone is something to do
-    assert seen["reset"] == ["params.Magic.6230.mp"] and seen["set"] == []
-    with pytest.raises(SystemExit):
-        cli.main(["write", "--set"])          # --set needs at least one NAME=VALUE
-    for old in (["write", "set", "level=1"], ["write", "refill", "hp"]):
+    assert cli.main(["write", "vigor=99", "level=150", "-v"]) == 0
+    assert seen["pairs"] == ["vigor=99", "level=150"] and seen["verbose"] and seen["vault"] is None
+    assert cli.main(["write", "params.Magic.6230.mp=default"]) == 0 and seen["pairs"] == ["params.Magic.6230.mp=default"]
+    assert cli.main(["write"]) == 0 and seen["pairs"] == []                  # write alone: the list of names
+    for old in (["write", "--set", "level=1"], ["write", "--refill", "hp"], ["write", "--reset", "all"],
+                ["write", "--text"], ["write", "--flame-color"]):
         with pytest.raises(SystemExit):
-            cli.main(old)                     # the verbs of 1.6.2 are gone
+            cli.main(old)                     # the flags before 1.8.0 part 2 are gone
 
 
 @pytest.mark.parametrize("argv", [
-    ["write", "--vault", "VAULT", "--set", "level=1"], ["write", "--set", "level=1", "--vault", "VAULT"],
+    ["write", "--vault", "VAULT", "level=1"], ["write", "level=1", "--vault", "VAULT"],
 ])
 def test_write_accepts_the_vault_before_or_after_the_values(monkeypatch, argv):
     seen = {}
     monkeypatch.setattr(cli, "cmd_write", lambda a: seen.update(vault=a.vault) or 0)
     assert cli.main(["X" if a == "VAULT" else a for a in argv]) == 0 and seen["vault"] == "X"
+
+
+def test_the_creative_commands_parse(monkeypatch):
+    seen = {}
+    for name in ("cmd_scripts", "cmd_innovate", "cmd_resurrect", "cmd_reset"):
+        monkeypatch.setattr(cli, name, lambda a: seen.update(vars(a)) or 0)
+    assert cli.main(["scripts", "start", "RctColoursFollowTheSpell:1", "--when-loaded"]) == 0
+    assert seen["words"] == ["start", "RctColoursFollowTheSpell:1"] and seen["when_loaded"]
+    with pytest.raises(SystemExit):
+        cli.main(["scripts", "stop", "*", "--when-loaded"])            # --when-loaded goes with start
+    assert cli.main(["innovate-spells", "build", "reverse_cursed_technique", "2230001", "--dry-run"]) == 0
+    assert seen["function"] == "build" and seen["names"] == ["reverse_cursed_technique", "2230001"] and seen["dry_run"]
+    assert cli.main(["innovate-spells", "apply", "--when-loaded"]) == 0 and seen["function"] == "apply" and seen["when_loaded"]
+    assert cli.main(["innovate-spells"]) == 0 and seen["function"] is None
+    for bad in (["innovate-spells", "secure", "--dry-run"], ["innovate-spells", "build", "--when-loaded"], ["innovate-spells", "make"]):
+        with pytest.raises(SystemExit):
+            cli.main(bad)
+    assert cli.main(["resurrect", "mohg lord", "10000850", "--dry-run"]) == 0 and seen["names"] == ["mohg lord", "10000850"]
+    with pytest.raises(SystemExit):
+        cli.main(["resurrect", "--dry-run", "--when-loaded"])
+    assert cli.main(["reset", "runes", "monitor"]) == 0 and seen["words"] == ["runes", "monitor"]
 
 
 def test_exit_codes():

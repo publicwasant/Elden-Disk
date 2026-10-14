@@ -20,7 +20,7 @@ LEVELS = "VDIWE"            # verbose, debug, info, warning, error (logcat lette
 LOG_NAME = "eldendisk.log"
 MAX_BYTES = 2 * 1024 * 1024
 KEEP_FILES = 3              # eldendisk.log, .1, .2
-DESIGN_TAG = "design"          # the tag of the design's lines
+CREATIVE_TAG = "creative"        # the tag of the creative features' lines (1.8.0; "design" before)
 TAG_WIDTH = 9               # the tag column, so the colon is in the same place in every line (9: as wide as the longest tag ever was, so the column never moves)
 
 

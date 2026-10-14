@@ -16,14 +16,14 @@ ALLOWED = {
     "host": ["eldendisk.host", "eldendisk.vault", "eldendisk.paths", "eldendisk.game.processes"],
     "reader": ["eldendisk.reader", "eldendisk.game", "eldendisk.paths", "eldendisk.vault.session"],
     "writer": ["eldendisk.writer", "eldendisk.game", "eldendisk.vault.session"],
-    "design": ["eldendisk.design"],        # builds files; knows nothing of the vault, the host or the game
+    "creative": ["eldendisk.creative"],      # builds files, runs scripts; knows nothing of the vault, the host or the game
 }
 
-# the files that may go past their package's boundary, and how far. 1.7.2: the external scripts (design/external_scripts) run next to
-# the game, so ONE file of them touches it: backend.py, which reads through the reader and writes through the writer of `read` and
-# `write` (the same chains, checks, gate and session). edstdlib, the host and the scripts themselves still see only the design package.
+# the files that may go past their package's boundary, and how far. 1.7.2: the scripts (creative/scripts) run next to the game, so ONE
+# file of them touches it: backend.py, which reads through the reader and writes through the writer of `read` and `write` (the same
+# chains, checks, gate and session). edstdlib, the host and the scripts themselves still see only the creative package.
 EXCEPTIONS = {
-    "design/external_scripts/backend.py": ["eldendisk.game", "eldendisk.reader", "eldendisk.writer", "eldendisk.vault"],
+    "creative/scripts/backend.py": ["eldendisk.game", "eldendisk.reader", "eldendisk.writer", "eldendisk.vault"],
 }
 
 
@@ -93,7 +93,7 @@ def test_only_the_write_command_the_scripts_backend_and_the_writer_package_touch
     session check, writer/eventflags.py)."""
     users = {p.relative_to(PKG).as_posix() for p in modules()
              if any(under(m, "eldendisk.writer") for m in internal_imports(p)) and "writer" not in p.relative_to(PKG).parts[:1]}
-    assert users == {"commands/write.py", "design/external_scripts/backend.py", "commands/resurrect.py"}
+    assert users == {"commands/write.py", "creative/scripts/backend.py", "commands/resurrect.py"}
 
 
 def test_the_reader_never_imports_the_writer_and_the_writer_never_imports_the_reader():
@@ -128,9 +128,9 @@ def test_the_design_package_uses_only_the_standard_library():
     """The exe is built without third-party packages; cryptography, zstandard and jsonschema are for the dev tests only."""
     import sys
     std = set(sys.stdlib_module_names)
-    for f in (PKG / "design").rglob("*.py"):
+    for f in (PKG / "creative").rglob("*.py"):
         for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
                 [node.module] if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module else []
-            for n in names:     # `edstdlib` is the external scripts' own name for design/external_scripts/edstdlib.py
+            for n in names:     # `edstdlib` is the external scripts' own name for creative/scripts/edstdlib.py
                 assert n.split(".")[0] in std | {"eldendisk", "edstdlib"}, f"{f.relative_to(PKG).as_posix()} imports {n}"

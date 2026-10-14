@@ -8,9 +8,11 @@
 > **Language:** English (technical terms are explained where they first appear; Appendix D is a glossary)
 > **Companion material:** `tools/` (every script needed to reproduce the build, next to this file) and `../../memory-read-101.md` (how Elden-Disk reads the live game, which is how we *observed* the result)
 
-> **Update 2026-10-09.** The final item (Z4: Flame-style cast, 34,590 runes, stock 1, Int 45 / Fai 15 / Arc 10, FP 80, 2.0 s poise buff) worked in the real game, and **Elden-Disk now builds this file itself** (`innovate-items spells`, spec 1.7.0): same bytes as `tools/make_item.py --name Z4` (decrypted SHA-256 `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`), swapped in by `run`, put back byte-identical by the vault. The Y1/Y2 "pending" lines below are superseded by Z4. The poise part is not yet confirmed in the game. For more than one item see 17.1 (measurements added) and spec 1.7.0 section 10b.
+> **1.8.0 (2026-10-14): the commands have new names.** `innovate-items spells --add | --secure` is `innovate-spells build | secure`, `write --text` and `write --flame-color` are one step, `innovate-spells apply`, `read --param T.ID` is `read params.T.ID`, `read --live-buffs` is `read monitor-buffs`, `write --set` / `--reset` are `write NAME=VALUE` / `NAME=default`, `design.json` is `creative.json` and `chr_state_ids.json` is `names.json`. The commands below are updated where they tell you what to type; the dated records (sections 19.x) keep the names of their day. The reference: [cli-commands.md](../guilde/cli-commands.md).
 >
-> **Update 2026-10-09 (later).** Slot 1 of the back-growth build (appended rows in Goods, Magic, SpEffect and ShopLineup) passed in the game, and Elden-Disk can now *look at and change the tables of the running game*: `read --param Magic.6230` shows any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup by field name, `write --set params.Magic.6230.mp=0` changes a field live (and `--reset` puts the game's own value back), `read --param-check` compares a built `regulation.bin` with the game row by row (the slot-1 build was equal on every row of all six tables). This is the "observe" half of the method in this book without Cheat Engine, and the test bench for the next kinds of spell (clone, buff, enchant, projectile, attack): Magic is read at the cast, Bullet when the bullet is created, and a changed row acts only on what is created afterwards. See [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md) and [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md).
+> **Update 2026-10-09.** The final item (Z4: Flame-style cast, 34,590 runes, stock 1, Int 45 / Fai 15 / Arc 10, FP 80, 2.0 s poise buff) worked in the real game, and **Elden-Disk now builds this file itself** (`innovate-spells`, spec 1.7.0): same bytes as `tools/make_item.py --name Z4` (decrypted SHA-256 `1aa16ee0dbcbc5902cef2b6eb29bd542f42b2158fcdb44c221c187280db5277b`), swapped in by `run`, put back byte-identical by the vault. The Y1/Y2 "pending" lines below are superseded by Z4. The poise part is not yet confirmed in the game. For more than one item see 17.1 (measurements added) and spec 1.7.0 section 10b.
+>
+> **Update 2026-10-09 (later).** Slot 1 of the back-growth build (appended rows in Goods, Magic, SpEffect and ShopLineup) passed in the game, and Elden-Disk can now *look at and change the tables of the running game*: `read params.Magic.6230` shows any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup by field name, `write params.Magic.6230.mp=0` changes a field live (and `NAME=default` puts the game's own value back), `check` compares a built `regulation.bin` with the game row by row (the slot-1 build was equal on every row of all six tables). This is the "observe" half of the method in this book without Cheat Engine, and the test bench for the next kinds of spell (clone, buff, enchant, projectile, attack): Magic is read at the cast, Bullet when the bullet is created, and a changed row acts only on what is created afterwards. See [phase1-params-workbench.md](../experiments/extensional/innovate-items/spell/level2/docs/phase1-params-workbench.md) and [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md).
 
 >
 > **Update 2026-10-11 (1.7.1) — the text layer works.** Name, short line and long description of the new item now show in the real game. Not by editing a file (a loose replacement of the text archive is not read by the unpatched game, tried), but by giving the *running* game a rebuilt text table: Elden-Disk copies the game's own table, adds the entries for the new Goods ids, puts it in memory it allocates in the game and changes the single pointer that leads to it. Chapter 19 has the method, how the tool finds the tables (by scanning, not by a fixed chain), the colour of the fire, the research tools and the limits. The icon is still open.
@@ -86,7 +88,7 @@ Create a **brand-new incantation** (not a re-skin of an existing one), by any te
 > 📌 **Case File — test X1 (screenshot, in game)**
 > The merchant's *Purchase Item* screen shows a new entry in the incantation tab: icon of a golden scroll, name **`?GoodsName?`**, type **Incantation**, *FP Cost 30*, *Slots Used 1*, *Attributes Required: Fai 20*, price **4,444**. The purchase dialog asks *Purchase how many? 1 / 699*. After buying: runes drop by the price, the item is in the inventory, it can be memorised, and casting it kneels the character, plays the flask glow and shows a buff icon.
 >
-> `eldendisk read --live-buffs` during the cast printed the buff row: `+ 999999999  Unknown  5.1 / 15.0 s` — a **15.0 s** timer counting down, on the SpEffect id we had put in the file. (Later builds use id `21950111`, now named in `chr_state_ids.json`.)
+> `eldendisk read monitor-buffs` during the cast printed the buff row: `+ 999999999  Unknown  5.1 / 15.0 s` — a **15.0 s** timer counting down, on the SpEffect id we had put in the file. (Later builds use id `21950111`, now named in `names.json`.)
 
 ### 1.4 The one-paragraph method
 
@@ -288,7 +290,7 @@ A **tick effect** is built from three fields:
 | `changeHpPoint`, `changeMpPoint` | applied **per tick** | `−60`, `−4` |
 | `staminaRecoverChangeSpeed` | stamina regeneration speed modifier while the effect lasts | `100` |
 
-15 s ÷ 0.5 s = 30 ticks → up to **1,800 HP** and **120 FP** restored over the buff's life; stamina regenerates at the boosted rate. 🔬 *Confidence:* the *direction* and the 15.0 s timer are E3 (seen in game and in `eldendisk read --live-buffs`); the *exact* per-second numbers were not measured, only seen to rise. `staminaRecoverChangeSpeed = 100`'s real unit is inferred.
+15 s ÷ 0.5 s = 30 ticks → up to **1,800 HP** and **120 FP** restored over the buff's life; stamina regenerates at the boosted rate. 🔬 *Confidence:* the *direction* and the 15.0 s timer are E3 (seen in game and in `eldendisk read monitor-buffs`); the *exact* per-second numbers were not measured, only seen to rise. `staminaRecoverChangeSpeed = 100`'s real unit is inferred.
 
 ### 5.2 What differs between a vanilla heal and a vanilla buff (the diff that taught us the cast-style fields)
 
@@ -326,7 +328,7 @@ We copy only the *behaviour/visual* fields (`vfxId`, `isExtendSpEffectLife`, `is
 
 ### 5.3 What the buff row's id is called in telemetry
 
-Elden-Disk's `read --live-buffs` lists active SpEffects by id, using `code/chr_state_ids.json` to give names. The mapping key **is the SpEffect id**, not the goods id:
+Elden-Disk's `read monitor-buffs` lists active SpEffects by id, using `code/eldendisk/reader/names.json` to give names. The mapping key **is the SpEffect id**, not the goods id:
 
 ```json
 "21950111": {
@@ -726,14 +728,14 @@ python make_item.py --name Free --price 1 --qty -1
 | 3 | The merchant of the chosen shop group lists the item under *incantations* | wrong shop group/line (Chapter 7); see below |
 | 4 | Price and stock as configured; attribute requirement shows `Fai 20` | check the Shop/Magic values with `inspect_rows.py` |
 | 5 | Buy → runes decrease; item in inventory; can be memorised | |
-| 6 | Cast: animation, effect, buff icon; HP/FP/stamina rise for the configured time | read the buff with Elden-Disk: `eldendisk.exe read --live-buffs` should list the SpEffect id with a timer `x / 15.0 s` |
+| 6 | Cast: animation, effect, buff icon; HP/FP/stamina rise for the configured time | read the buff with Elden-Disk: `eldendisk.exe read monitor-buffs` should list the SpEffect id with a timer `x / 15.0 s` |
 | 7 | Re-cast: refreshes the timer | note what plays on the re-cast |
 
 **To find which lines a merchant sells** (when step 3 fails): stand at the merchant, screenshot the item/price list, and match prices and item types against groups of 25 ids in `ShopLineupParam` (Chapter 7). Set every price of a candidate group to a silly value (like W1/X1 did) for an unmistakable test.
 
 ### 14.3 Read the result from outside
 
-The `read` command of Elden-Disk is the observation tool: it attaches to the running game and prints active SpEffects (`--live-buffs`) or a filtered view (`--query character.buffs.* --live`). That is how we proved the buff existed and ran for 15.0 s without trusting only what the screen showed.
+The `read` command of Elden-Disk is the observation tool: it attaches to the running game and prints active SpEffects (`read monitor-buffs`) or a filtered view (`read character.buffs.* --live`). That is how we proved the buff existed and ran for 15.0 s without trusting only what the screen showed.
 
 ## Chapter 15 — Doing your own edits (the building-block API)
 
@@ -781,7 +783,7 @@ Rules for safe edits:
 | Loads, item present but name shows `?GoodsName?` | the text (msgbnd FMG) is not edited | open problem 17.3 |
 | Buff icon shows, HP drops | sign error: **negative** `changeHpPoint` heals | Section 5.1 |
 | Item "sold out" at once or never sold out | stock flag reused or `0` with a finite `sellQuantity` | give the line its own `eventFlag_forStock` |
-| Telemetry prints `Unknown` for the buff | `chr_state_ids.json` key ≠ your SpEffect id | Section 5.3 |
+| Telemetry prints `Unknown` for the buff | `names.json` key ≠ your SpEffect id | Section 5.3 |
 
 ### 16.2 Mistakes we made (so you do not have to)
 
@@ -847,7 +849,7 @@ Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame G
 | 4 | "Until full" logic | SpEffect conditions | medium (unknown fields) |
 | 5 | Visual variants and colour | borrow ids; compare | low |
 | 6 | Custom image | texture archive | high |
-| 7 | Generalise `make_item.py` into a recipe/config format for many items | done for one item: Elden-Disk `spells.design.json` (spec 1.7.0); several items wait for step 3 | low |
+| 7 | Generalise `make_item.py` into a recipe/config format for many items | done for one item: Elden-Disk `creative.json` (spec 1.7.0); several items wait for step 3 | low |
 | 8 | Spells of every kind (clone, buff, enchant, projectile, attack) in up to 64 slots | Phase 1 (live read/write of six tables, check against the build) is done; Phase 2 is planned in [roadmap-innovate-spells.md](../experiments/extensional/innovate-items/spell/level2/docs/roadmap-innovate-spells.md) | medium |
 
 ---
@@ -879,7 +881,7 @@ Hypothesis: `isExtendSpEffectLife` / `isContractSpEffectLife` (both 1 on Flame G
 
 | Piece | What |
 |---|---|
-| `design.json` | each spell's `"text": {"goods_name", "goods_info", "goods_captions"}`, before `set`; 80 / 120 / 1000 characters. It is **not** part of the build (`build_view` leaves it out), so editing a text never rebuilds or un-secures anything |
+| `creative.json` | each spell's `"text": {"goods_name", "goods_info", "goods_captions"}`, before `set`; 80 / 120 / 1000 characters. It is **not** part of the build (`build_view` leaves it out), so editing a text never rebuilds or un-secures anything |
 | `eldendisk/writer/scan.py` | the one way the tool looks through the game's memory (text and fire share it): 1 MB pieces (no single read is long enough to be a frame the game misses), a rest owed as half the time the reading took and slept in lumps of at least 2 ms (so the game keeps its share of the memory bus whatever the speed), an optional `near` (the surroundings of given addresses, 64 MB each way, are read first and not read again), the first 128 MB of each private block of 256 MB or more first and then the rest (biggest first), a stop as soon as the caller has what it wants, a budget of 120 s, an unreadable piece read again in parts of 256 KB. It never writes |
 | `eldendisk/writer/text.py` | the memory side, bytes only. **Step A:** find the game's tables by shape (version-2 header, the `1` at `0x08`, the address at `0x18` equal to the table's own base + `0x28` + 16 × the number of groups) and by size (`text.sizes` of the profile). **Step B:** find the pointer to GoodsName, and where one is seen read the other two slots at the distances the file numbers give (`A + 10 * 8`, `A + 20 * 8`, `A + 24 * 8`): three pointers at exactly these distances do not happen by chance. The look starts around the tables (in the logs the array lay within 20 MB of them) and ends at the first whole array; only if there is none does it go through the rest of the memory (written for 1.7.1 after the first measurements; in the run of 2026-10-12 the tables took 1.6 s and the array 0.3 s, 38 MB read in the near tier). Then read the table the game holds, allocate, write the new table, change the pointer, read it back |
 | `eldendisk/design/innovate_items/fmg.py` | the FMG reader/writer (stdlib only); `write()` is canonical (4 of 6 real files come back byte-identical; the other two differ in 2 trailing bytes and the size field) |
@@ -896,7 +898,7 @@ Rules that keep it safe: the same session check as every `write`; `VirtualAllocE
 | `gamearchive.py` | the archive reader: RSA index, BHD5, path hash, AES-128 ECB. A library for the tool |
 | `probe_text.py` | read-only: finds the dumped table, or its laid-over copy, in the running game and the pointers to it (`--out textprobe.json`) |
 
-(`patch_text.py`, the experiment that first wrote a table into the game, and `probe_chain.py`, which found the fixed chain, are gone: `write --text` does the first and the chain was dropped, 19.3.)
+(`patch_text.py`, the experiment that first wrote a table into the game, and `probe_chain.py`, which found the fixed chain, are gone: `innovate-spells apply` does the first and the chain was dropped, 19.3.)
 
 For another game version or language: run `dump_msgbnd.py` (the keys are in that exe); the size of each `GoodsName.fmg`, `GoodsInfo.fmg` and `GoodsCaption.fmg` it writes is the size to put in `text.sizes`; the file numbers N come from the distances between the pointers that `probe_text.py` reports for the three tables.
 
@@ -914,7 +916,7 @@ For another game version or language: run `dump_msgbnd.py` (the keys are in that
 
 The text exists only while the game runs. The old tables stay in memory (a few hundred KB per switch) until the game closes.
 
-Known limit: a second `write --text` by hand in the same game ends with `set already in this session`, because the array no longer points at the game's own tables (the tool looks for those). The text stays as written.
+Known limit: a second `innovate-spells apply` by hand in the same game ends with `set already in this session`, because the array no longer points at the game's own tables (the tool looks for those). The text stays as written.
 
 ### 19.7 The colour of the fire (`flame_color`)
 

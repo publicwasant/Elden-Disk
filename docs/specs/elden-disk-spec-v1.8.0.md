@@ -1,8 +1,10 @@
 > [!NOTE]
 > **Version:** `1.8.0`  
-> **Status:** IMPLEMENTED (unit tests; the command itself not yet tried in the game). Before the code: The checks of section 12 passed in the real game on 2026-10-13 (section 13): the
-> event flags found and read, Mohg brought back with his intro, runes and Remembrance, the save restored byte for byte.  
-> **Last Updated:** _2026-10-13_
+> **Status:** Part 1 IMPLEMENTED (unit tests; the checks of section 12 passed in the real game on 2026-10-13: the event flags found and
+> read, Mohg brought back with his intro, runes and Remembrance, the save restored byte for byte). Part 2 IMPLEMENTED on 2026-10-14 (unit
+> tests: 1,700+; not yet tried in the game): the commands, the names and the document as Part 2 says; the notes at its end say what the
+> code decided where Part 2 left a choice.  
+> **Last Updated:** _2026-10-14_
 
 # Elden-Disk spec 1.8.0: `resurrect great-enemies`
 
@@ -812,10 +814,31 @@ class BossRush(Interface):
 
 ## Open questions
 
-1. `stop` of one script and `restart`: they need a way to reach the host from another terminal (a small file the host watches in the
-   vault, or a local pipe). The file is the simpler one and needs no open port.
+1. ~~`stop` of one script and `restart`: they need a way to reach the host from another terminal.~~ **Decided (2026-10-14): the file.**
+   Each request is a file of its own in `<vault>\creative\scripts.requests\`; the host looks once a second, does it and answers in
+   `scripts.status.json` (`replies`). No port is opened.
 2. Should `creative.innovate_spells.<id>.design` also be writable as a whole (a new build from the running session), or stay the
-   values only (each field written to the game's rows)?
+   values only (each field written to the game's rows)? **For now: the values only** (`write creative.innovate_spells.<id>.design.<path>=...`).
+
+## Implementation notes (2026-10-14)
+
+What the code decided where the text above left a choice:
+
+| **Where** | **What was built** |
+|:---|:---|
+| `write` alone | lists the writable names with their ranges (level, runes, the attributes, hp / fp / stamina, `params...`, `creative...`) and writes nothing |
+| `write NAME=default` | for `params` names only (`params=default`: every one changed in this game process); a character value has no default of the game |
+| `write creative.scripts.<group>.<NAME>.state` | `stopped` / `live`: a request to the running host; with no host it is an error (`write` never becomes the host) |
+| `scripts start` | when no host runs, the command **becomes the host** in its terminal (as `run` starts it); when one runs, a request. `stop *` ends the host |
+| `scripts add / remove / change` | edit `scripts.added` of `creative.json` (`--spec`, else the one next to the exe, made from the copy in the exe the first time, else `code/creative.json`); a running host loads / unloads at once. `change NEW` finds the entry with the same file name; `change OLD NEW` names it |
+| the scripts' status | `scripts.status.json` (was `external-scripts.status.json`): `pid`, `state`, `started`, `scripts` (`name`, `id`, `file`, `path`, `added`, `state`, `every`, `loops`, `slow`, `started`, `last_error`), `replies` |
+| `read monitor...` | `--unmapped` is the default, as the table says (it was "all" before) |
+| `reset` | the baselines live in `<TOOLS-DIR>\baselines.json`, for one game process (pid and start time); `runes` (the total now), `buffs`, `animations` (`monitor`: both); a reader takes them at its start (the runes) and every 2 s while it runs |
+| `innovate-spells build NAME \| ID` | NAME is the key of the slot; ID the goods id (2230000 + slot - 1); `creative.innovate_spells.<goods id>` works too |
+| `innovate-spells apply` | the texts, then the colours, one process (the second step looks at the world once, the first waited) |
+| `--names FILE` | a flag for `read`, `scripts`, `export`, `reset` (`--state-ids` before) |
+| the exe | `names.json` and the great-enemies table are always in it (package data); the default scripts sit in its `scripts\` (was `external-scripts\`) |
+| an older vault | `<vault>\design` (or `extension`) is renamed `<vault>\creative` once, and its `innovate-items\spells\` becomes `innovate-spells\` |
 
 ## Remarks
 

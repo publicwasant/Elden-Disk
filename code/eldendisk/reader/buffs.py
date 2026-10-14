@@ -1,4 +1,4 @@
-"""`read --live-buffs`: the character's buff ids (the game's SpEffects) over time (for chr_state_ids.json)."""
+"""`read monitor-buffs`: the character's buff ids (the game's SpEffects) over time (for names.json)."""
 from __future__ import annotations
 
 import math

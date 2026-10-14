@@ -134,7 +134,7 @@ def test_as_json_for_one_selection_and_for_the_whole_document():
     assert json.loads(view.as_json(view.select(DOC, None))) == DOC
 
 
-# ---- buffs and animations are part of the document, like in disk-state.json ----
+# ---- buffs and animations are part of the document, like in disk.json ----
 def test_the_whole_view_includes_buffs_and_animations():
     doc = {**DOC, "character": {**DOC["character"], "animations": {"7": {"name": "roll"}}}}
     paths = {r.path for r in view.rows(view.select(doc, None))}

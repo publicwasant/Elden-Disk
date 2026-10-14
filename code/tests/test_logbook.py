@@ -148,8 +148,8 @@ def test_a_log_another_process_holds_is_not_rotated_but_keeps_working(tmp_path, 
 
 def test_every_tag_keeps_the_colon_in_the_same_column():
     from datetime import datetime
-    from eldendisk.logbook import DESIGN_TAG, TAG_WIDTH, Event, format_line
-    got = [format_line(Event(datetime(2026, 10, 12, 1, 2, 3), 7, "I", tag, "m")) for tag in ("host", "client", "vault", "write", DESIGN_TAG)]
+    from eldendisk.logbook import CREATIVE_TAG, TAG_WIDTH, Event, format_line
+    got = [format_line(Event(datetime(2026, 10, 12, 1, 2, 3), 7, "I", tag, "m")) for tag in ("host", "client", "vault", "write", CREATIVE_TAG)]
     assert len({l.index(": m") for l in got}) == 1 and TAG_WIDTH >= len("design")
 
 

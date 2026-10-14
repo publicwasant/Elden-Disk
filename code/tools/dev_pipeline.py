@@ -4,9 +4,9 @@
 
 1. Tests: runs the whole test suite (pytest); a failure stops the pipeline.
 2. Build: compiles `./build/dist/eldendisk.exe` (PyInstaller; `--engine nuitka` for Nuitka). The build always starts clean
-   (`./build` is removed first) and embeds offsets.json, chr_state_ids.json and design.json in the exe; `--no-embed` leaves
+   (`./build` is removed first) and embeds offsets.json and creative.json in the exe (names.json always); `--no-embed` leaves
    them next to the exe instead. It also removes the tool's own folder `%LOCALAPPDATA%\\EldenDisk` (the vault and its save
-   snapshots, the designs' files, the exports), never while a vault in it owes a restore or the game or the tool runs;
+   snapshots, the creative files, the exports), never while a vault in it owes a restore or the game or the tool runs;
    `--keep-app-data` keeps it. A README.md (quick start + the exe's command reference, from `docs/guilde/`) is written next to
    the exe. Building the exe is a developer's job, so it lives here and not in the `eldendisk` command line.
 3. Status: where the exe is, its size and SHA-256, the version, what was embedded, how long each step took, and the command
@@ -117,7 +117,7 @@ def _local_app_data() -> Path:
 
 
 def app_data_problems(target: Path) -> list[str]:
-    """Why `target` (the tool's folder %LOCALAPPDATA%\\EldenDisk: the vault with its save snapshots, the designs' files, the exports)
+    """Why `target` (the tool's folder %LOCALAPPDATA%\\EldenDisk: the vault with its save snapshots, the creative files, the exports)
     must not be removed now; [] when it may. Only that exact folder is ever removed; nothing while a vault in it owes a restore or
     while the game or the tool runs (a session in progress keeps the only clean copy of the save there)."""
     if target.name != "EldenDisk" or target.parent != _local_app_data() or target.is_symlink():
@@ -131,10 +131,10 @@ def app_data_problems(target: Path) -> list[str]:
 
 
 def config_files(layout: dict) -> list[Path]:
-    """offsets.json, chr_state_ids.json and the design design.json (from code/ or the project root); only those
-    that exist."""
+    """offsets.json and creative.json (from code/ or the project root); only those that exist. names.json is package data of the
+    reader (code/eldendisk/reader/names.json): it is always in the exe (`package_data`)."""
     out = []
-    for name in ("offsets.json", "chr_state_ids.json", "design.json"):
+    for name in ("offsets.json", "creative.json"):
         for base in (layout["code_dir"], layout["project_root"]):
             if (base / name).exists():
                 out.append(base / name)
@@ -142,12 +142,24 @@ def config_files(layout: dict) -> list[Path]:
     return out
 
 
-SCRIPTS_FOLDER = "external-scripts"      # where the external scripts are inside the exe (and next to it, with --no-embed)
+SCRIPTS_FOLDER = "scripts"               # where the default scripts are inside the exe (and next to it, with --no-embed); 1.8.0
+PACKAGE_DATA = (("eldendisk", "reader", "names.json"),                                   # files the code reads next to itself: always
+                ("eldendisk", "creative", "resurrect", "great_enemies", "great_enemies.json"))   # in the exe, with or without --no-embed
+
+
+def package_data(layout: dict) -> list[tuple[Path, str]]:
+    """(file, its folder inside the exe) of every PACKAGE_DATA file that exists."""
+    out = []
+    for parts in PACKAGE_DATA:
+        f = layout["code_dir"].joinpath(*parts)
+        if f.is_file():
+            out.append((f, "/".join(parts[:-1])))
+    return out
 
 
 def user_scripts(layout: dict) -> list[Path]:
-    """The external scripts the exe carries: every `*.py` of code/eldendisk/design/external_scripts/defaults (not `_*.py`)."""
-    folder = layout["code_dir"] / "eldendisk" / "design" / "external_scripts" / "defaults"
+    """The default scripts the exe carries: every `*.py` of code/eldendisk/creative/scripts/defaults (not `_*.py`)."""
+    folder = layout["code_dir"] / "eldendisk" / "creative" / "scripts" / "defaults"
     return sorted(p for p in folder.glob("*.py") if p.is_file() and not p.name.startswith("_")) if folder.is_dir() else []
 
 
@@ -168,9 +180,7 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
         if embed:
             cmd += [f"--add-data={c}{sep}." for c in configs]
             cmd += [f"--add-data={s}{sep}{SCRIPTS_FOLDER}" for s in scripts]
-        table = layout["code_dir"] / "eldendisk" / "design" / "resurrect" / "great_enemies" / "great_enemies.json"
-        if table.is_file():           # 1.8.0: package data the code reads next to itself (always in the exe, with or without --no-embed)
-            cmd.append(f"--add-data={table}{sep}eldendisk/design/resurrect/great_enemies")
+        cmd += [f"--add-data={f}{sep}{where}" for f, where in package_data(layout)]
     else:  # nuitka
         cmd = [sys.executable, "-m", "nuitka", "--onefile", f"--output-dir={dist_dir}",
                f"--output-filename={EXE_NAME}"]
@@ -179,6 +189,7 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
         if embed:
             cmd += [f"--include-data-files={c}={c.name}" for c in configs]
             cmd += [f"--include-data-files={s}={SCRIPTS_FOLDER}/{s.name}" for s in scripts]
+        cmd += [f"--include-data-files={f}={where}/{f.name}" for f, where in package_data(layout)]
     cmd.append(str(entry))
     return cmd
 
@@ -201,7 +212,7 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
               app_data: bool = False) -> bool:
     """Compile ./build/dist/eldendisk.exe. `clean` (the default) removes ./build first, except while a vault inside it still
     owes a restore. `app_data` (with `clean`; what the pipeline does unless --keep-app-data) also removes %LOCALAPPDATA%\\EldenDisk,
-    the tool's own folder (the vault and its save snapshots, the designs' files, the exports), except while a vault in it owes a
+    the tool's own folder (the vault and its save snapshots, the creative files, the exports), except while a vault in it owes a
     restore or the game or the tool runs; nothing is removed when either check fails."""
     log(f"Step 2/2: Building standalone {EXE_NAME} for version {__version__} ({engine}, onefile; this takes a while)...")
     if engine not in ENGINES:
@@ -223,7 +234,7 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
                 for p in problems:
                     log(f"ERROR: {p}")
                 return False
-            log(f"cleaning the tool's own folder {target} (vault, save snapshots, design files, exports)")
+            log(f"cleaning the tool's own folder {target} (vault, save snapshots, creative files, exports)")
             try:
                 shutil.rmtree(target)
             except OSError as exc:
@@ -247,7 +258,7 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
         log(f"ERROR: {engine} build failed. Aborting pipeline.")
         return False
 
-    if not embed:  # editable configs travel next to the exe, the scripts in external-scripts\ beside it
+    if not embed:  # editable configs travel next to the exe, the scripts in scripts\ beside it
         for c in configs:
             shutil.copy2(c, dist_dir / c.name)
         if scripts:
@@ -303,14 +314,14 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
         ("version", f"{__version__} ({engine}, onefile)"),
         ("configs", (", ".join(c.name for c in configs) + (" embedded in the exe" if embed else f" copied next to the exe ({dist})"))
          if configs else "none found"),
-        ("scripts", (", ".join(s.name for s in user_scripts(layout)) + (" embedded in the exe (the default external scripts; `run --scripts-dir` "
+        ("scripts", (", ".join(s.name for s in user_scripts(layout)) + (" embedded in the exe (the default scripts; `scripts add PATH` "
                                                                            "adds more)" if embed else f" copied to {dist / SCRIPTS_FOLDER}"))
-         if user_scripts(layout) else "none in external_scripts/defaults (nothing embedded)"),
+         if user_scripts(layout) else "none in creative/scripts/defaults (nothing embedded)"),
         ("readme", str(dist / "README.md") if (dist / "README.md").exists() else "not written (no docs/guilde/)"),
         ("tests", "skipped" if tests_s is None else _fmt_seconds(tests_s)),
         ("build", _fmt_seconds(build_s)),
         ("total", _fmt_seconds(total_s)),
-        ("data", f"{app_data_dir()} (the vault, the designs' files and the exports; the exe can be copied anywhere)"),
+        ("data", f"{app_data_dir()} (the vault, the creative files and the exports; the exe can be copied anywhere)"),
         ("start it", f"{REL_EXE.replace('/', chr(92))} run -v"),
     ]
     width = max(len(k) for k, _ in rows)
@@ -331,11 +342,11 @@ def main(argv: list[str] | None = None) -> int:
                                      f"{REL_EXE}, then print where it is. It does not start the game.")
     parser.add_argument("--skip-tests", action="store_true", help="skip the tests")
     parser.add_argument("--no-embed", action="store_true",
-                        help="do not embed offsets.json, chr_state_ids.json and design.json in the exe (copy them next to it)")
+                        help="do not embed offsets.json and creative.json in the exe (copy them next to it; names.json is always in it)")
     parser.add_argument("--engine", choices=ENGINES, default="pyinstaller", help="compiler for the exe (default: pyinstaller)")
     parser.add_argument("--icon", metavar="ICO", default=None, help="icon file (.ico) for the exe")
     parser.add_argument("--keep-app-data", action="store_true",
-                        help="do not remove %%LOCALAPPDATA%%\\EldenDisk (the vault and its save snapshots, the designs' files, the "
+                        help="do not remove %%LOCALAPPDATA%%\\EldenDisk (the vault and its save snapshots, the creative files, the "
                              "exports) before the build; by default it is removed, never while a vault in it owes a restore or the game runs")
     args = parser.parse_args(argv)
 

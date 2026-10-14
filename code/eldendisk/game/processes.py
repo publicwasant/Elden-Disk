@@ -85,6 +85,20 @@ def process_started(pid: int) -> int | None:
         _win.k32.CloseHandle(h)
 
 
+def process_alive(pid: int) -> bool:
+    """Is process `pid` still running? (False when it cannot be opened: gone, or another user's.)"""
+    if not _win.IS_WINDOWS:
+        return False
+    h = _win.k32.OpenProcess(_win.PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not h:
+        return False
+    try:
+        code = _win.wintypes.DWORD(0)
+        return bool(_win.k32.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == _win.STILL_ACTIVE
+    finally:
+        _win.k32.CloseHandle(h)
+
+
 def is_window_active(pid: int | None) -> bool:
     """True if the foreground window belongs to process `pid`, or if pid is None / non-Windows."""
     if not _win.IS_WINDOWS or pid is None:

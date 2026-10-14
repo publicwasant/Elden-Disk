@@ -69,5 +69,5 @@ def app_data_dir() -> Path:
 
 
 def default_out_dir() -> str:
-    """Where `read --export` writes disk-state.json: `%LOCALAPPDATA%\\EldenDisk\\output`."""
+    """Where `export` writes disk.json: `%LOCALAPPDATA%\\EldenDisk\\output`."""
     return str(app_data_dir() / "output")

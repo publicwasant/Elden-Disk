@@ -16,7 +16,7 @@ for the new exe — this is intentional, it never guesses).
 |  B   | Find the memory address of your **runes**                                   | 10 min                      | —                                    |
 |  C   | Turn that address into a permanent **pointer path** (Pointer Scan)          | 10–30 min (mostly waiting)  | the numbers for the profile          |
 |  D   | Put the numbers in `offsets.json` and verify level, runes and attributes    | 10 min                      | **working stats telemetry**          |
-|  E   | Buffs & Animations: verify layout and fill `chr_state_ids.json`             | 30+ min                     | buffs and animations telemetry       |
+|  E   | Buffs & Animations: verify layout and fill `names.json`             | 30+ min                     | buffs and animations telemetry       |
 |  F   | Wrap-up: back up, record, patch-day shortcut                                | 5 min                       | —                                    |
 
 Times are rough guesses for a first attempt. Later patches are much faster because you already know the routine.
@@ -256,7 +256,7 @@ python -m eldendisk run --attach -v
 
 Expected: `[CONNECTED]`. A line like `note: buffs disabled: …` is fine at this point.
 
-**D3.** `[CONNECTED]` only means the numbers were *plausible*. Now check they are *true*. Open `output\disk-state.json`
+**D3.** `[CONNECTED]` only means the numbers were *plausible*. Now check they are *true*. Open `output\disk.json`
 and compare with the in-game Status screen — **every row must match exactly**:
 
 | Field                                  | In game | JSON                     |
@@ -292,12 +292,12 @@ identical. On a throwaway character raise **one** attribute by one point and con
 ## Part E — Buffs (optional, after Part D)
 
 Buffs need two things: the **layout** of the buff list (already filled with starting values in A2 — you *verify* it) and a
-table of **buff IDs** with names (`chr_state_ids.json`, the `buffs` object).
+table of **buff IDs** with names (`names.json`, the `buffs` object).
 
 **E1. Verify the layout.** In-world, run (with the game started by `eldendisk run`):
 
 ```powershell
-python -m eldendisk read --live-buffs -q
+python -m eldendisk read monitor-buffs -q
 ```
 
 You should see a table with one row per id (`id`, `name`, `timer`, `time`), and it should stay stable.
@@ -311,14 +311,14 @@ Equip and unequip one talisman at a Site of Grace: exactly one `permanent` row m
 | IDs look random                                                                    | `sp_effect.entry.id`                 |
 | permanent buffs do not show `permanent`                                            | `sp_effect.entry.duration` / `timer` |
 
-**E2. Timer direction.** Use a buff that lasts at least 30 s (for example Golden Vow) and watch its row in `--live-buffs`:
+**E2. Timer direction.** Use a buff that lasts at least 30 s (for example Golden Vow) and watch its row in `read monitor-buffs`:
 
 - timer goes **down** from `duration` towards 0 → `"timer_mode": "remaining"`
 - timer goes **up** from 0 towards `duration` → `"timer_mode": "elapsed"`
 
 Set it in the profile. A wrong value does not crash — it reports wrong times with confidence (a fresh 80 s buff would show about 4 s left).
 
-**E3. Collect IDs.** Keep `--live-buffs` running and do one thing at a time. Note the `+` rows:
+**E3. Collect IDs.** Keep `read monitor-buffs` running and do one thing at a time. Note the `+` rows:
 
 | You do                      | You see (reference build)                                          |
 |-----------------------------|--------------------------------------------------------------------|
@@ -328,7 +328,7 @@ Set it in the profile. A wrong value does not crash — it reports wrong times w
 
 Ignore anything that flickers with a duration under 1 s (internal engine buffs; `-q` hides them) and anything whose timer stays equal to its duration forever (refreshed every frame, not a real countdown).
 
-**E4. Write `chr_state_ids.json`.** Two objects, keys are the IDs as strings. Buff ids go under `buffs`; animation ids (`read --live-animations`) go under `animations`. Each entry has a `name`, and optionally `categories` and `abilities`:
+**E4. Write `names.json`.** Two objects, keys are the IDs as strings. Buff ids go under `buffs`; animation ids (`read monitor-animations`) go under `animations`. Each entry has a `name`, and optionally `categories` and `abilities`:
 
 ```json
 {
@@ -344,9 +344,9 @@ Ignore anything that flickers with a duration under 1 s (internal engine buffs; 
 }
 ```
 
-A buff and an animation may use the same number: they are two tables. A 1.6.2 file (one flat list with a `sources` field) is converted by `python code/tools/convert_state_ids.py chr_state_ids.json`. The monitors re-read the file while they run, so names you add show at once.
+A buff and an animation may use the same number: they are two tables. A 1.6.2 file (one flat list with a `sources` field) is converted by `python code/tools/convert_state_ids.py names.json`. The monitors re-read the file while they run, so names you add show at once.
 
-**E5. End-to-end test.** While a buff is running: `python -m eldendisk read --query buffs` twice, about five seconds apart.
+**E5. End-to-end test.** While a buff is running: `python -m eldendisk read buffs` twice, about five seconds apart.
 `buff_duration` must have dropped by about five, `max_duration` must equal the duration you saw, and the buff must vanish when it ends.
 
 > 🟢 **Checkpoint E:** the buffs you configured show correct names and counting-down times in `character.buffs`.
@@ -358,7 +358,7 @@ Mapping every ID to an item name can wait. A param editor such as Smithbox lists
 
 ## Part F — Wrap-up
 
-1. **Back up** `offsets.json` and `chr_state_ids.json` (or commit them). They are the product of this whole exercise.
+1. **Back up** `offsets.json` and `names.json` (or commit them). They are the product of this whole exercise.
 2. Fill the sign-off row for your build in the spec (§7.8). Stats verified and restart-tested is "PROVISIONAL"; add a 30-minute session
    with `python tools\soak_check.py` (spec V-06) to call it "VERIFIED".
 3. **After the next game patch** run `hash` again. The tool will say `UNSUPPORTED_VERSION` (safe). Add a **new** profile under the
@@ -397,7 +397,7 @@ It reproduces the profile that was verified on this build: stats matched the in-
 }
 ```
 
-Starter `chr_state_ids.json` for the same build (IDs observed in-game):
+Starter `names.json` for the same build (IDs observed in-game):
 
 ```json
 {
@@ -435,7 +435,7 @@ A profile is pinned to one `eldenring.exe` hash, so nothing is borrowed from ano
 
 ## Optional block: `params` (since 1.6.3)
 
-`params` lets `read` / `write` reach the game's own tables (`SpEffectParam`: the game's table of effects: buffs, burns, ...). It is **optional**: a profile without it still works, and `params` is then `null` in `disk-state.json` and `write --set params...` says the game version has no params. A block that is there must be complete, or the profile is rejected (`UNSUPPORTED_VERSION: profile incomplete: params...`). The values of the 1.17.1 profile are in `code/offsets.json`; the way they were found is in `docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md`.
+`params` lets `read` / `write` reach the game's own tables (`SpEffectParam`: the game's table of effects: buffs, burns, ...). It is **optional**: a profile without it still works, and `params` is then `null` in `disk.json` and `write params...` says the game version has no params. A block that is there must be complete, or the profile is rejected (`UNSUPPORTED_VERSION: profile incomplete: params...`). The values of the 1.17.1 profile are in `code/offsets.json`; the way they were found is in `docs/experiments/params/sp-effect-params/sp-effect-params-hypothesis-report.md`.
 
 ```json
 "params": {
@@ -453,11 +453,11 @@ A profile is pinned to one `eldenring.exe` hash, so nothing is borrowed from ano
 }
 ```
 
-- **`tables.<name>`:** the name is what you type and what `disk-state.json` shows: `params.effects.<row id>.<field>`.
+- **`tables.<name>`:** the name is what you type and what `disk.json` shows: `params.effects.<row id>.<field>`.
 - **`file_layout`:** a param file in memory starts with a header (row count as `u16`, data start as `u64`), then a table of row descriptors (`descriptor_size` bytes each: row id `u32`, offset of the row data from the file start `u64`), then the rows (`row_size` bytes each). The tool requires `data_start == descriptors + row_count * descriptor_size`; this is how it knows a chain really leads to a param file. Other param files of the game have the same layout, a different `row_size` and different chains.
 - **`head_chains`:** `[...[[base + rva] + o1] + o2 ...]` is the **start of the file**: read an 8-byte pointer at `base + rva`, add `o1`, read a pointer there, and so on; the last pointer read is the file head. Cheat Engine lists these offsets the other way round (last applied first) and its final entry is the row field offset, not part of the chain. Give several chains: the first that leads to a valid file is used.
 - **`fields`:** offset inside a row, type (`f32` or `s32`), `writable`. A writable field needs `min` and `max` (the range `write` clamps to). Offsets come from the Paramdex definition of the param (`Defs/<Param>.xml`) and are reliable for the fields the definition lists; check one in the game before trusting it.
-- **`rows`:** the key is the row **id** (digits, no leading zero), `name` is a text for people (shown as `name` in `disk-state.json`, never written, and not a field name you can use); every writable field needs its game value in `defaults` (what `write --reset` puts back; take it from the CSV export of the param). The tool finds a row by id in the descriptor table. A field called `name` is rejected in `fields`.
+- **`rows`:** the key is the row **id** (digits, no leading zero), `name` is a text for people (shown as `name` in `disk.json`, never written, and not a field name you can use); every writable field needs its game value in `defaults` (what `write NAME=default` puts back; take it from the CSV export of the param). The tool finds a row by id in the descriptor table. A field called `name` is rejected in `fields`.
 
 To find the chains and the file on a new build: export the rows with Smithbox (view/export only), scan Cheat Engine for the first bytes of one row as an array of byte, find the file head (row count and data start next to it), then run a pointer scan on the head address (static addresses only, 8-byte aligned, level 4, max offset 16383) and keep the paths that are still right after restarting the game twice.
 
@@ -465,7 +465,7 @@ To find the chains and the file on a new build: export the rows with Smithbox (v
 
 ## Optional block: `text` (since 1.7.1)
 
-`text` tells `write --text` which item-text tables to look for in the game, so it can give the running game a spell's name and description. Optional: without it `write --text` says the game version has no `text` block (exit `2`). A block that is there must be complete.
+`text` tells `innovate-spells apply` which item-text tables to look for in the game, so it can give the running game a spell's name and description. Optional: without it `innovate-spells apply` says the game version has no `text` block (exit `2`). A block that is there must be complete.
 
 ```json
 "text": { "files": { "GoodsName": 10, "GoodsInfo": 20, "GoodsCaption": 24 }, "sizes": { "GoodsName": 114880, "GoodsInfo": 164208, "GoodsCaption": 975296 } }

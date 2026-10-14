@@ -7,8 +7,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import capacity  # noqa: E402
 
-from eldendisk.design.innovate_items import preflight                      # noqa: E402
-from eldendisk.design.innovate_items.spells import build, spec             # noqa: E402
+from eldendisk.creative.innovate_spells import preflight                      # noqa: E402
+from eldendisk.creative.innovate_spells import build, spec             # noqa: E402
 
 ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 
@@ -25,7 +25,7 @@ def test_a_bad_mix_is_refused(bad):
 
 def test_the_design_has_the_slots_in_order_and_a_shop_on_the_first_seven():
     d = capacity.design([("attack", 2), ("buff", 6)])
-    slots = d["innovate_items"]["spells"]["slots"]
+    slots = d["innovate_spells"]["slots"]
     filled = [(k, v) for k, v in slots.items() if v]
     assert len(slots) == 64 and len(filled) == 8
     assert [v.get("kind", "buff") for _, v in filled] == ["attack"] * 2 + ["buff"] * 6
@@ -37,7 +37,7 @@ def test_the_design_has_the_slots_in_order_and_a_shop_on_the_first_seven():
 
 
 def test_buffs_do_not_share_their_dicts():
-    d = capacity.design([("buff", 2)])["innovate_items"]["spells"]["slots"]
+    d = capacity.design([("buff", 2)])["innovate_spells"]["slots"]
     a, b = [v for v in d.values() if v]
     assert a is not b and a["effect"] is not b["effect"] and a["requires"] is not b["requires"]
 

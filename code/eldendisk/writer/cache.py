@@ -2,11 +2,11 @@
 (1.7.2). `memory-cache.json` in the vault folder, tied to the pid and the start time of the game process (like params-snapshot.json):
 a new game starts empty, and nothing of it is ever used for another process.
 
-  text  the address of each text table's pointer (the array's slots `write --text` switched) and the texts written, by goods id
+  text  the address of each text table's pointer (the array's slots `innovate-spells apply` switched) and the texts written, by goods id
   fxr   per effect file: the addresses of its copies and the colours they carry now (`main` for the plan's colours, `accent` for the
         accent places; None = the game's own)
 
-Several processes write it in the same game (`write --text` and `write --flame-color` side by side under `run`, the external scripts):
+Several processes write it in the same game (`innovate-spells apply` and the scripts under `run`):
 save() reads the file again and writes only what THIS object changed over it, under a lock file, so one step never wipes what another
 found while it was busy (seen 2026-10-13: the text step, started before the colours were painted and done after, saved its old copy over
 them, and the scripts could not change a colour).

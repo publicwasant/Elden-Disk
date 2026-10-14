@@ -1,16 +1,17 @@
-"""`write --set NAME=VALUE... --refill LIST --reset NAME...`: apply edits once to the running game, inside an authorised
-session. Names under `params.` edit the game's own tables (and `--reset` puts the game's own values back).
+"""`write NAME=VALUE ...` (1.8.0 part 2; `write --set` before): apply edits once to the running game, inside the session `run` started
+(the portal). A name is one `read` shows: `vigor=99`, `hp=1914`, `params.effects.1621000.effectEndurance=-1`, `params.Magic.6230.mp=10`,
+`creative.innovate_spells.<goods id>.design.<path>=VALUE`, `creative.resurrect.great_enemies.<id or name>.defeated=false`,
+`creative.scripts.<defaults|added>.<NAME>.state=stopped|live`. `NAME=default` puts the game's own value back (a `params` name; `params=default`:
+every one changed in this game process). `write` alone lists the names that can be written and their ranges.
 
-`write --text [--wait [SEC]]` (1.7.1) puts the text of the design's spells (name, short line, long description) into the running
-game: it rebuilds the game's three text tables and switches the game to them (writer/text.py). `run` starts it by itself after the
-game is up. Needs the same authorised session; the text lasts until the game closes.
+The spells' texts and colours (`innovate-spells apply`, 1.7.1 `write --text` / `write --flame-color`) are written here too:
+`cmd_write_text` puts the text of the spells (name, short line, long description) into the running game: it rebuilds the game's three
+text tables and switches the game to them (writer/text.py); `cmd_write_flame` recolours the fire of Flame, Grant Me Strength (the fire
+while casting and the burst; the fire on the body is left alone) with the spells' `flame_color` (writer/fxr.py). `run` starts them after
+the game is up; the same session, and they last until the game closes.
 
-`write --flame-color [--wait [SEC]]` (1.7.1) recolours the fire of Flame, Grant Me Strength (the fire while casting and the burst; the fire
-on the body is left alone) in the running game with the design's `flame_color` (writer/fxr.py). `run` starts it after the game is up too;
-same session, same life span.
-
-`--when-loaded` (what `run` starts, with --text and --flame-color): wait until a character is in the world (the player exists: the chain
-`read` follows), then write ONCE and end. Nothing watches the game afterwards. The text tables stay as written when the world is
+`--when-loaded` (what `run` starts): wait until a character is in the world (the player exists: the chain `read` follows), then write
+ONCE and end. Nothing watches the game afterwards. The text tables stay as written when the world is
 loaded again (seen in the game's log). Both steps FIND what they change by looking through the game's memory (writer/scan.py): the
 effect files by their colours (writer/fxr.py), the text tables by their shape and the array that points at them (writer/text.py);
 no fixed chain from the exe is used for either, because the one for the text did not hold from run to run."""
@@ -21,12 +22,13 @@ from pathlib import Path
 
 from ..console import require_windows_x64
 from ..logbook import book
-from ..design.innovate_items.fmg import Fmg, FmgError
+from ..creative.innovate_spells.fmg import Fmg, FmgError
 from ..game.attach import EXIT_ERROR, EXIT_NO_SESSION, EXIT_UNSUPPORTED, AttachError, Target, locate
-from ..game.layout import LEVEL_RANGE, Layout
+from ..game.layout import ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout
 from ..game.memory import read_u32
 from ..game.params import ParamLockedError, ParamNameError
 from ..game.processes import process_started
+from ..game.values import is_param_name
 from ..vault import VaultError, authorise, resolve_vault
 from ..vault import session as vault_session
 from ..writer.paramedit import SNAPSHOT_NAME, Snapshot
@@ -35,9 +37,9 @@ from ..writer import scan as wscan
 from ..writer import text as wtext
 from ..writer.cache import CACHE_NAME, MemoryCache
 from ..writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
-from .design import design_folder, spec_file
-from .. import design
-from ..design.innovate_items.spells.service import DesignError
+from .innovate import creative_folder, spec_file
+from .. import creative
+from ..creative.innovate_spells.service import CreativeError
 
 TEXT_TABLES = {"GoodsName": "goods_name", "GoodsInfo": "goods_info", "GoodsCaption": "goods_captions"}   # game table -> field of `text`
 POLL, SETTLE = 1.0, 3.0     # seconds between looks for the game's modules; seconds to see that the game kept the new tables
@@ -171,7 +173,7 @@ def _put_text(mem, gate, target: Target, texts: dict, passes, cache: MemoryCache
         if all(t is not None and t.data == after[at] for at, t in kept.items()):
             break
         if attempt == 2:
-            book.e("write", "the game replaced its text tables again after they were set; run `eldendisk write --text` again")
+            book.e("write", "the game replaced its text tables again after they were set; run `eldendisk innovate-spells apply` again")
             return 1
         book.w("write", "the game replaced its text tables after they were set (it was still loading); setting them once more")
     if cache is not None:                       # where the pointers are and what they hold now: a later write needs no look
@@ -223,7 +225,7 @@ def _wait_world(mem, target: Target, name: str, tag: str = "write", stable: floa
 
 def _attach(args, wait: float):
     """The running game of an authorised session -> (target, None), or (None, the exit code) after saying why. Shared by the
-    steps `run` starts (--text, --flame-color)."""
+    steps `run` starts (`innovate-spells apply`, `resurrect`, the scripts)."""
     try:
         vault_root = resolve_vault(args.vault)
         record = vault_session.load(vault_root)
@@ -254,17 +256,17 @@ def _authorised(target: Target, record) -> bool:
 
 
 def cmd_write_text(args) -> int:
-    """`write --text [--wait [SEC] | --when-loaded]`: see the module text."""
+    """The texts of `innovate-spells apply [--when-loaded]`: see the module text."""
     require_windows_x64()
     when_loaded = bool(getattr(args, "when_loaded", False))
     wait = ATTACH_WAIT if when_loaded else float(getattr(args, "wait", 0) or 0)
     try:
-        ci = design.open_spells(design_folder(args), spec_file(args))
-        sel, note = ci.selection()          # the spells the build holds: the last `--add` chose them
+        ci = creative.open_spells(creative_folder(args), spec_file(args))
+        sel, note = ci.selection()          # the spells the build holds: the last `innovate-spells build` chose them
         if note:
-            book.w("write", f"innovate-items spells: {note}")
+            book.w("write", f"innovate-spells: {note}")
         texts = ci.texts(sel)
-    except DesignError as exc:
+    except CreativeError as exc:
         book.e("write", str(exc))
         return 1
     target, code, record = _attach(args, wait)
@@ -281,7 +283,7 @@ def cmd_write_text(args) -> int:
         gate = WriteGate()
         gate.open()   # only after the session, anti-cheat and profile checks above
         if when_loaded:
-            if not _wait_world(mem, target, "goods text"):
+            if not _wait_world(mem, target, "goods text", stable=0.0 if getattr(args, "world_ready", False) else None):
                 book.i("write", "goods text: the game closed before a character was in the world; nothing was written")
                 return 0
             return _put_text(mem, gate, target, texts, LOOKS, _cache_of(args, target))
@@ -292,7 +294,7 @@ def cmd_write_text(args) -> int:
 
 def _shown(rgb) -> str:
     """A colour in a log line as the design writes it: "#90D5FF", or the numbers when a channel is above 1."""
-    from ..design.innovate_items.spells.spec import colour_text
+    from ..creative.innovate_spells.spec import colour_text
     t = colour_text(rgb)
     return t if isinstance(t, str) else str(tuple(round(c, 3) for c in rgb))
 
@@ -371,26 +373,27 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=Fal
 
 
 def cmd_write_flame(args) -> int:
-    """`write --flame-color [--wait [SEC] | --when-loaded]`: see the module text. The positive curse energy eyes get their colour in the same step."""
+    """The colours of `innovate-spells apply [--when-loaded]`: see the module text. The positive curse energy eyes get their colour in the
+    same step."""
     require_windows_x64()
     when_loaded = bool(getattr(args, "when_loaded", False))
     wait = ATTACH_WAIT if when_loaded else float(getattr(args, "wait", 0) or 0)
     try:
-        ci = design.open_spells(design_folder(args), spec_file(args))
+        ci = creative.open_spells(creative_folder(args), spec_file(args))
         sel, note = ci.selection()
         if note:
-            book.w("write", f"innovate-items spells: {note}")
+            book.w("write", f"innovate-spells: {note}")
         colour, cnote = ci.flame_color(sel)
         eyes, enote = ci.eyes_color(sel)
         accent, anote = ci.flame_accent_color(sel)
-    except DesignError as exc:
+    except CreativeError as exc:
         book.e("write", str(exc))
         return 1
     for n in (cnote, enote, anote):
         if n:
             book.w("write", n)
     if colour is None and eyes is None:
-        book.i("write", "no spell of the design names a flame_color or a positive_curse_energy_eyes color: nothing to do")
+        book.i("write", "no spell names a flame_color or a positive_curse_energy_eyes color: no colour to put")
         return 0
     target, code, record = _attach(args, wait)
     if target is None:
@@ -403,7 +406,7 @@ def cmd_write_flame(args) -> int:
         gate = WriteGate()
         gate.open()   # only after the session and anti-cheat checks above
         if when_loaded:
-            if not _wait_world(mem, target, "flame colour"):
+            if not _wait_world(mem, target, "flame colour", stable=0.0 if getattr(args, "world_ready", False) else None):
                 book.i("write", "flame colour: the game closed before a character was in the world; nothing was written")
                 return 0
             return _put_flame(mem, gate, colour, LOOKS, eyes, accent, fresh=True, cache=_cache_of(args, target))
@@ -413,13 +416,15 @@ def cmd_write_flame(args) -> int:
 
 
 def ext_value(raw: str):
-    """The value of `--set design....=VALUE` as typed: a number, `null` (the game's own colour), or a text / a hex colour (quotes
-    around it are taken off)."""
+    """The value of `write creative....=VALUE` as typed: a number, `null` or `default` (the game's own colour), `true` / `false`, or a
+    text / a hex colour (quotes around it are taken off)."""
     t = raw.strip()
     if len(t) >= 2 and t[0] == t[-1] and t[0] in "'\"":
         return t[1:-1]
-    if t.lower() in ("null", "none"):
+    if t.lower() in ("null", "none", "default"):
         return None
+    if t.lower() in ("true", "false"):
+        return t.lower() == "true"
     for kind in (int, float):
         try:
             return kind(t.replace("_", "")) if kind is int else kind(t)
@@ -428,19 +433,20 @@ def ext_value(raw: str):
     return t
 
 
-def _write_design(args, target: Target, mem, gate, snapshot, sets: list) -> tuple[int, int]:
-    """`--set design.innovate_items.spells.<goods id>.<path>=VALUE` (1.7.2): the values of the design's spells in the running
-    game (design/external_scripts/backend.py). -> (written, refused)."""
-    from ..design.external_scripts.backend import DesignLive, Refused, design_path, enemy_path
+def _write_creative(args, target: Target, mem, gate, snapshot, sets: list) -> tuple[int, int]:
+    """`write creative.innovate_spells.<goods id>.design.<path>=VALUE` (1.7.2) and `creative.resurrect.great_enemies.<id or
+    name>.defeated=false` (1.8.0): the values of the spells and the great enemies in the running game (creative/scripts/backend.py).
+    -> (written, refused)."""
+    from ..creative.scripts.backend import CreativeLive, Refused, spell_path, enemy_path
     vault_root = resolve_vault(args.vault)
     try:
-        resolved = design.open_spells(design_folder(args, vault_root), spec_file(args)).resolved_path
-    except DesignError as exc:
+        resolved = creative.open_spells(creative_folder(args, vault_root), spec_file(args)).resolved_path
+    except CreativeError as exc:
         if not all(enemy_path(s.partition("=")[0]) for s in sets):      # the great enemies need no build
             book.e("write", str(exc))
             return 0, len(sets)
         resolved = None
-    live = DesignLive(mem, target, vault_root, resolved, gate=gate, snapshot=snapshot,
+    live = CreativeLive(mem, target, vault_root, resolved, gate=gate, snapshot=snapshot,
                          say=lambda level, msg: {"W": book.w, "E": book.e, "D": book.d}.get(level, book.i)("write", msg))
     ok = bad = 0
     for item in sets:
@@ -450,7 +456,7 @@ def _write_design(args, target: Target, mem, gate, snapshot, sets: list) -> tupl
             if enemy is not None:
                 got = live.apply_enemy(enemy[0], enemy[1], ext_value(raw))
             else:
-                goods, parts = design_path(name)
+                goods, parts = spell_path(name)
                 got = live.apply(goods, parts, ext_value(raw))
             for what, value in got.items():
                 book.ok("write", f"{name.strip()} = {value}  ({what})")
@@ -461,29 +467,96 @@ def _write_design(args, target: Target, mem, gate, snapshot, sets: list) -> tupl
     return ok, bad
 
 
+WRITABLE_NAMES = [   # what `write` alone lists: (name, range or values, what it is)
+    ("level", f"{LEVEL_RANGE[0]}-{LEVEL_RANGE[1]}", "the character's level (the runes it cost are not given back)"),
+    ("runes", f"0-{RUNES_MAX:,}", "the runes held (character.runes.total)"),
+    ("vigor  mind  endurance  strength  dexterity  intelligence  faith  arcane", f"{ATTR_RANGE[0]}-{ATTR_RANGE[1]}",
+     "the attributes (attrs.* for every one)"),
+    ("hp  fp  stamina", "0-maximum", "the current value (a number above the maximum is the maximum)"),
+    ("params.effects.<id>.<field>", "the field's type, or default", "the rows offsets.json names (Black Flame 1621000, ...); a pattern "
+     "such as params.effects.*.effectEndurance writes every row"),
+    ("params.<Table>.<id>.<field>", "the field's type, or default", "any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup"),
+    ("params", "default", "every params value changed in this game process back to the game's own"),
+    ("creative.innovate_spells.<goods id>.design.<path>", "as the design says", "the spells of the last build: requires.*, customs.basic.*, "
+     "customs.advanced.texts.*, customs.advanced.colors.* (`read creative.innovate_spells` shows them)"),
+    ("creative.resurrect.great_enemies.<id or name>.defeated", "false", "brings a defeated great enemy back (`resurrect NAME`)"),
+    ("creative.scripts.<defaults|added>.<NAME>.state", "stopped, live", "stops or starts a script (`scripts stop | start NAME`)"),
+]
+
+
+def cmd_write_names(args) -> int:
+    """`write` alone: the names that can be written and their ranges. Writes nothing."""
+    from .. import ui
+    ui.result("info", "write NAME=VALUE ... (inside the session `run` started; NAME=default: the game's own value)")
+    ui.fields([(name, f"{rng}: {what}") for name, rng, what in WRITABLE_NAMES])
+    return 0
+
+
+def _scripts_state(args, items: list[str]) -> int:
+    """`creative.scripts.<group>.<NAME>.state=stopped|live`: the same as `scripts stop | start NAME`, to the running host (`write` never
+    becomes the host itself)."""
+    from .scripts import _ask, _status
+    folder, _st, running = _status(args)
+    if not running:
+        book.e("write", "no scripts' host runs: `scripts start` starts it (inside the session `run` started)")
+        return 1
+    code = 0
+    for item in items:
+        name, _sep, raw = item.partition("=")
+        parts = name.strip().split(".")
+        value = raw.strip().strip("'\"").lower()
+        if len(parts) != 5 or parts[2].lower() not in ("defaults", "added") or parts[4].lower() != "state" or value not in ("stopped", "live"):
+            book.e("write", f"{item!r}: expected creative.scripts.<defaults|added>.<NAME>.state=stopped or =live")
+            return 1
+        code = _ask(folder, "stop" if value == "stopped" else "start", parts[3]) or code
+    return code
+
+
 def cmd_write(args) -> int:
-    if getattr(args, "text", False):
-        return cmd_write_text(args)
-    if getattr(args, "flame_color", False):
-        return cmd_write_flame(args)
+    """`write NAME=VALUE ...` (and `write` alone: the list of names)."""
+    pairs = [w for w in (getattr(args, "pairs", None) or []) if w.strip()]
+    if not pairs:
+        return cmd_write_names(args)
     require_windows_x64()
-    ext_sets = [s for s in (args.set or []) if s.strip().lower().startswith("design.")]
+    for item in pairs:
+        if "=" not in item or not item.partition("=")[0].strip():
+            book.e("write", f"{item!r}: expected NAME=VALUE (`write` alone lists the names)")
+            return 1
+    def head(item):
+        return item.partition("=")[0].strip().lower()
+    scripts = [s for s in pairs if head(s).startswith("creative.scripts.")]
+    ext_sets = [s for s in pairs if head(s).startswith("creative.") and s not in scripts]
     for item in ext_sets:
-        name, sep, _raw = item.partition("=")
-        head = [p.lower() for p in name.strip().split(".")[:3]]
-        if not sep or len(name.strip().split(".")) < 5 or head not in (["design", "innovate_items", "spells"],
-                                                                       ["design", "resurrect", "great_enemies"]):
-            book.e("write", f"--set {item!r}: expected design.innovate_items.spells.<goods id>.<path>=VALUE or "
-                            "design.resurrect.great_enemies.<id or name>.defeated=false")
+        name = item.partition("=")[0].strip()
+        parts = [p.lower() for p in name.split(".")]
+        if not ((parts[:2] == ["creative", "innovate_spells"] and len(parts) >= 5)
+                or (parts[:3] == ["creative", "resurrect", "great_enemies"] and len(parts) >= 5)):
+            book.e("write", f"{item!r}: expected creative.innovate_spells.<goods id>.design.<path>=VALUE, "
+                            "creative.resurrect.great_enemies.<id or name>.defeated=false or creative.scripts.<defaults|added>.<NAME>.state=...")
+            return 1
+    sets, resets = [], []
+    for item in pairs:
+        if item in ext_sets or item in scripts:
+            continue
+        name, _sep, raw = item.partition("=")
+        if raw.strip().lower() != "default":
+            sets.append(item)
+            continue
+        if name.strip().lower() in ("params", "params.*"):
+            resets.append("all")
+        elif is_param_name(name):
+            resets.append(name.strip())
+        else:
+            book.e("write", f"{item!r}: `default` is the game's own value of a params name; {name.strip()} is your character's "
+                            "(write the number)")
             return 1
     try:
-        policy = parse_policy([s for s in (args.set or []) if s not in ext_sets], args.refill, getattr(args, "reset", None))
+        policy = parse_policy(sets, None, resets)
     except ValueError as exc:   # unknown or unsettable name, bad value
         book.e("write", str(exc))
         return 1
-    if policy.empty and not ext_sets:
-        book.i("write", "nothing to do")
-        return 0
+    if scripts and policy.empty and not ext_sets:
+        return _scripts_state(args, scripts)
 
     try:
         vault_root = resolve_vault(args.vault)
@@ -497,7 +570,7 @@ def cmd_write(args) -> int:
         book.e("write", str(exc))
         return exc.code
 
-    snapshot = Snapshot(vault_root / SNAPSHOT_NAME, target.pid, target.started)    # the game's own values, for --reset
+    snapshot = Snapshot(vault_root / SNAPSHOT_NAME, target.pid, target.started)    # the game's own values, for NAME=default
     snapshot.load()
     try:   # what the params names mean needs the profile; a read-only field is refused before the session is looked at
         policy, notes = plan_params(target.profile.params, policy, snapshot)
@@ -525,13 +598,13 @@ def cmd_write(args) -> int:
         writer = MemoryWriter(mem, Layout(mem, target.profile, target.base), policy, gate,
                               log=lambda m: book.d("write", m), snapshot=snapshot)
         results = writer.apply_once()
-        ext_ok, ext_bad = _write_design(args, target, mem, gate, snapshot, ext_sets) if ext_sets else (0, 0)
+        ext_ok, ext_bad = _write_creative(args, target, mem, gate, snapshot, ext_sets) if ext_sets else (0, 0)
     finally:
         mem.close()
         try:
             snapshot.save()
         except OSError as exc:
-            book.w("write", f"could not save {SNAPSHOT_NAME} ({exc}); --reset of these values will not find the game's own value")
+            book.w("write", f"could not save {SNAPSHOT_NAME} ({exc}); NAME=default of these values will not find the game's own value")
 
     failed = [r.name for r in results if not r.wrote]
     for r in results:
@@ -547,4 +620,4 @@ def cmd_write(args) -> int:
         return 1
     if not results and not ext_ok:
         book.i("write", "values already match")
-    return 0
+    return _scripts_state(args, scripts) if scripts else 0

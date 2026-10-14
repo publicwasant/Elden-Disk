@@ -59,7 +59,7 @@ def test_the_status_says_where_the_exe_is_how_big_and_how_long(project, monkeypa
     text = "\n".join(dev_pipeline.status_lines(layout=layout, engine="pyinstaller", embed=True,
                                               configs=dev_pipeline.config_files(layout), tests_s=75.0, build_s=42.5, total_s=130.0))
     assert str(exe) in text and "2,048 bytes" in text and "1 min 15.0 s" in text and "42.5 s" in text and "2 min 10.0 s" in text
-    assert "offsets.json, chr_state_ids.json, design.json embedded in the exe" in text
+    assert "offsets.json, creative.json embedded in the exe" in text
     assert dev_pipeline._sha256(exe) in text and dev_pipeline.__version__ in text
     assert "build\\dist\\eldendisk.exe run -v" in text and "EldenDisk" in text
     assert "skipped" in "\n".join(dev_pipeline.status_lines(layout=layout, engine="nuitka", embed=False, configs=[],
@@ -129,9 +129,10 @@ def project(tmp_path, monkeypatch):
     code = tmp_path / "code"
     (code / "eldendisk").mkdir(parents=True)
     (code / "offsets.json").write_text("{}")
-    (code / "chr_state_ids.json").write_text("{}")
+    (code / "eldendisk" / "reader").mkdir()
+    (code / "eldendisk" / "reader" / "names.json").write_text("{}")     # 1.8.0: the reader's, always in the exe
     (code / "eldendisk" / "__main__.py").write_text("")
-    (code / "design.json").write_text('{"innovate_items": {"spells": {"maximum": 1, "slots": {"<id-1>": null}}}}')
+    (code / "creative.json").write_text('{"innovate_spells": {"maximum": 1, "slots": {"<id-1>": null}}}')
     monkeypatch.setattr(dev_pipeline, "ROOT_DIR", tmp_path)
     monkeypatch.setattr(dev_pipeline, "CODE_DIR", code)
     return tmp_path
@@ -154,25 +155,27 @@ def test_pyinstaller_puts_the_exe_in_build_dist_and_embeds_the_configs(project, 
     assert ok and "PyInstaller" in cmd and "--onefile" in cmd and f"--distpath={project / 'build' / 'dist'}" in cmd
     adds = [c for c in cmd if c.startswith("--add-data=")]
     assert len(adds) == 3 and not any("schema" in a for a in adds)
-    assert any(a.endswith("design.json;.") or a.endswith("design.json:.") for a in adds)
+    assert any(a.endswith("creative.json;.") or a.endswith("creative.json:.") for a in adds)
+    assert any(a.endswith(("names.json;eldendisk/reader", "names.json:eldendisk/reader")) for a in adds)
     assert not (project / "build" / "dist" / "offsets.json").exists()          # embedded: nothing copied
 
 
 def test_the_great_enemies_table_goes_into_the_exe_next_to_its_package(project, monkeypatch):
-    table = project / "code" / "eldendisk" / "design" / "resurrect" / "great_enemies" / "great_enemies.json"
+    table = project / "code" / "eldendisk" / "creative" / "resurrect" / "great_enemies" / "great_enemies.json"
     table.parent.mkdir(parents=True, exist_ok=True)
     table.write_text("{}", encoding="utf-8")
     for embed in (True, False):                     # package data the code reads next to itself: with or without --no-embed
         ok, calls = build(monkeypatch, embed=embed)
         adds = [c for c in calls[0] if c.startswith("--add-data=")]
-        assert ok and any(a.endswith(("great_enemies.json;eldendisk/design/resurrect/great_enemies",
-                                      "great_enemies.json:eldendisk/design/resurrect/great_enemies")) for a in adds)
+        assert ok and any(a.endswith(("great_enemies.json;eldendisk/creative/resurrect/great_enemies",
+                                      "great_enemies.json:eldendisk/creative/resurrect/great_enemies")) for a in adds)
 
 
 def test_nuitka_embeds_and_names_the_exe(project, monkeypatch):
     ok, calls = build(monkeypatch, engine="nuitka")
     inc = [c for c in calls[0] if c.startswith("--include-data-files=")]
-    assert ok and len(inc) == 3 and inc[0].endswith("=offsets.json") and inc[-1].endswith("=design.json")
+    assert ok and len(inc) == 3 and inc[0].endswith("=offsets.json") and inc[1].endswith("=creative.json")
+    assert inc[2].endswith("=eldendisk/reader/names.json")
     assert "--output-filename=eldendisk.exe" in calls[0] and f"--output-dir={project / 'build' / 'dist'}" in calls[0]
 
 
@@ -180,8 +183,9 @@ def test_nuitka_embeds_and_names_the_exe(project, monkeypatch):
 def test_without_embedding_the_editable_configs_go_next_to_the_exe(project, monkeypatch, engine):
     ok, calls = build(monkeypatch, embed=False, engine=engine)
     out = project / "build" / "dist"
-    assert ok and (out / "offsets.json").exists() and (out / "chr_state_ids.json").exists() and (out / "design.json").exists()
-    assert not any(c.startswith(("--add-data=", "--include-data-files=")) for c in calls[0])
+    assert ok and (out / "offsets.json").exists() and (out / "creative.json").exists() and not (out / "names.json").exists()
+    data = [c for c in calls[0] if c.startswith(("--add-data=", "--include-data-files="))]
+    assert len(data) == 1 and "names.json" in data[0]                      # names.json is always in the exe
 
 
 def test_a_failed_build_returns_false_and_copies_nothing(project, monkeypatch):
@@ -256,7 +260,7 @@ def test_a_failed_build_writes_no_readme(project, monkeypatch):
 def test_the_real_docs_make_a_readme():
     root = Path(__file__).resolve().parents[2]
     text = dev_pipeline.exe_readme({"project_root": root})
-    assert text and "# Command reference" in text and "## 1. `run` (host)" in text and "{version}" not in text
+    assert text and "# Command reference" in text and "## 1. `run`: the portal" in text and "{version}" not in text
     assert "Standalone Executable CLI Commands Reference" not in text    # the reference's own title is replaced
     assert "`build`" not in text.split("# Command reference", 1)[1].split("## 1.")[0]
 
@@ -280,8 +284,8 @@ def app_data(monkeypatch):
     d = dev_pipeline.app_data_dir()
     (d / "vault" / "20261012-185726").mkdir(parents=True)
     (d / "vault" / "eldendisk.log").write_text("x")
-    (d / "output" / "disk-state.json").parent.mkdir(parents=True)
-    (d / "output" / "disk-state.json").write_text("{}")
+    (d / "output" / "disk.json").parent.mkdir(parents=True)
+    (d / "output" / "disk.json").write_text("{}")
     return d
 
 
@@ -325,7 +329,7 @@ def test_only_the_exact_folder_may_be_removed(tmp_path, monkeypatch):
 
 # ---------- the external scripts of external_scripts/defaults travel with the exe (1.7.2) ----------
 def _defaults(project, *names):
-    defaults = project / "code" / "eldendisk" / "design" / "external_scripts" / "defaults"
+    defaults = project / "code" / "eldendisk" / "creative" / "scripts" / "defaults"
     defaults.mkdir(parents=True, exist_ok=True)
     for n in names:
         (defaults / n).write_text("# a script\n")
@@ -337,22 +341,22 @@ def test_the_default_scripts_are_embedded_in_the_exe(project, monkeypatch):
     _defaults(project, "heartbeat.py", "_helper.py")
     ok, calls = build(monkeypatch)
     adds = [c for c in calls[0] if c.startswith("--add-data=")]
-    assert ok and len(adds) == 4 and any(a.endswith(("heartbeat.py;external-scripts", "heartbeat.py:external-scripts")) for a in adds)
+    assert ok and len(adds) == 4 and any(a.endswith(("heartbeat.py;scripts", "heartbeat.py:scripts")) for a in adds)
     assert not any("_helper" in a or "README" in a for a in adds)
 
 
 def test_nuitka_embeds_the_scripts_in_the_same_folder(project, monkeypatch):
     _defaults(project, "heartbeat.py")
     ok, calls = build(monkeypatch, engine="nuitka")
-    assert any(c.endswith("=external-scripts/heartbeat.py") for c in calls[0] if c.startswith("--include-data-files="))
+    assert any(c.endswith("=scripts/heartbeat.py") for c in calls[0] if c.startswith("--include-data-files="))
 
 
 def test_without_embedding_the_scripts_go_next_to_the_exe(project, monkeypatch):
     _defaults(project, "heartbeat.py")
     ok, _calls = build(monkeypatch, embed=False)
-    assert ok and (project / "build" / "dist" / "external-scripts" / "heartbeat.py").is_file()
+    assert ok and (project / "build" / "dist" / "scripts" / "heartbeat.py").is_file()
 
 
 def test_no_scripts_no_folder_embedded(project, monkeypatch):
     ok, calls = build(monkeypatch)
-    assert ok and not any("external-scripts" in c for c in calls[0])
+    assert ok and not any(c.endswith((";scripts", ":scripts")) or "=scripts/" in c for c in calls[0])

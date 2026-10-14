@@ -1,7 +1,7 @@
 """A backend for edstdlib without the game (tests only): a document, the writes applied to it, the log lines kept."""
 import copy
 
-from eldendisk.design.external_scripts import edstdlib as ed
+from eldendisk.creative.scripts import edstdlib as ed
 
 DOC = {
     "systems": {"status": {"pid": 1, "tool_state": "CONNECTED"}},
@@ -13,21 +13,23 @@ DOC = {
         "runes": {"total": 1234, "baseline": 1234, "delta": 0},
         "attributes": {"vigor": 60, "mind": 20, "endurance": 20, "strength": 20, "dexterity": 20, "intelligence": 10, "faith": 60,
                        "arcane": 10},
-        "buffs": {"21951000": {"name": "reverse_cursed_technique", "categories": "DESIGN"}},
+        "buffs": {"21951000": {"name": "reverse_cursed_technique", "categories": "CREATIVE"}},
         "animations": {},
         "equipment": {"magic": {"selected": {"slot": 1, "id": 2230000}, "slots": {"1": 2230000, "2": 6420}}},
     },
     "params": {"effects": {"1621000": {"name": "Black Flame", "effectEndurance": 2.0}}},
-    "design": {"innovate_items": {"spells": {"2230000": {
+    "creative": {"innovate_spells": {"2230000": {
         "id": "reverse_cursed_technique", "slot": 1,
         "rows": {"goods": 2230000, "magic": 2230000, "sp_effect": [21951000], "bullet": [], "atk": [], "shop": 100508},
-        "kind": "projectile", "from": 6421,
-        "requires": {"status": {"faith": 60}, "cost": {"focus_point": 120}},
-        "customs": {"basic": {"SpEffect.1642100.effectEndurance": 20.0},
-                    "advanced": {"texts": {"goods_name": "Reverse Cursed Technique"},
-                                 "colors": {"Magic.6421.castSfxId": {"main": "#90D5FF", "accent": "#FF909E"},
-                                            "SpEffect.1642100": "#90D5FF"}}},
-    }}}},
+        "design": {
+            "kind": "projectile", "from": 6421,
+            "requires": {"status": {"faith": 60}, "cost": {"focus_point": 120}},
+            "customs": {"basic": {"SpEffect.1642100.effectEndurance": 20.0},
+                        "advanced": {"texts": {"goods_name": "Reverse Cursed Technique"},
+                                     "colors": {"Magic.6421.castSfxId": {"main": "#90D5FF", "accent": "#FF909E"},
+                                                "SpEffect.1642100": "#90D5FF"}}},
+        },
+    }}},
 }
 
 

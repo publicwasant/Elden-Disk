@@ -277,7 +277,7 @@ def test_a_catalog_with_an_unknown_table_is_refused(tmp_path):
 
 
 def test_the_layouts_agree_with_the_ones_innovate_items_uses():
-    from eldendisk.design.innovate_items.paramdefs import PARAMDEFS
+    from eldendisk.creative.innovate_spells.paramdefs import PARAMDEFS
     for ext, ours in {"goods": "Goods", "magic": "Magic", "sp": "SpEffect", "shop": "ShopLineup"}.items():
         assert PARAMDEFS[ext]["size"] == LAYOUTS[ours]["size"]
         assert PARAMDEFS[ext]["fields"] == LAYOUTS[ours]["fields"]
@@ -290,8 +290,8 @@ ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 @pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
 def test_every_row_of_the_real_tables_decodes_and_black_flame_is_where_the_survey_found_it():
     import struct as st
-    from eldendisk.design.innovate_items import bases, container, zstd
-    from eldendisk.design.innovate_items.container import Bnd4
+    from eldendisk.creative.innovate_spells import bases, container, zstd
+    from eldendisk.creative.innovate_spells.container import Bnd4
     data = Path(ORIG).read_bytes()
     assert hashlib.sha256(data).hexdigest() == bases.BASES[bases.CURRENT_BASE]
     dcx = container.decrypt(data)

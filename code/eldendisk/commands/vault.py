@@ -94,7 +94,7 @@ def cmd_status(args) -> int:
     else:
         ui.result("ok", "no unresolved session, the live save is trusted")
     if s["legacy_world"]:
-        rows.append(("regulation", f"{s['legacy_world']} is no longer read (since 1.7.0); see `eldendisk design --list`"))
+        rows.append(("regulation", f"{s['legacy_world']} is no longer read (since 1.7.0); see `eldendisk innovate-spells`"))
     rows.append(("snapshots", f"{s['snapshots']}, last {s['last'] or '-'}"
                  + (", verified" if s["last"] and not s["last_problems"] else "")))
     if s["last"] and s["last_problems"]:

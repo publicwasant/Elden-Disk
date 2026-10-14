@@ -1,4 +1,4 @@
-"""`read --probe-params`: where are the param files of the other tables in the game's memory? (read-only)
+"""`probe`: where are the param files of the other tables in the game's memory? (read-only)
 
 The profile holds three pointer chains to SpEffectParam. Each is `exe + rva -> [selector] -> tail...`; the first step
 after the global (the selector) is a slot in an object that holds one entry per table, the tail is the same for every

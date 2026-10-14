@@ -19,11 +19,11 @@
         },
         "features": {
           "type": "object",
-          "required": ["buffs_supported", "animations_supported", "sandbox_supported"],
+          "required": ["buffs_supported", "animations_supported", "creative_supported"],
           "properties": {
             "buffs_supported": { "type": "boolean" },
             "animations_supported": { "type": "boolean" },
-            "sandbox_supported": { "type": "boolean" }
+            "creative_supported": { "type": "boolean" }
           }
         },
         "status": {
@@ -46,11 +46,11 @@
         },
         "session": {
           "type": "object",
-          "required": ["mode", "read_only", "sandbox"],
+          "required": ["mode", "read_only", "creative"],
           "properties": {
             "mode": { "type": "string" },
             "read_only": { "type": "boolean" },
-            "sandbox": { "type": "boolean" }
+            "creative": { "type": "boolean" }
           }
         },
         "errors": {
@@ -192,17 +192,31 @@
         }
       }
     },
-    "design": {
+    "creative": {
       "type": ["object", "null"],
-      "description": "1.7.2: the design's spells of the last build (design.innovate_items.spells.<goods id>) with what the game holds now; 1.8.0: the great enemies (design.resurrect.great_enemies.<id>: name, place, grace, runes, drop, story, dlc, defeated) when the profile has an event_flags block; null when there is neither.",
+      "description": "1.8.0: what exists only in the parallel world. scripts: the scripts' host and every script (from its status file); innovate_spells.<goods id>: the spells of the last build (id, slot, rows) with their design and what the game holds now; resurrect.great_enemies.<id>: the great enemies that are defeated now (name, place, grace, runes, drop, story, dlc, defeated: true). A part without data is left out; null when there is none.",
       "properties": {
-        "innovate_items": {
+        "scripts": {
+          "type": "object",
+          "required": ["host", "defaults", "added"],
+          "properties": {
+            "host": { "type": ["object", "null"] },
+            "defaults": { "type": "object" },
+            "added": { "type": "object" }
+          }
+        },
+        "innovate_spells": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[1-9][0-9]*$" },
+          "additionalProperties": { "type": "object", "required": ["id", "slot", "rows", "design"] }
+        },
+        "resurrect": {
           "type": "object",
           "properties": {
-            "spells": {
+            "great_enemies": {
               "type": "object",
               "propertyNames": { "pattern": "^[1-9][0-9]*$" },
-              "additionalProperties": { "type": "object", "required": ["id", "slot", "rows"] }
+              "additionalProperties": { "type": "object", "required": ["name", "defeated"] }
             }
           }
         }

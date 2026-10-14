@@ -1,5 +1,5 @@
-"""`write --set params.<Table>.<id>.<field>=…` and `--reset` for the six workbench tables (Phase 1, step 1.3): range-checked,
-bit-exact, the game's own value remembered before the first change and put back by `--reset`."""
+"""`write params.<Table>.<id>.<field>=…` and `=default` for the six workbench tables (Phase 1, step 1.3): range-checked, bit-exact,
+the game's own value remembered before the first change and put back by `NAME=default`."""
 import json
 import struct
 

@@ -190,7 +190,7 @@
 
 - Three **names** are shortcuts: `flame` = `1605000`, `flask` = `5030` (the glow of a Flask of Crimson Tears), `none` = `-1`.
 - **Any other number is accepted but untried.** The tool checks that some effect of the game uses it (the game has about 1,000 such numbers; the table below lists the **72 used by the effects of spells**). A visual may be made for something else (the weapon, the hit, a boss) and show nothing on a body, or show it somewhere odd. Try it and see.
-- A spell can have several effects with several visuals; the table lists each visual with the spells whose effects use it and a few of the effect rows (`SpEffect` ids; read them with `eldendisk read --param SpEffect.<id>`).
+- A spell can have several effects with several visuals; the table lists each visual with the spells whose effects use it and a few of the effect rows (`SpEffect` ids; read them with `eldendisk read params.SpEffect.<id>`).
 - Only the home-made spell (kind `buff` without `from`) has `effect.visual`. To change the look of a copied spell, use `set` on its `SpEffect` rows (`vfxId` is one of the fields in section 7.8 of the handbook).
 
 | Visual | Spells whose effects use it | Effect rows | Name |

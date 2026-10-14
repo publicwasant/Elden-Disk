@@ -1,18 +1,19 @@
-"""`read`: look at the game's values. Read-only; it never opens a write handle.
+"""`read` and the Data commands (`export`, `check`, `probe`, `reset`): the game's values. Read-only; they never open a write handle.
 
-    read                          every value once, then exit
-    read --query NAME [NAME ...]  one or several values or groups once (`character.runes`, `hp`, `attrs.*`), then exit
-    read --export                 write disk-state.json once, then exit
-    read ... --flat               print the values as `full.path  value` rows instead of the tree
-    read --live                   the same, continuously (with --query / --export: that one, continuously)
-    read --probe-params           where the param files of the other tables are in memory (read-only, once; add --json)
-    read --param REF [REF ...]    any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup: `Magic.6230`, `Bullet.10621000`,
-                                  `Magic.6230.mp*` (a field or a pattern); read-only, once (--flat, --json)
-    read --live-buffs             buffs monitor        read --live-animations   animation monitor
-                                  (--mapped / --unmapped: only ids that are / are not in chr_state_ids.json)
+    read [* | all]                     the whole document once (`--tree`, the default; `--flat`; `--json`)
+    read NAME | ID | PATH ...          a part of it: `hp`, `attrs.*`, `character.runes`, `creative.resurrect.great_enemies`,
+                                       `params.effects.1621000`, and any row of the six tables: `params.Magic.6230`, `params.Magic.6230.mp*`
+    read ... --live                    the same, kept current (at --hz)
+    read monitor | monitor-buffs | monitor-animations [--mapped | --unmapped]
+                                       the monitors: one row per id that appears; `--unmapped` (the default) shows only the ids names.json
+                                       does not name yet, `--mapped` only those it names
+    export [--live]                    the whole document to <TOOLS-DIR>\\output\\disk.json (again each time it changes with --live)
+    check [FILE]                       a regulation.bin (the game folder's by default) against the game, row by row
+    probe                              where the param files of the other tables are in memory
+    reset [* | all | runes | buffs | animations | monitor]
+                                       the read baselines start again from now: `runes.delta` = 0, the monitors' history cleared
 
-`--live` means "do not stop". One attach and one loop serve every mode (spec 1.6.2 section 5).
-"""
+One attach and one loop serve every mode (spec 1.6.2 section 5)."""
 from __future__ import annotations
 
 import re
@@ -31,8 +32,8 @@ from ..game.probe import as_json as probe_json, lines as probe_lines, probe
 from ..game.profile import load_state_ids
 from ..game.values import UnknownName, is_param_name
 from ..logbook import book
-from ..paths import describe_resource
-from ..reader import view
+from ..paths import describe_resource, get_resource_path
+from ..reader import baselines, view
 from ..reader.animations import AnimationsMonitor
 from ..reader.buffs import BuffsMonitor
 from ..reader.export import ExportWriter, JsonLogger
@@ -42,7 +43,17 @@ from ..vault import session as vault_session
 from .common import begin, log_config
 
 RESCAN_S = 2.0       # how often EAC and the session record are re-checked
-EXPORT_NAME = "disk-state.json"
+EXPORT_NAME = "disk.json"
+MONITORS = {"monitor": ("buffs", "animations"), "monitor-buffs": ("buffs",), "monitor-animations": ("animations",)}
+
+
+def names_file(args) -> Path:
+    """names.json: `--names FILE`, else the one next to the exe, else the one in the exe / the reader's package."""
+    given = getattr(args, "state_ids", None)
+    if given:
+        return Path(given)
+    from .. import reader
+    return get_resource_path("names.json", default_dir=Path(reader.__file__).resolve().parent)
 
 
 def _wait_for_game(offsets: Path, timeout: float | None = None) -> Target:
@@ -84,9 +95,12 @@ def _why_unknown(exc: UnknownName, doc: dict, sample, names) -> str:
     wanted = [names] if isinstance(names, str) else names or []
     if doc.get("params") is None and any(is_param_name(n) for n in wanted):
         return f"params cannot be read: {sample.params_error or 'this exe version has no params block in offsets.json'}"
-    if not doc.get("design") and any(n.strip().lower().startswith("design") for n in wanted):
-        return ("the design has no spells built in this vault yet (spells.resolved.json is written by every build: `run`, or "
-                "`innovate-items spells --add all`)")
+    creative = doc.get("creative") or {}
+    if not creative.get("innovate_spells") and any(n.strip().lower().startswith("creative.innovate_spells") for n in wanted):
+        return ("no spells are built in this vault yet (spells.resolved.json is written by every build: `run`, or "
+                "`innovate-spells build`)")
+    if not creative and any(n.strip().lower().startswith("creative") for n in wanted):
+        return "the creative block is empty: no build, no scripts' host, and no event_flags block for this game version"
     return str(exc)
 
 
@@ -100,6 +114,104 @@ def _mode_text(args) -> str:
     if args.export:
         return f"export to {args.out} (live)"
     return f"{view.label(args.query)} (live)"
+
+
+def read_words(args) -> int:
+    """`read [EMPTY | * | all | NAME ...]` and `read monitor | monitor-buffs | monitor-animations`: the words -> what `cmd_read` does."""
+    words = [w for w in (getattr(args, "words", None) or []) if w.strip()]
+    args.live_buffs = args.live_animations = False
+    if words and words[0].lower() in MONITORS:
+        if len(words) > 1:
+            book.e("read", f"`read {words[0]}` stands alone (--mapped or --unmapped go with it)")
+            return EXIT_ERROR
+        if args.live or args.json or args.flat:
+            book.e("read", "the monitors are live by themselves: --live, --flat and --json do not go with them")
+            return EXIT_ERROR
+        kinds = MONITORS[words[0].lower()]
+        args.live_buffs, args.live_animations = "buffs" in kinds, "animations" in kinds
+        if not (args.mapped or args.unmapped):
+            args.unmapped = True                 # 1.8.0: the ids names.json does not name yet are what a monitor is for
+        return cmd_read(args)
+    if args.mapped or args.unmapped:
+        book.e("read", "--mapped / --unmapped go with read monitor, monitor-buffs, monitor-animations")
+        return EXIT_ERROR
+    if any(w in ("*", "all") for w in words) and len(words) > 1:
+        book.e("read", "`*` and `all` stand alone: they are the whole document")
+        return EXIT_ERROR
+    words = [w for w in words if w not in ("*", "all")]
+    refs = [w for w in words if _is_table_ref(w)]
+    if refs and len(refs) != len(words):
+        book.e("read", "rows of the six tables (params.Magic.6230 ...) are read on their own: give them without other names")
+        return EXIT_ERROR
+    if refs and args.live:
+        book.e("read", "rows of the six tables are read once: --live does not go with them")
+        return EXIT_ERROR
+    args.param = refs or None
+    args.query = None if refs else (words or None)
+    return cmd_read(args)
+
+
+def _is_table_ref(name: str) -> bool:
+    """`params.<Table>.<id>...` for one of the six tables of the workbench (Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup or
+    the game's own names of them), not `params.effects...` (the rows the profile names)."""
+    parts = name.strip().split(".")
+    if len(parts) < 3 or parts[0].lower() != "params":
+        return False
+    from ..game.paramtables import TABLES
+    return parts[1].lower() in TABLES
+
+
+def cmd_export(args) -> int:
+    """`export [--live]`: the whole document to <TOOLS-DIR>\\output\\disk.json."""
+    args.export, args.query, args.param, args.live_buffs, args.live_animations = True, None, None, False, False
+    return cmd_read(args)
+
+
+def cmd_check(args) -> int:
+    """`check [FILE]`: a regulation.bin against the running game (the game folder's when no FILE is given)."""
+    args.param_check = args.file or ""
+    args.query, args.param, args.live_buffs, args.live_animations = None, None, False, False
+    return cmd_read(args)
+
+
+def cmd_probe(args) -> int:
+    """`probe`: where the param files of the other tables are in memory."""
+    args.probe_params, args.query, args.param, args.live_buffs, args.live_animations = True, None, None, False, False
+    return cmd_read(args)
+
+
+def cmd_reset(args) -> int:
+    """`reset [* | all | runes | buffs | animations | monitor]`: the read baselines start again from now. Writes nothing to the game:
+    a small file (reader/baselines.py) that every reader of this game looks at."""
+    require_windows_x64()
+    try:
+        names = baselines.names_of([w for w in (getattr(args, "words", None) or []) if w.strip()])
+    except ValueError as exc:
+        book.e("reset", str(exc))
+        return EXIT_ERROR
+    try:
+        target = locate(Path(args.offsets))
+    except AttachError as exc:
+        book.e("reset", str(exc))
+        return exc.code
+    what: dict = {n: None for n in names}
+    if "runes" in names:
+        mem = open_read(target)
+        try:
+            sampler = Sampler(mem, target.profile, load_state_ids(names_file(args)), target.base)
+            sample = _first_sample(args, mem, sampler)
+        finally:
+            mem.close()
+        if sample is None:
+            return EXIT_ERROR
+        what["runes"] = sample.runes
+    path = baselines.save(target.pid, target.started, what)
+    for n in names:
+        book.ok("reset", {"runes": f"runes: the baseline is {what['runes']:,} now (delta 0)" if what.get("runes") is not None else "runes",
+                          "buffs": "buffs: the monitor's history starts again from now",
+                          "animations": "animations: the monitor's history starts again from now"}[n])
+    book.d("reset", f"written to {path}; nothing was written to the game")
+    return 0
 
 
 def cmd_read(args) -> int:
@@ -119,7 +231,7 @@ def cmd_read(args) -> int:
         if checked is None:
             return EXIT_ERROR
     try:
-        state_ids = load_state_ids(Path(args.state_ids))     # before waiting for the game: a bad file is told at once
+        state_ids = load_state_ids(names_file(args))     # before waiting for the game: a bad file is told at once
     except ValueError as exc:
         book.e("read", str(exc))
         return EXIT_ERROR
@@ -137,7 +249,7 @@ def cmd_read(args) -> int:
             return EXIT_ERROR
 
     log_config("offsets", args.offsets)
-    log_config("state ids", args.state_ids)
+    log_config("names", names_file(args))
     vault = Path()
     try:
         vault = resolve_vault(args.vault)
@@ -156,6 +268,8 @@ def cmd_read(args) -> int:
 
     mem = open_read(target)
     sampler = Sampler(mem, profile, state_ids, target.base)
+    watch = baselines.Watch(target.pid, target.started, since=time.time())
+    _take_baselines(watch, sampler, [])          # a runes baseline `reset` set for this game counts at once
     try:
         if args.probe_params:
             return _probe_params(args, target, mem)
@@ -164,14 +278,14 @@ def cmd_read(args) -> int:
         if checked is not None:
             return _param_check(args, target, mem, checked)
         if args.live_buffs or args.live_animations:
-            return _monitors(args, target, mem, sampler, vault)
+            return _monitors(args, target, mem, sampler, vault, watch)
         export = _exporter(args, target, vault)
-        export.design = _design_block(args, target, mem, vault, sampler)
+        export.creative_block = _creative_block(args, target, mem, vault, sampler)
         if args.export and not args.live:
             return _export_once(args, target, mem, sampler, export)
         if not args.export and not args.live:
             return _query_once(args, mem, sampler, export)
-        return _live(args, target, mem, sampler, export, vault)
+        return _live(args, target, mem, sampler, export, vault, watch)
     except KeyboardInterrupt:
         book.i("read", "stopped; the game keeps running")
         return 130
@@ -179,8 +293,22 @@ def cmd_read(args) -> int:
         mem.close()
 
 
+def _take_baselines(watch: baselines.Watch | None, sampler: Sampler, monitors) -> None:
+    """What `reset` set since the last look: the runes baseline into the sampler, the monitors' history cleared."""
+    if watch is None:
+        return
+    for name, entry in watch.new().items():
+        if name == "runes" and entry.get("total") is not None:
+            sampler.reset_baseline(int(entry["total"]))
+            book.i("read", f"runes: the baseline is {int(entry['total']):,} (reset at {entry.get('at')})")
+        for m in monitors:
+            if m.name == name:
+                m.ledger.forget()
+                book.i("read", f"{name}: the history starts again from now (reset at {entry.get('at')})")
+
+
 def _probe_params(args, target: Target, mem) -> int:
-    """`--probe-params`: list the param files reachable from the globals of the known chains. Reads only."""
+    """`probe`: list the param files reachable from the globals of the known chains. Reads only."""
     if target.profile.params is None:
         book.e("read", "this exe version has no params block in offsets.json; nothing to probe from")
         return EXIT_ERROR
@@ -198,7 +326,7 @@ def _probe_params(args, target: Target, mem) -> int:
 
 
 def _read_params(args, target: Target, mem, refs) -> int:
-    """`--param`: print rows of the six tables as a tree (`--flat`: one `params.<Table>.<id>.<field>  value` row each). Reads only."""
+    """`read params.<Table>.<id>`: print rows of the six tables as a tree (`--flat`: one `params.<Table>.<id>.<field>  value` row each). Reads only."""
     if target.profile.params is None:
         book.e("read", "this exe version has no params block in offsets.json")
         return EXIT_ERROR
@@ -234,7 +362,7 @@ def _open_check_file(path: str, default: bool = False):
 
 
 def _param_check(args, target: Target, mem, checked) -> int:
-    """`--param-check FILE`: the six tables of the file against the same tables in the game. Reads only; 0 only when all agree."""
+    """`check FILE`: the six tables of the file against the same tables in the game. Reads only; 0 only when all agree."""
     if target.profile.params is None:
         book.e("read", "this exe version has no params block in offsets.json")
         return EXIT_ERROR
@@ -260,7 +388,7 @@ def _param_check(args, target: Target, mem, checked) -> int:
 
 
 def _exporter(args, target: Target, vault: Path | None) -> ExportWriter:
-    """The object that builds `disk-state.json` documents; it writes them only when it has a logger (`--export`)."""
+    """The object that builds the documents (`disk.json`); it writes them only when it has a logger (`export`)."""
     profile = target.profile
     logger = JsonLogger(Path(args.out), target.exe_path.parent, filename=EXPORT_NAME) if args.export else None
     export = ExportWriter(logger, interval=0.0 if not args.live else args.export_interval,
@@ -269,24 +397,29 @@ def _exporter(args, target: Target, vault: Path | None) -> ExportWriter:
     export.anti_cheat = "DISABLED_OFFLINE"
     export.buffs_supported = profile.sp_effect is not None
     export.animations_supported = profile.anim is not None
-    export.sandbox = bool(vault) and _in_session(vault, target)
+    export.creative = bool(vault) and _in_session(vault, target)
     return export
 
 
-def _design_block(args, target: Target, mem, vault: Path | None, sampler: Sampler | None = None, every: float = 1.0):
-    """The `design` block of the document (1.7.2): the spells of the last build with what the game holds now; read again at most
-    every `every` seconds (a few rows of the game's tables and two small files). None when there is no build or no vault."""
+def _creative_block(args, target: Target, mem, vault: Path | None, sampler: Sampler | None = None, every: float = 1.0):
+    """The `creative` block of the document (1.7.2; 1.8.0): the scripts' host, the spells of the last build with what the game holds
+    now, the defeated great enemies; read again at most every `every` seconds (a few rows of the game's tables, the event flags of the
+    table and three small files). None without a vault."""
     if not vault:
         return None
-    from .design import design_folder, spec_file
-    from .. import design
-    from ..design.external_scripts.backend import DesignLive, with_spell_buffs
-    from ..design.innovate_items.spells.service import DesignError
+    from .innovate import creative_folder, spec_file
+    from .. import creative
+    from ..creative.scripts import host as shost
+    from ..creative.scripts.backend import CreativeLive, with_spell_buffs
+    from ..creative.innovate_spells.service import CreativeError
+    status = None
     try:
-        resolved = design.open_spells(design_folder(args, vault), spec_file(args)).resolved_path
-    except DesignError:
-        resolved = None                # no build: the great enemies (1.8.0) are still there
-    ext = DesignLive(mem, target, vault, resolved)
+        folder = creative_folder(args, vault)
+        status = folder / shost.STATUS_FILE
+        resolved = creative.open_spells(folder, spec_file(args)).resolved_path
+    except CreativeError:
+        resolved = None                # no build: the scripts and the great enemies (1.8.0) are still there
+    ext = CreativeLive(mem, target, vault, resolved, status_path=status)
     if sampler is not None:            # the buffs of the design's spells are named in character.buffs
         sampler.state_ids = with_spell_buffs(sampler.state_ids, ext.spells())
     last = {"at": -1e9, "block": None}
@@ -458,7 +591,7 @@ class _LiveValues:
 
 
 class _Board:
-    """`--live-buffs` / `--live-animations` on a terminal: one table per monitor, redrawn where it stands."""
+    """`read monitor` (`monitor-buffs` / `monitor-animations`) on a terminal: one table per monitor, redrawn where it stands."""
 
     def __init__(self, monitors):
         self.monitors = monitors
@@ -487,7 +620,7 @@ class _Board:
 
 
 class _TableReload:
-    """Re-reads chr_state_ids.json when it changed, so names added while a monitor runs show up at once."""
+    """Re-reads names.json when it changed, so names added while a monitor runs show up at once."""
 
     def __init__(self, path: Path, sampler: Sampler):
         self.path, self.sampler = Path(path), sampler
@@ -516,7 +649,8 @@ class _TableReload:
         book.i("read", f"{self.path.name} reloaded ({len(table.buffs)} buffs, {len(table.animations)} animations)")
 
 
-def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vault: Path | None) -> int:
+def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vault: Path | None,
+          watch: baselines.Watch | None = None) -> int:
     stream = None
     if not args.export:
         sample = _first_sample(args, mem, sampler)
@@ -527,7 +661,7 @@ def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vau
             return EXIT_ERROR
     book.ok("read", "attached, reading (Ctrl+C to stop)")
     try:
-        return _loop(args, target, mem, sampler, [], export, vault, stream)
+        return _loop(args, target, mem, sampler, [], export, vault, stream, watch=watch)
     finally:
         if stream is not None:
             stream.close()
@@ -535,7 +669,7 @@ def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vau
             export.close()
 
 
-def _monitors(args, target: Target, mem, sampler: Sampler, vault: Path | None) -> int:
+def _monitors(args, target: Target, mem, sampler: Sampler, vault: Path | None, watch: baselines.Watch | None = None) -> int:
     both = args.live_buffs and args.live_animations
     show = "mapped" if args.mapped else "unmapped" if args.unmapped else "all"
     redraw = ui.can_redraw()
@@ -562,14 +696,14 @@ def _monitors(args, target: Target, mem, sampler: Sampler, vault: Path | None) -
     book.ok("read", "attached, reading (Ctrl+C to stop)")
     try:
         return _loop(args, target, mem, sampler, monitors, None, vault, board,
-                     _TableReload(Path(args.state_ids), sampler))
+                     _TableReload(names_file(args), sampler), watch=watch)
     finally:
         if board is not None:
             board.close()
 
 
 def _loop(args, target: Target, mem, sampler: Sampler, monitors, export: ExportWriter | None, vault: Path | None,
-          stream: _LiveValues | _Board | None, reload: _TableReload | None = None) -> int:
+          stream: _LiveValues | _Board | None, reload: _TableReload | None = None, watch: baselines.Watch | None = None) -> int:
     period = 1.0 / args.hz
     next_tick = time.monotonic()
     next_scan = next_tick + RESCAN_S
@@ -590,9 +724,10 @@ def _loop(args, target: Target, mem, sampler: Sampler, monitors, export: ExportW
                 book.e("read", "EasyAntiCheat appeared in eldenring.exe; stopped reading")
                 return EXIT_EAC
             if export is not None:
-                export.sandbox = bool(vault) and _in_session(vault, target)
+                export.creative = bool(vault) and _in_session(vault, target)
             if reload is not None:
                 reload.check()
+            _take_baselines(watch, sampler, monitors)
             next_scan = now + RESCAN_S
 
         for m in monitors:

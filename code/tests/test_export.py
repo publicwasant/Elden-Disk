@@ -31,7 +31,7 @@ def rig(tmp_path):
     lg = JsonLogger(tmp_path / "out")
     ew = ExportWriter(lg, interval=0.5, timer_interval=2.0, clock=clock)
     ew.pid = 1
-    return ew, lg, clock, tmp_path / "out" / "disk-state.json"
+    return ew, lg, clock, tmp_path / "out" / "disk.json"
 
 
 def test_first_document_is_written_at_once(rig):
@@ -102,8 +102,8 @@ def test_a_locked_file_is_retried_not_dropped(rig, monkeypatch):
     assert ew.writes == 1
 
 
-def test_session_label_follows_the_flag_and_read_only_stays_true(rig):
+def test_session_label_follows_the_portal(rig):
     ew, lg, clock, path = rig
-    ew.sandbox = True
+    ew.creative = True              # 1.8.0 part 2: inside the portal the document can be written (`write`, tools.write)
     ew.emit("CONNECTED", sample())
-    assert json.loads(path.read_text())["systems"]["session"] == {"mode": "sandbox", "read_only": True, "sandbox": True}
+    assert json.loads(path.read_text())["systems"]["session"] == {"mode": "creative", "read_only": False, "creative": True}

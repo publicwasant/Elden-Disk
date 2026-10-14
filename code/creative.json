@@ -1,0 +1,87 @@
+{
+  "innovate_spells": {
+    "maximum": 20,
+    "slots": {
+      "reverse_cursed_technique": {
+        "__info__": "Reverse Cursed Technique: an incantation made from Heal (Magic and Goods 6421). You cast it with the flame cast of Black Flame Blade (motion 32): the hand takes the fire, throws a small round burst of fire at the weapon, and for 20 seconds you heal over time (the buff, SpEffect 1642100: -45 HP, -15 FP and stamina regeneration 100 every 0.5 s), with blue fire (the positive curse energy), a deep red-purple ring of runes at the hand (the negative curse energy it converts) and the Positive Curse Energy Eyes, glowing blue. It is sold once by Kale. `kind` and `from`: kind projectile copies the rows of spell `from` (6421) with their own ids; the id of this spell in the game is not the key above but 2230000 + slot - 1 (slot 1 = 2230000): after a build the vault's spells.resolved.json says every id that was really used. `requires.status` is what the character needs to learn it, `requires.cost` what casting takes, `locations` where it is sold, `customs.basic` the numbers of the game's rows that are changed (built into regulation.bin) and `customs.advanced` what is put into the running game after the world loads (texts and colours).",
+        "kind": "projectile",
+        "from": 6421,
+        "requires": {
+          "status": {
+            "intelligence": 0,
+            "faith": 60,
+            "arcane": 10
+          },
+          "cost": {
+            "focus_point": 120
+          }
+        },
+        "locations": {
+          "kale": {
+            "price": 34590,
+            "stock": 1
+          }
+        },
+        "customs": {
+          "basic": {
+            "__info__": "Level 2: Numbers written over the copies of the game's rows; the key is <Table>.<row id>.<field>. SpEffect.1642100 is the buff the spell gives: effectEndurance = seconds it lasts, motionInterval = seconds between heartbeats, changeHpPoint / changeMpPoint = HP and FP per heartbeat (negative heals), staminaRecoverChangeSpeed = faster stamina, vfxId = visual on the body (-1: none). Magic.6421: refType = cast motion (32: Black Flame Blade), castSfxId / fireSfxId = the effects of the cast and of the burst (524400 / 524401: the fire of Flame, Grant Me Strength, the only ones `colors` can recolour). Bullet.10642100.sfxId_Bullet = the visual of the thrown burst (-1: none). Goods.6421.iconId = the inventory icon (6806: Gravitational Missile). Changing anything here builds regulation.bin again.",
+            "SpEffect.1642100.effectEndurance": 20.0,
+            "SpEffect.1642100.motionInterval": 0.5,
+            "SpEffect.1642100.changeHpPoint": -45,
+            "SpEffect.1642100.changeMpPoint": -15,
+            "SpEffect.1642100.staminaRecoverChangeSpeed": 100,
+            "SpEffect.1642100.vfxId": -1,
+            "Magic.6421.refType": 32,
+            "Magic.6421.castSfxId": 524400,
+            "Magic.6421.fireSfxId": 524401,
+            "Bullet.10642100.sfxId_Bullet": -1,
+            "Goods.6421.iconId": 6806
+          },
+          "advanced": {
+            "__info__": "Level 3: things that are not in regulation.bin. `eldendisk run` writes them into the game's memory once the character is in the world (a scan of the game's memory, about 4 seconds), and they last until the game closes. `texts`: goods_name = the name (shop and inventory), goods_info = the short line (shop and inventory), goods_caption = the long description (inventory and memory slot). `colors` are hex colours \"#RRGGBB\" (or [red, green, blue], each 0 to 2, 1 = the full colour, above 1 brighter). Magic.6421.castSfxId: the effect the spell casts; `main` = the fire (in the hand, the burst and the burning), `accent` = what the fire's own colour does not reach and the ring of runes at the hand. SpEffect.1642100: the buff row; its colour is the colour of the Positive Curse Energy Eyes that glow while it lasts (null = the game's own red). The effect files are the game's own and shared, so the colours are for the whole game session. Changing only this part never builds regulation.bin again.",
+            "texts": {
+              "goods_name": "Reverse Cursed Technique",
+              "goods_info": "Converts negative curse energy into a positive cursed energy that resurrects over time.",
+              "goods_caption": "The nature of a curse is to erode, corrupt, and destroy. Yet, this paradox dictates a terrifying truth: when two currents of profound malice are forced to violently collide and multiply, they do not bring absolute ruin. Instead, the multiplied negativity gives birth to a vibrant, positive spark of life capable of reversing death's approach.\n\nThis alien logic was introduced to the Lands Between by an Unknown Sorcerer—a wanderer who fell through the cracks of reality from a universe entirely unalike our own. They wore strange garments, swore fealty to no sovereign, and manipulated an unseen energy that defied every natural law of this world. To them, the impossible was merely a matter of calculation.\n\nThe sorcerer lingered only briefly before the fabric of space swallowed them once more, returning them to their distant home. In their wake, they left nothing but the formula for this absolute contradiction. Perhaps it was a deliberate miracle gifted to those who suffer, or perhaps, to a being who walks between dimensions, rewriting the rules of mortality was simply a fleeting whim"
+            },
+            "colors": {
+              "__info__": "Base of Light Blue Color Palette from https://www.figma.com/colors/light-blue/, I've adjusted the Color harmonies - Split Color Palette Sets, using #FF909E as the Negative Cursed Energy, and #90D5FF as the Positive Cursed Energy for the concept.",
+              "Magic.6421.castSfxId": {
+                "main": "#90D5FF",
+                "accent": "#FF909E"
+              },
+              "SpEffect.1642100": "#90D5FF"
+            }
+          }
+        }
+      },
+      "<id-2>": null,
+      "<id-3>": null,
+      "<id-4>": null,
+      "<id-5>": null,
+      "<id-6>": null,
+      "<id-7>": null,
+      "<id-8>": null,
+      "<id-9>": null,
+      "<id-10>": null,
+      "<id-11>": null,
+      "<id-12>": null,
+      "<id-13>": null,
+      "<id-14>": null,
+      "<id-15>": null,
+      "<id-16>": null,
+      "<id-17>": null,
+      "<id-18>": null,
+      "<id-19>": null,
+      "<id-20>": null
+    }
+  },
+  "scripts": {
+    "added": []
+  },
+  "resurrect": {
+    "great_enemies": {
+      "activate": []
+    }
+  }
+}

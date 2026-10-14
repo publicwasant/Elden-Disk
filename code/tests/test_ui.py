@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 
 from eldendisk import ui
-from eldendisk.logbook import DESIGN_TAG, Event, Logbook, format_line
+from eldendisk.logbook import CREATIVE_TAG, Event, Logbook, format_line
 
 WHEN = datetime(2026, 10, 7, 23, 41, 2, 123000)
 
@@ -117,7 +117,7 @@ def test_a_bare_file_name_is_orange(err, monkeypatch):
 
 def test_the_file_name_at_the_end_of_a_path_is_orange_and_the_folders_are_not(err, monkeypatch):
     monkeypatch.setenv("FORCE_COLOR", "1")
-    ui.pretty_sink(stream=err)(ev(tag=DESIGN_TAG, msg="building x on D:\\SteamLibrary\\ELDEN RING\\Game\\regulation.bin and checking"))
+    ui.pretty_sink(stream=err)(ev(tag=CREATIVE_TAG, msg="building x on D:\\SteamLibrary\\ELDEN RING\\Game\\regulation.bin and checking"))
     assert "D:\\SteamLibrary\\ELDEN RING\\Game\\" + ORANGE.format("regulation.bin") + " and checking" in err.getvalue()
     err.truncate(0); err.seek(0)
     ui.pretty_sink(stream=err)(ev(msg="folder C:\\Users\\x\\EldenDisk\\vault and C:\\a\\b.v2"))
@@ -364,7 +364,7 @@ def colour(monkeypatch):
 def test_spell_ids_are_purple_in_an_ext_line(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag=DESIGN_TAG, msg="innovate-items spells: building reverse_curse_technique, black_flame_copy on D:\\x"))
+    ui.pretty_sink(stream=buf)(ev(tag=CREATIVE_TAG, msg="innovate-items spells: building reverse_curse_technique, black_flame_copy on D:\\x"))
     out = buf.getvalue()
     assert PURPLE.format("reverse_curse_technique") in out and PURPLE.format("black_flame_copy") in out
 
@@ -372,7 +372,7 @@ def test_spell_ids_are_purple_in_an_ext_line(spells, monkeypatch):
 def test_a_diff_line_colours_only_the_id_part(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag=DESIGN_TAG, msg="  black_flame_copy.shop.price  1000 -> 2000"))
+    ui.pretty_sink(stream=buf)(ev(tag=CREATIVE_TAG, msg="  black_flame_copy.shop.price  1000 -> 2000"))
     assert PURPLE.format("black_flame_copy") + ".shop.price  " in buf.getvalue()           # the id of the spell is purple, the rest is not
     assert "[38;5;179m1000[0m -> [38;5;179m2000[0m" in buf.getvalue()      # numbers of 4 digits or more: their own colour
 
@@ -382,37 +382,37 @@ def test_other_tags_paths_and_longer_words_are_left_alone(spells, monkeypatch):
     buf = Stream()
     sink = ui.pretty_sink(stream=buf)
     sink(ev(tag="vault", msg="black_flame_copy"))
-    sink(ev(tag=DESIGN_TAG, msg="in D:\\x\\black_flame_copy\\a.json and black_flame_copy2 and my-black_flame_copy"))
+    sink(ev(tag=CREATIVE_TAG, msg="in D:\\x\\black_flame_copy\\a.json and black_flame_copy2 and my-black_flame_copy"))
     assert "\x1b[35m" not in buf.getvalue()
 
 
 def test_no_colour_no_change_and_the_log_file_line_stays_plain(spells, monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag=DESIGN_TAG, msg="built black_flame_copy"))
+    ui.pretty_sink(stream=buf)(ev(tag=CREATIVE_TAG, msg="built black_flame_copy"))
     assert "\x1b" not in buf.getvalue() and "built black_flame_copy" in buf.getvalue()
-    assert "\x1b" not in format_line(ev(tag=DESIGN_TAG, msg="built black_flame_copy"))
+    assert "\x1b" not in format_line(ev(tag=CREATIVE_TAG, msg="built black_flame_copy"))
 
 
 def test_the_raw_view_colours_the_message_not_the_prefix(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.raw_sink(stream=buf)(ev(tag=DESIGN_TAG, msg="building black_flame_copy"))
+    ui.raw_sink(stream=buf)(ev(tag=CREATIVE_TAG, msg="building black_flame_copy"))
     line = buf.getvalue()
-    assert line.startswith("10-07 23:41:02.123  4242 I design   : building ") and PURPLE.format("black_flame_copy") in line
+    assert line.startswith("10-07 23:41:02.123  4242 I creative : building ") and PURPLE.format("black_flame_copy") in line
     buf2 = Stream()
-    ui.raw_line("10-07 23:41:02.123  4242 I design   : built black_flame_copy", buf2)
-    assert PURPLE.format("black_flame_copy") in buf2.getvalue() and buf2.getvalue().startswith("10-07 23:41:02.123  4242 I design   : built ")
+    ui.raw_line("10-07 23:41:02.123  4242 I creative : built black_flame_copy", buf2)
+    assert PURPLE.format("black_flame_copy") in buf2.getvalue() and buf2.getvalue().startswith("10-07 23:41:02.123  4242 I creative : built ")
 
 
 def test_an_error_stays_red_and_clearing_the_ids_stops_the_colour(spells, monkeypatch):
     colour(monkeypatch)
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(level="E", tag=DESIGN_TAG, msg="black_flame_copy failed"))
+    ui.pretty_sink(stream=buf)(ev(level="E", tag=CREATIVE_TAG, msg="black_flame_copy failed"))
     assert "\x1b[35m" not in buf.getvalue()
     ui.mark_spell_ids([])
     buf = Stream()
-    ui.pretty_sink(stream=buf)(ev(tag=DESIGN_TAG, msg="built black_flame_copy"))
+    ui.pretty_sink(stream=buf)(ev(tag=CREATIVE_TAG, msg="built black_flame_copy"))
     assert "\x1b[35m" not in buf.getvalue()
 
 
@@ -452,16 +452,16 @@ def test_the_raw_view_colours_the_message_and_not_the_pid(monkeypatch):
     assert ADDR.format("0x7ff3cbbb0000") in out and ID.format("114880") in out and ID.format("4242") not in out
 
 
-def test_a_block_draws_the_lines_of_the_design_tag_inside_it(monkeypatch):
+def test_a_block_draws_the_lines_of_the_creative_tag_inside_it(monkeypatch):
     monkeypatch.setenv("NO_COLOR", "1")
     err = Stream()
     sink = ui.pretty_sink(stream=err)
     clock = iter([0.0, 5.8])
     with ui.Block("design", stream=err, clock=lambda: next(clock)) as blk:
-        sink(ev(tag=DESIGN_TAG, msg="building because the design changed"))
+        sink(ev(tag=CREATIVE_TAG, msg="building because the design changed"))
         sink(ev(tag="vault", msg="other tag stays as it is"))
         blk.rows([("name", "Reverse"), ("game", "goods 2230000")])
-        sink(ev(level="E", tag=DESIGN_TAG, msg="  $.a.b: unknown field"))
+        sink(ev(level="E", tag=CREATIVE_TAG, msg="  $.a.b: unknown field"))
         blk.close("regulation.bin written")
     lines = err.getvalue().splitlines()
     assert lines[0] == " \u256d\u2500 design"
@@ -470,8 +470,8 @@ def test_a_block_draws_the_lines_of_the_design_tag_inside_it(monkeypatch):
     assert lines[3] == " \u2502    name  Reverse" and lines[4] == " \u2502    game  goods 2230000"
     assert lines[5].startswith(" \u2502  \u2716    $.a.b: unknown field")
     assert lines[6] == " \u2570\u2500 \u2713  regulation.bin written  (5.8 s)"
-    sink(ev(tag=DESIGN_TAG, msg="after the block"))
-    assert "design" in err.getvalue().splitlines()[-1] and "\u2502" not in err.getvalue().splitlines()[-1]
+    sink(ev(tag=CREATIVE_TAG, msg="after the block"))
+    assert "creative" in err.getvalue().splitlines()[-1] and "\u2502" not in err.getvalue().splitlines()[-1]
 
 
 def test_a_block_that_is_not_active_draws_nothing_and_leaves_the_lines_alone(monkeypatch):
@@ -481,13 +481,13 @@ def test_a_block_that_is_not_active_draws_nothing_and_leaves_the_lines_alone(mon
     with ui.block("design", verbose=True, stream=err) as blk:
         blk.note("x")
         blk.rows([("a", "b")])
-        sink(ev(tag=DESIGN_TAG, msg="m"))
-    assert err.getvalue().splitlines() == [" \u00b7  design    m"]
+        sink(ev(tag=CREATIVE_TAG, msg="m"))
+    assert err.getvalue().splitlines() == [" \u00b7  creative  m"]
 
 
 def test_a_problem_of_the_design_has_its_place_in_cyan(monkeypatch):
     colour(monkeypatch)
     err = Stream()
     with ui.Block("design", stream=err):
-        ui.pretty_sink(stream=err)(ev(level="E", tag=DESIGN_TAG, msg="  $.innovate_items.spells.slots[x].customs.basic: unknown field"))
+        ui.pretty_sink(stream=err)(ev(level="E", tag=CREATIVE_TAG, msg="  $.innovate_items.spells.slots[x].customs.basic: unknown field"))
     assert "\x1b[36m$.innovate_items.spells.slots[x].customs.basic\x1b[0m\x1b[31m: unknown field" in err.getvalue()

@@ -1,38 +1,54 @@
 # Elden-Disk {version} (`eldendisk.exe`)
 
-Offline save guard and live memory reader / writer for **Elden Ring 1.17.1** (Windows 10/11 x64). This file sits next to `eldendisk.exe`; the full command reference follows the quick start.
+**Elden-Disk is the Elden Ring Memory Disk I/O Tools** for **Elden Ring 1.17.1** (Windows 10/11, 64-bit): CLI commands in a console. You
+open a terminal, run a command, it does its work and ends. This file sits next to `eldendisk.exe`; the full command reference follows the
+quick start.
+
+**The portal.** `run` opens a portal into a parallel world of the game: there you can play with it in creative ways (new spells you design,
+great enemies brought back, your own scripts changing the game while it runs). When the game closes, the vault puts your save files and
+the game's own `regulation.bin` back, byte for byte: **nothing you did inside comes back with you.**
 
 ## In this folder
 
-| File | What it is |
+| **File** | **What it is** |
 |:---|:---|
 | `eldendisk.exe` | the tool; run it from a terminal (`.\eldendisk.exe <command>`) |
 | `README.md` | this file (written when the exe is built) |
-| `offsets.json`, `chr_state_ids.json` | only when the build did not embed them: the memory profile of the game and the buff / animation names; edit them here |
+| `offsets.json`, `names.json`, `creative.json` | only when you put them here: they win over the copies in the exe (the profile of each game version, the names of the buffs and the animations, what you create) |
 
-The other world never touches the real one: whatever you do in a `run` session, the vault puts the save and the game's own `regulation.bin` back byte-identical when the game closes.
-
-Nothing is written next to the exe: everything the tool produces lives in `%LOCALAPPDATA%\EldenDisk` (the vault in `vault\`, the files of the designs in `vault\design\`, the exports of `read --export` in `output\`), so the exe can be anywhere and replacing it loses nothing. The game folder is left as it was, except for one thing you ask for: with the vault ON, `run` swaps a `regulation.bin` in for the session and puts the game's own file back, checked by hash, when the game closes. That file is the secured copy (`innovate-items spells --secure`, after you tried it) when the `design.json` embedded in the exe is unchanged, otherwise a new build (a few seconds) that the gate must pass (`innovate-items spells --add all` builds without the game). The files live in `<vault>\design\innovate-items\spells\`. The vault (snapshots, session record, `eldendisk.log`) lives in `%LOCALAPPDATA%\EldenDisk\vault`, and `--save-dir` / `--vault` are remembered in the Registry (`HKCU\Software\EldenDisk`).
+Nothing is written next to the exe: everything the tool keeps lives in `%LOCALAPPDATA%\EldenDisk` (`<TOOLS-DIR>`): the vault in `vault\`
+(snapshots, the session record, `eldendisk.log`, the creative files in `vault\creative\`) and what `export` writes in `output\`. So the exe
+can be anywhere and replacing it loses nothing. `--save-dir` and `--vault` are remembered in the Registry (`HKCU\Software\EldenDisk`).
 
 ## Quick start
 
 1. **Copy your save folder by hand first** (`%APPDATA%\EldenRing\<SteamID64>`). A manual copy is the one backup the tool cannot get wrong.
-2. Terminal 0: `.\eldendisk.exe run`. It backs the save up, starts the game **offline** and, when the game exits, puts the save back byte for byte. Leave it open. (Several Steam accounts: add `--save-dir "<folder>"` once.)
-3. Terminal 1, once a character is loaded: `.\eldendisk.exe read --live` (every value, redrawn in place), or `read --query runes hp attrs.*`, `read --live-buffs`.
-4. Terminal 2: `.\eldendisk.exe write --set vigor=99 level=150`, `write --refill hp,fp,stamina`. Game params: `write --set params.effects.1621000.effectEndurance=-1` makes the Black Flame burn last until the target dies (`write --reset all` puts the game's own values back; they live in the game's memory, not in the save, and are gone when the game closes). Any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup can be read and written: `read --param Magic.6230` shows a row, `write --set params.Magic.6230.mp=0` makes Scouring Black Flame cost no FP, `write --reset params.Magic.6230.mp` puts the game's value back. `read --param-check` compares the `regulation.bin` in the game folder with what the game holds, row by row.
-5. Quit the game. Everything `write` changed is rolled back. To **keep** it instead: let the game save (rest at a grace or quit to title), stop `run`, close the game, then `.\eldendisk.exe vault keep --yes`.
-6. Power loss, host killed, console closed: close the game and run `.\eldendisk.exe vault restore`.
+2. Terminal 0: `.\eldendisk.exe run`. It backs the save files up, swaps in the `regulation.bin` built from `creative.json`, starts the game
+   **offline** and, when the game exits, puts everything back byte for byte. Leave it open. (Several Steam accounts: add
+   `--save-dir "<folder>"` once.)
+3. Terminal 1, once a character is loaded: `.\eldendisk.exe read` (the whole document once), `read runes hp attrs.*`, `read hp --live`,
+   `read monitor` (the buff and animation ids that appear).
+4. Terminal 2: `.\eldendisk.exe write` lists what can be written; `write vigor=99 level=150`, `write hp=99999` (full),
+   `write params.effects.1621000.effectEndurance=-1` (Black Flame burns until the target dies), `write params=default` (the game's own
+   values back).
+5. Creative: `.\eldendisk.exe resurrect "mohg lord"` (a beaten boss alive again; warp to another region and back), `read
+   creative.resurrect.great_enemies` (the ones you can bring back), `scripts` (your scripts and their state), `innovate-spells` (your
+   spells).
+6. Quit the game. Everything is rolled back. To **keep** the save instead: let the game save (rest at a grace or quit to title), close the
+   game, end `run`, then `.\eldendisk.exe vault keep --yes`.
+7. Power loss, `run` killed, console closed: close the game and run `.\eldendisk.exe vault restore`.
 
-For read-only farming where you want to keep what you earn, start the host with `run --vault-off` (no backup, no restore; `write` is refused).
+For reading while you farm and keep what you earn: `run --vault-off` (no backup, no restore; nothing is written to the game).
 
 ## Good to know
 
-- **Steam Cloud** may sync the save when the game exits; this is not verified. Use Steam's offline mode or turn Steam Cloud off for Elden Ring during a session.
-- **EasyAntiCheat:** `read` and `write` only work on a game started by `run` (offline, without EAC). A game started from Steam stops them with exit code `3`.
-- `-v` on any command shows the log (`<vault>\eldendisk.log`) live instead of the short view; `run -v` also shows the commands other terminals run.
-- **Params are for offline play only:** changing the game's own tables with anti-cheat active or online can get an account banned. `run` starts the game offline.
-- **A changed row acts on what is created afterwards:** a Magic row is read at the cast, a Bullet row when the bullet is created; a flame already in the world keeps the values it had. A value written stays through Quit to Title and Continue, and is gone when the game process ends.
-- Exit codes: `0` ok · `1` error / not applied · `2` unsupported `eldenring.exe` (or a read-only `params` field named in `write`) · `3` EAC loaded · `4` restore pending · `5` no valid session · `130` interrupted.
+- **Offline only.** The game is started offline; with the anti-cheat running the tool refuses (exit `3`). Changing the game's own tables
+  online can get an account banned.
+- **Steam Cloud** may sync the save when the game exits (not verified): use Steam's offline mode or turn Steam Cloud off for Elden Ring.
+- **Every write needs the portal:** the session `run` started with the vault ON, for this very game process (exit `5` otherwise).
+- `-v` on any command shows the log (`<vault>\eldendisk.log`) live instead of the short view; `run -v` also shows the other terminals.
+- Exit codes: `0` done · `1` error / not applied · `2` not supported · `3` anti-cheat running · `4` restore pending · `5` no portal ·
+  `130` interrupted.
 
 ---
 

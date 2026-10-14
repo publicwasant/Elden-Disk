@@ -92,7 +92,7 @@ class Sampler(Layout):
 
     # -- main ------------------------------------------------------------
     def read_params(self, now: datetime) -> tuple[dict | None, str | None]:
-        """The param tables (disk-state `params`) as (values, None) or (None, why not); read at most every PARAMS_EVERY_S."""
+        """The param tables (the document's `params`) as (values, None) or (None, why not); read at most every PARAMS_EVERY_S."""
         if self.param_store is None:
             return None, None
         gap = PARAMS_EVERY_S if self._params is not None else PARAMS_RETRY_S
@@ -241,7 +241,7 @@ class Sampler(Layout):
         return {"magic": {"selected": {"slot": sel + 1, "id": chosen}, "slots": slots}}
 
     def raw_buffs(self) -> tuple[list[tuple[int, float, float]] | None, str | None]:
-        """Unclassified (id, duration, timer) entries, for the `--live-buffs` monitor."""
+        """Unclassified (id, duration, timer) entries, for the `read monitor-buffs` monitor."""
         if self.profile.sp_effect is None:
             return None, "profile has no complete sp_effect layout"
         player, reason = self.locate_player()

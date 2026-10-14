@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import gamearchive as archive                      # noqa: E402  (tools/gamearchive.py)
-from eldendisk.design.innovate_items import zstd   # noqa: E402
+from eldendisk.creative.innovate_spells import zstd   # noqa: E402
 
 LANG = "engUS"
 FILES = [f"/msg/{LANG}/{n}.msgbnd.dcx" for n in ("item", "menu", "item_dlc01", "item_dlc02", "menu_dlc01", "menu_dlc02")]

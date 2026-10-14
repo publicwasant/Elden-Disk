@@ -1,4 +1,4 @@
-"""`read --param-check FILE`: do the rows of a regulation.bin equal the rows in the running game? (read-only)
+"""`check FILE`: do the rows of a regulation.bin equal the rows in the running game? (read-only)
 
 The file side opens the container (AES → DCX → zstd → BND4 → the six .param files) and takes every row as bytes; the game
 side reads the same six tables from memory. Rows are matched by id and compared byte for byte; a row that differs is then
@@ -11,8 +11,8 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..design.innovate_items import container, zstd
-from ..design.innovate_items.container import Bnd4, ContainerError
+from ..creative.innovate_spells import container, zstd
+from ..creative.innovate_spells.container import Bnd4, ContainerError
 from ..game.paramlayouts import LAYOUTS
 from ..game.paramtables import decode_row
 

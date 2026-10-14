@@ -1,2 +1,2 @@
-"""Offline save sandbox & memory tool for Elden Ring: live state streaming, plus save-protected sandbox edits (see README)."""
-__version__ = "1.7.2"
+"""Elden-Disk, the Elden Ring Memory Disk I/O Tools: a portal into a parallel world of the game (see README and spec 1.8.0 part 2)."""
+__version__ = "1.8.0"

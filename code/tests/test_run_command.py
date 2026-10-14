@@ -155,7 +155,7 @@ def _run_with_world(tmp_path, monkeypatch, capsys, *, protect):
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x",
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False, protect=protect,
-                              regulation=str(tmp_path / "mine" / "regulation.bin"), design_dir=str(tmp_path / "ext"))
+                              regulation=str(tmp_path / "mine" / "regulation.bin"), creative_dir=str(tmp_path / "ext"))
     assert run_cmd.cmd_run(args) == 0
     captured = capsys.readouterr()
     book.close()
@@ -202,38 +202,38 @@ def test_run_hints_at_secure_only_after_a_session_that_ran_a_new_build(tmp_path,
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (tmp_path / "r.bin", mode))
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", no_archive_contaminated=False,
-                              keep=0, launch_timeout=1.0, verbose=False, protect=True, regulation=None, design_dir=None, spec=None)
+                              keep=0, launch_timeout=1.0, verbose=False, protect=True, regulation=None, creative_dir=None, spec=None)
     assert run_cmd.cmd_run(args) == 0
     out = capsys.readouterr()
     book.close()
-    assert ("innovate-items spells --secure" in out.out + out.err) is hint
+    assert ("innovate-spells secure" in out.out + out.err) is hint
 
 
-# ---- 1.7.1: the text step ----
+# ---- the memory steps `run` starts (1.7.1 text and colour; 1.8.0: `innovate-spells apply`, `resurrect`, `scripts start`) ----
 def _args(tmp_path, **kw):
     import argparse
-    d = dict(vault=str(tmp_path / "vault"), offsets="offsets.json", spec=None, design_dir=None, verbose=False)
+    d = dict(vault=str(tmp_path / "vault"), offsets="offsets.json", spec=None, creative_dir=None, verbose=False)
     return argparse.Namespace(**{**d, **kw})
 
 
-def test_the_text_command_is_write_text_when_loaded_with_the_same_vault_offsets_and_design(tmp_path, monkeypatch):
+def test_the_apply_command_is_innovate_spells_apply_when_loaded_with_the_same_vault_offsets_and_file(tmp_path, monkeypatch):
     monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
-    cmd, cwd = run_cmd.text_command(_args(tmp_path, spec="my.json", design_dir="ext"), tmp_path / "vault")
-    assert cmd[:3] == [run_cmd.sys.executable, "-m", "eldendisk"] and cmd[3:6] == ["write", "--text", "--when-loaded"]
+    cmd, cwd = run_cmd.apply_command(_args(tmp_path, spec="my.json", creative_dir="ext"), tmp_path / "vault")
+    assert cmd[:3] == [run_cmd.sys.executable, "-m", "eldendisk"] and cmd[3:6] == ["innovate-spells", "apply", "--when-loaded"]
     assert cmd[cmd.index("--vault") + 1] == str(tmp_path / "vault") and cmd[cmd.index("--offsets") + 1] == "offsets.json"
-    assert cmd[cmd.index("--spec") + 1] == "my.json" and cmd[cmd.index("--design-dir") + 1] == "ext"
+    assert cmd[cmd.index("--spec") + 1] == "my.json" and cmd[cmd.index("--creative-dir") + 1] == "ext"
     assert cwd and (run_cmd.Path(cwd) / "eldendisk").is_dir()
-    plain, _ = run_cmd.text_command(_args(tmp_path), tmp_path / "vault")
-    assert "--spec" not in plain and "--design-dir" not in plain
+    plain, _ = run_cmd.apply_command(_args(tmp_path), tmp_path / "vault")
+    assert "--spec" not in plain and "--creative-dir" not in plain
 
 
-def test_the_text_command_names_the_vault_and_offsets_only_when_the_user_chose_them(tmp_path, monkeypatch):
+def test_the_apply_command_names_the_vault_and_offsets_only_when_the_user_chose_them(tmp_path, monkeypatch):
     """The default vault and the default offsets.json are what the step finds by itself: the command line and the log stay short."""
     monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
     default = str(run_cmd.get_resource_path("offsets.json", default_dir=run_cmd.HERE))
-    cmd, _ = run_cmd.text_command(_args(tmp_path, vault=None, offsets=default), tmp_path / "vault")
-    assert cmd[3:] == ["write", "--text", "--when-loaded"]
-    cmd, _ = run_cmd.text_command(_args(tmp_path, vault=None, offsets="mine.json"), tmp_path / "vault")
+    cmd, _ = run_cmd.apply_command(_args(tmp_path, vault=None, offsets=default), tmp_path / "vault")
+    assert cmd[3:] == ["innovate-spells", "apply", "--when-loaded"]
+    cmd, _ = run_cmd.apply_command(_args(tmp_path, vault=None, offsets="mine.json"), tmp_path / "vault")
     assert "--vault" not in cmd and cmd[cmd.index("--offsets") + 1] == "mine.json"
 
 
@@ -243,20 +243,25 @@ def test_the_log_line_of_a_started_step_is_the_short_command(tmp_path, monkeypat
     seen = []
     monkeypatch.setattr(book, "d", lambda tag, msg: seen.append((tag, msg)))
     default = str(run_cmd.get_resource_path("offsets.json", default_dir=run_cmd.HERE))
-    run_cmd.start_text(_args(tmp_path, vault=None, offsets=default), tmp_path / "vault", spawn=lambda *a, **k: None)
-    assert seen == [("design", "starting: eldendisk write --text --when-loaded")]
+    quiet = _args(tmp_path, vault=None, offsets=default)
+    run_cmd.start_apply(quiet, tmp_path / "vault", spawn=lambda *a, **k: None)
+    run_cmd.start_enemies(quiet, tmp_path / "vault", spawn=lambda *a, **k: None)
+    run_cmd.start_scripts(quiet, tmp_path / "vault", spawn=lambda *a, **k: None)
+    assert seen == [("creative", "starting: eldendisk innovate-spells apply --when-loaded"),
+                    ("creative", "starting: eldendisk resurrect --when-loaded"),
+                    ("creative", "starting: eldendisk scripts start * --when-loaded")]
 
 
 def test_the_frozen_exe_runs_itself(tmp_path, monkeypatch):
     monkeypatch.setattr(run_cmd.sys, "frozen", True, raising=False)
-    cmd, cwd = run_cmd.text_command(_args(tmp_path), tmp_path / "vault")
-    assert cmd[:2] == [run_cmd.sys.executable, "write"] and cwd is None
+    cmd, cwd = run_cmd.apply_command(_args(tmp_path), tmp_path / "vault")
+    assert cmd[:3] == [run_cmd.sys.executable, "innovate-spells", "apply"] and cwd is None
 
 
-def test_start_text_spawns_in_its_own_process_group_and_stays_quiet_only_under_v(tmp_path):
+def test_a_step_spawns_in_its_own_process_group_and_stays_quiet_only_under_v(tmp_path):
     calls = []
-    run_cmd.start_text(_args(tmp_path), tmp_path / "vault", spawn=lambda cmd, **kw: calls.append(kw))
-    run_cmd.start_text(_args(tmp_path, verbose=True), tmp_path / "vault", spawn=lambda cmd, **kw: calls.append(kw))
+    run_cmd.start_apply(_args(tmp_path), tmp_path / "vault", spawn=lambda cmd, **kw: calls.append(kw))
+    run_cmd.start_apply(_args(tmp_path, verbose=True), tmp_path / "vault", spawn=lambda cmd, **kw: calls.append(kw))
     assert "stdout" not in calls[0] and calls[1]["stdout"] is run_cmd.subprocess.DEVNULL
     assert all("creationflags" in c for c in calls)
 
@@ -285,10 +290,11 @@ def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text, flame=False
     monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     monkeypatch.setattr(run_cmd, "_regulation", lambda *a: (world, mode))
-    monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: text)
-    monkeypatch.setattr(run_cmd, "design_has_flame", lambda a, v: flame)
-    monkeypatch.setattr(run_cmd, "start_flame", lambda a, v: spawned.append("flame") or type("P", (), {"poll": lambda s: 0})())
-    monkeypatch.setattr(run_cmd, "start_text", lambda a, v: spawned.append("text") or type("P", (), {"poll": lambda s: 0})())
+    monkeypatch.setattr(run_cmd, "creative_has_text", lambda a, v: text)
+    monkeypatch.setattr(run_cmd, "creative_has_flame", lambda a, v: flame)
+    monkeypatch.setattr(run_cmd, "creative_has_enemies", lambda a, v: False)
+    monkeypatch.setattr(run_cmd, "has_scripts", lambda a: False)
+    monkeypatch.setattr(run_cmd, "start_apply", lambda a, v: spawned.append("apply") or type("P", (), {"poll": lambda s: 0})())
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=protect,
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
     assert run_cmd.cmd_run(args) == 0
@@ -296,33 +302,20 @@ def _run_hooks(tmp_path, monkeypatch, *, protect, world, mode, text, flame=False
     return spawned
 
 
-@pytest.mark.parametrize("protect,world,mode,text,expect", [
-    (True, "w.bin", "built", True, ["text"]), (True, "w.bin", "secured", True, ["text"]), (True, "w.bin", "last", True, ["text"]),
-    (True, "w.bin", "built", False, []),             # no text in the design: nothing to start
-    (True, "w.bin", "file", True, []),               # `--regulation FILE` is not the design's build
-    (True, None, "none", True, []),                  # nothing was swapped
-    (False, "w.bin", "built", True, [])])            # vault OFF: `write` is not allowed at all
-def test_run_starts_the_text_step_only_when_it_has_something_to_give(tmp_path, monkeypatch, protect, world, mode, text, expect):
-    assert _run_hooks(tmp_path, monkeypatch, protect=protect, world=world, mode=mode, text=text) == expect
-
-
 @pytest.mark.parametrize("protect,world,mode,text,flame,expect", [
-    (True, "w.bin", "built", False, True, ["flame"]),            # a flame colour without any text still starts its step
-    (True, "w.bin", "secured", True, True, ["text", "flame"]),
-    (True, "w.bin", "built", False, False, []),
-    (True, "w.bin", "file", True, True, []),                     # not the design's build
-    (False, "w.bin", "built", True, True, [])])                  # vault OFF
-def test_run_starts_the_flame_colour_step_only_with_a_colour_in_the_design(tmp_path, monkeypatch, protect, world, mode, text, flame, expect):
+    (True, "w.bin", "built", True, False, ["apply"]), (True, "w.bin", "secured", True, False, ["apply"]),
+    (True, "w.bin", "last", True, False, ["apply"]),
+    (True, "w.bin", "built", False, True, ["apply"]),            # a flame colour without any text still starts it
+    (True, "w.bin", "secured", True, True, ["apply"]),           # texts and colours: one step
+    (True, "w.bin", "built", False, False, []),                  # nothing to give: nothing to start
+    (True, "w.bin", "file", True, True, []),                     # `--regulation FILE` is not creative.json's build
+    (True, None, "none", True, True, []),                        # nothing was swapped
+    (False, "w.bin", "built", True, True, [])])                  # vault OFF: no write at all
+def test_run_starts_apply_only_when_it_has_something_to_give(tmp_path, monkeypatch, protect, world, mode, text, flame, expect):
     assert _run_hooks(tmp_path, monkeypatch, protect=protect, world=world, mode=mode, text=text, flame=flame) == expect
 
 
-def test_the_flame_command_is_write_flame_color_when_loaded(tmp_path, monkeypatch):
-    monkeypatch.setattr(run_cmd.sys, "frozen", False, raising=False)
-    cmd, _ = run_cmd.text_command(_args(tmp_path), tmp_path / "vault", "--flame-color")
-    assert cmd[3:6] == ["write", "--flame-color", "--when-loaded"]
-
-
-def test_a_text_step_still_running_when_the_session_ends_is_stopped(tmp_path, monkeypatch):
+def test_a_step_still_running_when_the_session_ends_is_stopped(tmp_path, monkeypatch):
     import argparse
     from eldendisk.logbook import book
     stopped = []
@@ -346,16 +339,18 @@ def test_a_text_step_still_running_when_the_session_ends_is_stopped(tmp_path, mo
     monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     monkeypatch.setattr(run_cmd, "_regulation", lambda *a: ("w.bin", "built"))
-    monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: True)
-    monkeypatch.setattr(run_cmd, "design_has_flame", lambda a, v: False)
-    monkeypatch.setattr(run_cmd, "start_text", lambda a, v: Child())
+    monkeypatch.setattr(run_cmd, "creative_has_text", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "creative_has_flame", lambda a, v: False)
+    monkeypatch.setattr(run_cmd, "creative_has_enemies", lambda a, v: False)
+    monkeypatch.setattr(run_cmd, "has_scripts", lambda a: False)
+    monkeypatch.setattr(run_cmd, "start_apply", lambda a, v: Child())
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=True,
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
     assert run_cmd.cmd_run(args) == 0 and stopped == [1]
     book.close()
 
 
-def test_the_scripts_start_once_the_text_and_colour_steps_are_done(tmp_path, monkeypatch):
+def test_the_scripts_start_once_the_memory_steps_are_done(tmp_path, monkeypatch):
     """Started side by side, a script's first colour writes were refused (`not painted yet`): the scripts wait for those steps."""
     import argparse
     import threading
@@ -388,19 +383,20 @@ def test_the_scripts_start_once_the_text_and_colour_steps_are_done(tmp_path, mon
     monkeypatch.setattr(run_cmd, "list_process_names", lambda: [])
     monkeypatch.setattr(run_cmd, "session_log", lambda: None)
     monkeypatch.setattr(run_cmd, "_regulation", lambda *a: ("w.bin", "built"))
-    monkeypatch.setattr(run_cmd, "design_has_text", lambda a, v: True)
-    monkeypatch.setattr(run_cmd, "design_has_flame", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "creative_has_text", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "creative_has_flame", lambda a, v: True)
+    monkeypatch.setattr(run_cmd, "creative_has_enemies", lambda a, v: True)
     monkeypatch.setattr(run_cmd, "has_scripts", lambda a: True)
     monkeypatch.setattr(run_cmd, "find_pid", lambda exe: 77)
-    monkeypatch.setattr(run_cmd, "start_text", lambda a, v: Step("text", 3))
-    monkeypatch.setattr(run_cmd, "start_flame", lambda a, v: Step("flame", 6))
+    monkeypatch.setattr(run_cmd, "start_apply", lambda a, v: Step("apply", 3))
+    monkeypatch.setattr(run_cmd, "start_enemies", lambda a, v: Step("resurrect", 6))
     monkeypatch.setattr(run_cmd, "start_scripts", lambda a, v, after_steps=False: order.append(("scripts", after_steps)) or done.set()
                         or Step("scripts", 99))
     args = argparse.Namespace(vault=str(tmp_path / "vault"), save_dir=None, game_dir=None, offsets="x", protect=True,
                               no_archive_contaminated=False, keep=0, launch_timeout=1.0, verbose=False)
     assert run_cmd.cmd_run(args) == 0
     book.close()
-    assert order == ["text", "flame", ("scripts", True)]
+    assert order == ["apply", "resurrect", ("scripts", True)]
 
 
 def test_scripts_started_after_the_steps_do_not_wait_for_the_world_twice(tmp_path):
@@ -420,7 +416,7 @@ def test_the_colour_step_starts_for_a_fire_colour_or_a_colour_of_the_positive_cu
         spell["positive_curse_energy_eyes"] = eyes
     if flame is not None:
         spell["flame_color"] = flame
-    design = tmp_path / "design.json"
+    design = tmp_path / "creative.json"
     design.write_text(json.dumps(file_of({ID: spell})), encoding="utf-8")
-    assert run_cmd.design_has_flame(_args(tmp_path, spec=str(design)), tmp_path / "vault") is expect
+    assert run_cmd.creative_has_flame(_args(tmp_path, spec=str(design)), tmp_path / "vault") is expect
 
