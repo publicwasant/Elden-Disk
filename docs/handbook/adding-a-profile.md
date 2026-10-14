@@ -491,3 +491,18 @@ How the 1.17.1 values were found (2026-10-13, read-only, the game running): with
 first slot, a look for that number in PlayerGameData and one pointer away from it found it at `[PlayerGameData+0x530]+0x10`, followed by the
 other memorised spells 8 bytes apart; selecting the next slot changed one number only, at `+0x80`, from 0 to 1.
 
+## Optional block: `event_flags` (since 1.8.0)
+
+```json
+"event_flags": { "man_rva": "0x3D6C4B8", "divisor": 1000, "holder_size": 125 }
+```
+
+Where the game keeps its event flags, for `resurrect great-enemies`: the static at `base + man_rva` points at `CSEventFlagMan`,
+whose first member is `CSFD4VirtualMemoryFlag`; the manager must hold `divisor` at `+0x1C` and `holder_size` at `+0x20` (else the
+command says the game version moved it). The rest of the layout (the tree of groups at `+0x38`, the blocks at `+0x28`) is in
+`game/eventflags.py`. Without the block the great enemies are listed but cannot be read or brought back (exit `2`).
+
+How the 1.17.1 value was found (2026-10-13, read-only, a character in the world): every 8 bytes of the exe's `.data` (13.3 MB) were read
+as a pointer, and the one object they point at whose vftable lies in the exe and whose `+0x1C` / `+0x20` are 1000 / 125 was the
+manager; one candidate, in 1.9 s. Its tree then gave Godrick's and Margit's defeat flags as the game shows them.
+

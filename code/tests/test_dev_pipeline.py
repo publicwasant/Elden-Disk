@@ -158,6 +158,17 @@ def test_pyinstaller_puts_the_exe_in_build_dist_and_embeds_the_configs(project, 
     assert not (project / "build" / "dist" / "offsets.json").exists()          # embedded: nothing copied
 
 
+def test_the_great_enemies_table_goes_into_the_exe_next_to_its_package(project, monkeypatch):
+    table = project / "code" / "eldendisk" / "design" / "resurrect" / "great_enemies" / "great_enemies.json"
+    table.parent.mkdir(parents=True, exist_ok=True)
+    table.write_text("{}", encoding="utf-8")
+    for embed in (True, False):                     # package data the code reads next to itself: with or without --no-embed
+        ok, calls = build(monkeypatch, embed=embed)
+        adds = [c for c in calls[0] if c.startswith("--add-data=")]
+        assert ok and any(a.endswith(("great_enemies.json;eldendisk/design/resurrect/great_enemies",
+                                      "great_enemies.json:eldendisk/design/resurrect/great_enemies")) for a in adds)
+
+
 def test_nuitka_embeds_and_names_the_exe(project, monkeypatch):
     ok, calls = build(monkeypatch, engine="nuitka")
     inc = [c for c in calls[0] if c.startswith("--include-data-files=")]

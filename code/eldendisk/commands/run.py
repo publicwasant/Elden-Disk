@@ -111,6 +111,24 @@ def start_flame(args, vault_path: Path):
     return start_text(args, vault_path, flag="--flame-color")
 
 
+def design_has_enemies(args, vault_path: Path) -> bool:
+    """Does the design name great enemies to bring back (`resurrect.great_enemies.activate`, 1.8.0)?"""
+    import json
+    from ..design.resurrect.great_enemies.table import TableError, design_list
+    try:
+        return bool(design_list(json.loads(Path(spec_file(args)).read_text(encoding="utf-8"))))
+    except (OSError, ValueError, TableError):
+        return False
+
+
+def start_enemies(args, vault_path: Path, spawn=subprocess.Popen):
+    """Start `resurrect great-enemies --when-loaded` in the background: the design's great enemies, once a character is in the world."""
+    cmd, cwd = child_command(args, vault_path, ["resurrect", "great-enemies", "--when-loaded"])
+    book.d(DESIGN_TAG, "starting: " + " ".join(["eldendisk"] + cmd[1 if getattr(sys, "frozen", False) else 3:]))
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL} if getattr(args, "verbose", False) else {}
+    return spawn(cmd, cwd=cwd, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0), env=_child_env(), **quiet)
+
+
 def start_scripts(args, vault_path: Path, spawn=subprocess.Popen, after_steps: bool = False):
     """Start the host of the external scripts (`external-scripts --run --when-loaded`) in the background: its lines appear in
     this console and in the log; a script that fails, or the host itself, never stops the game or the restore."""
@@ -203,6 +221,8 @@ def cmd_run(args) -> int:
             steps.append(start_text)
         if design_has_flame(args, vault_path):
             steps.append(start_flame)
+    if protect and design_has_enemies(args, vault_path):     # 1.8.0: whatever regulation.bin is swapped (memory only, the session's)
+        steps.append(start_enemies)
     scripts = None
     if protect and has_scripts(args):          # the external scripts: whatever regulation.bin the session swaps (they write through the session)
         scripts = start_scripts

@@ -142,6 +142,15 @@ class EquipmentLayout:
 
 
 @dataclass(frozen=True)
+class EventFlagsLayout:
+    """Where the game keeps its event flags (1.8.0; found read-only on 1.17.1, spec 1.8.0 section 13): the static at man_rva points at
+    CSEventFlagMan, whose first member is CSFD4VirtualMemoryFlag; it must hold `divisor` at +0x1C and `holder_size` at +0x20."""
+    man_rva: int
+    divisor: int
+    holder_size: int
+
+
+@dataclass(frozen=True)
 class TextProfile:
     """The text tables `write --text` changes (measured on 1.17.1, tools/probe_text.py; writer/text.py says how they are found). `files`:
     table name -> the number of its text file (the pointer to the table sits at `array + number * 8`). `sizes`: table name -> the size of
@@ -168,6 +177,7 @@ class Profile:
     params: ParamsProfile | None = None   # None -> params unsupported for this exe
     text: TextProfile | None = None       # None -> `write --text` unsupported for this exe
     equipment: EquipmentLayout | None = None   # None -> character.equipment is not read for this exe
+    event_flags: EventFlagsLayout | None = None   # None -> resurrect cannot read or change a boss on this exe
 
 
 def _parse_sp_effect(d: dict) -> tuple[SpEffectLayout | None, str | None]:
@@ -289,6 +299,19 @@ def _parse_text(d: dict) -> TextProfile | None:
                        {str(n): _number(v, f"text.sizes.{n}", 0x28, 64 * 1024 * 1024) for n, v in sizes.items()})
 
 
+def _parse_event_flags(d: dict) -> EventFlagsLayout | None:
+    """Absent block -> None (resurrect unsupported). A block that is there must be complete."""
+    e = d.get("event_flags")
+    if e is None:
+        return None
+    if not isinstance(e, dict):
+        raise Incomplete("event_flags must be an object")
+    lay = EventFlagsLayout(**{k: _num(e.get(k), f"event_flags.{k}") for k in ("man_rva", "divisor", "holder_size")})
+    if lay.divisor <= 0 or lay.holder_size * 8 < lay.divisor:
+        raise Incomplete("event_flags: holder_size bytes must hold divisor flags")
+    return lay
+
+
 def _parse_equipment(d: dict) -> EquipmentLayout | None:
     """Absent block -> None (no character.equipment). A block that is there must be complete."""
     e = d.get("equipment")
@@ -397,6 +420,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
         params = _parse_params(raw)
         text = _parse_text(raw)
         equipment = _parse_equipment(raw)
+        event_flags = _parse_event_flags(raw)
         return Profile(
             sha256=exe_sha256.lower(),
             label=str(raw.get("label") or exe_sha256[:12]),
@@ -414,6 +438,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
             params=params,
             text=text,
             equipment=equipment,
+            event_flags=event_flags,
         ), None
     except Incomplete as exc:
         return None, f"profile incomplete: {exc}"

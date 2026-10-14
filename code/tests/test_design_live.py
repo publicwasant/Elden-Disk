@@ -242,15 +242,18 @@ def test_a_snapshots_changes_go_where_they_belong(monkeypatch, tmp_path):
     b.gate, b.say, b._write_lock, b._read_lock, b._doc = tf.open_gate(), (lambda l, m: None), __import__("threading").Lock(), \
         __import__("threading").Lock(), None
     b._checked_at, b._clock = 0.0, (lambda: 0.5)
-    applied, plain = [], []
+    applied, plain, enemies = [], [], []
     b.design = SimpleNamespace(apply=lambda goods, parts, value: applied.append((goods, parts, value)) or {"x": value},
-                                  table_index=lambda: None)
+                               apply_enemy=lambda who, parts, value: enemies.append((who, parts, value)) or {"y": value},
+                               table_index=lambda: None)
     monkeypatch.setattr(backend, "write_values", lambda mem, t, gate, snap, values, say, *rest: plain.append(values) or dict(values))
     done, problems = b.write({("character", "attributes", "vigor"): 60, ("systems", "status", "pid"): 3,
                               ("design", "innovate_items", "spells", "2230000", "customs", "advanced", "colors", "SpEffect.1642100"): "#FF909E",
+                              ("design", "resurrect", "great_enemies", "10000850", "defeated"): False,
                               ("params", "effects", "1621000", "effectEndurance"): 5.0})
     assert plain == [{"character.attributes.vigor": 60}, {"params.effects.1621000.effectEndurance": 5.0}]
     assert applied == [("2230000", ["customs", "advanced", "colors", "SpEffect.1642100"], "#FF909E")]
+    assert enemies == [("10000850", ["defeated"], False)]                          # 1.8.0: a great enemy brought back
     assert len(problems) == 1 and "systems.status.pid" in problems[0]
 
 

@@ -427,7 +427,8 @@ def test_write_capability_is_confined_to_the_writer_package():
             assert "VirtualAllocEx" not in text, f"VirtualAllocEx found in {rel}"   # 1.7.1: the one allocation, for a text table
             assert "WriteProcessMemory" not in text, f"WriteProcessMemory found in {rel}"
             assert "PROCESS_VM_WRITE" not in text, f"PROCESS_VM_WRITE found in {rel}"
-        if rel not in ("writer/writer.py", "commands/write.py", "design/external_scripts/backend.py"):     # 1.7.2: the scripts' backend
+        if rel not in ("writer/writer.py", "commands/write.py", "design/external_scripts/backend.py",     # 1.7.2: the scripts' backend
+                       "commands/resurrect.py"):                                                              # 1.8.0: event flags OFF
             assert "WritableProcessMemory" not in text, f"{rel} must not use the write handle"
 
 

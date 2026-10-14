@@ -115,6 +115,9 @@
     }
   },
   "extension": {
+    "external_scripts": {
+      "default": {}
+    },
     "innovate_items": {
       "spells": {
         "2230000": {
@@ -169,16 +172,19 @@
                 },
                 "colors": {
                   "Magic.6421.castSfxId": {
-                    "main": [0.2, 0.65, 1.0],
-                    "accent": [1.0, 1.0, 1.0]
+                    "main": "<hex>",
+                    "accent": "<hex>"
                   },
-                  "SpEffect.1642100": [0.2, 0.65, 1.0]
+                  "SpEffect.1642100": "<hex>"
                 }
               }
             }
           }
         }
       }
+    },
+    "resurrect": {
+      "great_enemies": {}
     }
   }
 }

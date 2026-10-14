@@ -115,6 +115,7 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 | `write --set NAME=VALUE...` / `write --refill LIST` / `write --reset NAME...` | **Writer** | One-shot edits (values, and `params.…` fields of the game's tables, any numeric field of any row of six tables); `--reset` puts the game's own params back (it remembers the first value of a field in this game process); exit `5` without a valid session. `write --text [--wait [SEC] \| --when-loaded]` puts the `text` of the design's spells into the running game, `write --flame-color [--wait [SEC] \| --when-loaded]` the `flame_color` of the design (both also started by `run`; `--when-loaded` waits for a character in the world and writes once) |
 | `vault status \| list \| verify \| restore \| keep \| prune` | **Vault** | Session record, snapshots, recovery; `keep --yes` adopts the current save as the new baseline |
 | `design --list` \| `innovate-items spells --add all\|PATH...\|--secure` | **Design** | Build things for the game outside the game. `innovate-items spells` turns `design.json` into a `regulation.bin` with your own incantation (judged by a gate; `--secure` keeps the one you tried); `run` (vault ON) does the same build and swaps it in; `--add spells.slots.<id> ...` picks which spells `run` builds |
+| `resurrect great-enemies --list \| --activate NAME...` | **Design** | A boss you have beaten, alive again for this session (1.8.0): its event flags turned off in memory; warp to another region and back, it fights as the first time; the vault restores the save |
 | `external-scripts [--run [--when-loaded]] [--scripts-dir PATH ...]` | **Design** | Your Python scripts next to the game (1.7.2): without `--run` it lists them and how each ended; `run` (vault ON) starts them by itself |
 | `hash` | Tool | SHA-256 of `eldenring.exe` (profile key) |
 
@@ -159,6 +160,17 @@ next run, design unchanged: regulation.secured.bin is swapped, nothing is built
 - The order is: build, back up the save and the game's file, write the session record, swap, launch. When the game closes, `run` restores the save **and** the game's file and checks both by hash. If either fails, the record stays and the next `run` is refused until `vault restore` finishes (exit `4`). `vault keep` keeps the current *save* only; the game's own file always comes back first.
 - Offline only (as every param change). `write --set params.…` works inside a swapped session, so a new row can be tuned live.
 - Details: [spec 1.7.0](docs/specs/elden-disk-spec-v1.7.0.md), [spec 1.6.4](docs/specs/elden-disk-spec-v1.6.4.md); the research is in the [item-customization handbook](docs/experiments/item-customization/item-customization-handbook.md).
+
+---
+
+## ⚔️ Great enemies again (`resurrect`, 1.8.0)
+
+`eldendisk resurrect great-enemies --activate "mohg lord"` brings a boss you have beaten back for the session: every enemy fought
+under the big health bar (212, the DLC included) can come back with its intro, its runes and its drop, for practice or a video. Only
+the game's memory changes; when the game closes the vault puts the save back and the boss is dead again. Warp to a grace in another
+region and come back: the boss is there. `--list` shows them all with the nearest grace (`--defeated`, `--area caelid`, `--story`);
+the design can name a list `run` brings back every session. Details: [cli-commands section 4d](docs/guilde/cli-commands.md),
+[spec 1.8.0](docs/specs/elden-disk-spec-v1.8.0.md).
 
 ---
 

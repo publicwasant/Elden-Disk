@@ -194,7 +194,7 @@
     },
     "design": {
       "type": ["object", "null"],
-      "description": "1.7.2: the design's spells of the last build (design.innovate_items.spells.<goods id>) with what the game holds now; null without a build.",
+      "description": "1.7.2: the design's spells of the last build (design.innovate_items.spells.<goods id>) with what the game holds now; 1.8.0: the great enemies (design.resurrect.great_enemies.<id>: name, place, grace, runes, drop, story, dlc, defeated) when the profile has an event_flags block; null when there is neither.",
       "properties": {
         "innovate_items": {
           "type": "object",

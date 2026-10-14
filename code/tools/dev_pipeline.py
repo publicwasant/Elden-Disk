@@ -168,6 +168,9 @@ def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, c
         if embed:
             cmd += [f"--add-data={c}{sep}." for c in configs]
             cmd += [f"--add-data={s}{sep}{SCRIPTS_FOLDER}" for s in scripts]
+        table = layout["code_dir"] / "eldendisk" / "design" / "resurrect" / "great_enemies" / "great_enemies.json"
+        if table.is_file():           # 1.8.0: package data the code reads next to itself (always in the exe, with or without --no-embed)
+            cmd.append(f"--add-data={table}{sep}eldendisk/design/resurrect/great_enemies")
     else:  # nuitka
         cmd = [sys.executable, "-m", "nuitka", "--onefile", f"--output-dir={dist_dir}",
                f"--output-filename={EXE_NAME}"]

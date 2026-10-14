@@ -88,11 +88,12 @@ def test_the_host_and_the_vault_never_open_the_game():
 
 
 def test_only_the_write_command_the_scripts_backend_and_the_writer_package_touch_the_writer():
-    """`write`, and since 1.7.2 the backend of the external scripts (it writes through the same MemoryWriter, after the same session
-    check, and checks the session again while the scripts run)."""
+    """`write`, since 1.7.2 the backend of the external scripts (it writes through the same MemoryWriter, after the same session
+    check, and checks the session again while the scripts run), and since 1.8.0 `resurrect` (event flags OFF only, after the same
+    session check, writer/eventflags.py)."""
     users = {p.relative_to(PKG).as_posix() for p in modules()
              if any(under(m, "eldendisk.writer") for m in internal_imports(p)) and "writer" not in p.relative_to(PKG).parts[:1]}
-    assert users == {"commands/write.py", "design/external_scripts/backend.py"}
+    assert users == {"commands/write.py", "design/external_scripts/backend.py", "commands/resurrect.py"}
 
 
 def test_the_reader_never_imports_the_writer_and_the_writer_never_imports_the_reader():

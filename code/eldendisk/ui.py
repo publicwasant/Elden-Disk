@@ -458,7 +458,7 @@ def card(title: str, rows: list[tuple[str, str]], stream=None) -> None:
 
 # ---- what the other processes of a `run` did (read back from the log file) ----
 _LOG_LINE = re.compile(r"^\d\d-\d\d (\d\d):(\d\d):(\d\d)\.\d{3} +\d+ ([VDIWE]) (\S+) *: (.*)$")
-CHILD_TAGS = ("write", "scripts")
+CHILD_TAGS = ("write", "scripts", "design")       # design: the great enemies step (1.8.0)
 CHILD_DONE = "it lasts until the game closes"     # the end of the line a `write` step ends with when it has done its work
 
 

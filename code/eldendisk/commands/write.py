@@ -431,21 +431,28 @@ def ext_value(raw: str):
 def _write_design(args, target: Target, mem, gate, snapshot, sets: list) -> tuple[int, int]:
     """`--set design.innovate_items.spells.<goods id>.<path>=VALUE` (1.7.2): the values of the design's spells in the running
     game (design/external_scripts/backend.py). -> (written, refused)."""
-    from ..design.external_scripts.backend import DesignLive, Refused, design_path
+    from ..design.external_scripts.backend import DesignLive, Refused, design_path, enemy_path
     vault_root = resolve_vault(args.vault)
     try:
         resolved = design.open_spells(design_folder(args, vault_root), spec_file(args)).resolved_path
     except DesignError as exc:
-        book.e("write", str(exc))
-        return 0, len(sets)
+        if not all(enemy_path(s.partition("=")[0]) for s in sets):      # the great enemies need no build
+            book.e("write", str(exc))
+            return 0, len(sets)
+        resolved = None
     live = DesignLive(mem, target, vault_root, resolved, gate=gate, snapshot=snapshot,
                          say=lambda level, msg: {"W": book.w, "E": book.e, "D": book.d}.get(level, book.i)("write", msg))
     ok = bad = 0
     for item in sets:
         name, _sep, raw = item.partition("=")
-        goods, parts = design_path(name)
         try:
-            for what, value in live.apply(goods, parts, ext_value(raw)).items():
+            enemy = enemy_path(name)
+            if enemy is not None:
+                got = live.apply_enemy(enemy[0], enemy[1], ext_value(raw))
+            else:
+                goods, parts = design_path(name)
+                got = live.apply(goods, parts, ext_value(raw))
+            for what, value in got.items():
                 book.ok("write", f"{name.strip()} = {value}  ({what})")
             ok += 1
         except Refused as exc:
@@ -463,8 +470,11 @@ def cmd_write(args) -> int:
     ext_sets = [s for s in (args.set or []) if s.strip().lower().startswith("design.")]
     for item in ext_sets:
         name, sep, _raw = item.partition("=")
-        if not sep or len(name.strip().split(".")) < 5 or name.strip().split(".")[:3] != ["design", "innovate_items", "spells"]:
-            book.e("write", f"--set {item!r}: expected design.innovate_items.spells.<goods id>.<path>=VALUE")
+        head = [p.lower() for p in name.strip().split(".")[:3]]
+        if not sep or len(name.strip().split(".")) < 5 or head not in (["design", "innovate_items", "spells"],
+                                                                       ["design", "resurrect", "great_enemies"]):
+            book.e("write", f"--set {item!r}: expected design.innovate_items.spells.<goods id>.<path>=VALUE or "
+                            "design.resurrect.great_enemies.<id or name>.defeated=false")
             return 1
     try:
         policy = parse_policy([s for s in (args.set or []) if s not in ext_sets], args.refill, getattr(args, "reset", None))

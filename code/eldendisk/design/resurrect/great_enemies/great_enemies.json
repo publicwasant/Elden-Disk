@@ -1,0 +1,5100 @@
+{
+ "_readme": "spec 1.8.0 section 4: made by tools/gen_great_enemies.py from the game's own files (1.17.1); do not edit by hand, add to OVERRIDES in the tool instead",
+ "game": "1.17.1",
+ "great_enemies": {
+  "10000800": {
+   "name": "Godrick the Grafted",
+   "place": "Stormveil Castle",
+   "map": "m10_00_00",
+   "flags": {
+    "defeated": 10000800,
+    "playlog": [
+     9101
+    ],
+    "drop": [
+     171,
+     510010
+    ],
+    "cutscene": [
+     10000801
+    ]
+   },
+   "runes": 20000,
+   "drop": [
+    "Godrick's Great Rune",
+    "Remembrance of the Grafted"
+   ],
+   "grace": {
+    "id": 100007,
+    "name": "Secluded Cell",
+    "meters": 57
+   },
+   "story": true,
+   "dlc": false
+  },
+  "10000850": {
+   "name": "Margit, the Fell Omen",
+   "place": "Stormhill",
+   "map": "m10_00_00",
+   "flags": {
+    "defeated": 10000850,
+    "playlog": [
+     9100
+    ],
+    "drop": [
+     60510
+    ],
+    "cutscene": [
+     10000851
+    ]
+   },
+   "runes": 12000,
+   "drop": [
+    "Talisman Pouch"
+   ],
+   "grace": {
+    "id": 100002,
+    "name": "Castleward Tunnel",
+    "meters": 59
+   },
+   "story": true,
+   "dlc": false
+  },
+  "10010800": {
+   "name": "Grafted Scion",
+   "place": null,
+   "map": "m10_01_00",
+   "flags": {
+    "defeated": 10010800,
+    "playlog": [
+     9103
+    ],
+    "drop": [
+     510030
+    ],
+    "cutscene": []
+   },
+   "runes": 3200,
+   "drop": [
+    "Ornamental Straight Sword",
+    "Golden Beast Crest Shield"
+   ],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "11000800": {
+   "name": "Morgott, the Omen King",
+   "place": "Leyndell, Royal Capital",
+   "map": "m11_00_00",
+   "flags": {
+    "defeated": 11000800,
+    "playlog": [
+     9100,
+     9104
+    ],
+    "drop": [
+     173,
+     60510,
+     510040
+    ],
+    "cutscene": [
+     11000801
+    ]
+   },
+   "runes": 120000,
+   "drop": [
+    "Remembrance of the Omen King",
+    "Morgott's Great Rune",
+    "Talisman Pouch"
+   ],
+   "grace": {
+    "id": 110000,
+    "name": "Elden Throne",
+    "meters": 51
+   },
+   "story": true,
+   "dlc": false
+  },
+  "11000850": {
+   "name": "Godfrey, First Elden Lord",
+   "place": "Leyndell, Royal Capital",
+   "map": "m11_00_00",
+   "flags": {
+    "defeated": 11000850,
+    "playlog": [
+     9105
+    ],
+    "drop": [
+     60520
+    ],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [
+    "Talisman Pouch"
+   ],
+   "grace": {
+    "id": 110007,
+    "name": "Queen's Bedchamber",
+    "meters": 111
+   },
+   "story": true,
+   "dlc": false
+  },
+  "11050800": {
+   "name": "Godfrey, First Elden Lord",
+   "place": "Leyndell, Ashen Capital",
+   "map": "m11_05_00",
+   "flags": {
+    "defeated": 11050800,
+    "playlog": [
+     9107
+    ],
+    "drop": [
+     510070
+    ],
+    "cutscene": [
+     11050801
+    ]
+   },
+   "runes": 300000,
+   "drop": [
+    "Remembrance of Hoarah Loux"
+   ],
+   "grace": {
+    "id": 110504,
+    "name": "Queen's Bedchamber",
+    "meters": 151
+   },
+   "story": true,
+   "dlc": false
+  },
+  "11050850": {
+   "name": "Sir Gideon Ofnir, the All-Knowing",
+   "place": "Leyndell, Ashen Capital",
+   "map": "m11_05_00",
+   "flags": {
+    "defeated": 11050850,
+    "playlog": [
+     9106
+    ],
+    "drop": [
+     510060
+    ],
+    "cutscene": []
+   },
+   "runes": 150000,
+   "drop": [
+    "Scepter of the All-Knowing",
+    "All-Knowing Helm",
+    "All-Knowing Armor",
+    "All-Knowing Gauntlets",
+    "All-Knowing Greaves"
+   ],
+   "grace": {
+    "id": 110504,
+    "name": "Queen's Bedchamber",
+    "meters": 113
+   },
+   "story": true,
+   "dlc": false
+  },
+  "12010800": {
+   "name": "Dragonkin Soldier of Nokstella",
+   "place": "Ainsel River Main",
+   "map": "m12_01_00",
+   "flags": {
+    "defeated": 12010800,
+    "playlog": [
+     9109
+    ],
+    "drop": [
+     510090
+    ],
+    "cutscene": []
+   },
+   "runes": 12000,
+   "drop": [
+    "Frozen Lightning Spear"
+   ],
+   "grace": {
+    "id": 120109,
+    "name": "Nokstella Waterfall Basin",
+    "meters": 120
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12010850": {
+   "name": "Dragonkin Soldier",
+   "place": "Lake of Rot",
+   "map": "m12_01_00",
+   "flags": {
+    "defeated": 12010850,
+    "playlog": [],
+    "drop": [
+     530600
+    ],
+    "cutscene": []
+   },
+   "runes": 58000,
+   "drop": [
+    "Dragonscale Blade"
+   ],
+   "grace": {
+    "id": 120106,
+    "name": "Lake of Rot Shoreside",
+    "meters": 254
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12020800": {
+   "name": "Valiant Gargoyle",
+   "place": "Nokron, Eternal City",
+   "map": "m12_02_00",
+   "flags": {
+    "defeated": 12020800,
+    "playlog": [
+     9110
+    ],
+    "drop": [
+     510100
+    ],
+    "cutscene": [
+     12020502
+    ]
+   },
+   "runes": 30000,
+   "drop": [
+    "Gargoyle's Greatsword",
+    "Gargoyle's Twinblade"
+   ],
+   "grace": {
+    "id": 120207,
+    "name": "Aqueduct-Facing Cliffs",
+    "meters": 184
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12020830": {
+   "name": "Dragonkin Soldier",
+   "place": "Nokron, Eternal City",
+   "map": "m12_02_00",
+   "flags": {
+    "defeated": 12020830,
+    "playlog": [],
+    "drop": [
+     530620
+    ],
+    "cutscene": []
+   },
+   "runes": 16000,
+   "drop": [
+    "Dragon Halberd"
+   ],
+   "grace": {
+    "id": 120207,
+    "name": "Aqueduct-Facing Cliffs",
+    "meters": 152
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12020850": {
+   "name": "Mimic Tear",
+   "place": "Nokron, Eternal City",
+   "map": "m12_02_00",
+   "flags": {
+    "defeated": 12020850,
+    "playlog": [
+     9134
+    ],
+    "drop": [
+     510340
+    ],
+    "cutscene": []
+   },
+   "runes": 10000,
+   "drop": [
+    "Larval Tear",
+    "Silver Tear Mask"
+   ],
+   "grace": {
+    "id": 120208,
+    "name": "Night's Sacred Ground",
+    "meters": 163
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12030390": {
+   "name": "great enemy 12030390",
+   "place": "Deeproot Depths",
+   "map": "m12_03_00",
+   "flags": {
+    "defeated": 12020390,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 25000,
+   "drop": [],
+   "grace": {
+    "id": 120304,
+    "name": "The Nameless Eternal City",
+    "meters": 214
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12030800": {
+   "name": "Fia's Champion",
+   "place": "Deeproot Depths",
+   "map": "m12_03_00",
+   "flags": {
+    "defeated": 12030800,
+    "playlog": [
+     9135
+    ],
+    "drop": [
+     510350,
+     12037800
+    ],
+    "cutscene": []
+   },
+   "runes": 40000,
+   "drop": [
+    "Fia's Mist",
+    "Numen's Rune",
+    "Rune Arc"
+   ],
+   "grace": {
+    "id": 120305,
+    "name": "Across the Roots",
+    "meters": 178
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12030850": {
+   "name": "Lichdragon Fortissax",
+   "place": "Deeproot Depths",
+   "map": "m12_03_00",
+   "flags": {
+    "defeated": 12030850,
+    "playlog": [
+     9111
+    ],
+    "drop": [
+     510110,
+     12037850
+    ],
+    "cutscene": []
+   },
+   "runes": 90000,
+   "drop": [
+    "Remembrance of the Lichdragon",
+    "Numen's Rune",
+    "Rune Arc"
+   ],
+   "grace": {
+    "id": 120305,
+    "name": "Across the Roots",
+    "meters": 81
+   },
+   "story": false,
+   "dlc": false
+  },
+  "12040800": {
+   "name": "Astel, Naturalborn of the Void",
+   "place": null,
+   "map": "m12_04_00",
+   "flags": {
+    "defeated": 12040800,
+    "playlog": [
+     9108
+    ],
+    "drop": [
+     510080
+    ],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [
+    "Remembrance of the Naturalborn"
+   ],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "12050800": {
+   "name": "Mohg, Lord of Blood",
+   "place": "Mohgwyn Palace",
+   "map": "m12_05_00",
+   "flags": {
+    "defeated": 12050800,
+    "playlog": [
+     9112
+    ],
+    "drop": [
+     175,
+     510120
+    ],
+    "cutscene": [
+     12050801,
+     12050802
+    ]
+   },
+   "runes": 420000,
+   "drop": [
+    "Remembrance of the Blood Lord",
+    "Mohg's Great Rune"
+   ],
+   "grace": {
+    "id": 120503,
+    "name": "Dynasty Mausoleum Midpoint",
+    "meters": 103
+   },
+   "story": true,
+   "dlc": false
+  },
+  "12080800": {
+   "name": "Ancestor Spirit",
+   "place": null,
+   "map": "m12_08_00",
+   "flags": {
+    "defeated": 12080800,
+    "playlog": [
+     9132
+    ],
+    "drop": [
+     510320
+    ],
+    "cutscene": []
+   },
+   "runes": 13000,
+   "drop": [
+    "Ancestral Follower Ashes"
+   ],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "12090800": {
+   "name": "Regal Ancestor Spirit",
+   "place": null,
+   "map": "m12_09_00",
+   "flags": {
+    "defeated": 12090800,
+    "playlog": [
+     9133
+    ],
+    "drop": [
+     510330
+    ],
+    "cutscene": []
+   },
+   "runes": 24000,
+   "drop": [
+    "Remembrance of the Regal Ancestor"
+   ],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "13000800": {
+   "name": "Maliketh, the Black Blade",
+   "place": "Crumbling Farum Azula",
+   "map": "m13_00_00",
+   "flags": {
+    "defeated": 13000800,
+    "playlog": [
+     9116
+    ],
+    "drop": [
+     510160
+    ],
+    "cutscene": []
+   },
+   "runes": 220000,
+   "drop": [
+    "Remembrance of the Black Blade"
+   ],
+   "grace": {
+    "id": 130007,
+    "name": "Dragon Temple Transept",
+    "meters": 168
+   },
+   "story": true,
+   "dlc": false
+  },
+  "13000830": {
+   "name": "Dragonlord Placidusax",
+   "place": "Crumbling Farum Azula",
+   "map": "m13_00_00",
+   "flags": {
+    "defeated": 13000830,
+    "playlog": [
+     9115
+    ],
+    "drop": [
+     510150
+    ],
+    "cutscene": []
+   },
+   "runes": 280000,
+   "drop": [
+    "Remembrance of the Dragonlord"
+   ],
+   "grace": {
+    "id": 130004,
+    "name": "Crumbling Beast Grave Depths",
+    "meters": 975
+   },
+   "story": false,
+   "dlc": false
+  },
+  "13000850": {
+   "name": "Godskin Duo",
+   "place": "Crumbling Farum Azula",
+   "map": "m13_00_00",
+   "flags": {
+    "defeated": 13000850,
+    "playlog": [
+     9114
+    ],
+    "drop": [
+     510140
+    ],
+    "cutscene": []
+   },
+   "runes": 170000,
+   "drop": [
+    "Smithing-Stone Miner's Bell Bearing [4]",
+    "Ash of War: Black Flame Tornado"
+   ],
+   "grace": {
+    "id": 130007,
+    "name": "Dragon Temple Transept",
+    "meters": 56
+   },
+   "story": true,
+   "dlc": false
+  },
+  "14000800": {
+   "name": "Rennala, Queen of the Full Moon",
+   "place": "Academy of Raya Lucaria",
+   "map": "m14_00_00",
+   "flags": {
+    "defeated": 14000800,
+    "playlog": [
+     9118
+    ],
+    "drop": [
+     177,
+     197
+    ],
+    "cutscene": [
+     14000801
+    ]
+   },
+   "runes": 40000,
+   "drop": [
+    "Remembrance of the Full Moon Queen",
+    "Great Rune of the Unborn"
+   ],
+   "grace": {
+    "id": 140002,
+    "name": "Church of the Cuckoo",
+    "meters": 908
+   },
+   "story": true,
+   "dlc": false
+  },
+  "14000850": {
+   "name": "Red Wolf of Radagon",
+   "place": "Academy of Raya Lucaria",
+   "map": "m14_00_00",
+   "flags": {
+    "defeated": 14000850,
+    "playlog": [
+     9117
+    ],
+    "drop": [
+     60440
+    ],
+    "cutscene": []
+   },
+   "runes": 14000,
+   "drop": [
+    "Memory Stone"
+   ],
+   "grace": {
+    "id": 140003,
+    "name": "Schoolhouse Classroom",
+    "meters": 45
+   },
+   "story": true,
+   "dlc": false
+  },
+  "15000800": {
+   "name": "Malenia, Blade of Miquella",
+   "place": "Elphael, Brace of the Haligtree",
+   "map": "m15_00_00",
+   "flags": {
+    "defeated": 15000800,
+    "playlog": [
+     9120
+    ],
+    "drop": [
+     176,
+     510200
+    ],
+    "cutscene": [
+     15000801
+    ]
+   },
+   "runes": 480000,
+   "drop": [
+    "Remembrance of the Rot Goddess",
+    "Malenia's Great Rune"
+   ],
+   "grace": {
+    "id": 150004,
+    "name": "Haligtree Roots",
+    "meters": 136
+   },
+   "story": true,
+   "dlc": false
+  },
+  "15000850": {
+   "name": "Loretta, Knight of the Haligtree",
+   "place": "Miquella's Haligtree",
+   "map": "m15_00_00",
+   "flags": {
+    "defeated": 15000850,
+    "playlog": [
+     9119
+    ],
+    "drop": [
+     510190
+    ],
+    "cutscene": []
+   },
+   "runes": 200000,
+   "drop": [
+    "Loretta's Mastery",
+    "Loretta's War Sickle"
+   ],
+   "grace": {
+    "id": 150007,
+    "name": "Haligtree Town",
+    "meters": 152
+   },
+   "story": false,
+   "dlc": false
+  },
+  "16000800": {
+   "name": "Rykard, Lord of Blasphemy",
+   "place": "Volcano Manor",
+   "map": "m16_00_00",
+   "flags": {
+    "defeated": 16000800,
+    "playlog": [
+     9122
+    ],
+    "drop": [
+     174,
+     510220,
+     16007690
+    ],
+    "cutscene": []
+   },
+   "runes": 130000,
+   "drop": [
+    "Remembrance of the Blasphemous",
+    "Rykard's Great Rune",
+    "Serpent-Hunter"
+   ],
+   "grace": {
+    "id": 160005,
+    "name": "Audience Pathway",
+    "meters": 107
+   },
+   "story": true,
+   "dlc": false
+  },
+  "16000850": {
+   "name": "Godskin Noble",
+   "place": "Volcano Manor",
+   "map": "m16_00_00",
+   "flags": {
+    "defeated": 16000850,
+    "playlog": [
+     9121
+    ],
+    "drop": [
+     510210
+    ],
+    "cutscene": []
+   },
+   "runes": 50000,
+   "drop": [
+    "Godskin Stitcher",
+    "Noble Presence"
+   ],
+   "grace": {
+    "id": 160002,
+    "name": "Volcano Manor",
+    "meters": 153
+   },
+   "story": false,
+   "dlc": false
+  },
+  "16000860": {
+   "name": "Abductor Virgin (Swinging Sickle)",
+   "place": "Volcano Manor",
+   "map": "m16_00_00",
+   "flags": {
+    "defeated": 16000860,
+    "playlog": [
+     9129
+    ],
+    "drop": [
+     510290
+    ],
+    "cutscene": []
+   },
+   "runes": 10000,
+   "drop": [
+    "Inquisitor's Girandole"
+   ],
+   "grace": {
+    "id": 160007,
+    "name": "Subterranean Inquisition Chamber",
+    "meters": 125
+   },
+   "story": false,
+   "dlc": false
+  },
+  "18000800": {
+   "name": "Ulcerated Tree Spirit",
+   "place": "Stranded Graveyard",
+   "map": "m18_00_00",
+   "flags": {
+    "defeated": 18000800,
+    "playlog": [
+     9128
+    ],
+    "drop": [
+     510280
+    ],
+    "cutscene": []
+   },
+   "runes": 15000,
+   "drop": [
+    "Golden Seed",
+    "Banished Knight Oleg"
+   ],
+   "grace": {
+    "id": 180000,
+    "name": "Cave of Knowledge",
+    "meters": 156
+   },
+   "story": false,
+   "dlc": false
+  },
+  "18000850": {
+   "name": "Soldier of Godrick",
+   "place": "Stranded Graveyard",
+   "map": "m18_00_00",
+   "flags": {
+    "defeated": 18000850,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 400,
+   "drop": [],
+   "grace": {
+    "id": 180000,
+    "name": "Cave of Knowledge",
+    "meters": 52
+   },
+   "story": false,
+   "dlc": false
+  },
+  "19000800": {
+   "name": "Elden Beast",
+   "place": null,
+   "map": "m19_00_00",
+   "flags": {
+    "defeated": 19000800,
+    "playlog": [
+     9021,
+     9123
+    ],
+    "drop": [
+     510230
+    ],
+    "cutscene": []
+   },
+   "runes": 500000,
+   "drop": [
+    "Elden Remembrance"
+   ],
+   "grace": null,
+   "story": true,
+   "dlc": false
+  },
+  "20000800": {
+   "name": "Divine Beast Dancing Lion",
+   "place": "Belurat, Tower Settlement",
+   "map": "m20_00_00",
+   "flags": {
+    "defeated": 20000800,
+    "playlog": [
+     9140
+    ],
+    "drop": [
+     510400
+    ],
+    "cutscene": [
+     20000801
+    ]
+   },
+   "runes": 120000,
+   "drop": [
+    "Remembrance of the Dancing Lion"
+   ],
+   "grace": {
+    "id": 200003,
+    "name": "Stagefront",
+    "meters": 57
+   },
+   "story": false,
+   "dlc": true
+  },
+  "20010800": {
+   "name": "Radahn, Consort of Miquella",
+   "place": "Enir-Ilim",
+   "map": "m20_01_00",
+   "flags": {
+    "defeated": 20010800,
+    "playlog": [
+     9143
+    ],
+    "drop": [
+     510430,
+     20017981
+    ],
+    "cutscene": [
+     20010199,
+     20010801
+    ]
+   },
+   "runes": 500000,
+   "drop": [
+    "Remembrance of a God and a Lord",
+    "Circlet of Light"
+   ],
+   "grace": {
+    "id": 200106,
+    "name": "Divine Gate Front Staircase",
+    "meters": 122
+   },
+   "story": false,
+   "dlc": true
+  },
+  "20010850": {
+   "name": "Needle Knight Leda",
+   "place": "Enir-Ilim",
+   "map": "m20_01_00",
+   "flags": {
+    "defeated": 20010850,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 0,
+   "drop": [],
+   "grace": {
+    "id": 200105,
+    "name": "Cleansing Chamber Anteroom",
+    "meters": 104
+   },
+   "story": false,
+   "dlc": true
+  },
+  "21000850": {
+   "name": "great enemy 21000850",
+   "place": "Elphael, Brace of the Haligtree",
+   "map": "m15_00_00",
+   "flags": {
+    "defeated": 21000850,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 200000,
+   "drop": [],
+   "grace": {
+    "id": 150000,
+    "name": "Malenia, Goddess of Rot",
+    "meters": 11
+   },
+   "story": false,
+   "dlc": false
+  },
+  "21010800": {
+   "name": "great enemy 21010800",
+   "place": "Miquella's Haligtree",
+   "map": "m15_00_00",
+   "flags": {
+    "defeated": 21010800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 400000,
+   "drop": [],
+   "grace": {
+    "id": 150005,
+    "name": "Haligtree Promenade",
+    "meters": 10
+   },
+   "story": false,
+   "dlc": false
+  },
+  "22000800": {
+   "name": "Putrescent Knight",
+   "place": "Stone Coffin Fissure",
+   "map": "m22_00_00",
+   "flags": {
+    "defeated": 22000800,
+    "playlog": [
+     9148
+    ],
+    "drop": [
+     510480
+    ],
+    "cutscene": [
+     22000801
+    ]
+   },
+   "runes": 220000,
+   "drop": [
+    "Remembrance of Putrescence"
+   ],
+   "grace": {
+    "id": 220003,
+    "name": "Fissure Waypoint",
+    "meters": 509
+   },
+   "story": true,
+   "dlc": true
+  },
+  "25000800": {
+   "name": "Metyr, Mother of Fingers",
+   "place": null,
+   "map": "m25_00_00",
+   "flags": {
+    "defeated": 25000800,
+    "playlog": [
+     9155
+    ],
+    "drop": [
+     510550
+    ],
+    "cutscene": []
+   },
+   "runes": 420000,
+   "drop": [
+    "Remembrance of the Mother of Fingers"
+   ],
+   "grace": null,
+   "story": true,
+   "dlc": true
+  },
+  "28000800": {
+   "name": "Midra, Lord of Frenzied Flame",
+   "place": "Midra's Manse",
+   "map": "m28_00_00",
+   "flags": {
+    "defeated": 28000800,
+    "playlog": [
+     9156
+    ],
+    "drop": [
+     510560
+    ],
+    "cutscene": [
+     28000801
+    ]
+   },
+   "runes": 410000,
+   "drop": [
+    "Remembrance of the Lord of Frenzied Flame"
+   ],
+   "grace": {
+    "id": 280003,
+    "name": "Second Floor Chamber",
+    "meters": 37
+   },
+   "story": true,
+   "dlc": true
+  },
+  "30000800": {
+   "name": "Cemetery Shade",
+   "place": "Weeping Peninsula",
+   "map": "m30_00_00",
+   "flags": {
+    "defeated": 30000800,
+    "playlog": [
+     9200
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 2200,
+   "drop": [],
+   "grace": {
+    "id": 300000,
+    "name": "Tombsward Catacombs",
+    "meters": 109
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30010800": {
+   "name": "Erdtree Burial Watchdog",
+   "place": "Weeping Peninsula",
+   "map": "m30_01_00",
+   "flags": {
+    "defeated": 30010800,
+    "playlog": [
+     9201
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 2400,
+   "drop": [],
+   "grace": {
+    "id": 300100,
+    "name": "Impaler's Catacombs",
+    "meters": 110
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30020800": {
+   "name": "Erdtree Burial Watchdog",
+   "place": "Limgrave",
+   "map": "m30_02_00",
+   "flags": {
+    "defeated": 30020800,
+    "playlog": [
+     9202
+    ],
+    "drop": [],
+    "cutscene": [
+     30020801
+    ]
+   },
+   "runes": 1300,
+   "drop": [],
+   "grace": {
+    "id": 300200,
+    "name": "Stormfoot Catacombs",
+    "meters": 116
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30030800": {
+   "name": "Spiritcaller Snail",
+   "place": "Liurnia of the Lakes",
+   "map": "m30_03_00",
+   "flags": {
+    "defeated": 30030800,
+    "playlog": [
+     9206
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3000,
+   "drop": [],
+   "grace": {
+    "id": 300300,
+    "name": "Road's End Catacombs",
+    "meters": 115
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30040800": {
+   "name": "Grave Warden Duelist",
+   "place": "Limgrave",
+   "map": "m30_04_00",
+   "flags": {
+    "defeated": 30040800,
+    "playlog": [
+     9204
+    ],
+    "drop": [],
+    "cutscene": [
+     30040801
+    ]
+   },
+   "runes": 1700,
+   "drop": [],
+   "grace": {
+    "id": 300400,
+    "name": "Murkwater Catacombs",
+    "meters": 116
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30050800": {
+   "name": "Cemetery Shade",
+   "place": "Liurnia of the Lakes",
+   "map": "m30_05_00",
+   "flags": {
+    "defeated": 30050800,
+    "playlog": [
+     9205
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3500,
+   "drop": [],
+   "grace": {
+    "id": 300500,
+    "name": "Black Knife Catacombs",
+    "meters": 118
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30050850": {
+   "name": "Black Knife Assassin",
+   "place": "Liurnia of the Lakes",
+   "map": "m30_05_00",
+   "flags": {
+    "defeated": 30050850,
+    "playlog": [
+     9221
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 4200,
+   "drop": [],
+   "grace": {
+    "id": 300500,
+    "name": "Black Knife Catacombs",
+    "meters": 180
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30060800": {
+   "name": "Erdtree Burial Watchdog",
+   "place": "Liurnia of the Lakes",
+   "map": "m30_06_00",
+   "flags": {
+    "defeated": 30060800,
+    "playlog": [
+     9207
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3200,
+   "drop": [],
+   "grace": {
+    "id": 300600,
+    "name": "Cliffbottom Catacombs",
+    "meters": 113
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30070800": {
+   "name": "Erdtree Burial Watchdog",
+   "place": "Mt. Gelmir",
+   "map": "m30_07_00",
+   "flags": {
+    "defeated": 30070800,
+    "playlog": [
+     9212
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 12000,
+   "drop": [],
+   "grace": {
+    "id": 300700,
+    "name": "Wyndham Catacombs",
+    "meters": 101
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30080800": {
+   "name": "Ancient Hero of Zamor",
+   "place": "Altus Plateau",
+   "map": "m30_08_00",
+   "flags": {
+    "defeated": 30080800,
+    "playlog": [
+     9208
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 20000,
+   "drop": [],
+   "grace": {
+    "id": 300800,
+    "name": "Sainted Hero's Grave",
+    "meters": 322
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30090800": {
+   "name": "Red Wolf of the Champion",
+   "place": "Mt. Gelmir",
+   "map": "m30_09_00",
+   "flags": {
+    "defeated": 30090800,
+    "playlog": [
+     9209
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 21000,
+   "drop": [],
+   "grace": {
+    "id": 300900,
+    "name": "Gelmir Hero's Grave",
+    "meters": 369
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30100800": {
+   "name": "Crucible Knight Ordovis",
+   "place": "Capital Outskirts",
+   "map": "m30_10_00",
+   "flags": {
+    "defeated": 30100800,
+    "playlog": [
+     9210
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 28000,
+   "drop": [],
+   "grace": {
+    "id": 301000,
+    "name": "Auriza Hero's Grave",
+    "meters": 329
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30100801": {
+   "name": "Crucible Knight Ordovis",
+   "place": "Capital Outskirts",
+   "map": "m30_10_00",
+   "flags": {
+    "defeated": 30100800,
+    "playlog": [
+     9210
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 0,
+   "drop": [],
+   "grace": {
+    "id": 301000,
+    "name": "Auriza Hero's Grave",
+    "meters": 324
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30110800": {
+   "name": "Black Knife Assassin",
+   "place": "Stormhill",
+   "map": "m30_11_00",
+   "flags": {
+    "defeated": 30110800,
+    "playlog": [
+     9203
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 1600,
+   "drop": [],
+   "grace": {
+    "id": 301100,
+    "name": "Deathtouched Catacombs",
+    "meters": 124
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30120800": {
+   "name": "Misbegotten Warrior",
+   "place": "Altus Plateau",
+   "map": "m30_12_00",
+   "flags": {
+    "defeated": 30120800,
+    "playlog": [
+     9211
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 9400,
+   "drop": [],
+   "grace": {
+    "id": 301200,
+    "name": "Unsightly Catacombs",
+    "meters": 143
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30120801": {
+   "name": "Misbegotten Warrior",
+   "place": "Altus Plateau",
+   "map": "m30_12_00",
+   "flags": {
+    "defeated": 30120800,
+    "playlog": [
+     9211
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 0,
+   "drop": [],
+   "grace": {
+    "id": 301200,
+    "name": "Unsightly Catacombs",
+    "meters": 147
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30130800": {
+   "name": "Grave Warden Duelist",
+   "place": "Capital Outskirts",
+   "map": "m30_13_00",
+   "flags": {
+    "defeated": 30130800,
+    "playlog": [
+     9213
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 15000,
+   "drop": [],
+   "grace": {
+    "id": 301300,
+    "name": "Auriza Side Tomb",
+    "meters": 113
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30140800": {
+   "name": "Erdtree Burial Watchdog (Sword)",
+   "place": "Caelid",
+   "map": "m30_14_00",
+   "flags": {
+    "defeated": 30140800,
+    "playlog": [
+     9214
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 7400,
+   "drop": [],
+   "grace": {
+    "id": 301400,
+    "name": "Minor Erdtree Catacombs",
+    "meters": 133
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30150800": {
+   "name": "Cemetery Shade",
+   "place": "Caelid",
+   "map": "m30_15_00",
+   "flags": {
+    "defeated": 30150800,
+    "playlog": [
+     9215
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 6800,
+   "drop": [],
+   "grace": {
+    "id": 301500,
+    "name": "Caelid Catacombs",
+    "meters": 195
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30160800": {
+   "name": "Putrid Tree Spirit",
+   "place": "Caelid",
+   "map": "m30_16_00",
+   "flags": {
+    "defeated": 30160800,
+    "playlog": [
+     9216
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 64000,
+   "drop": [],
+   "grace": {
+    "id": 301600,
+    "name": "War-Dead Catacombs",
+    "meters": 174
+   },
+   "story": false,
+   "dlc": false
+  },
+  "30170800": {
+   "name": "Ancient Hero of Zamor",
+   "place": null,
+   "map": "m30_17_00",
+   "flags": {
+    "defeated": 30170800,
+    "playlog": [
+     9217
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 83000,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "30180800": {
+   "name": "Ulcerated Tree Spirit",
+   "place": null,
+   "map": "m30_18_00",
+   "flags": {
+    "defeated": 30180800,
+    "playlog": [
+     9218
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 48000,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "30190800": {
+   "name": "Putrid Grave Warden Duelist",
+   "place": null,
+   "map": "m30_19_00",
+   "flags": {
+    "defeated": 30190800,
+    "playlog": [
+     9219
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 78000,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "30200800": {
+   "name": "great enemy 30200800",
+   "place": "Forbidden Lands",
+   "map": "m30_20_00",
+   "flags": {
+    "defeated": 30200810,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 50000,
+   "drop": [],
+   "grace": {
+    "id": 302000,
+    "name": "Hidden Path to the Haligtree",
+    "meters": 155
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31000800": {
+   "name": "Patches",
+   "place": null,
+   "map": "m31_00_00",
+   "flags": {
+    "defeated": 31000800,
+    "playlog": [
+     9232
+    ],
+    "drop": [
+     400183
+    ],
+    "cutscene": []
+   },
+   "runes": 0,
+   "drop": [
+    "Golden Rune [1]"
+   ],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "31010800": {
+   "name": "Runebear",
+   "place": "Weeping Peninsula",
+   "map": "m31_01_00",
+   "flags": {
+    "defeated": 31010800,
+    "playlog": [
+     9231
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 2600,
+   "drop": [],
+   "grace": {
+    "id": 310100,
+    "name": "Earthbore Cave",
+    "meters": 120
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31020800": {
+   "name": "Miranda Blossom",
+   "place": null,
+   "map": "m31_02_00",
+   "flags": {
+    "defeated": 31020800,
+    "playlog": [
+     9230
+    ],
+    "drop": [],
+    "cutscene": [
+     31020801
+    ]
+   },
+   "runes": 2100,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "31030800": {
+   "name": "Beastman of Farum Azula",
+   "place": "Limgrave",
+   "map": "m31_03_00",
+   "flags": {
+    "defeated": 31030800,
+    "playlog": [
+     9233
+    ],
+    "drop": [
+     520330
+    ],
+    "cutscene": [
+     31030801
+    ]
+   },
+   "runes": 1000,
+   "drop": [
+    "Flamedrake Talisman"
+   ],
+   "grace": {
+    "id": 310300,
+    "name": "Groveside Cave",
+    "meters": 113
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31040800": {
+   "name": "Cleanrot Knight",
+   "place": "Liurnia of the Lakes",
+   "map": "m31_04_00",
+   "flags": {
+    "defeated": 31040800,
+    "playlog": [
+     9236
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3300,
+   "drop": [],
+   "grace": {
+    "id": 310400,
+    "name": "Stillwater Cave",
+    "meters": 158
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31050800": {
+   "name": "Bloodhound Knight",
+   "place": "Liurnia of the Lakes",
+   "map": "m31_05_00",
+   "flags": {
+    "defeated": 31050800,
+    "playlog": [
+     9237
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3600,
+   "drop": [],
+   "grace": {
+    "id": 310500,
+    "name": "Lakeside Crystal Cave",
+    "meters": 88
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31060800": {
+   "name": "Crystalian (Staff)",
+   "place": "Liurnia of the Lakes",
+   "map": "m31_06_00",
+   "flags": {
+    "defeated": 31060800,
+    "playlog": [
+     9238
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3300,
+   "drop": [],
+   "grace": {
+    "id": 310600,
+    "name": "Academy Crystal Cave",
+    "meters": 121
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31070800": {
+   "name": "Kindred of Rot",
+   "place": "Mt. Gelmir",
+   "map": "m31_07_00",
+   "flags": {
+    "defeated": 31070800,
+    "playlog": [
+     9239
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 10000,
+   "drop": [],
+   "grace": {
+    "id": 310700,
+    "name": "Seethewater Cave",
+    "meters": 186
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31090800": {
+   "name": "Demi-Human Queen Margot",
+   "place": "Mt. Gelmir",
+   "map": "m31_09_00",
+   "flags": {
+    "defeated": 31090800,
+    "playlog": [
+     9240
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 11000,
+   "drop": [],
+   "grace": {
+    "id": 310900,
+    "name": "Volcano Cave",
+    "meters": 25
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31100800": {
+   "name": "Beastman of Farum Azula (Cleaver)",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m31_10_00",
+   "flags": {
+    "defeated": 31100800,
+    "playlog": [
+     9244
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 65000,
+   "drop": [],
+   "grace": {
+    "id": 311000,
+    "name": "Dragonbarrow Cave",
+    "meters": 91
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31110800": {
+   "name": "Putrid Crystalian (Spear)",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m31_11_00",
+   "flags": {
+    "defeated": 31110800,
+    "playlog": [
+     9246
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 7100,
+   "drop": [],
+   "grace": {
+    "id": 311100,
+    "name": "Sellia Hideaway",
+    "meters": 293
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31120800": {
+   "name": "Misbegotten Crusader",
+   "place": "Consecrated Snowfield",
+   "map": "m31_12_00",
+   "flags": {
+    "defeated": 31120800,
+    "playlog": [
+     9247
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 93000,
+   "drop": [],
+   "grace": {
+    "id": 311200,
+    "name": "Cave of the Forlorn",
+    "meters": 98
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31150800": {
+   "name": "Demi-Human Chief",
+   "place": "Limgrave",
+   "map": "m31_15_00",
+   "flags": {
+    "defeated": 31150800,
+    "playlog": [
+     9234
+    ],
+    "drop": [
+     60140,
+     520340
+    ],
+    "cutscene": [
+     31150801
+    ]
+   },
+   "runes": 1200,
+   "drop": [
+    "Sewing Needle",
+    "Tailoring Tools"
+   ],
+   "grace": {
+    "id": 311500,
+    "name": "Coastal Cave",
+    "meters": 67
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31170800": {
+   "name": "Guardian Golem",
+   "place": "Limgrave",
+   "map": "m31_17_00",
+   "flags": {
+    "defeated": 31170800,
+    "playlog": [
+     9235
+    ],
+    "drop": [],
+    "cutscene": [
+     31170801
+    ]
+   },
+   "runes": 1700,
+   "drop": [],
+   "grace": {
+    "id": 311700,
+    "name": "Highroad Cave",
+    "meters": 119
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31180800": {
+   "name": "Miranda the Blighted Bloom",
+   "place": "Altus Plateau",
+   "map": "m31_18_00",
+   "flags": {
+    "defeated": 31180800,
+    "playlog": [
+     9241
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 8400,
+   "drop": [],
+   "grace": {
+    "id": 311800,
+    "name": "Perfumer's Grotto",
+    "meters": 219
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31190800": {
+   "name": "Black Knife Assassin",
+   "place": "Altus Plateau",
+   "map": "m31_19_00",
+   "flags": {
+    "defeated": 31190800,
+    "playlog": [
+     9242
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 9000,
+   "drop": [],
+   "grace": {
+    "id": 311900,
+    "name": "Sage's Cave",
+    "meters": 61
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31190850": {
+   "name": "Necromancer Garris",
+   "place": "Altus Plateau",
+   "map": "m31_19_00",
+   "flags": {
+    "defeated": 31190850,
+    "playlog": [
+     9249
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 9000,
+   "drop": [],
+   "grace": {
+    "id": 311900,
+    "name": "Sage's Cave",
+    "meters": 30
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31200800": {
+   "name": "Cleanrot Knight (Spear)",
+   "place": "Caelid",
+   "map": "m31_20_00",
+   "flags": {
+    "defeated": 31200800,
+    "playlog": [
+     9245
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 7000,
+   "drop": [],
+   "grace": {
+    "id": 312000,
+    "name": "Abandoned Cave",
+    "meters": 119
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31210800": {
+   "name": "Frenzied Duelist",
+   "place": "Caelid",
+   "map": "m31_21_00",
+   "flags": {
+    "defeated": 31210800,
+    "playlog": [
+     9243
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 6700,
+   "drop": [],
+   "grace": {
+    "id": 312100,
+    "name": "Gaol Cave",
+    "meters": 127
+   },
+   "story": false,
+   "dlc": false
+  },
+  "31220800": {
+   "name": "Spiritcaller Snail",
+   "place": null,
+   "map": "m31_22_00",
+   "flags": {
+    "defeated": 31220800,
+    "playlog": [
+     9248
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 70000,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "32000800": {
+   "name": "Scaly Misbegotten",
+   "place": "Weeping Peninsula",
+   "map": "m32_00_00",
+   "flags": {
+    "defeated": 32000800,
+    "playlog": [
+     9260
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 2000,
+   "drop": [],
+   "grace": {
+    "id": 320000,
+    "name": "Morne Tunnel",
+    "meters": 84
+   },
+   "story": false,
+   "dlc": false
+  },
+  "32010800": {
+   "name": "Stonedigger Troll",
+   "place": null,
+   "map": "m32_01_00",
+   "flags": {
+    "defeated": 32010800,
+    "playlog": [
+     9261
+    ],
+    "drop": [],
+    "cutscene": [
+     32010801
+    ]
+   },
+   "runes": 1800,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "32020800": {
+   "name": "Crystalian",
+   "place": null,
+   "map": "m32_02_00",
+   "flags": {
+    "defeated": 32020800,
+    "playlog": [
+     9262
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3000,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "32040800": {
+   "name": "Stonedigger Troll",
+   "place": null,
+   "map": "m32_04_00",
+   "flags": {
+    "defeated": 32040800,
+    "playlog": [
+     9263
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 9600,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "32050800": {
+   "name": "Crystalian (Ringblade)",
+   "place": "Altus Plateau",
+   "map": "m32_05_00",
+   "flags": {
+    "defeated": 32050800,
+    "playlog": [
+     9265
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 9000,
+   "drop": [],
+   "grace": {
+    "id": 320500,
+    "name": "Altus Tunnel",
+    "meters": 138
+   },
+   "story": false,
+   "dlc": false
+  },
+  "32050801": {
+   "name": "Crystalian (Ringblade)",
+   "place": "Altus Plateau",
+   "map": "m32_05_00",
+   "flags": {
+    "defeated": 32050800,
+    "playlog": [
+     9265
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 0,
+   "drop": [],
+   "grace": {
+    "id": 320500,
+    "name": "Altus Tunnel",
+    "meters": 137
+   },
+   "story": false,
+   "dlc": false
+  },
+  "32070800": {
+   "name": "Magma Wyrm",
+   "place": "Caelid",
+   "map": "m32_07_00",
+   "flags": {
+    "defeated": 32070800,
+    "playlog": [
+     9266
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 7500,
+   "drop": [],
+   "grace": {
+    "id": 320701,
+    "name": "Rear Gael Tunnel Entrance",
+    "meters": 50
+   },
+   "story": false,
+   "dlc": false
+  },
+  "32080800": {
+   "name": "Fallingstar Beast",
+   "place": "Caelid",
+   "map": "m32_08_00",
+   "flags": {
+    "defeated": 32080800,
+    "playlog": [
+     9267
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 7600,
+   "drop": [],
+   "grace": {
+    "id": 320800,
+    "name": "Sellia Crystal Tunnel",
+    "meters": 158
+   },
+   "story": false,
+   "dlc": false
+  },
+  "32110800": {
+   "name": "Astel, Stars of Darkness",
+   "place": null,
+   "map": "m32_11_00",
+   "flags": {
+    "defeated": 32110800,
+    "playlog": [
+     9268
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 120000,
+   "drop": [],
+   "grace": null,
+   "story": false,
+   "dlc": false
+  },
+  "34120800": {
+   "name": "Onyx Lord",
+   "place": "Capital Outskirts",
+   "map": "m34_12_00",
+   "flags": {
+    "defeated": 34120800,
+    "playlog": [
+     9264
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 16000,
+   "drop": [],
+   "grace": {
+    "id": 341202,
+    "name": "Divine Tower of West Altus: Gate",
+    "meters": 43
+   },
+   "story": false,
+   "dlc": false
+  },
+  "34130800": {
+   "name": "Godskin Apostle",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m34_13_00",
+   "flags": {
+    "defeated": 34130800,
+    "playlog": [
+     9173
+    ],
+    "drop": [
+     510730
+    ],
+    "cutscene": []
+   },
+   "runes": 94000,
+   "drop": [
+    "Godskin Apostle Hood",
+    "Godskin Apostle Robe",
+    "Godskin Apostle Bracelets",
+    "Godskin Apostle Trousers"
+   ],
+   "grace": {
+    "id": 341301,
+    "name": "Divine Tower of Caelid: Basement",
+    "meters": 79
+   },
+   "story": false,
+   "dlc": false
+  },
+  "34140850": {
+   "name": "Fell Twin",
+   "place": "Forbidden Lands",
+   "map": "m34_14_00",
+   "flags": {
+    "defeated": 34140850,
+    "playlog": [
+     9174
+    ],
+    "drop": [
+     510740
+    ],
+    "cutscene": []
+   },
+   "runes": 29000,
+   "drop": [
+    "Omenkiller Rollo"
+   ],
+   "grace": {
+    "id": 341400,
+    "name": "Divine Tower of East Altus: Gate",
+    "meters": 435
+   },
+   "story": false,
+   "dlc": false
+  },
+  "35000800": {
+   "name": "Mohg, the Omen",
+   "place": "Subterranean Shunning-Grounds",
+   "map": "m35_00_00",
+   "flags": {
+    "defeated": 35000800,
+    "playlog": [
+     9125
+    ],
+    "drop": [
+     510250
+    ],
+    "cutscene": []
+   },
+   "runes": 100000,
+   "drop": [
+    "Bloodflame Talons"
+   ],
+   "grace": {
+    "id": 350004,
+    "name": "Frenzied Flame Proscription",
+    "meters": 123
+   },
+   "story": false,
+   "dlc": false
+  },
+  "35000850": {
+   "name": "Esgar, Priest of Blood",
+   "place": "Subterranean Shunning-Grounds",
+   "map": "m35_00_00",
+   "flags": {
+    "defeated": 35000850,
+    "playlog": [
+     9222
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 30000,
+   "drop": [],
+   "grace": {
+    "id": 350003,
+    "name": "Leyndell Catacombs",
+    "meters": 92
+   },
+   "story": false,
+   "dlc": false
+  },
+  "39200800": {
+   "name": "Magma Wyrm Makar",
+   "place": "Ruin-Strewn Precipice",
+   "map": "m39_20_00",
+   "flags": {
+    "defeated": 39200800,
+    "playlog": [
+     9126
+    ],
+    "drop": [
+     510260
+    ],
+    "cutscene": []
+   },
+   "runes": 24000,
+   "drop": [
+    "Magma Wyrm's Scalesword",
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 390002,
+    "name": "Ruin-Strewn Precipice Overlook",
+    "meters": 100
+   },
+   "story": false,
+   "dlc": false
+  },
+  "40000800": {
+   "name": "Death Knight",
+   "place": "Gravesite Plain",
+   "map": "m40_00_00",
+   "flags": {
+    "defeated": 40000800,
+    "playlog": [
+     9270
+    ],
+    "drop": [],
+    "cutscene": [
+     40000801
+    ]
+   },
+   "runes": 110000,
+   "drop": [],
+   "grace": {
+    "id": 400000,
+    "name": "Fog Rift Catacombs",
+    "meters": 366
+   },
+   "story": false,
+   "dlc": true
+  },
+  "40010800": {
+   "name": "Death Knight",
+   "place": "Rauh Base",
+   "map": "m40_01_00",
+   "flags": {
+    "defeated": 40010800,
+    "playlog": [
+     9271
+    ],
+    "drop": [],
+    "cutscene": [
+     40010801
+    ]
+   },
+   "runes": 130000,
+   "drop": [],
+   "grace": {
+    "id": 400100,
+    "name": "Scorpion River Catacombs",
+    "meters": 350
+   },
+   "story": false,
+   "dlc": true
+  },
+  "41000800": {
+   "name": "Demi-Human Swordmaster Onze",
+   "place": "Gravesite Plain",
+   "map": "m41_00_00",
+   "flags": {
+    "defeated": 41000800,
+    "playlog": [
+     9275
+    ],
+    "drop": [],
+    "cutscene": [
+     41000801
+    ]
+   },
+   "runes": 80000,
+   "drop": [],
+   "grace": {
+    "id": 410000,
+    "name": "Belurat Gaol",
+    "meters": 218
+   },
+   "story": false,
+   "dlc": true
+  },
+  "41010800": {
+   "name": "Curseblade Labirith",
+   "place": "Scadu Altus",
+   "map": "m41_01_00",
+   "flags": {
+    "defeated": 41010800,
+    "playlog": [
+     9276
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 100000,
+   "drop": [],
+   "grace": {
+    "id": 410100,
+    "name": "Bonny Gaol",
+    "meters": 220
+   },
+   "story": false,
+   "dlc": true
+  },
+  "41020800": {
+   "name": "Lamenter",
+   "place": "Charo's Hidden Grave",
+   "map": "m41_02_00",
+   "flags": {
+    "defeated": 41020800,
+    "playlog": [
+     9277
+    ],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 160000,
+   "drop": [],
+   "grace": {
+    "id": 410200,
+    "name": "Lamenter's Gaol",
+    "meters": 90
+   },
+   "story": false,
+   "dlc": true
+  },
+  "43000800": {
+   "name": "Chief Bloodfiend",
+   "place": "Gravesite Plain",
+   "map": "m43_00_00",
+   "flags": {
+    "defeated": 43000800,
+    "playlog": [
+     9280
+    ],
+    "drop": [],
+    "cutscene": [
+     43000801
+    ]
+   },
+   "runes": 80000,
+   "drop": [],
+   "grace": {
+    "id": 430000,
+    "name": "Rivermouth Cave",
+    "meters": 222
+   },
+   "story": false,
+   "dlc": true
+  },
+  "43010800": {
+   "name": "Ancient Dragon-Man",
+   "place": "Gravesite Plain",
+   "map": "m43_01_00",
+   "flags": {
+    "defeated": 43010800,
+    "playlog": [
+     9281
+    ],
+    "drop": [],
+    "cutscene": [
+     43010801
+    ]
+   },
+   "runes": 130000,
+   "drop": [],
+   "grace": {
+    "id": 430101,
+    "name": "Dragon's Pit Terminus",
+    "meters": 63
+   },
+   "story": false,
+   "dlc": true
+  },
+  "1033420800": {
+   "name": "Alecto, Black Knife Ringleader",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_33_42",
+   "flags": {
+    "defeated": 1033420800,
+    "playlog": [],
+    "drop": [
+     530265
+    ],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [
+    "Black Knife Tiche"
+   ],
+   "grace": {
+    "id": 62344300,
+    "name": "Converted Tower",
+    "meters": 232
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1033430800": {
+   "name": "Erdtree Avatar",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_33_43",
+   "flags": {
+    "defeated": 1033430800,
+    "playlog": [],
+    "drop": [
+     65040,
+     65160
+    ],
+    "cutscene": []
+   },
+   "runes": 5800,
+   "drop": [
+    "Cerulean Crystal Tear",
+    "Ruptured Crystal Tear"
+   ],
+   "grace": {
+    "id": 62344300,
+    "name": "Converted Tower",
+    "meters": 178
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1033450800": {
+   "name": "Bols, Carian Knight",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_33_45",
+   "flags": {
+    "defeated": 1033450800,
+    "playlog": [],
+    "drop": [
+     530250
+    ],
+    "cutscene": []
+   },
+   "runes": 4600,
+   "drop": [
+    "Greatblade Phalanx"
+   ],
+   "grace": {
+    "id": 62334400,
+    "name": "Revenger's Shack",
+    "meters": 218
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1034420800": {
+   "name": "Glintstone Dragon Adula",
+   "place": "Moonlight Altar",
+   "map": "m60_34_42",
+   "flags": {
+    "defeated": 1034420800,
+    "playlog": [],
+    "drop": [
+     530260
+    ],
+    "cutscene": []
+   },
+   "runes": 120000,
+   "drop": [
+    "Dragon Heart",
+    "Adula's Moonblade"
+   ],
+   "grace": {
+    "id": 62354200,
+    "name": "Cathedral of Manus Celes",
+    "meters": 142
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1034450800": {
+   "name": "Glintstone Dragon Smarag",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_34_45",
+   "flags": {
+    "defeated": 1034450800,
+    "playlog": [],
+    "drop": [
+     530210
+    ],
+    "cutscene": []
+   },
+   "runes": 14000,
+   "drop": [
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 62344400,
+    "name": "Temple Quarter",
+    "meters": 127
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1034480800": {
+   "name": "Royal Revenant",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_34_48",
+   "flags": {
+    "defeated": 1034480800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 3100,
+   "drop": [],
+   "grace": {
+    "id": 62344900,
+    "name": "Road to the Manor",
+    "meters": 112
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1034500800": {
+   "name": "Glintstone Dragon Adula",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_34_50",
+   "flags": {
+    "defeated": 1034500800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 12000,
+   "drop": [],
+   "grace": {
+    "id": 62355002,
+    "name": "Royal Moongazing Grounds",
+    "meters": 153
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1035420800": {
+   "name": "Omenkiller",
+   "place": "Moonlight Altar",
+   "map": "m60_35_42",
+   "flags": {
+    "defeated": 1035420800,
+    "playlog": [],
+    "drop": [
+     530225
+    ],
+    "cutscene": []
+   },
+   "runes": 4900,
+   "drop": [
+    "Crucible Knot Talisman"
+   ],
+   "grace": {
+    "id": 62354200,
+    "name": "Cathedral of Manus Celes",
+    "meters": 141
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1035500800": {
+   "name": "Royal Knight Loretta",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_35_50",
+   "flags": {
+    "defeated": 1035500800,
+    "playlog": [
+     9181
+    ],
+    "drop": [
+     510810
+    ],
+    "cutscene": []
+   },
+   "runes": 10000,
+   "drop": [
+    "Loretta's Greatbow",
+    "Ash of War: Loretta's Slash"
+   ],
+   "grace": {
+    "id": 62355001,
+    "name": "Manor Lower Level",
+    "meters": 165
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1035530800": {
+   "name": "Magma Wyrm",
+   "place": "Mt. Gelmir",
+   "map": "m60_35_53",
+   "flags": {
+    "defeated": 1035530800,
+    "playlog": [],
+    "drop": [
+     530390
+    ],
+    "cutscene": []
+   },
+   "runes": 19000,
+   "drop": [
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 63355300,
+    "name": "Seethewater Terminus",
+    "meters": 201
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1036450340": {
+   "name": "Death Rite Bird",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_36_45",
+   "flags": {
+    "defeated": 1036450340,
+    "playlog": [],
+    "drop": [
+     1036457400
+    ],
+    "cutscene": []
+   },
+   "runes": 7800,
+   "drop": [
+    "Ancient Death Rancor"
+   ],
+   "grace": {
+    "id": 62364500,
+    "name": "Gate Town North",
+    "meters": 73
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1036480340": {
+   "name": "Night's Cavalry",
+   "place": "Bellum Highway",
+   "map": "m60_36_48",
+   "flags": {
+    "defeated": 1036480340,
+    "playlog": [],
+    "drop": [
+     1036487400
+    ],
+    "cutscene": []
+   },
+   "runes": 5600,
+   "drop": [
+    "Ash of War: Giant Hunt",
+    "Nightrider Glaive"
+   ],
+   "grace": {
+    "id": 62364900,
+    "name": "Bellum Church",
+    "meters": 136
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1036500800": {
+   "name": "Onyx Lord",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_36_50",
+   "flags": {
+    "defeated": 1036500800,
+    "playlog": [],
+    "drop": [
+     530255
+    ],
+    "cutscene": []
+   },
+   "runes": 3600,
+   "drop": [
+    "Meteorite"
+   ],
+   "grace": {
+    "id": 62365000,
+    "name": "Behind Caria Manor",
+    "meters": 216
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1036540800": {
+   "name": "Full-Grown Fallingstar Beast",
+   "place": "Mt. Gelmir",
+   "map": "m60_36_54",
+   "flags": {
+    "defeated": 1036540800,
+    "playlog": [],
+    "drop": [
+     530375
+    ],
+    "cutscene": []
+   },
+   "runes": 21000,
+   "drop": [
+    "Somber Smithing Stone [6]",
+    "Smithing Stone [6]",
+    "Fallingstar Beast Jaw"
+   ],
+   "grace": {
+    "id": 63365401,
+    "name": "Ninth Mt. Gelmir Campsite",
+    "meters": 81
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1037420340": {
+   "name": "Deathbird",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_37_42",
+   "flags": {
+    "defeated": 1037420340,
+    "playlog": [],
+    "drop": [
+     1037427400
+    ],
+    "cutscene": []
+   },
+   "runes": 6600,
+   "drop": [
+    "Red-Feathered Branchsword"
+   ],
+   "grace": {
+    "id": 62374200,
+    "name": "Scenic Isle",
+    "meters": 86
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1037460800": {
+   "name": "Bell Bearing Hunter",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_37_46",
+   "flags": {
+    "defeated": 1037460800,
+    "playlog": [],
+    "drop": [
+     1037467400
+    ],
+    "cutscene": []
+   },
+   "runes": 6000,
+   "drop": [
+    "Meat Peddler's Bell Bearing"
+   ],
+   "grace": {
+    "id": 62374600,
+    "name": "Church of Vows",
+    "meters": 41
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1037510800": {
+   "name": "Ancient Dragon Lansseax",
+   "place": "Altus Plateau",
+   "map": "m60_37_51",
+   "flags": {
+    "defeated": 1037510800,
+    "playlog": [],
+    "drop": [
+     530300
+    ],
+    "cutscene": []
+   },
+   "runes": 60000,
+   "drop": [
+    "Lansseax's Glaive"
+   ],
+   "grace": {
+    "id": 63385100,
+    "name": "Erdtree-Gazing Hill",
+    "meters": 151
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1037530800": {
+   "name": "Demi-Human Queen Maggie",
+   "place": "Mt. Gelmir",
+   "map": "m60_37_53",
+   "flags": {
+    "defeated": 1037530800,
+    "playlog": [],
+    "drop": [
+     60450
+    ],
+    "cutscene": []
+   },
+   "runes": 13000,
+   "drop": [
+    "Memory Stone"
+   ],
+   "grace": {
+    "id": 63375300,
+    "name": "Primeval Sorcerer Azur",
+    "meters": 58
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1037540810": {
+   "name": "Ulcerated Tree Spirit",
+   "place": "Mt. Gelmir",
+   "map": "m60_37_54",
+   "flags": {
+    "defeated": 1037540810,
+    "playlog": [],
+    "drop": [
+     65180,
+     65250
+    ],
+    "cutscene": []
+   },
+   "runes": 18000,
+   "drop": [
+    "Leaden Hardtear",
+    "Cerulean Hidden Tear"
+   ],
+   "grace": {
+    "id": 63365401,
+    "name": "Ninth Mt. Gelmir Campsite",
+    "meters": 211
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1038410800": {
+   "name": "Adan, Thief of Fire",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_38_41",
+   "flags": {
+    "defeated": 1038410800,
+    "playlog": [],
+    "drop": [
+     530245
+    ],
+    "cutscene": []
+   },
+   "runes": 3800,
+   "drop": [
+    "Flame of the Fell God"
+   ],
+   "grace": {
+    "id": 62384000,
+    "name": "Liurnia Lake Shore",
+    "meters": 47
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1038480800": {
+   "name": "Erdtree Avatar",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_38_48",
+   "flags": {
+    "defeated": 1038480800,
+    "playlog": [],
+    "drop": [
+     65290,
+     65300,
+     65310
+    ],
+    "cutscene": []
+   },
+   "runes": 5800,
+   "drop": [
+    "Magic-Shrouding Cracked Tear",
+    "Lightning-Shrouding Cracked Tear",
+    "Holy-Shrouding Cracked Tear"
+   ],
+   "grace": {
+    "id": 62374800,
+    "name": "Mausoleum Compound",
+    "meters": 178
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1038510800": {
+   "name": "Demi-Human Queen Gilika",
+   "place": "Altus Plateau",
+   "map": "m60_38_51",
+   "flags": {
+    "defeated": 1038510800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 8500,
+   "drop": [],
+   "grace": {
+    "id": 63385100,
+    "name": "Erdtree-Gazing Hill",
+    "meters": 51
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1038520340": {
+   "name": "great enemy 1038520340",
+   "place": "Mt. Gelmir",
+   "map": "m60_38_52",
+   "flags": {
+    "defeated": 1038520800,
+    "playlog": [],
+    "drop": [
+     530385
+    ],
+    "cutscene": []
+   },
+   "runes": 14000,
+   "drop": [
+    "Deathroot",
+    "Tibia's Summons"
+   ],
+   "grace": {
+    "id": 63375200,
+    "name": "Seethewater River",
+    "meters": 73
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1039430340": {
+   "name": "Night's Cavalry",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_39_43",
+   "flags": {
+    "defeated": 1039430340,
+    "playlog": [],
+    "drop": [
+     1039437400
+    ],
+    "cutscene": []
+   },
+   "runes": 5600,
+   "drop": [
+    "Ash of War: Ice Spear"
+   ],
+   "grace": {
+    "id": 62384300,
+    "name": "Gate Town Bridge",
+    "meters": 87
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1039440800": {
+   "name": "Tibia Mariner",
+   "place": "Liurnia of the Lakes",
+   "map": "m60_39_44",
+   "flags": {
+    "defeated": 1039440800,
+    "playlog": [],
+    "drop": [
+     530240
+    ],
+    "cutscene": []
+   },
+   "runes": 4700,
+   "drop": [
+    "Deathroot",
+    "Skeletal Bandit Ashes"
+   ],
+   "grace": {
+    "id": 62394400,
+    "name": "Jarburg",
+    "meters": 150
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1039500800": {
+   "name": "Godefroy the Grafted",
+   "place": "Altus Plateau",
+   "map": "m60_39_50",
+   "flags": {
+    "defeated": 1039500800,
+    "playlog": [],
+    "drop": [
+     1039507100
+    ],
+    "cutscene": []
+   },
+   "runes": 26000,
+   "drop": [
+    "Godfrey Icon"
+   ],
+   "grace": {
+    "id": 63385002,
+    "name": "Altus Plateau",
+    "meters": 236
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1039510800": {
+   "name": "great enemy 1039510800",
+   "place": "Altus Plateau",
+   "map": "m60_39_51",
+   "flags": {
+    "defeated": 1043530800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 10000,
+   "drop": [],
+   "grace": {
+    "id": 63395100,
+    "name": "Altus Highway Junction",
+    "meters": 156
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1039540800": {
+   "name": "Elemer of the Briar",
+   "place": "Altus Plateau",
+   "map": "m60_39_54",
+   "flags": {
+    "defeated": 1039540800,
+    "playlog": [
+     9182
+    ],
+    "drop": [
+     510820
+    ],
+    "cutscene": []
+   },
+   "runes": 24000,
+   "drop": [
+    "Marais Executioner's Sword",
+    "Briar Greatshield"
+   ],
+   "grace": {
+    "id": 63395401,
+    "name": "Shaded Castle Inner Gate",
+    "meters": 35
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1040520800": {
+   "name": "Black Knife Assassin",
+   "place": "Altus Plateau",
+   "map": "m60_40_52",
+   "flags": {
+    "defeated": 1040520800,
+    "playlog": [],
+    "drop": [
+     530350
+    ],
+    "cutscene": []
+   },
+   "runes": 10800,
+   "drop": [
+    "Black Knife"
+   ],
+   "grace": {
+    "id": 63405200,
+    "name": "Forest-Spanning Greatbridge",
+    "meters": 154
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1040530800": {
+   "name": "Sanguine Noble",
+   "place": "Altus Plateau",
+   "map": "m60_40_53",
+   "flags": {
+    "defeated": 1040530800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 8800,
+   "drop": [],
+   "grace": {
+    "id": 63405300,
+    "name": "Bower of Bounty",
+    "meters": 192
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1041500800": {
+   "name": "Fallingstar Beast",
+   "place": "Capital Outskirts",
+   "map": "m60_41_50",
+   "flags": {
+    "defeated": 1041500800,
+    "playlog": [],
+    "drop": [
+     530310
+    ],
+    "cutscene": []
+   },
+   "runes": 11000,
+   "drop": [
+    "Somber Smithing Stone [5]",
+    "Smithing Stone [6]",
+    "Gravity Stone Fan",
+    "Gravity Stone Chunk"
+   ],
+   "grace": {
+    "id": 63425100,
+    "name": "Outer Wall Phantom Tree",
+    "meters": 192
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1041510800": {
+   "name": "Tree Sentinel",
+   "place": "Capital Outskirts",
+   "map": "m60_41_51",
+   "flags": {
+    "defeated": 1041510800,
+    "playlog": [],
+    "drop": [
+     530335
+    ],
+    "cutscene": []
+   },
+   "runes": 20000,
+   "drop": [
+    "Erdtree Greatshield",
+    "Hero's Rune [1]"
+   ],
+   "grace": {
+    "id": 63425100,
+    "name": "Outer Wall Phantom Tree",
+    "meters": 114
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1041520800": {
+   "name": "Ancient Dragon Lansseax",
+   "place": "Altus Plateau",
+   "map": "m60_41_52",
+   "flags": {
+    "defeated": 1041520800,
+    "playlog": [],
+    "drop": [
+     530300
+    ],
+    "cutscene": []
+   },
+   "runes": 60000,
+   "drop": [
+    "Lansseax's Glaive"
+   ],
+   "grace": {
+    "id": 63415201,
+    "name": "Rampartside Path",
+    "meters": 145
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1041530800": {
+   "name": "Wormface",
+   "place": "Altus Plateau",
+   "map": "m60_41_53",
+   "flags": {
+    "defeated": 1041530800,
+    "playlog": [],
+    "drop": [
+     65000,
+     65060
+    ],
+    "cutscene": []
+   },
+   "runes": 10000,
+   "drop": [
+    "Speckled Hardtear",
+    "Crimsonspill Crystal Tear"
+   ],
+   "grace": {
+    "id": 63405200,
+    "name": "Forest-Spanning Greatbridge",
+    "meters": 168
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1042330800": {
+   "name": "Ancient Hero of Zamor",
+   "place": "Weeping Peninsula",
+   "map": "m60_42_33",
+   "flags": {
+    "defeated": 1042330800,
+    "playlog": [],
+    "drop": [
+     1042337100
+    ],
+    "cutscene": []
+   },
+   "runes": 5400,
+   "drop": [
+    "Radagon's Scarseal"
+   ],
+   "grace": {
+    "id": 310200,
+    "name": "Tombsward Cave",
+    "meters": 80
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1042360800": {
+   "name": "Tree Sentinel",
+   "place": "Limgrave",
+   "map": "m60_42_36",
+   "flags": {
+    "defeated": 1042360800,
+    "playlog": [],
+    "drop": [
+     530100
+    ],
+    "cutscene": []
+   },
+   "runes": 3200,
+   "drop": [
+    "Golden Halberd"
+   ],
+   "grace": {
+    "id": 61423600,
+    "name": "Church of Elleh",
+    "meters": 43
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1042370800": {
+   "name": "Crucible Knight",
+   "place": "Limgrave",
+   "map": "m60_42_37",
+   "flags": {
+    "defeated": 1042370800,
+    "playlog": [],
+    "drop": [
+     530120
+    ],
+    "cutscene": []
+   },
+   "runes": 2100,
+   "drop": [
+    "Aspects of the Crucible: Tail"
+   ],
+   "grace": {
+    "id": 61423700,
+    "name": "Gatefront",
+    "meters": 118
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1042380800": {
+   "name": "Deathbird",
+   "place": "Stormhill",
+   "map": "m60_42_38",
+   "flags": {
+    "defeated": 1042380800,
+    "playlog": [],
+    "drop": [
+     1042387400
+    ],
+    "cutscene": []
+   },
+   "runes": 2800,
+   "drop": [
+    "Blue-Feathered Branchsword"
+   ],
+   "grace": {
+    "id": 61423800,
+    "name": "Warmaster's Shack",
+    "meters": 122
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1042380850": {
+   "name": "Bell Bearing Hunter",
+   "place": "Stormhill",
+   "map": "m60_42_38",
+   "flags": {
+    "defeated": 1042380850,
+    "playlog": [],
+    "drop": [
+     1042387410
+    ],
+    "cutscene": []
+   },
+   "runes": 2700,
+   "drop": [
+    "Bone Peddler's Bell Bearing"
+   ],
+   "grace": {
+    "id": 61423800,
+    "name": "Warmaster's Shack",
+    "meters": 10
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1042550800": {
+   "name": "Godskin Apostle",
+   "place": "Altus Plateau",
+   "map": "m60_42_55",
+   "flags": {
+    "defeated": 1042550800,
+    "playlog": [],
+    "drop": [
+     530325
+    ],
+    "cutscene": []
+   },
+   "runes": 14000,
+   "drop": [
+    "Godskin Peeler",
+    "Scouring Black Flame"
+   ],
+   "grace": {
+    "id": 63415400,
+    "name": "Windmill Village",
+    "meters": 228
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1043300800": {
+   "name": "Leonine Misbegotten",
+   "place": "Weeping Peninsula",
+   "map": "m60_43_30",
+   "flags": {
+    "defeated": 1043300800,
+    "playlog": [
+     9180
+    ],
+    "drop": [
+     510800
+    ],
+    "cutscene": []
+   },
+   "runes": 3800,
+   "drop": [
+    "Grafted Blade Greatsword"
+   ],
+   "grace": {
+    "id": 61433102,
+    "name": "Beside the Rampart Gaol",
+    "meters": 144
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1043330800": {
+   "name": "Erdtree Avatar",
+   "place": "Weeping Peninsula",
+   "map": "m60_43_33",
+   "flags": {
+    "defeated": 1043330800,
+    "playlog": [],
+    "drop": [
+     65080,
+     65090
+    ],
+    "cutscene": []
+   },
+   "runes": 3600,
+   "drop": [
+    "Crimsonburst Crystal Tear",
+    "Opaline Bubbletear"
+   ],
+   "grace": {
+    "id": 61423300,
+    "name": "Tombsward",
+    "meters": 146
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1043360800": {
+   "name": "Flying Dragon Agheel",
+   "place": "Limgrave",
+   "map": "m60_43_36",
+   "flags": {
+    "defeated": 1043360800,
+    "playlog": [],
+    "drop": [
+     530110
+    ],
+    "cutscene": []
+   },
+   "runes": 5000,
+   "drop": [
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 320100,
+    "name": "Limgrave Tunnels",
+    "meters": 143
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1043370340": {
+   "name": "great enemy 1043370340",
+   "place": "Limgrave",
+   "map": "m60_43_37",
+   "flags": {
+    "defeated": 1043370800,
+    "playlog": [],
+    "drop": [
+     1043377400
+    ],
+    "cutscene": []
+   },
+   "runes": 2400,
+   "drop": [
+    "Ash of War: Repeating Thrust"
+   ],
+   "grace": {
+    "id": 310000,
+    "name": "Murkwater Cave",
+    "meters": 158
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1043530800": {
+   "name": "Bell Bearing Hunter",
+   "place": "Capital Outskirts",
+   "map": "m60_43_53",
+   "flags": {
+    "defeated": 1043530800,
+    "playlog": [],
+    "drop": [
+     1043537400
+    ],
+    "cutscene": []
+   },
+   "runes": 20000,
+   "drop": [
+    "Medicine Peddler's Bell Bearing"
+   ],
+   "grace": {
+    "id": 63435300,
+    "name": "Hermit Merchant's Shack",
+    "meters": 10
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1044320340": {
+   "name": "great enemy 1044320340",
+   "place": "Weeping Peninsula",
+   "map": "m60_44_32",
+   "flags": {
+    "defeated": 1044320800,
+    "playlog": [],
+    "drop": [
+     1044327400
+    ],
+    "cutscene": []
+   },
+   "runes": 3900,
+   "drop": [
+    "Sacrificial Axe"
+   ],
+   "grace": {
+    "id": 61443300,
+    "name": "Castle Morne Rampart",
+    "meters": 240
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1044320342": {
+   "name": "great enemy 1044320342",
+   "place": "Weeping Peninsula",
+   "map": "m60_44_32",
+   "flags": {
+    "defeated": 1044320850,
+    "playlog": [],
+    "drop": [
+     1044327410
+    ],
+    "cutscene": []
+   },
+   "runes": 3400,
+   "drop": [
+    "Ash of War: Barricade Shield",
+    "Nightrider Flail"
+   ],
+   "grace": {
+    "id": 61443300,
+    "name": "Castle Morne Rampart",
+    "meters": 74
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1044350800": {
+   "name": "great enemy 1044350800",
+   "place": "Weeping Peninsula",
+   "map": "m60_44_34",
+   "flags": {
+    "defeated": 1044350800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 1900,
+   "drop": [],
+   "grace": {
+    "id": 61443400,
+    "name": "Bridge of Sacrifice",
+    "meters": 181
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1044360800": {
+   "name": "Mad Pumpkin Head",
+   "place": "Limgrave",
+   "map": "m60_44_36",
+   "flags": {
+    "defeated": 1044360800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 1100,
+   "drop": [],
+   "grace": {
+    "id": 61443500,
+    "name": "Agheel Lake South",
+    "meters": 245
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1044530800": {
+   "name": "great enemy 1044530800",
+   "place": "Capital Outskirts",
+   "map": "m60_44_53",
+   "flags": {
+    "defeated": 1043530800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 29000,
+   "drop": [],
+   "grace": {
+    "id": 63435300,
+    "name": "Hermit Merchant's Shack",
+    "meters": 247
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1045390800": {
+   "name": "Tibia Mariner",
+   "place": "Limgrave",
+   "map": "m60_45_39",
+   "flags": {
+    "defeated": 1045390800,
+    "playlog": [],
+    "drop": [
+     530170
+    ],
+    "cutscene": []
+   },
+   "runes": 2400,
+   "drop": [
+    "Deathroot",
+    "Skeletal Militiaman Ashes"
+   ],
+   "grace": {
+    "id": 61443900,
+    "name": "Summonwater Village Outskirts",
+    "meters": 107
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1045520800": {
+   "name": "Draconic Tree Sentinel",
+   "place": "Capital Outskirts",
+   "map": "m60_45_52",
+   "flags": {
+    "defeated": 1045520800,
+    "playlog": [],
+    "drop": [
+     530315
+    ],
+    "cutscene": []
+   },
+   "runes": 50000,
+   "drop": [
+    "Dragon Greatclaw",
+    "Dragonclaw Shield"
+   ],
+   "grace": {
+    "id": 63455200,
+    "name": "Capital Rampart",
+    "meters": 119
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1047400800": {
+   "name": "Putrid Avatar",
+   "place": "Caelid",
+   "map": "m60_47_40",
+   "flags": {
+    "defeated": 1047400800,
+    "playlog": [],
+    "drop": [
+     65100,
+     65280
+    ],
+    "cutscene": []
+   },
+   "runes": 9600,
+   "drop": [
+    "Greenburst Crystal Tear",
+    "Flame-Shrouding Cracked Tear"
+   ],
+   "grace": {
+    "id": 64464001,
+    "name": "Rotview Balcony",
+    "meters": 180
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1048370800": {
+   "name": "Decaying Ekzykes",
+   "place": "Caelid",
+   "map": "m60_48_37",
+   "flags": {
+    "defeated": 1048370800,
+    "playlog": [],
+    "drop": [
+     530400
+    ],
+    "cutscene": []
+   },
+   "runes": 38000,
+   "drop": [
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 64483700,
+    "name": "Caelid Highway South",
+    "meters": 109
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1048400800": {
+   "name": "Mad Pumpkin Head (Hammer)",
+   "place": "Caelid",
+   "map": "m60_48_40",
+   "flags": {
+    "defeated": 1048400800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 6300,
+   "drop": [],
+   "grace": {
+    "id": 64474000,
+    "name": "Caelem Ruins",
+    "meters": 83
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1048410800": {
+   "name": "Bell Bearing Hunter",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m60_48_41",
+   "flags": {
+    "defeated": 1048410800,
+    "playlog": [],
+    "drop": [
+     1048417800
+    ],
+    "cutscene": []
+   },
+   "runes": 50000,
+   "drop": [
+    "Gravity Stone Peddler's Bell Bearing"
+   ],
+   "grace": {
+    "id": 64484100,
+    "name": "Isolated Merchant's Shack",
+    "meters": 17
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1048510800": {
+   "name": "Night's Cavalry",
+   "place": "Forbidden Lands",
+   "map": "m60_48_51",
+   "flags": {
+    "defeated": 1048510800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 36000,
+   "drop": [],
+   "grace": {
+    "id": 65475100,
+    "name": "Forbidden Lands",
+    "meters": 184
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1048570800": {
+   "name": "Death Rite Bird",
+   "place": "Consecrated Snowfield",
+   "map": "m60_48_57",
+   "flags": {
+    "defeated": 1048570800,
+    "playlog": [],
+    "drop": [
+     1048577700
+    ],
+    "cutscene": []
+   },
+   "runes": 220000,
+   "drop": [
+    "Explosive Ghostflame"
+   ],
+   "grace": {
+    "id": 65475800,
+    "name": "Apostate Derelict",
+    "meters": 150
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1049370800": {
+   "name": "Night's Cavalry",
+   "place": "Caelid",
+   "map": "m60_49_37",
+   "flags": {
+    "defeated": 1049370800,
+    "playlog": [],
+    "drop": [
+     1049377100
+    ],
+    "cutscene": []
+   },
+   "runes": 8500,
+   "drop": [
+    "Ash of War: Poison Moth Flight"
+   ],
+   "grace": {
+    "id": 64493700,
+    "name": "Southern Aeonia Swamp Bank",
+    "meters": 139
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1049370850": {
+   "name": "Death Rite Bird",
+   "place": "Caelid",
+   "map": "m60_49_37",
+   "flags": {
+    "defeated": 1049370850,
+    "playlog": [],
+    "drop": [
+     1049377110
+    ],
+    "cutscene": []
+   },
+   "runes": 15000,
+   "drop": [
+    "Death's Poker"
+   ],
+   "grace": {
+    "id": 64493700,
+    "name": "Southern Aeonia Swamp Bank",
+    "meters": 120
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1049380800": {
+   "name": "Commander O'Neil",
+   "place": "Swamp of Aeonia",
+   "map": "m60_49_38",
+   "flags": {
+    "defeated": 1049380800,
+    "playlog": [],
+    "drop": [
+     530405
+    ],
+    "cutscene": []
+   },
+   "runes": 12000,
+   "drop": [
+    "Commander's Standard",
+    "Unalloyed Gold Needle"
+   ],
+   "grace": {
+    "id": 64493801,
+    "name": "Inner Aeonia",
+    "meters": 73
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1049390800": {
+   "name": "Nox Monk",
+   "place": "Caelid",
+   "map": "m60_49_39",
+   "flags": {
+    "defeated": 1049390800,
+    "playlog": [],
+    "drop": [
+     1049397800
+    ],
+    "cutscene": []
+   },
+   "runes": 6400,
+   "drop": [
+    "Nox Flowing Sword"
+   ],
+   "grace": {
+    "id": 64493900,
+    "name": "Sellia Backstreets",
+    "meters": 49
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1049390850": {
+   "name": "Battlemage Hugues",
+   "place": "Swamp of Aeonia",
+   "map": "m60_49_39",
+   "flags": {
+    "defeated": 1049390850,
+    "playlog": [],
+    "drop": [
+     1049397850
+    ],
+    "cutscene": []
+   },
+   "runes": 7800,
+   "drop": [
+    "Battlemage Hugues"
+   ],
+   "grace": {
+    "id": 64493801,
+    "name": "Inner Aeonia",
+    "meters": 174
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1049520800": {
+   "name": "Black Blade Kindred",
+   "place": "Forbidden Lands",
+   "map": "m60_49_52",
+   "flags": {
+    "defeated": 1049520800,
+    "playlog": [],
+    "drop": [
+     530505
+    ],
+    "cutscene": []
+   },
+   "runes": 60000,
+   "drop": [
+    "Gargoyle's Black Blades",
+    "Gargoyle's Black Axe"
+   ],
+   "grace": {
+    "id": 65495301,
+    "name": "Grand Lift of Rold",
+    "meters": 103
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1050560800": {
+   "name": "Great Wyrm Theodorix",
+   "place": "Consecrated Snowfield",
+   "map": "m60_50_56",
+   "flags": {
+    "defeated": 1050560800,
+    "playlog": [],
+    "drop": [
+     530550
+    ],
+    "cutscene": []
+   },
+   "runes": 180000,
+   "drop": [
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 301900,
+    "name": "Consecrated Snowfield Catacombs",
+    "meters": 377
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1050570800": {
+   "name": "Death Rite Bird",
+   "place": "Mountaintops of the Giants",
+   "map": "m60_50_57",
+   "flags": {
+    "defeated": 1050570800,
+    "playlog": [],
+    "drop": [
+     530530
+    ],
+    "cutscene": []
+   },
+   "runes": 77000,
+   "drop": [
+    "Death Ritual Spear"
+   ],
+   "grace": {
+    "id": 65515701,
+    "name": "Castle Sol Main Gate",
+    "meters": 227
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1050570850": {
+   "name": "Putrid Avatar",
+   "place": "Mountaintops of the Giants",
+   "map": "m60_50_57",
+   "flags": {
+    "defeated": 1050570850,
+    "playlog": [],
+    "drop": [
+     65130,
+     65170
+    ],
+    "cutscene": []
+   },
+   "runes": 160000,
+   "drop": [
+    "Thorny Cracked Tear",
+    "Ruptured Crystal Tear"
+   ],
+   "grace": {
+    "id": 65515701,
+    "name": "Castle Sol Main Gate",
+    "meters": 402
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1051360800": {
+   "name": "Crucible Knight",
+   "place": "Caelid",
+   "map": "m60_51_36",
+   "flags": {
+    "defeated": 1051360800,
+    "playlog": [
+     9183
+    ],
+    "drop": [
+     510830,
+     1051367800
+    ],
+    "cutscene": []
+   },
+   "runes": 16000,
+   "drop": [
+    "Ruins Greatsword",
+    "Somber Smithing Stone [4]",
+    "Beast Blood",
+    "Old Fang"
+   ],
+   "grace": {
+    "id": 64513601,
+    "name": "Chamber Outside the Plaza",
+    "meters": 79
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1051400800": {
+   "name": "Putrid Avatar",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m60_51_40",
+   "flags": {
+    "defeated": 1051400800,
+    "playlog": [],
+    "drop": [
+     65110,
+     65260
+    ],
+    "cutscene": []
+   },
+   "runes": 91000,
+   "drop": [
+    "Opaline Hardtear",
+    "Stonebarb Cracked Tear"
+   ],
+   "grace": {
+    "id": 64504000,
+    "name": "Dragonbarrow Fork",
+    "meters": 230
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1051430800": {
+   "name": "Black Blade Kindred",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m60_51_43",
+   "flags": {
+    "defeated": 1051430800,
+    "playlog": [],
+    "drop": [
+     530425
+    ],
+    "cutscene": []
+   },
+   "runes": 88000,
+   "drop": [
+    "Gargoyle's Blackblade",
+    "Gargoyle's Black Halberd"
+   ],
+   "grace": {
+    "id": 64514300,
+    "name": "Bestial Sanctum",
+    "meters": 140
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1051570800": {
+   "name": "Commander Niall",
+   "place": "Mountaintops of the Giants",
+   "map": "m60_51_57",
+   "flags": {
+    "defeated": 1051570800,
+    "playlog": [
+     9184
+    ],
+    "drop": [
+     510840,
+     1051577800
+    ],
+    "cutscene": []
+   },
+   "runes": 90000,
+   "drop": [
+    "Veteran's Prosthesis",
+    "Somber Smithing Stone [7]",
+    "Beast Blood",
+    "Old Fang"
+   ],
+   "grace": {
+    "id": 65515702,
+    "name": "Church of the Eclipse",
+    "meters": 97
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1052380800": {
+   "name": "Starscourge Radahn",
+   "place": "Caelid",
+   "map": "m60_52_38",
+   "flags": {
+    "defeated": 1252380800,
+    "playlog": [
+     9130,
+     9412
+    ],
+    "drop": [
+     172,
+     510300
+    ],
+    "cutscene": []
+   },
+   "runes": 70000,
+   "drop": [
+    "Remembrance of the Starscourge",
+    "Radahn's Great Rune"
+   ],
+   "grace": {
+    "id": 64513600,
+    "name": "Redmane Castle Plaza",
+    "meters": 474
+   },
+   "story": true,
+   "dlc": false
+  },
+  "1052410800": {
+   "name": "Flying Dragon Greyll",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m60_52_41",
+   "flags": {
+    "defeated": 1052410800,
+    "playlog": [],
+    "drop": [
+     530420
+    ],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 64524100,
+    "name": "Lenne's Rise",
+    "meters": 170
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1052410850": {
+   "name": "Night's Cavalry",
+   "place": "Greyoll's Dragonbarrow",
+   "map": "m60_52_41",
+   "flags": {
+    "defeated": 1052410850,
+    "playlog": [],
+    "drop": [
+     1052417100
+    ],
+    "cutscene": []
+   },
+   "runes": 42000,
+   "drop": [
+    "Ash of War: Bloodhound's Step"
+   ],
+   "grace": {
+    "id": 64524100,
+    "name": "Lenne's Rise",
+    "meters": 110
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1052520800": {
+   "name": "Fire Giant",
+   "place": "Flame Peak",
+   "map": "m60_52_52",
+   "flags": {
+    "defeated": 1052520800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 180000,
+   "drop": [],
+   "grace": {
+    "id": 65525300,
+    "name": "Foot of the Forge",
+    "meters": 245
+   },
+   "story": true,
+   "dlc": false
+  },
+  "1052560800": {
+   "name": "Erdtree Avatar",
+   "place": "Mountaintops of the Giants",
+   "map": "m60_52_56",
+   "flags": {
+    "defeated": 1052560800,
+    "playlog": [],
+    "drop": [
+     65050,
+     65070
+    ],
+    "cutscene": []
+   },
+   "runes": 70000,
+   "drop": [
+    "Cerulean Crystal Tear",
+    "Crimson Bubbletear"
+   ],
+   "grace": {
+    "id": 65515700,
+    "name": "Snow Valley Ruins Overlook",
+    "meters": 165
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1053560800": {
+   "name": "Roundtable Knight Vyke",
+   "place": "Mountaintops of the Giants",
+   "map": "m60_53_56",
+   "flags": {
+    "defeated": 1053560800,
+    "playlog": [],
+    "drop": [
+     530515
+    ],
+    "cutscene": []
+   },
+   "runes": 75000,
+   "drop": [
+    "Vyke's Dragonbolt",
+    "Fingerprint Helm",
+    "Fingerprint Armor",
+    "Fingerprint Gauntlets",
+    "Fingerprint Greaves"
+   ],
+   "grace": {
+    "id": 65525600,
+    "name": "Whiteridge Road",
+    "meters": 161
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1054560800": {
+   "name": "great enemy 1054560800",
+   "place": "Mountaintops of the Giants",
+   "map": "m60_54_56",
+   "flags": {
+    "defeated": 1254560800,
+    "playlog": [],
+    "drop": [
+     530510
+    ],
+    "cutscene": []
+   },
+   "runes": 100000,
+   "drop": [
+    "Dragon Heart"
+   ],
+   "grace": {
+    "id": 312200,
+    "name": "Spiritcaller Cave",
+    "meters": 180
+   },
+   "story": false,
+   "dlc": false
+  },
+  "1248550800": {
+   "name": "Night's Cavalry (Glaive)",
+   "place": "Consecrated Snowfield",
+   "map": "m60_48_55",
+   "flags": {
+    "defeated": 1248550800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 84000,
+   "drop": [],
+   "grace": {
+    "id": 65495500,
+    "name": "Inner Consecrated Snowfield",
+    "meters": 146
+   },
+   "story": false,
+   "dlc": false
+  },
+  "2044450800": {
+   "name": "Romina, Saint of the Bud",
+   "place": "Ancient Ruins of Rauh",
+   "map": "m61_44_45",
+   "flags": {
+    "defeated": 2044450800,
+    "playlog": [
+     9160
+    ],
+    "drop": [
+     510600
+    ],
+    "cutscene": []
+   },
+   "runes": 380000,
+   "drop": [
+    "Remembrance of the Saint of the Bud"
+   ],
+   "grace": {
+    "id": 69444600,
+    "name": "Church of the Bud, Main Entrance",
+    "meters": 90
+   },
+   "story": true,
+   "dlc": true
+  },
+  "2044470800": {
+   "name": "Rugalea the Great Red Bear",
+   "place": "Rauh Base",
+   "map": "m61_44_47",
+   "flags": {
+    "defeated": 2044470800,
+    "playlog": [],
+    "drop": [
+     530905
+    ],
+    "cutscene": []
+   },
+   "runes": 210000,
+   "drop": [
+    "Roar of Rugalea"
+   ],
+   "grace": {
+    "id": 69454700,
+    "name": "Ravine North",
+    "meters": 320
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2045440800": {
+   "name": "Ghostflame Dragon",
+   "place": "Gravesite Plain",
+   "map": "m61_45_44",
+   "flags": {
+    "defeated": 2045440800,
+    "playlog": [],
+    "drop": [
+     530860,
+     530861
+    ],
+    "cutscene": []
+   },
+   "runes": 100000,
+   "drop": [
+    "Dragon Heart",
+    "Somber Ancient Dragon Smithing Stone"
+   ],
+   "grace": {
+    "id": 61464400,
+    "name": "Greatbridge, North",
+    "meters": 154
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2046380800": {
+   "name": "Dancer of Ranah",
+   "place": "Cerulean Coast",
+   "map": "m61_46_38",
+   "flags": {
+    "defeated": 2046380800,
+    "playlog": [],
+    "drop": [
+     530810
+    ],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [
+    "Dancing Blade of Ranah",
+    "Dancer's Hood",
+    "Dancer's Dress",
+    "Dancer's Bracer",
+    "Dancer's Trousers"
+   ],
+   "grace": {
+    "id": 68463900,
+    "name": "Cerulean Coast West",
+    "meters": 257
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2046400800": {
+   "name": "Demi-Human Queen Marigga",
+   "place": "Cerulean Coast",
+   "map": "m61_46_40",
+   "flags": {
+    "defeated": 2046400800,
+    "playlog": [],
+    "drop": [
+     530845
+    ],
+    "cutscene": []
+   },
+   "runes": 100000,
+   "drop": [
+    "Star-Lined Sword"
+   ],
+   "grace": {
+    "id": 68463900,
+    "name": "Cerulean Coast West",
+    "meters": 341
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2046410800": {
+   "name": "Knight of the Solitary Gaol",
+   "place": "Gravesite Plain",
+   "map": "m61_46_41",
+   "flags": {
+    "defeated": 2046410800,
+    "playlog": [],
+    "drop": [
+     530820
+    ],
+    "cutscene": []
+   },
+   "runes": 70000,
+   "drop": [
+    "Greatsword of Solitude",
+    "Helm of Solitude",
+    "Armor of Solitude",
+    "Gauntlets of Solitude",
+    "Greaves of Solitude"
+   ],
+   "grace": {
+    "id": 61454100,
+    "name": "Cliffroad Terminus",
+    "meters": 115
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2046450800": {
+   "name": "Red Bear",
+   "place": "Scadu Altus",
+   "map": "m61_46_45",
+   "flags": {
+    "defeated": 2046450800,
+    "playlog": [],
+    "drop": [
+     530900
+    ],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [
+    "Red Bear's Claw",
+    "Fang Helm",
+    "Iron Rivet Armor",
+    "Iron Rivet Gauntlets",
+    "Iron Rivet Greaves"
+   ],
+   "grace": {
+    "id": 69474500,
+    "name": "Scadu Altus, West",
+    "meters": 152
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2046460800": {
+   "name": "Divine Beast Dancing Lion",
+   "place": "Ancient Ruins of Rauh",
+   "map": "m61_46_46",
+   "flags": {
+    "defeated": 2046460800,
+    "playlog": [],
+    "drop": [
+     530940
+    ],
+    "cutscene": []
+   },
+   "runes": 180000,
+   "drop": [
+    "Divine Beast Tornado"
+   ],
+   "grace": {
+    "id": 69464700,
+    "name": "Rauh Ancient Ruins, East",
+    "meters": 200
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2047390800": {
+   "name": "Death Rite Bird",
+   "place": "Cerulean Coast",
+   "map": "m61_47_39",
+   "flags": {
+    "defeated": 2047390800,
+    "playlog": [],
+    "drop": [
+     530855
+    ],
+    "cutscene": []
+   },
+   "runes": 230000,
+   "drop": [
+    "Ash of War: Ghostflame Call"
+   ],
+   "grace": {
+    "id": 68483900,
+    "name": "Cerulean Coast",
+    "meters": 121
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2047450800": {
+   "name": "great enemy 2047450800",
+   "place": "Scadu Altus",
+   "map": "m61_47_44",
+   "flags": {
+    "defeated": 2047450800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [],
+   "grace": {
+    "id": 69474500,
+    "name": "Scadu Altus, West",
+    "meters": 100
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2048380850": {
+   "name": "great enemy 2048380850",
+   "place": "Cerulean Coast",
+   "map": "m61_48_39",
+   "flags": {
+    "defeated": 2048380850,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 120000,
+   "drop": [],
+   "grace": {
+    "id": 68483900,
+    "name": "Cerulean Coast",
+    "meters": 54
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2048440800": {
+   "name": "Rellana, Twin Moon Knight",
+   "place": "Castle Ensis",
+   "map": "m61_48_44",
+   "flags": {
+    "defeated": 2048440800,
+    "playlog": [
+     9190
+    ],
+    "drop": [
+     510900
+    ],
+    "cutscene": []
+   },
+   "runes": 240000,
+   "drop": [
+    "Remembrance of the Twin Moon Knight"
+   ],
+   "grace": {
+    "id": 61484401,
+    "name": "Castle-Lord's Chamber",
+    "meters": 53
+   },
+   "story": true,
+   "dlc": true
+  },
+  "2049410800": {
+   "name": "Jagged Peak Drake",
+   "place": "Foot of the Jagged Peak",
+   "map": "m61_49_41",
+   "flags": {
+    "defeated": 2049410800,
+    "playlog": [],
+    "drop": [
+     530850
+    ],
+    "cutscene": []
+   },
+   "runes": 90000,
+   "drop": [
+    "Dragon Heart",
+    "Dragonscale Flesh"
+   ],
+   "grace": {
+    "id": 68493900,
+    "name": "Grand Altar of Dragon Communion",
+    "meters": 501
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2049430800": {
+   "name": "Ghostflame Dragon",
+   "place": "Scadu Altus",
+   "map": "m61_49_43",
+   "flags": {
+    "defeated": 2049430800,
+    "playlog": [],
+    "drop": [
+     530945
+    ],
+    "cutscene": []
+   },
+   "runes": 120000,
+   "drop": [
+    "Dragon Heart",
+    "Somber Ancient Dragon Smithing Stone"
+   ],
+   "grace": {
+    "id": 69494300,
+    "name": "Moorth Highway, South",
+    "meters": 117
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2049430850": {
+   "name": "Black Knight Edredd",
+   "place": "Scadu Altus",
+   "map": "m61_49_43",
+   "flags": {
+    "defeated": 2049430850,
+    "playlog": [],
+    "drop": [
+     530965
+    ],
+    "cutscene": []
+   },
+   "runes": 80000,
+   "drop": [
+    "Ash of War: Aspects of the Crucible: Wings"
+   ],
+   "grace": {
+    "id": 69494302,
+    "name": "Behind the Fort of Reprimand",
+    "meters": 19
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2049450800": {
+   "name": "Ralva the Great Red Bear",
+   "place": "Scadu Altus",
+   "map": "m61_49_45",
+   "flags": {
+    "defeated": 2049450800,
+    "playlog": [],
+    "drop": [
+     530930
+    ],
+    "cutscene": []
+   },
+   "runes": 180000,
+   "drop": [
+    "Pelt of Ralva"
+   ],
+   "grace": {
+    "id": 69504500,
+    "name": "Recluses' River Upstream",
+    "meters": 188
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2049480800": {
+   "name": "Commander Gaius",
+   "place": "Scaduview",
+   "map": "m61_49_48",
+   "flags": {
+    "defeated": 2049480800,
+    "playlog": [
+     9164
+    ],
+    "drop": [
+     510640
+    ],
+    "cutscene": []
+   },
+   "runes": 230000,
+   "drop": [
+    "Remembrance of the Wild Boar Rider"
+   ],
+   "grace": {
+    "id": 69494801,
+    "name": "Shadow Keep, Back Gate",
+    "meters": 72
+   },
+   "story": true,
+   "dlc": true
+  },
+  "2050470800": {
+   "name": "Tree Sentinel",
+   "place": "Scaduview",
+   "map": "m61_50_47",
+   "flags": {
+    "defeated": 2050470800,
+    "playlog": [],
+    "drop": [
+     530935
+    ],
+    "cutscene": []
+   },
+   "runes": 120000,
+   "drop": [
+    "Blessing of Marika"
+   ],
+   "grace": {
+    "id": 69504800,
+    "name": "Hinterland",
+    "meters": 151
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2050480800": {
+   "name": "great enemy 2050480800",
+   "place": "Scaduview",
+   "map": "m61_50_48",
+   "flags": {
+    "defeated": 2050480800,
+    "playlog": [
+     9162
+    ],
+    "drop": [
+     510620
+    ],
+    "cutscene": []
+   },
+   "runes": 260000,
+   "drop": [
+    "Remembrance of the Shadow Sunflower",
+    "Miquella's Great Rune"
+   ],
+   "grace": {
+    "id": 69504800,
+    "name": "Hinterland",
+    "meters": 417
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2050480860": {
+   "name": "great enemy 2050480860",
+   "place": "Scaduview",
+   "map": "m61_50_48",
+   "flags": {
+    "defeated": 2050480860,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 120000,
+   "drop": [],
+   "grace": {
+    "id": 69514801,
+    "name": "Hinterland Bridge",
+    "meters": 157
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2051440800": {
+   "name": "Rakshasa",
+   "place": "Scadu Altus",
+   "map": "m61_51_44",
+   "flags": {
+    "defeated": 2051440800,
+    "playlog": [],
+    "drop": [
+     530830
+    ],
+    "cutscene": []
+   },
+   "runes": 90000,
+   "drop": [
+    "Rakshasa's Great Katana",
+    "Rakshasa Helm",
+    "Rakshasa Armor",
+    "Rakshasa Gauntlets",
+    "Rakshasa Greaves"
+   ],
+   "grace": {
+    "id": 69514400,
+    "name": "Bridge Leading to the Village",
+    "meters": 145
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2051450720": {
+   "name": "Count Ymir, Mother of Fingers",
+   "place": "Scadu Altus",
+   "map": "m61_51_45",
+   "flags": {
+    "defeated": 2051450800,
+    "playlog": [],
+    "drop": [],
+    "cutscene": []
+   },
+   "runes": 210000,
+   "drop": [],
+   "grace": {
+    "id": 69514500,
+    "name": "Cathedral of Manus Metyr",
+    "meters": 55
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2052400800": {
+   "name": "Jagged Peak Drake",
+   "place": "Foot of the Jagged Peak",
+   "map": "m61_52_40",
+   "flags": {
+    "defeated": 2052400800,
+    "playlog": [],
+    "drop": [
+     530800
+    ],
+    "cutscene": []
+   },
+   "runes": 120000,
+   "drop": [
+    "Dragon Heart",
+    "Dragonscale Flesh"
+   ],
+   "grace": {
+    "id": 68524000,
+    "name": "Foot of the Jagged Peak",
+    "meters": 189
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2052430800": {
+   "name": "Jori, Elder Inquisitor",
+   "place": "Abyssal Woods",
+   "map": "m61_52_43",
+   "flags": {
+    "defeated": 2052430800,
+    "playlog": [
+     9161
+    ],
+    "drop": [
+     510610
+    ],
+    "cutscene": []
+   },
+   "runes": 260000,
+   "drop": [
+    "Barbed Staff-Spear"
+   ],
+   "grace": {
+    "id": 68514200,
+    "name": "Woodland Trail",
+    "meters": 286
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2052480800": {
+   "name": "Fallingstar Beast",
+   "place": "Scaduview",
+   "map": "m61_52_48",
+   "flags": {
+    "defeated": 2052480800,
+    "playlog": [],
+    "drop": [
+     530960
+    ],
+    "cutscene": []
+   },
+   "runes": 170000,
+   "drop": [
+    "Gravitational Missile"
+   ],
+   "grace": {
+    "id": 69514800,
+    "name": "Fingerstone Hill",
+    "meters": 140
+   },
+   "story": false,
+   "dlc": true
+  },
+  "2054390800": {
+   "name": "Bayle the Dread",
+   "place": "Jagged Peak",
+   "map": "m61_54_39",
+   "flags": {
+    "defeated": 2054390800,
+    "playlog": [
+     9163
+    ],
+    "drop": [
+     510630
+    ],
+    "cutscene": []
+   },
+   "runes": 490000,
+   "drop": [
+    "Heart of Bayle"
+   ],
+   "grace": {
+    "id": 68553900,
+    "name": "Rest of the Dread Dragon",
+    "meters": 26
+   },
+   "story": true,
+   "dlc": true
+  },
+  "2054390850": {
+   "name": "Ancient Dragon Senessax",
+   "place": "Jagged Peak",
+   "map": "m61_54_39",
+   "flags": {
+    "defeated": 2054390850,
+    "playlog": [],
+    "drop": [
+     530805
+    ],
+    "cutscene": []
+   },
+   "runes": 200000,
+   "drop": [
+    "Ancient Dragon Smithing Stone",
+    "Somber Ancient Dragon Smithing Stone"
+   ],
+   "grace": {
+    "id": 68533900,
+    "name": "Jagged Peak Mountainside",
+    "meters": 319
+   },
+   "story": false,
+   "dlc": true
+  }
+ }
+}

@@ -91,3 +91,20 @@ def test_a_profile_without_equipment_just_has_none(tmp_path):
 def test_an_equipment_block_that_is_there_must_be_complete(tmp_path, bad):
     p, why = _load(tmp_path, lambda r: r.__setitem__("equipment", bad))
     assert p is None and "equipment" in why
+
+
+# ---- 1.8.0: the event flags (resurrect)
+def test_the_shipped_profile_says_where_the_event_flags_are(tmp_path):
+    p, why = _load(tmp_path, lambda r: None)
+    assert why is None and (p.event_flags.man_rva, p.event_flags.divisor, p.event_flags.holder_size) == (0x3D6C4B8, 1000, 125)
+
+
+def test_a_profile_without_event_flags_just_has_none(tmp_path):
+    p, why = _load(tmp_path, lambda r: r.pop("event_flags"))
+    assert why is None and p.event_flags is None
+
+
+@pytest.mark.parametrize("bad", [True, {"man_rva": "0x3D6C4B8"}, {"man_rva": "0x3D6C4B8", "divisor": 1000, "holder_size": 10}])
+def test_an_event_flags_block_that_is_there_must_be_complete(tmp_path, bad):
+    p, why = _load(tmp_path, lambda r: r.__setitem__("event_flags", bad))
+    assert p is None and "event_flags" in why

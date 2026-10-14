@@ -1,4 +1,4 @@
-"""CLI: eldendisk run | read | write | vault | design | innovate-items | external-scripts | hash
+"""CLI: eldendisk run | read | write | vault | design | innovate-items | external-scripts | resurrect | hash
 
   run               host: back up the save, launch the game offline, restore the save when it exits (leave this open)
   read              look at the game's values: print, --query, --export, --live, --live-buffs, --live-animations (read-only)
@@ -8,6 +8,7 @@
   design            the design (design.json): what it holds, what is secured, the last build
   innovate-items    build things for the game outside the game: `innovate-items spells --add all|--secure`
   external-scripts  your own scripts next to the game: `external-scripts [--run]`
+  resurrect    bring a beaten boss back for this session: `resurrect great-enemies --list | --activate NAME`
 
 Every command prints concise lines; with -v it prints the log itself, live (the same lines that go to
 <vault>/eldendisk.log).
@@ -26,6 +27,7 @@ from eldendisk.commands.common import add_vault_option, add_verbose  # noqa: E40
 from eldendisk.commands.design import cmd_design  # noqa: E402
 from eldendisk.commands.hash import cmd_hash  # noqa: E402
 from eldendisk.commands.read import cmd_read  # noqa: E402
+from eldendisk.commands.resurrect import cmd_resurrect  # noqa: E402
 from eldendisk.commands.run import cmd_run  # noqa: E402
 from eldendisk.commands.vault import cmd_vault  # noqa: E402
 from eldendisk.commands.write import cmd_write  # noqa: E402
@@ -177,13 +179,13 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--list", action="store_true", help="the same (the overview is what `design` shows)")
     d.add_argument("--design-dir", metavar="DIR", default=None, help="where the built files go (default: <vault>\\design)")
     d.add_argument("--spec", metavar="FILE", default=None, help="the design (default: design.json next to the exe, else the embedded copy)")
-    add_vault_option(d, leaf=True)
-    add_verbose(d, leaf=True)
+    add_vault_option(d)
+    add_verbose(d)
     d.set_defaults(fn=cmd_design)
 
     ii = sub.add_parser("innovate-items", help="new items for the game, built outside it (kinds: spells)")
-    add_vault_option(ii, leaf=True)
-    add_verbose(ii, leaf=True)
+    add_vault_option(ii)
+    add_verbose(ii)
     ik = ii.add_subparsers(dest="items_kind")
     ci = ik.add_parser("spells", help="build a regulation.bin with the spells of the design, or secure the one you tried")
     ci.add_argument("--add", metavar="all|PATH", nargs="+",
@@ -216,9 +218,33 @@ def build_parser() -> argparse.ArgumentParser:
     xs.add_argument("--state-ids", dest="state_ids", default=state_ids_default, help="chr_state_ids.json (default: %(default)s)")
     xs.add_argument("--design-dir", metavar="DIR", default=None, help="where the design's files are")
     xs.add_argument("--spec", metavar="FILE", default=None, help="the design")
-    add_vault_option(xs, leaf=True)
-    add_verbose(xs, leaf=True)
+    add_vault_option(xs)
+    add_verbose(xs)
     xs.set_defaults(fn=cmd_design)
+
+    ru = sub.add_parser("resurrect", help="bring back, for this session, what the game remembers as gone (kinds: great-enemies)")
+    add_vault_option(ru)
+    add_verbose(ru)
+    rk = ru.add_subparsers(dest="resurrect_kind")
+    ge = rk.add_parser("great-enemies", help="a boss you have beaten, alive again until the game closes (memory only; the vault restores the save)")
+    ge.add_argument("--list", action="store_true", help="every great enemy: id, name, place, nearest grace, runes, drop; with the game: defeated or alive")
+    ge.add_argument("--defeated", action="store_true", help="with --list: only the defeated ones (reads the game)")
+    ge.add_argument("--alive", action="store_true", help="with --list: only the ones alive (reads the game)")
+    ge.add_argument("--area", metavar="NAME", default=None, help="with --list: only those whose place or map has NAME (limgrave, caelid, m30)")
+    ge.add_argument("--story", action="store_true", help="with --list: only story bosses")
+    ge.add_argument("--dlc", action="store_true", help="with --list: only Shadow of the Erdtree")
+    ge.add_argument("--json", action="store_true", help="with --list: the rows as JSON")
+    ge.add_argument("--activate", metavar="NAME|ID", nargs="*", default=None,
+                    help="bring them back (a name in any case, part of it, or the id; `all` or `*` alone: every defeated one)")
+    ge.add_argument("--all", action="store_true", help="with --activate: every great enemy that is defeated")
+    ge.add_argument("--when-loaded", dest="when_loaded", action="store_true",
+                    help="wait for a character in the world, then activate the design's list (what `run` starts)")
+    ge.add_argument("--offsets", default=offsets_default, help="offsets.json (default: %(default)s)")
+    ge.add_argument("--spec", metavar="FILE", default=None, help="the design (default: design.json next to the exe, else the embedded copy)")
+    ge.add_argument("--design-dir", metavar="DIR", default=None, help="where the design's files are")
+    add_vault_option(ge, leaf=True)
+    add_verbose(ge, leaf=True)
+    ru.set_defaults(fn=cmd_resurrect)
 
     # ---- tooling ----
     h = sub.add_parser("hash", help="print SHA-256 of eldenring.exe (key for offsets.json)")
@@ -276,6 +302,22 @@ def main(argv=None) -> int:
         ap.error("give the kind of item: innovate-items spells")
     if args.cmd == "innovate-items" and args.secure and (args.add is not None or args.dry_run):
         ap.error("--secure stands alone (it does not build; --add and --dry-run build)")
+    if args.cmd == "resurrect":
+        if not getattr(args, "resurrect_kind", None):
+            ap.error("give the kind: resurrect great-enemies")
+        listing = args.defeated or args.alive or args.area or args.story or args.dlc or args.json
+        if listing and not args.list:
+            ap.error("--defeated, --alive, --area, --story, --dlc and --json go with --list")
+        if args.defeated and args.alive:
+            ap.error("--defeated and --alive cannot be combined")
+        if args.list and (args.activate is not None or args.all or args.when_loaded):
+            ap.error("--list stands alone (with its filters)")
+        if args.all and args.activate:
+            ap.error("--all stands alone: --activate --all")
+        if args.all and args.activate is None:
+            args.activate = []
+        if args.when_loaded and (args.activate or args.all):
+            ap.error("--when-loaded activates the design's list: it does not go with --activate NAME or --all")
     if args.cmd == "run" and args.keep < 0:
         ap.error("--keep must not be negative")
     if args.cmd == "run" and args.launch_timeout <= 0:

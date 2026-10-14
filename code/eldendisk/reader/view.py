@@ -70,7 +70,7 @@ def select(doc: dict, names: str | list[str] | None) -> list[tuple[str, object]]
     """
     wanted = _wanted(names)
     if not wanted:
-        return [("", doc)]
+        return [("", _compact(doc))]
     out: list[tuple[str, object]] = []
     for name in wanted:
         for path, value in _select_one(doc, name):
@@ -91,10 +91,42 @@ def _canonical(leaves: dict[str, object]) -> dict[str, str]:
 
 
 SPELLS = "design.innovate_items.spells."
+ENEMIES = "design.resurrect.great_enemies."
+
+
+def _compact(doc: dict) -> dict:
+    """The whole document as `read` with no name shows it: the 212 great enemies (1.8.0) as a count; `--query` names them."""
+    enemies = ((doc.get("design") or {}).get("resurrect") or {}).get("great_enemies")
+    if not isinstance(enemies, dict) or not enemies:
+        return doc
+    states = [e.get("defeated") for e in enemies.values() if isinstance(e, dict)]
+    summary = {"defeated": sum(1 for v in states if v is True), "alive": sum(1 for v in states if v is False), "of": len(enemies)}
+    design = dict(doc["design"], resurrect=dict(doc["design"]["resurrect"], great_enemies=summary))
+    return dict(doc, design=design)
+
+
+def _enemy_key(name: str) -> str:
+    return "_".join(w for w in "".join(c if c.isalnum() else " " for c in str(name).lower()).split())
+
+
+def _by_enemy_name(doc: dict, path: str) -> str:
+    """`design.resurrect.great_enemies.<name>...` -> the same path with the boss's id (`margit`, `mohg_lord_of_blood`)."""
+    head, _dot, rest = path[len(ENEMIES):].partition(".")
+    enemies = ((doc.get("design") or {}).get("resurrect") or {}).get("great_enemies") or {}
+    if head in enemies or not head or is_pattern(head):
+        return path
+    keys = {rid: _enemy_key(e.get("name", "")) for rid, e in enemies.items() if isinstance(e, dict)}
+    hits = [rid for rid, k in keys.items() if k == head] or [rid for rid, k in keys.items() if k.startswith(head + "_") or k == head]
+    if len({keys[r] for r in hits}) == 1:
+        return ENEMIES + hits[0] + ("." + rest if rest else "")
+    return path
 
 
 def _by_label(doc: dict, path: str) -> str:
-    """`design.innovate_items.spells.<label>...` -> the same path with the spell's goods id (a spell is named by both)."""
+    """`design.innovate_items.spells.<label>...` -> the same path with the spell's goods id (a spell is named by both); a great enemy
+    by its name the same way."""
+    if path.startswith(ENEMIES):
+        return _by_enemy_name(doc, path)
     if not path.startswith(SPELLS):
         return path
     head, _dot, rest = path[len(SPELLS):].partition(".")

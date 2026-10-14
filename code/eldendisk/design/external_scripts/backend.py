@@ -24,6 +24,7 @@ import threading
 import time
 from pathlib import Path
 
+from ...game.eventflags import EventFlagError, EventFlags
 from ...game.layout import Layout
 from ...game.params import ParamError, ParamLockedError, ParamNameError
 from ...game.paramtables import Tables
@@ -36,11 +37,14 @@ from ...vault import session as vault_session
 from ...writer import fxr as wfxr
 from ...writer import text as wtext
 from ...writer.cache import CACHE_NAME, MemoryCache
+from ...writer.eventflags import FlagRefused, turn_off
 from ...writer.paramedit import SNAPSHOT_NAME, Snapshot
 from ...writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
 from ..innovate_items.fmg import Fmg, FmgError
 from ..innovate_items.spells import live
 from ..innovate_items.spells.spec import colour_of, colour_text
+from ..resurrect.great_enemies import TableError
+from ..resurrect.great_enemies import load as load_enemies
 
 SHARE = 0.05          # seconds a read of the game is shared by every script
 RECHECK = 1.0         # seconds between two checks of the session while writing
@@ -141,7 +145,83 @@ class DesignLive:
 
     # ---- reading
     def block(self) -> dict | None:
-        """{"innovate_items": {"spells": {goods id: node}}} with the values the game holds now, or None without a build."""
+        """{"innovate_items": {"spells": {goods id: node}}, "resurrect": {"great_enemies": {id: node}}} with the values the game
+        holds now; a part without data is left out, None when both are."""
+        out = {}
+        spells = self._spells_block()
+        if spells is not None:
+            out["innovate_items"] = {"spells": spells}
+        enemies = self.enemies_block()
+        if enemies is not None:
+            out["resurrect"] = {"great_enemies": enemies}
+        return out or None
+
+    # ---- the great enemies (1.8.0)
+    def enemy_table(self):
+        if not hasattr(self, "_enemies"):
+            try:
+                self._enemies = load_enemies()
+            except TableError as exc:
+                self.say("W", str(exc))
+                self._enemies = None
+        return self._enemies
+
+    def event_flags(self) -> EventFlags | None:
+        lay = getattr(self.target.profile, "event_flags", None)
+        if lay is None:
+            return None
+        if getattr(self, "_flags", None) is None:
+            self._flags = EventFlags(self.mem, self.target.base, lay)
+        return self._flags
+
+    def enemies_block(self) -> dict | None:
+        """{id: {name, place, grace, runes, drop, story, dlc, defeated}}: the table with the defeat flag the game holds now (null when the
+        game holds no save yet); None when this game version has no event_flags block or the table cannot be read."""
+        table, flags = self.enemy_table(), self.event_flags()
+        if table is None or flags is None:
+            return None
+        try:
+            got = flags.get_many(table.defeated_flags().values())
+        except EventFlagError:
+            got = {}
+        out = {}
+        for rid, r in table.rows.items():
+            out[str(rid)] = {"name": r["name"], "place": r.get("place"), "grace": (r.get("grace") or {}).get("name"), "runes": r["runes"],
+                             "drop": list(r.get("drop") or []), "story": bool(r.get("story")), "dlc": bool(r.get("dlc")),
+                             "defeated": got.get(r["flags"]["defeated"])}
+        return out
+
+    def apply_enemy(self, who: str, parts, value) -> dict:
+        """`design.resurrect.great_enemies.<id or name>.defeated = false`: the boss comes back (spec 1.8.0 section 8). -> {name: value}
+        written; Refused with the reason. `true` is refused: only the game marks a great enemy defeated."""
+        table, flags = self.enemy_table(), self.event_flags()
+        if table is None or flags is None:
+            raise Refused("great enemies: this game version has no event_flags block in offsets.json, or the table cannot be read")
+        if list(parts) != ["defeated"]:
+            raise Refused(f"great enemies: only `defeated` can be written (`{'.'.join(parts)}` is the table's)")
+        if value not in (False, "false", "False", 0):
+            raise Refused("great enemies: only the game marks a great enemy defeated (write defeated = false to bring it back)")
+        try:
+            rids = table.one(str(who))
+        except TableError as exc:
+            raise Refused(f"great enemies: {exc}") from None
+        if self.gate is None or not self.gate.allowed:
+            raise Refused(f"writes are not allowed ({getattr(self.gate, 'reason', 'no session')})")
+        try:
+            done = {}
+            for rid in rids:
+                got = turn_off(self.mem, self.gate, flags, table.flags_of(rid), table.allowed())
+                bad = [f"{f} ({how})" for f, how in got.items() if how == "did not stick"]
+                if bad:
+                    raise Refused(f"{table.rows[rid]['name']}: not resurrected: {', '.join(bad)}")
+                done[f"design.resurrect.great_enemies.{rid}.defeated"] = False
+            self.say("I", f"{table.rows[rids[0]]['name']} alive again: it appears once its area loads again (warp to another region, "
+                          "then come back)")
+            return done
+        except (EventFlagError, FlagRefused) as exc:
+            raise Refused(f"great enemies: {exc}") from None
+
+    def _spells_block(self) -> dict | None:
         spells = self.spells()
         if not spells:
             return None
@@ -160,7 +240,7 @@ class DesignLive:
                         live.put(n, ["customs", "advanced", "texts", key], text)
                 self._colours(n, rec, cache)
             out[str(goods)] = n
-        return {"innovate_items": {"spells": out}}
+        return out
 
     def _param(self, name: str, rows: dict):
         _p, table, rid, field = name.split(".", 3)
@@ -300,6 +380,17 @@ def with_spell_buffs(state_ids: StateIds, spells: dict) -> StateIds:
     return StateIds({**extra, **state_ids.buffs}, state_ids.animations)
 
 
+ENEMIES = ["design", "resurrect", "great_enemies"]
+
+
+def enemy_path(name: str) -> tuple[str, list] | None:
+    """`design.resurrect.great_enemies.<id or name>.<field>` -> (id or name, field parts); None for any other name."""
+    parts = name.strip().split(".")
+    if [p.lower() for p in parts[:3]] != ENEMIES or len(parts) < 5:
+        return None
+    return parts[3], parts[4:]
+
+
 def design_path(name: str) -> tuple[str, list] | None:
     """`design.innovate_items.spells.<goods>.<path>` -> (goods, path parts); None for any other name."""
     parts = name.strip().split(".")
@@ -387,6 +478,11 @@ class LiveBackend:
                 name = ".".join(str(p) for p in path)
                 if not path or path[0] == "systems":
                     problems.append(f"{name}: what the tool knows of itself, not a value of the game")
+                elif path[0] == "design" and [str(p).lower() for p in path[:3]] == ENEMIES and len(path) >= 5:
+                    try:
+                        done.update(self.design.apply_enemy(str(path[3]), [str(p) for p in path[4:]], value))
+                    except Refused as exc:
+                        problems.append(str(exc))
                 elif path[0] == "design":
                     ext = design_path(name) if len(path) >= 5 else None
                     if ext is None or list(path[:3]) != ["design", "innovate_items", "spells"]:

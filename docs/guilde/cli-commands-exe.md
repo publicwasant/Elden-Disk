@@ -397,6 +397,44 @@ Note: `x.a.b = v` changes the snapshot `x`; write `tools.write(x)`. (`y = x.a.b 
 
 Without `--run` the command lists the scripts and how each ended the last time (`<vault>\design\external-scripts.status.json`). `--run` by hand needs the game `run` started (exit `5` otherwise) and starts the scripts at once; `--when-loaded` waits for a character in the world first (what `run` starts). Exit codes: `0` ok, `1` no script can run, `5` no session.
 
+## 4d. `resurrect great-enemies` (a beaten boss alive again, 1.8.0)
+
+```commandline
+eldendisk.exe resurrect great-enemies --list [--defeated | --alive] [--area NAME] [--story] [--dlc] [--json]
+eldendisk.exe resurrect great-enemies --activate NAME|ID [NAME|ID ...]
+eldendisk.exe resurrect great-enemies --activate --all            (or `all`, `*`: every great enemy that is defeated)
+```
+
+A **great enemy** is every enemy fought under the big health bar: the 212 rows of the game's `GameAreaParam` with a defeat flag (40 in
+Shadow of the Erdtree). The game remembers a beaten one in event flags of the save; `--activate` turns its flags **off in the game's
+memory only**: the defeat, the play-log flag that gives its Remembrance, its drops' flags and its intro's flags (the achievement flags
+are never touched). It needs the game `run` started with the vault ON (exit `5` otherwise) and a character in the world; when the game
+closes the vault puts the save back, so the boss is dead again and what the second fight gave is gone. **The boss appears once its area
+loads again: warp to a grace in another region, then come back** (walking to the arena is not enough). Then it fights as the first time:
+the intro, the runes, the drop. Tried in the game on 2026-10-13 with Mohg, Lord of Blood (spec 1.8.0 section 13).
+
+```text
+ ✓  design    Mohg, Lord of Blood alive again: Mohgwyn Palace · grace: Dynasty Mausoleum Midpoint · 420,000 runes · Remembrance of the Blood Lord, Mohg's Great Rune
+ ·  design    1 great enemy alive again; it appears once its area loads again: warp to a grace in another region, then come back
+ !  design    Mohg, Lord of Blood: story boss: what the death started (a Great Rune, the people who speak of it) may look odd until the game closes; the vault puts your save back then
+```
+
+**Names.** By the id (`12050800`) or the name the health bar shows, in any letter case and without punctuation, or part of it:
+`margit`, `"fell omen"`, `"mohg lord"`. A name that fits several (`mohg`: Mohg, Lord of Blood and Mohg, the Omen; `cemetery shade`:
+three places) is refused with the list; add the place (`"radahn caelid"`) or give the id. Nothing is written when any name is wrong.
+`--list` shows every great enemy with its place, the nearest grace (not the one the fight lights), its runes and its drop; with the game
+running also `defeated` / `alive`.
+
+**In the design** (`design.json`), the list `run` brings back at every session, once a character is in the world:
+`"resurrect": {"great_enemies": {"activate": ["margit", "12050800"]}}` (or `"activate": "all"`). `run` starts
+`resurrect great-enemies --when-loaded` for it, like the text and colour steps (the external scripts start after it).
+
+**Read and write.** `read --query "design.resurrect.great_enemies.margit.*"` (a boss by its id or its name); `read` with no name
+shows the count (`defeated`, `alive`, `of`). `write --set design.resurrect.great_enemies.margit.defeated=false` and, in a script,
+`x.design.resurrect.great_enemies[12050800].defeated = False; tools.write(x)` are `--activate` for that boss; `true` is refused
+(only the game marks a boss defeated). Exit codes: `0` done (also when the bosses named were alive already), `1` a wrong name, no
+character in the world or a flag that did not stick, `2` this game version has no `event_flags` block in `offsets.json`, `5` no session.
+
 ---
 
 ## 5. `hash`

@@ -285,7 +285,7 @@ def _design_block(args, target: Target, mem, vault: Path | None, sampler: Sample
     try:
         resolved = design.open_spells(design_folder(args, vault), spec_file(args)).resolved_path
     except DesignError:
-        return None
+        resolved = None                # no build: the great enemies (1.8.0) are still there
     ext = DesignLive(mem, target, vault, resolved)
     if sampler is not None:            # the buffs of the design's spells are named in character.buffs
         sampler.state_ids = with_spell_buffs(sampler.state_ids, ext.spells())
