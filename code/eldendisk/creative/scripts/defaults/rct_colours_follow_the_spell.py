@@ -1,8 +1,8 @@
 """The colours of Reverse Cursed Technique only while it is the spell in use: the fire and the ring take the design's colours when the
 spell is selected in the magic slots (before the cast, so the cast shows them) and go back to the game's own when another spell is selected
 (Flame, Grant Me Strength looks as the game made it again). The effect files are shared, so the colours can only follow the spell in time."""
-from edstdlib import *
 
+from eldendisk.creative.scripts.edstdlib import tools, Interface
 
 class RctColoursFollowTheSpell(Interface):
     every = 0.2

@@ -27,7 +27,7 @@ POLICY_KEY = {   # settable value -> the key of the writer's edit policy
 }
 WRITABLE = tuple(POLICY_KEY)
 _SEGMENTS = {"attrs": "attributes", "rune": "runes", "animation": "animations", "buff": "buffs", "hp": "hit_point", "fp": "focus_point",
-             "max": "maximum"}
+             "max": "maximum", "characters": "character"}
 _ROOTS = ("character", "systems", "params")
 PARAMS = "params"   # the third block of the document: tables of the game itself, always typed in full (`params.effects...`)
 CREATIVE = "creative"   # the fourth (1.8.0): the creative features, always typed in full (`creative.innovate_spells...`)
@@ -47,14 +47,14 @@ class UnknownName(ValueError):
 
 
 CHARACTER_HEADS = ("level", "runes", "vitals", "attributes", "buffs", "animations", "equipment", *VITALS, *ATTR_NAMES)
+CREATIVE_HEADS = ("resurrect", "great_enemies", "innovate_spells", "spells", "scripts", "event_flags")
 
 
 def normalize(name: str) -> str:
     """The canonical dotted path of `name` (wildcards pass through). Does not check that the path exists.
 
     A name is a path of the document as it is (`systems...`, `character...`, `params...`, `creative...`, `*` for all of it). The
-    only shortening: a name that starts with a value of the character (`hp`, `vigor`, `attrs.faith`, `runes`, `buffs`...) may leave
-    `character.` out. Nothing else is assumed: a name that names nothing is an unknown name, never quietly read as another."""
+    shortening: `character.` or `creative.` may be left out for common heads (`hp`, `vigor`, `runes`, `resurrect`, `spells`...)."""
     n = name.strip().lower()
     parts = [s for s in n.split(".") if s != ""]
     if not parts or parts[0] in FULL_ROOTS or parts[0] == "systems":   # below `params` / `creative` the names are the game's
@@ -68,6 +68,13 @@ def normalize(name: str) -> str:
         elif segs[0] in ATTR_NAMES:
             segs.insert(0, "attributes")
         segs.insert(0, "character")
+        return ".".join(segs)
+    if segs[0] in CREATIVE_HEADS:
+        if segs[0] == "great_enemies":
+            segs[0] = "resurrect.great_enemies"
+        elif segs[0] == "spells":
+            segs[0] = "innovate_spells"
+        segs.insert(0, "creative")
         return ".".join(segs)
     return ".".join(parts)
 

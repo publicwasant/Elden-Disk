@@ -28,7 +28,10 @@ DOC = {
     ("focus_point.current", "character.vitals.focus_point.current"), ("stamina", "character.vitals.stamina"),
     ("vitals.hit_point.current", "character.vitals.hit_point.current"),
     ("buffs", "character.buffs"), ("buff", "character.buffs"), ("animation", "character.animations"), ("systems.status.pid", "systems.status.pid"),
-    ("attrs.*", "character.attributes.*"),
+    ("attrs.*", "character.attributes.*"), ("characters", "character"), ("characters.*", "character.*"),
+    ("resurrect", "creative.resurrect"), ("resurrect.*", "creative.resurrect.*"),
+    ("resurrect.great_enemies.*", "creative.resurrect.great_enemies.*"),
+    ("great_enemies", "creative.resurrect.great_enemies"), ("spells", "creative.innovate_spells"),
 ])
 def test_normalize(name, path):
     assert normalize(name) == path

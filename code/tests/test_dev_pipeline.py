@@ -274,7 +274,7 @@ def test_the_tests_run_with_a_temporary_folder_of_their_own_outside_the_build(mo
     assert dev_pipeline.run_precheck()
     temp = dev_pipeline.tests_temp_dir()
     assert seen[0][1:3] == ["-m", "pytest"] and f"--basetemp={temp}" in seen[0]
-    assert temp.name == "eldendisk-pytest" and dev_pipeline.build_layout()["build_root"] not in temp.parents
+    assert temp.name.startswith("eldendisk-pytest") and dev_pipeline.build_layout()["build_root"] not in temp.parents
 
 
 # ---------- %LOCALAPPDATA%\EldenDisk (LOCALAPPDATA points into tmp_path in every test: conftest) ----------

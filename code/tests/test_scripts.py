@@ -561,6 +561,7 @@ def test_another_terminal_stops_starts_and_restarts_a_script_through_request_fil
         assert reply["ok"] and scripts["B"]["state"] == "stopped" and scripts["A"]["state"] == "live" and scripts["B"]["added"]
         reply, scripts = ask("start", "B:2")
         assert reply["ok"] and "started" in reply["lines"][0] and scripts["B"]["id"] == 2
+        time.sleep(0.02)
         b.write_text(GOOD.replace("class A", "class B").replace("every = 0.05", "every = 0.07"), encoding="utf-8")
         reply, scripts = ask("restart", "B")
         assert reply["ok"] and "loaded again" in reply["lines"][0] and scripts["B"]["every"] == 0.07 and scripts["B"]["id"] == 2

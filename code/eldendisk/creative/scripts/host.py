@@ -23,13 +23,13 @@ document's `creative.scripts`). Another terminal controls the host through small
 answers in the status file. No port is opened."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import sys
 import threading
 import time
 import traceback
+import types
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -98,11 +98,16 @@ def load_file(path: Path, added: bool = False) -> Found:
     install()
     path = Path(path)
     name = f"edscript_{path.stem}"
+    sys.modules.pop(name, None)
     try:
-        spec = importlib.util.spec_from_file_location(name, path)
-        module = importlib.util.module_from_spec(spec)
+        code = compile(path.read_text(encoding="utf-8"), str(path), "exec")
+        module = types.ModuleType(name)
+        module.__file__ = str(path)
         sys.modules[name] = module
-        spec.loader.exec_module(module)
+        exec(code, module.__dict__)
+    except BaseException as exc:          # a broken file (SyntaxError, an import, SystemExit) never stops the host
+        sys.modules.pop(name, None)
+        return Found(path, error=_short(exc), added=added)
     except BaseException as exc:          # a broken file (SyntaxError, an import, SystemExit) never stops the host
         sys.modules.pop(name, None)
         return Found(path, error=_short(exc), added=added)

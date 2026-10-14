@@ -71,7 +71,14 @@ def tests_temp_dir() -> Path:
     Without it pytest keeps numbered folders and a `pytest-current` link in %TEMP%/pytest-of-<user>, and Windows may refuse to
     remove that link at exit ("Exception ignored in atexit callback ... PermissionError"). Not inside ./build: the tests make vaults
     that owe a restore on purpose, and the build's clean refuses to remove a folder that holds one."""
-    return Path(tempfile.gettempdir()) / "eldendisk-pytest"
+    target = Path(tempfile.gettempdir()) / "eldendisk-pytest"
+    try:
+        if target.exists():
+            os.scandir(target)
+    except (PermissionError, OSError):
+        user = os.environ.get("USERNAME") or os.environ.get("USER") or "user"
+        target = Path(tempfile.gettempdir()) / f"eldendisk-pytest-{user}"
+    return target
 
 
 def run_precheck() -> bool:
