@@ -425,7 +425,7 @@ LAYOUTS = {
         'atkSuperArmorCorrection': ('f32', 432, 4, 0, 0, 1),
         'defSfxMaterialVariationValue': ('u8', 436, 1, 0, 0, 1),
     }},
-    'AtkParam_Pc': {"type": 'ATK_PARAM_ST', "stride": 456, "rows": 11019, "first": 0, "last": 999999999, "digest": None, "size": 456, "fields": {
+    'AtkParam_Pc': {"type": 'ATK_PARAM_ST', "stride": 456, "rows": 11017, "first": 0, "last": 999999999, "digest": None, "size": 456, "fields": {
         'hit0_Radius': ('f32', 0, 4, 0, 0, 1),
         'hit1_Radius': ('f32', 4, 4, 0, 0, 1),
         'hit2_Radius': ('f32', 8, 4, 0, 0, 1),
@@ -874,7 +874,7 @@ LAYOUTS = {
         'vram_chr_and_parts': ('f32', 100, 4, 0, 0, 1),
         'havok_navimesh': ('f32', 104, 4, 0, 0, 1),
     }},
-    'Bullet': {"type": 'BULLET_PARAM_ST', "stride": 272, "rows": 15477, "first": 0, "last": 999999999, "digest": None, "size": 272, "fields": {
+    'Bullet': {"type": 'BULLET_PARAM_ST', "stride": 272, "rows": 15475, "first": 0, "last": 999999999, "digest": None, "size": 272, "fields": {
         'atkId_Bullet': ('s32', 0, 4, 0, 0, 1),
         'sfxId_Bullet': ('s32', 4, 4, 0, 0, 1),
         'sfxId_Hit': ('s32', 8, 4, 0, 0, 1),
@@ -1598,7 +1598,7 @@ LAYOUTS = {
         'spEffectId_forAtk2': ('s32', 80, 4, 0, 0, 1),
         'mountWepTextId': ('s32', 84, 4, 0, 0, 1),
     }},
-    'EquipParamGoods': {"type": 'EQUIP_PARAM_GOODS_ST', "stride": 176, "rows": 2330, "first": 0, "last": 999999999, "digest": None, "size": 176, "fields": {
+    'EquipParamGoods': {"type": 'EQUIP_PARAM_GOODS_ST', "stride": 176, "rows": 2329, "first": 0, "last": 999999999, "digest": None, "size": 176, "fields": {
         'disableParam_NT': ('u8', 0, 1, 0, 1, 1),
         'refId_default': ('s32', 4, 4, 0, 0, 1),
         'sfxVariationId': ('s32', 8, 4, 0, 0, 1),
@@ -3786,7 +3786,7 @@ LAYOUTS = {
         'lockTgtKeepTime': ('f32', 72, 4, 0, 0, 1),
         'chrTransChaseRateForNormal': ('f32', 76, 4, 0, 0, 1),
     }},
-    'Magic': {"type": 'MAGIC_PARAM_ST', "stride": 168, "rows": 318, "first": 4000, "last": 999999999, "digest": '03561816f8073360', "size": 168, "fields": {
+    'Magic': {"type": 'MAGIC_PARAM_ST', "stride": 168, "rows": 317, "first": 4000, "last": 999999999, "digest": '9941fe694e838a05', "size": 168, "fields": {
         'disableParam_NT': ('u8', 0, 1, 0, 1, 1),
         'yesNoDialogMessageId': ('s32', 4, 4, 0, 0, 1),
         'limitCancelSpEffectId': ('s32', 8, 4, 0, 0, 1),
@@ -5672,7 +5672,7 @@ LAYOUTS = {
     'SfxBlockResShareParam': {"type": 'SFX_BLOCK_RES_SHARE_PARAM', "stride": 8, "rows": 1, "first": 0, "last": 0, "digest": None, "size": 4, "fields": {
         'shareBlockRsMapUidVal': ('u32', 0, 4, 0, 0, 1),
     }},
-    'ShopLineupParam': {"type": 'SHOP_LINEUP_PARAM', "stride": 52, "rows": 1297, "first": 1, "last": 9999002, "digest": None, "size": 52, "fields": {
+    'ShopLineupParam': {"type": 'SHOP_LINEUP_PARAM', "stride": 52, "rows": 1296, "first": 1, "last": 9999002, "digest": None, "size": 52, "fields": {
         'equipId': ('s32', 0, 4, 0, 0, 1),
         'value': ('s32', 4, 4, 0, 0, 1),
         'mtrlId': ('s32', 8, 4, 0, 0, 1),
@@ -5794,7 +5794,7 @@ LAYOUTS = {
         'MaxTranslucencyBranch': ('f32', 32, 4, 0, 0, 1),
         'BillboardBackSpecularWeakenParam': ('f32', 36, 4, 0, 0, 1),
     }},
-    'SpEffectParam': {"type": 'SP_EFFECT_PARAM_ST', "stride": 912, "rows": 11356, "first": 0, "last": 999999999, "digest": None, "size": 912, "fields": {
+    'SpEffectParam': {"type": 'SP_EFFECT_PARAM_ST', "stride": 912, "rows": 11354, "first": 0, "last": 999999999, "digest": None, "size": 912, "fields": {
         'iconId': ('s32', 0, 4, 0, 0, 1),
         'conditionHp': ('f32', 4, 4, 0, 0, 1),
         'effectEndurance': ('f32', 8, 4, 0, 0, 1),

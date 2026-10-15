@@ -167,12 +167,6 @@
         }
       }
     },
-    "params": {
-      "type": ["object", "null"],
-      "description": "1.8.0 part 4: every table of the game (params.<Table>.<row id>.<field>), by the name its regulation.bin gives it. The disk holds each table as {\"rows\": n} until it is named (`read params.NpcParam`): its rows are read then. null with no game attached.",
-      "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
-      "additionalProperties": { "type": "object" }
-    },
     "creative": {
       "type": ["object", "null"],
       "description": "1.8.0: what exists only in the parallel world. scripts: the scripts' host and every script (from its status file); innovate_spells.<goods id>: the spells of the last build (id, slot, rows) with their design and what the game holds now; resurrect.great_enemies.<id>: the great enemies that are defeated now (name, place, grace, runes, drop, story, dlc, defeated: true). A part without data is left out; null when there is none.",

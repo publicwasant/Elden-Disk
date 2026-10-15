@@ -103,14 +103,20 @@ _NUMBER = re.compile(r"(?<![\w.:\\/\-#])(0x[0-9a-fA-F]{4,}|[0-9]{4,})(?![\w.:\\/
 _HEX = re.compile(r"(?<![\w&])#([0-9a-fA-F]{6})(?![\w])")       # a colour as the design writes it: #90D5FF
 
 
+# A small square in the colour, one cell and one colour (U+23F9, the rounded one, is drawn by Windows as a two-colour emoji
+# button two cells wide); `#` on a legacy code page.
+CHIP = "\u25a0"
+
+
 def paint_hex(text: str, color: bool, resume: str = "") -> str:
-    """On a colour console: each colour `#RRGGBB` written in that colour (bright, even in a dim debug line). Never inside an escape."""
+    """On a colour console: before each colour `#RRGGBB` a small square in that colour (bright, even in a dim debug line); the text
+    itself stays in the colour of its line. Never inside an escape."""
     if not color or "#" not in text:
         return text
     parts = _ANSI.split(text)
     for i in range(0, len(parts), 2):
-        parts[i] = _HEX.sub(lambda m: "\x1b[22;38;2;%d;%d;%dm%s\x1b[0m%s" % (
-            int(m.group(1)[0:2], 16), int(m.group(1)[2:4], 16), int(m.group(1)[4:6], 16), m.group(0), resume), parts[i])
+        parts[i] = _HEX.sub(lambda m: "[22;38;2;%d;%d;%dm%s[0m%s %s" % (
+            int(m.group(1)[0:2], 16), int(m.group(1)[2:4], 16), int(m.group(1)[4:6], 16), CHIP, resume, m.group(0)), parts[i])
     return "".join(parts)
 
 
@@ -616,8 +622,39 @@ def format_rows(items, *, indent: int = 1, color: bool = False, hot=frozenset(),
 def rows(items, indent: int = 1) -> None:
     """The tree on stdout (see `format_rows`)."""
     stream = sys.stdout
-    for line in format_rows(items, indent=indent, color=use_color(stream)):
-        _emit(line, stream)
+    _emit_many(format_rows(items, indent=indent, color=use_color(stream)), stream)
+
+
+EMIT_CHUNK = 2000     # lines per write of `_emit_many`
+
+
+def _emit_many(lines, stream) -> None:
+    """`_emit` of every line, for thousands of them (a whole table of the game is millions of rows): the console is asked once
+    whether it takes colours and links, not per line, and the lines go out in chunks, one write and one flush each."""
+    color, links, enc = use_color(stream), use_links(stream), getattr(stream, "encoding", None)
+    chunk: list[str] = []
+
+    def write() -> None:
+        with _screen:
+            live = _live if _live is not None and _live.stream is stream else None
+            if live is not None:
+                live.wipe()
+            stream.write("\n".join(chunk) + "\n")
+            stream.flush()
+            if live is not None:
+                live.draw()
+        chunk.clear()
+
+    for text in lines:
+        if links:
+            text = linkify(text, color=color) if ":\\" in text else text      # a path starts with a drive (`D:\`)
+        elif color and ("\\" in text or "/" in text):
+            text = paint_tails(text)
+        chunk.append(printable(text, enc))
+        if len(chunk) >= EMIT_CHUNK:
+            write()
+    if chunk:
+        write()
 
 
 def _join(segs, width: int, color: bool) -> str:

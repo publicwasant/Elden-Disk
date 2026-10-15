@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import json
 from fnmatch import fnmatchcase
-from typing import Iterator, NamedTuple
+from typing import NamedTuple
 
-from ..game.values import FULL_ROOTS, PARAMS, UnknownName, is_pattern, normalize, suggest
+from ..game.values import DISK, FULL_ROOTS, PARAMS, UnknownName, is_pattern, normalize, suggest
 
 TICKING = (".buff_duration",)     # countdowns: the live views paint them in their own colour, they are never "changes"
 VOLATILE = (*TICKING, "systems.status.ignored.buffs", "systems.status.ignored.animations")
@@ -29,12 +29,17 @@ class Row(NamedTuple):
 def flatten(value, prefix: str = "") -> dict[str, object]:
     """{dotted path: scalar} of every leaf of `value`."""
     out: dict[str, object] = {}
+    _flatten_into(out, value, prefix)
+    return out
+
+
+def _flatten_into(out: dict, value, prefix: str) -> None:
+    """One dict for the whole tree (a whole table is millions of leaves: no dict per level copied into its parent)."""
     if isinstance(value, dict):
         for k, v in value.items():
-            out.update(flatten(v, f"{prefix}.{k}" if prefix else str(k)))
+            _flatten_into(out, v, f"{prefix}.{k}" if prefix else str(k))
     else:
         out[prefix] = value
-    return out
 
 
 def _walk(path: str, value) -> object:
@@ -73,10 +78,21 @@ def select(doc: dict, names: str | list[str] | None) -> list[tuple[str, object]]
         return [("", doc)]
     out: list[tuple[str, object]] = []
     for name in wanted:
-        for path, value in _select_one(doc, name):
+        for path, value in _select_disk(doc, name):
             if all(path != p for p, _ in out):
                 out.append((path, value))
     return out
+
+
+def _select_disk(doc: dict, name: str) -> list[tuple[str, object]]:
+    """`disk`, `disk.*`: the whole document under `disk`; `disk.<path>`: that path, shown as `disk.<path>` (the name as `disk.json`
+    holds it, 1.8.0). A name without `disk.` is selected and shown as before."""
+    head, _dot, rest = name.strip().partition(".")
+    if head.lower() != DISK:
+        return _select_one(doc, name)
+    if rest.strip() in ("", "*"):
+        return [(DISK, doc)]
+    return [(f"{DISK}.{path}" if path else DISK, value) for path, value in _select_one(doc, rest)]
 
 
 def _canonical(leaves: dict[str, object]) -> dict[str, str]:
@@ -153,6 +169,10 @@ def _select_one(doc: dict, name: str) -> list[tuple[str, object]]:
     raise UnknownName(name, suggest(name, sorted(known)))
 
 
+_FULL = tuple(r + "." for r in FULL_ROOTS)                 # paths whose numbers are shown as they are
+_FULL_OR_EQUIPMENT = _FULL + ("character.equipment.",)
+
+
 def fmt(key: str, value, path: str = "") -> str:
     if value is None:
         return "-"
@@ -161,24 +181,36 @@ def fmt(key: str, value, path: str = "") -> str:
     if isinstance(value, int):
         if key == "delta":
             return f"{value:+,}"
-        return str(value) if key in ("pid", "code") or path.startswith(tuple(r + "." for r in FULL_ROOTS) + ("character.equipment.",)) \
+        return str(value) if key in ("pid", "code") or path.startswith(_FULL_OR_EQUIPMENT) \
             else f"{value:,}"   # ids: no commas
     if isinstance(value, float):
-        return repr(value) if path.startswith(tuple(r + "." for r in FULL_ROOTS)) else f"{value:.2f}"   # params: -1.0 and 0.01 as they are
+        return repr(value) if path.startswith(_FULL) else f"{value:.2f}"   # params: -1.0 and 0.01 as they are
     if isinstance(value, list):
         return ", ".join(fmt(key, v, path) for v in value) if all(not isinstance(v, (dict, list)) for v in value) \
             else json.dumps(value)
     return str(value)
 
 
-def _rows(value: dict, indent: int, prefix: str) -> Iterator[Row]:
+def _rows(value: dict, indent: int, prefix: str, out: list[Row]) -> list[Row]:
+    """The rows of the tree into `out` (a list, not nested generators: a whole table of the game is millions of rows)."""
     for key, v in value.items():
-        path = f"{prefix}.{key}" if prefix else str(key)
+        key = str(key)
+        path = f"{prefix}.{key}" if prefix else key
         if isinstance(v, dict):
-            yield Row(indent, str(key), None, path)
-            yield from _rows(v, indent + 1, path)
+            out.append(Row(indent, key, None, path))
+            _rows(v, indent + 1, path, out)
         else:
-            yield Row(indent, str(key), fmt(str(key), v, path), path)
+            out.append(Row(indent, key, fmt(key, v, path), path))
+    return out
+
+
+def _flat_rows(value, prefix: str, out: list[Row]) -> None:
+    """One `full.path  value` row per leaf, in the order of `flatten`, without building its dict first."""
+    if isinstance(value, dict):
+        for key, v in value.items():
+            _flat_rows(v, f"{prefix}.{key}" if prefix else str(key), out)
+    else:
+        out.append(Row(0, prefix, fmt(prefix.rsplit(".", 1)[-1], value, prefix), prefix))
 
 
 def _graft(tree: dict, parts: list[str], value) -> None:
@@ -207,15 +239,17 @@ def rows(selection: list[tuple[str, object]], flat: bool = False) -> list[Row]:
     exactly as the whole document is printed, so a wildcard or several names read like `read` itself. One single
     value is one `path  value` row. `flat`: every value is one `full.path  value` row, no headings."""
     if flat:
-        return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value, path), path)
-                for top, sub in selection for path, value in flatten(sub, top).items()]
+        out: list[Row] = []
+        for top, sub in selection:
+            _flat_rows(sub, top, out)
+        return out
     if len(selection) == 1 and selection[0][0] and not isinstance(selection[0][1], dict):
         path, value = selection[0]
         return [Row(0, path, fmt(path.rsplit(".", 1)[-1], value, path), path)]
     tree: dict = {}
     for path, value in selection:
         _graft(tree, path.split(".") if path else [], value)
-    return list(_rows(tree, 0, ""))
+    return _rows(tree, 0, "", [])
 
 
 def as_json(selection: list[tuple[str, object]]) -> str:

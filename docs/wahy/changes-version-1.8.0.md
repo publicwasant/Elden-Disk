@@ -57,16 +57,22 @@ _(baseline: **[changes-version-1.7.2.md](changes-version-1.7.2.md)**; design: **
 
 | # | Change | Where |
 |:-:|:---|:---|
-| 22 | **Every table of the game** (194 in 1.17.1, 170,966 rows) is `params.<Table>.<id>.<field>`, by the game's own name of the table in any letter case; the short names still work. The layouts from Paramdex, generated against the game's `regulation.bin`: 188 tables decode, 6 have no def that fits yet. | `game/paramlayouts.py`, `game/paramnames.py`, `tools/gen_paramdefs.py` |
+| 22 | **Every table of the game** (194 in 1.17.1, 179,367 rows) is `params.<Table>.<id>.<field>`, by the game's own name of the table in any letter case; the short names still work. The layouts from Paramdex, generated against the game's `regulation.bin`: 188 tables decode, 6 have no def that fits yet. | `game/paramlayouts.py`, `game/paramnames.py`, `tools/gen_paramdefs.py` |
 | 23 | **Read when named.** The document's `params` is `{Table: {"rows": n}}`; `read params.NpcParam` (every row), `params.NpcParam.10000000[.hp]`, `params.NpcParam.*.hp` read from the game then. A script's table reads a row when it is touched. | `game/paramtables.py`, `reader/sampler.py`, `commands/read.py`, `creative/scripts/backend.py`, `disk.schema.json` |
 | 24 | **`params.effects` is gone**, folded into `params.SpEffectParam.<id>`; a name under it says where its rows are. Every table is written through the same edits (type and bit width checked; an id field gets a note). | `writer/writer.py`, `writer/paramedit.py` |
 | 25 | **`params.repository`**: the list the game keeps every table in, walked once; each slot named by its param type, rows, ids, the digest of its rows or the name next to it, else left out with the reason. `probe` prints every slot. | `game/profile.py`, `game/paramtables.py`, `game/probe.py`, `offsets.json` |
 | 26 | **Tests** of the walk (`test_param_walk.py`); the `params.effects` tests moved to `params.SpEffectParam`; docs and spec 1.8.0 Part 4. | `tests/`, `docs/` |
+| 27 | **Optimization of Part 4**: a decoder made once per table (a row 3.6 times quicker, the same values); `params.T.*.field` decodes only that field; a whole table printed in chunks with the console asked once (`read params.SpEffectParam` about 27 s → 10 s); a table's slot by look-up. | `game/paramtables.py`, `reader/view.py`, `ui.py`, `commands/read.py` |
+| 28 | **A colour in the log** (`#90D5FF`): a small square (`■`) in that colour and a space before it, the text itself plain (was: the text painted in the colour). The rounded `⏹` tried first is drawn by Windows as a two-colour emoji button. `#` on a legacy code page. | `ui.py` (`paint_hex`) |
+| 29 | **The walk checked in the game** (`probe`): 194 tables. A slot whose rows are those of another table is named by the first table name next to it (its own; the names after it are its neighbours'): all 194 named (was 182). | `game/paramtables.py` (`_named_next_to_slot`), spec 1.8.0 Part 4 |
+| 30 | **`export --params`**: every row of every table of the game, every field, to `output\params.json` (once; about 490 MB, 11 s; one row a line; a table no layout decodes as bytes). `export` alone (or `--disk`) writes `disk.json` as before. | `commands/read.py`, `reader/export.py` (`params_chunks`, `write_chunks`), `__main__.py` |
+| 31 | **The layouts made again from the original `regulation.bin`**: the first Part 4 commit was generated from a build (the six tables of the build had its rows). `gen_paramdefs.py` refuses a file that is not the original. | `game/paramlayouts.py`, `tools/gen_paramdefs.py` |
+| 32 | **`disk.json` has no `params` any more** (it held each table's number of rows): `read params` lists the tables from the game, `export --params` writes them whole, a script's `x.params.<Table>[id]` still works (its own copy of the document). The reader no longer looks at the tables every second. | `reader/export.py`, `reader/sampler.py`, `disk.schema.json`, `commands/read.py`, `creative/scripts/backend.py` |
+| 33 | **`read disk.<path>`**: a path of `disk.json` (shown as `disk.<path>`), `read disk` / `disk.*` the whole document, `read params.<path>` the game's tables; the short names still work; `write` takes `disk.` names too. | `game/values.py` (`normalize`), `reader/view.py` (`select`) |
 
 ## Not done (open)
 
 - The reads and scans inside the game, measured from a session's logs (spec 1.8.0 Part 3). Decided not to do: a one-folder exe, and the
   decoded game file's state kept between builds.
 - Part 2 in the real game (the new command line, the scripts' control from another terminal, `reset`).
-- Part 4 in the real game: the walk of `params.repository` (`probe`).
 - `creative.innovate_spells.<id>.design` written as a whole (a new build from the running session): the values only for now.

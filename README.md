@@ -58,8 +58,9 @@ sequenceDiagram
 
 Rules every command follows:
 
-1. **One document.** Whatever the tool knows of the running game is a path in one document (`systems`, `character`, `params`,
-   `creative`). `read` shows it, `write` and the scripts' `tools.write` change it, `export` writes it as `output\disk.json`.
+1. **One document.** Whatever the tool knows of the running game is a path in one document (`systems`, `character`,
+   `creative`). `read` shows it, `write` and the scripts' `tools.write` change it, `export` writes it as `output\disk.json`. The game's
+   tables (`params`) are read from the game when named, and `export --params` writes all of them to `output\params.json`.
 2. **Read anywhere, write only through the portal.** Reading needs no session. Every write (a value, a param, a text, a colour, a flag)
    needs the session `run` started with the vault ON, for this very game process, and goes through the same gate (exit `5` otherwise).
 3. **Memory only.** Nothing is written to the game folder or to the save files; what is built from `creative.json` (`regulation.bin`) is
@@ -79,13 +80,13 @@ Run via `eldendisk.exe <command> [options]` or `python -m eldendisk <command> [o
 |:---|:---|:---|
 | the portal | `run [--vault-on \| --vault-off]` | back up the save files, swap in the build of `creative.json`, launch offline; once a character is in the world `innovate-spells apply`, `resurrect` (the list of `creative.json`) and `scripts start *`; restore everything when the game closes |
 | 1st: vault | `vault status \| list \| verify \| restore \| keep \| prune` | the snapshots and the session record; `restore` after a session cut short, `keep --yes` to keep the current save |
-| 2nd: core | `read [* \| all \| NAME \| ID \| PATH ...] [--live] [--tree \| --flat \| --json]` | the document, or a part of it: `hp`, `attrs.*`, `params.NpcParam.10000000.hp`, `creative.resurrect.great_enemies.margit` |
+| 2nd: core | `read [* \| all \| NAME \| ID \| PATH ...] [--live] [--tree \| --flat \| --json]` | the document, or a part of it: `disk.character.level`, `disk.creative.resurrect.great_enemies.margit` (short: `hp`, `attrs.*`); the game's tables: `params.NpcParam.10000000.hp` |
 | 2nd: core | `read monitor \| monitor-buffs \| monitor-animations [--mapped \| --unmapped]` | one row per buff / animation id that appears (`--unmapped`, the default: the ids `names.json` does not name yet) |
 | 2nd: core | `write NAME=VALUE ...`, `write NAME=default`, `write` | change a value the document shows; `default` = the game's own value; `write` alone lists the names and their ranges |
 | 3rd: creative | `scripts [* \| all]`, `scripts start \| restart \| stop \| status [NAME[:ID[:PROCESS_ID]]]`, `scripts add \| remove \| change PATH` | your Python scripts next to the game, controlled from another terminal |
 | 3rd: creative | `innovate-spells`, `innovate-spells build [all \| NAME \| ID ...] \| secure \| apply` | new spells: `creative.json` ⟶ a `regulation.bin` judged by a gate ⟶ secured; their texts and colours into the game |
 | 3rd: creative | `resurrect NAME \| ID \| PATH ... \| all [--dry-run]` | a boss you have beaten, alive again for the session |
-| data | `export [--live]` | the document to `%LOCALAPPDATA%\EldenDisk\output\disk.json` |
+| data | `export [--disk] [--params] [--live]` | the document to `%LOCALAPPDATA%\EldenDisk\output\disk.json`; `--params`: every row of every table of the game to `params.json` |
 | data | `reset [all \| runes \| buffs \| animations \| monitor]` | the read baselines start again from now (`runes.delta` = 0, the monitors' history); nothing is written to the game |
 | data | `check [FILE]` | a `regulation.bin` against the game, row by row |
 | data | `probe` | where the game's param tables lie in memory (for a new game version) |
@@ -201,7 +202,6 @@ All the scripts of a session run in **one host process**, each in a thread of it
   },
   "character": { "level": 386, "vitals": { "...": "..." }, "runes": { "total": 55214603, "baseline": 55214603, "delta": 0 },
                  "attributes": { "...": "..." }, "buffs": { "...": "..." }, "animations": { "...": "..." }, "equipment": { "...": "..." } },
-  "params": { "effects": { "1621000": { "name": "Black Flame", "effectEndurance": 2.0, "...": "..." } } },
   "creative": {
     "scripts": { "host": { "process_id": 26528, "state": "running", "started": "...", "scripts": 1 }, "defaults": { "...": "..." }, "added": {} },
     "innovate_spells": { "2230000": { "id": "reverse_cursed_technique", "slot": 1, "rows": { "...": "..." }, "design": { "...": "..." } } },
@@ -239,7 +239,7 @@ the exe; one next to the exe wins). The full document is in [spec 1.8.0 part 2](
  │                                               params-snapshot.json, eldendisk.log
  ├─ baselines.json                               what `reset` set
  ├─ exe-sha256.json                              the hash of eldenring.exe, kept while the file stays the same
- └─ output\disk.json                             what `export` writes
+ └─ output\disk.json, params.json                what `export` and `export --params` write
 <exe folder>\                                    eldendisk.exe; offsets.json, names.json, creative.json when you put them next to it
 ```
 

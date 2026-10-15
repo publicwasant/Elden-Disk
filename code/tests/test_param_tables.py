@@ -309,23 +309,22 @@ def test_every_row_of_the_real_tables_decodes_and_black_flame_is_where_the_surve
     dcx = container.decrypt(data)
     body = zstd.decode_frame(dcx[0x4C:0x4C + st.unpack(">I", dcx[0x20:0x24])[0]])
     bnd = Bnd4(body)
-    files = {"Goods": "EquipParamGoods", "Magic": "Magic", "SpEffect": "SpEffectParam", "Bullet": "Bullet",
-             "AtkParam_Pc": "AtkParam_Pc", "ShopLineup": "ShopLineupParam"}
     rows = {}
-    for table, fname in files.items():
-        raw = bnd.get(fname).data
+    for table in ("EquipParamGoods", "Magic", "SpEffectParam", "Bullet", "AtkParam_Pc", "ShopLineupParam"):
+        raw = bnd.get(table).data
         n, size = st.unpack_from("<H", raw, 0xA)[0], LAYOUTS[table]["size"]
         start = st.unpack_from("<Q", raw, 0x30)[0]
         assert start == 0x40 + n * 24
         offs = [st.unpack_from("<IIQQ", raw, 0x40 + i * 24) for i in range(n)]
         assert all(o[2] % size == start % size for o in offs)
         for rid, _pad, off, _x in offs[::max(1, n // 400)]:
-            PT.decode_row(table, raw[off:off + size])
+            row = raw[off:off + size]
+            assert repr(PT.decode_row(table, row)) == repr(PT._decode_slow(table, row, None))     # 1.8.0: the compiled decoder
         rows[table] = {rid: raw[off:off + size] for rid, _p, off, _x in offs if rid in (6210, 6230, 10621001, 1621000)}
     m6210 = PT.decode_row("Magic", rows["Magic"][6210])
     assert (m6210["mp"], m6210["refCategory1"], m6210["refId1"], m6210["refType"]) == (18, 1, 10621000, 17)
     assert PT.decode_row("Bullet", rows["Bullet"][10621001])["spEffectId0"] == 1621000
-    burn = PT.decode_row("SpEffect", rows["SpEffect"][1621000])
+    burn = PT.decode_row("SpEffect", rows["SpEffectParam"][1621000])
     assert burn["effectEndurance"] == 2.0 and burn["changeHpRate"] == 0.1 and burn["changeHpPoint"] == 1
 
 
@@ -371,3 +370,45 @@ def test_a_descriptor_that_no_longer_names_the_row_makes_the_index_again():
     m.put(head + 0x40 + i * 24, b)                                                   # the two descriptors swapped places
     m.put(head + 0x40 + other * 24, a)
     assert t.read_row("Magic", 6230)["mp"] == 21 and t.read_row("Magic", 6210)["mp"] == 18
+
+
+# ---- 1.8.0 part 4: a decoder made once per table (and per set of fields) ----
+def test_every_layout_compiles_and_decodes_as_field_by_field_does():
+    import random
+    rnd = random.Random(4)
+    for table, layout in LAYOUTS.items():
+        if layout["fields"] is None:
+            continue
+        assert PT._compile(table, None) is not None, table
+        for _ in range(3):
+            row = bytes(rnd.getrandbits(8) for _ in range(layout["size"]))
+            assert repr(PT.decode_row(table, row)) == repr(PT._decode_slow(table, row, None)), table    # NaN, bits and text too
+
+
+def test_only_the_fields_asked_for_are_decoded_in_the_layouts_order():
+    row = encode("Magic", mp=18, refCategory1=1, refId1=10621000)
+    names = PT.fields_like("Magic", "REF*1")
+    assert names == ("refCategory1", "refId1")
+    assert list(PT.decode_row("Magic", row, names)) == list(names)
+    assert PT.decode_row("Magic", row, names)["refId1"] == 10621000 and PT.decode_row("Magic", row, ("mp",)) == {"mp": 18}
+    assert PT.fields_like("Magic", "nothing*") == ()
+
+
+def test_floats_keep_their_sign_and_a_nan_is_a_nan():
+    for value in (0.0, -0.0, 0.1, -1.0, float("inf")):
+        row = encode("SpEffectParam", effectEndurance=value)
+        assert repr(PT.decode_row("SpEffectParam", row)["effectEndurance"]) == repr(PT.shown(value))
+    nan = bytearray(encode("SpEffectParam"))
+    struct.pack_into("<I", nan, LAYOUTS["SpEffectParam"]["fields"]["effectEndurance"][1], 0x7FC00000)
+    v = PT.decode_row("SpEffectParam", bytes(nan))["effectEndurance"]
+    assert v != v
+
+
+def test_a_field_of_every_row_reads_only_that_field(capsys):
+    m = pf.Pages()
+    put_table(m, "Magic", MAGIC)
+    t = tables(m)
+    assert {rid: row for rid, row in t.read_table("Magic", "MP").items()} == {rid: {"mp": PT.decode_row("Magic", raw)["mp"]}
+                                                                              for rid, raw in MAGIC.items()}
+    with pytest.raises(ParamNameError, match="no field of Magic"):
+        t.read_table("Magic", "nothing*")

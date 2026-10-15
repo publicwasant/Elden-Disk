@@ -18,8 +18,10 @@ the game closes. **Nothing you did inside comes back with you.**
 vault: back up the save files (and swap in the regulation.bin built from creative.json)      `run`: the portal opens
  │
  ├─ read      the game's memory (RAM) through the pointer chains of the profile (offsets.json); every value is a name in ONE document
- │   ├─ [nothing | * | all]        all of the document
- │   └─ [NAME | ID | PATH ...]     a part of it: `hp`, `creative.resurrect.great_enemies.margit`, `params.Magic.6230.mp`
+ │   ├─ [nothing | * | all | disk] all of the document (disk.json)
+ │   ├─ [disk.PATH ...]            a part of it: `disk.character.level`, `disk.creative.resurrect.great_enemies.margit`
+ │   │                             (the short names still work: `hp`, `level`, `margit`)
+ │   └─ [params.PATH ...]          the game's tables, read from the game: `params.Magic.6230.mp` (what export --params writes)
  │       └─ [--live | --tree (default) | --flat | --json]
  │
  ├─ write     the game's memory through the same chains, only inside the session `run` started (vault ON)
@@ -38,8 +40,9 @@ vault: restore the save files and the game's own files, byte for byte           
 
 Rules every command follows:
 
-1. **One document.** Whatever the tool knows of the running game is a path in one document (`systems`, `character`, `params`,
-   `creative`). `read` shows it, `write` and `tools.write` change it, `export` writes it as `output\disk.json`.
+1. **One document.** Whatever the tool knows of the running game is a path in one document (`systems`, `character`,
+   `creative`). `read` shows it, `write` and `tools.write` change it, `export` writes it as `output\disk.json`. The game's
+   tables (`params`) are read from the game when named, and `export --params` writes all of them to `output\params.json`.
 2. **Read anywhere, write only through the portal.** Reading needs no session. Every write (a value, a param, a text, a colour, a flag)
    needs the session `run` started with the vault ON, for this very game process, and goes through the same gate.
 3. **Memory only.** Nothing is written to the game folder or to the save files; the `regulation.bin` built from `creative.json` is
@@ -61,7 +64,7 @@ Rules every command follows:
 | 3rd: creative | `scripts [* \| all]`, `scripts start \| restart \| stop \| status [NAME[:ID[:PROCESS_ID]] \| * \| all]`, `scripts add \| remove \| change PATH` | your scripts |
 | 3rd: creative | `innovate-spells`, `innovate-spells build [* \| all \| NAME \| ID ...] \| secure \| apply` | new spells |
 | 3rd: creative | `resurrect NAME \| ID \| PATH ... \| * \| all [--dry-run] [--when-loaded]` | a beaten boss alive again |
-| data | `export [--live]` | the document to `<TOOLS-DIR>\output\disk.json` |
+| data | `export [--disk] [--params] [--live]` | the document to `<TOOLS-DIR>\output\disk.json`; `--params`: every row of every table to `params.json` |
 | data | `reset [* \| all \| runes \| buffs \| animations \| monitor]` | the read baselines start again from now |
 | data | `check [FILE]` | a `regulation.bin` against the game, row by row |
 | data | `probe` | where the game's param tables lie in memory |
@@ -178,11 +181,12 @@ handle and works with or without `run` (it waits for `eldenring.exe` and for a l
 
 | **Form** | **What** |
 |:---|:---|
-| `read`, `read *`, `read all` | the whole document once |
+| `read`, `read *`, `read all`, `read disk` | the whole document once (what `disk.json` holds) |
+| `read disk.character.level`, `read disk.character.*` | a part of it, by its path in `disk.json`; shown as `disk.<path>`. Without `disk.` (`level`, `hp`, `attrs.*`) the same values, shown as before. `write` takes `disk.` names too |
 | `read hp attrs.* character.runes` | one or several values or groups |
 | `read creative.resurrect.great_enemies` | the great enemies defeated now; a boss by name: `read creative.resurrect.great_enemies.margit` |
 | `read creative.innovate_spells.reverse_cursed_technique` | a spell of the last build (by its name or its goods id) |
-| `read params` | every table of the game (194 in 1.17.1) with its number of rows: what the document holds until a table is named |
+| `read params` | every table of the game (194 in 1.17.1) with its number of rows, from the game (the tables are not in `disk.json`) |
 | `read params.NpcParam`, `read params.SpEffectParam.1621000` | every row of a table, one row (Black Flame), read from the game now; once, not with `--live` |
 | `read params.Magic.6230.mp*`, `read params.NpcParam.*.hp` | the fields of a row that match, a field of every row |
 | `--live` | keep the values current at `--hz` (on a terminal the tree is redrawn and a changed value lights up; elsewhere one line per change) |
@@ -350,7 +354,7 @@ rest at a Site of Grace. When the game closes the vault puts the save back and t
 ## 8. Data
 
 ```commandline
-python -m eldendisk export [--live] [--out DIR]
+python -m eldendisk export [--disk] [--params] [--live] [--out DIR]
 python -m eldendisk reset [* | all | runes | buffs | animations | monitor]
 python -m eldendisk check [FILE] [--json]
 python -m eldendisk probe [--json]
@@ -358,7 +362,8 @@ python -m eldendisk probe [--json]
 
 | **Command** | **What** |
 |:---|:---|
-| `export` | the whole document to `<TOOLS-DIR>\output\disk.json`, once. `--live`: again each time it changes (at most every `--export-interval` s, 0.5; a change that is only a buff countdown at most every `--timer-interval` s, 2; it pauses while the game window is not in front unless `--no-idle`) |
+| `export --params` | every row of every table of the game, every field, read from the game now, to `<TOOLS-DIR>\output\params.json` (once, about 500 MB and 10 s; one row a line, so `findstr` finds a row; a table no layout decodes has its rows as bytes, `{"_raw": "hex"}`). `read params...` never reads this file: it reads the game |
+| `export`, `export --disk` | the whole document to `<TOOLS-DIR>\output\disk.json`, once (no `params` in it; `--disk --params` writes both files). `--live`: again each time it changes (at most every `--export-interval` s, 0.5; a change that is only a buff countdown at most every `--timer-interval` s, 2; it pauses while the game window is not in front unless `--no-idle`) |
 | `reset` | the game's values now become the read baselines: `runes` (`character.runes.baseline` = the total now, `delta` = 0), `buffs` / `animations` (`monitor`: both; the monitors' history of what has ended is cleared). Nothing is written to the game: a small file (`<TOOLS-DIR>\baselines.json`, for this game process) that every reader takes within a few seconds |
 | `check` | decode a `regulation.bin` (the one in the game folder by default: what the game loaded) and compare the six tables with the game's, row by row; exit `0` only when they agree |
 | `probe` | find where the game's param tables lie in memory and check them against the profile's chains; then every slot of the game's list of tables with the table it was named as, and the tables not found (for a new game version) |
@@ -422,13 +427,14 @@ A wrong name or value is an error that names its place in the file; nothing is b
 
 ## The document
 
-`read` shows it, `export` writes it as `<TOOLS-DIR>\output\disk.json`, `tools.read()` gives it to a script. Four blocks:
+`read` shows it, `export` writes it as `<TOOLS-DIR>\output\disk.json`, `tools.read()` gives it to a script. Three blocks
+(the game's tables are not in it: `read params...` reads them from the game, `export --params` writes them to `params.json`; a script's
+`tools.read()` has them too, as `x.params.<Table>[id]`):
 
 | **Block** | **What** |
 |:---|:---|
 | `systems` | the profile, the features this game version supports (`buffs_supported`, `animations_supported`, `creative_supported`), the status, the session (`mode`: `creative` inside the portal, else `telemetry`; `read_only`; `creative`) |
 | `character` | `level`, `vitals`, `runes` (`total`, `baseline`, `delta`), `attributes`, `buffs`, `animations`, `equipment.magic` |
-| `params` | `effects` (the rows `offsets.json` names) |
 | `creative` | `scripts` (`host` and every script), `innovate_spells.<goods id>` (`id`, `slot`, `rows`, and apart `design`), `resurrect.great_enemies.<id>` (the defeated ones only) |
 
 The full example is in [spec 1.8.0 part 2, "The single source of truth"](../specs/elden-disk-spec-v1.8.0.md).
@@ -449,7 +455,7 @@ The full example is in [spec 1.8.0 part 2, "The single source of truth"](../spec
  │   └─ eldendisk.log                           the log of every command
  ├─ baselines.json                              what `reset` set
  ├─ exe-sha256.json                             the hash of eldenring.exe, kept while the file stays the same
- └─ output\disk.json                            what `export` writes
+ └─ output\disk.json, params.json               what `export` and `export --params` write
 <exe folder>\                                   eldendisk.exe; offsets.json, names.json, creative.json when you put them next to it
                                                 (they win over the copies in the exe)
 ```

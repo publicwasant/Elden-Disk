@@ -97,7 +97,14 @@ def table_facts(regulation: str) -> list[dict]:
 
 
 def main_game(defs_dir: str, regulation: str, out: str) -> None:
+    import hashlib
     import xml.etree.ElementTree as ET
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from eldendisk.creative.innovate_spells import bases
+    if hashlib.sha256(Path(regulation).read_bytes()).hexdigest() != bases.BASES[bases.CURRENT_BASE]:
+        # The rows, ids and digests name the tables in memory: they must be the game's own (a build adds rows; during a `run`
+        # the game folder holds the build, the original is in the vault: <vault>\<snapshot>\bin\regulation.bin).
+        sys.exit(f"{regulation} is not the game's original {bases.CURRENT_BASE} regulation.bin (a build is swapped in?)")
     by_type = {}
     for x in sorted(Path(defs_dir).glob("*.xml")):
         by_type.setdefault(ET.parse(x).getroot().findtext("ParamType"), []).append(x)

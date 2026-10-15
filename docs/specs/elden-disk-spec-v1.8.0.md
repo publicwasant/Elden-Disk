@@ -4,8 +4,8 @@
 > read, Mohg brought back with his intro, runes and Remembrance, the save restored byte for byte). Part 2 IMPLEMENTED on 2026-10-14 (unit
 > tests: 1,700+; not yet tried in the game): the commands, the names and the document as Part 2 says; the notes at its end say what the
 > code decided where Part 2 left a choice. Part 3 (optimization) IMPLEMENTED on 2026-10-15 for what needs no decision and no
-> game; the rest is listed there. Part 4 (every param table in the disk) IMPLEMENTED on 2026-10-15 (unit tests; the walk of the list
-> not yet checked in the game: `probe`).  
+> game; the rest is listed there. Part 4 (every param table in the disk) IMPLEMENTED on 2026-10-15; the walk of the list checked in
+> the game the same day (`probe`: 194 tables, every one named).  
 > **Last Updated:** _2026-10-15_
 
 # Elden-Disk spec 1.8.0: `resurrect great-enemies`
@@ -928,7 +928,7 @@ All tests pass, the 92 golden ones on the game's original `regulation.bin` inclu
 
 Written 2026-10-15. Until now the disk's `params` held four rows of one table (`params.effects`: Black Flame), and six tables of the
 workbench could be read and written by name outside it. The game holds far more: its `regulation.bin` (1.17.1) has **194 tables,
-170,966 rows** (49 MB of row data): every weapon, armour, item, spell, effect, bullet, attack, enemy, drop, shop line, grace, cutscene ...
+179,367 rows** (49 MB of row data): every weapon, armour, item, spell, effect, bullet, attack, enemy, drop, shop line, grace, cutscene ...
 Part 4 puts **all of them** in the disk, to read and write freely, as every other value.
 
 Decided by the author (2026-10-14): every table; read when named (lazy); `params.effects` folded into the tables; the layouts from
@@ -967,6 +967,49 @@ file. So the disk holds every table, and reads its rows only when they are named
 - A script reads a row when it touches it: `x.params.NpcParam[10000000].hp`; `tools.write(x)` writes what it changed. A row that is not
   in the table says so in one line (not the list of every id).
 - A row is read again at every `read`: a value `write` changed shows at once.
+
+## The tables leave `disk.json` (2026-10-15)
+
+Asked by the author once `params.json` existed: `disk.json` has no `params` block any more (it held each table's number of rows). The
+tables are read from the game when they are named and written whole by `export --params`; the disk is `systems`, `character`,
+`creative`.
+
+- `read params` and `read params.*`: every table of the game with its rows, read from the game (no longer the disk's index).
+- `read params.<Table>...`, `write params...`: unchanged (the game).
+- A script's `tools.read()` still has `x.params.<Table>[id]`: the scripts' backend adds the tables to its own copy of the document,
+  each row read when it is touched. That copy is not `disk.json`.
+- The reader no longer looks at the tables about once a second (the index it kept for the disk): `read`, `read --live` and
+  `export --live` read no param file at all.
+- The schema no longer describes `params`.
+
+The sections above that speak of the disk's index of the tables ("Read when named": `params` -> every table with its number of rows)
+are replaced by this.
+
+## `read disk...` and `read params...` (2026-10-15)
+
+Asked by the author: the names say which file they belong to. `read disk.<path>` reads a path of `disk.json` (`disk.character.level`,
+`disk.creative.resurrect.great_enemies.margit`), `read params.<path>` the game's tables (what `params.json` holds). `read disk` and
+`read disk.*` are the whole document (as `read`). The values show with their prefix (`disk.character.level  386`), so a name read is the
+name written in the file. The short names stay (`level`, `hp`, `attrs.*`, `margit`): the same values, shown as before. `write` takes
+`disk.` names too (`write disk.character.level=150`).
+
+## `export --params`: every row in a file (2026-10-15)
+
+Asked by the author: the rows of the tables, all of them, in a file of their own next to `disk.json`.
+
+```commandline
+eldendisk.exe export              the document to output\disk.json (as before; --disk says it)
+eldendisk.exe export --params     every row of every table to output\params.json
+eldendisk.exe export --disk --params   both
+```
+
+- `params.json`: `{"profile": {...}, "written": time, "params": {Table: {row id: {field: value}}}, "skipped": {Table: why}}`, every
+  table found in the game, every row, every field, read now (the same decoder as `read`). One row a line: `findstr "10000000"` gives a row.
+- A table no layout decodes (6) has each row as its bytes: `{"_raw": "hex"}`. A table that cannot be read is under `skipped` with why.
+- Once, never `--live`: about 490 MB, about 11 s (measured on the game's rows). Written table by table to a temp file that then replaces
+  `params.json` (never held whole in memory). Not inside the game folder, like `disk.json`. It needs no vault (`disk.json` does).
+- `read params...` and the scripts never read this file: they read the game (the file is for other tools and for looking through).
+- `RandomAppearParam` has 26 ids used twice (different rows); a JSON object keeps one row per id (the last), as `read` of the table does.
 
 ## Write
 
@@ -1014,8 +1057,14 @@ for `probe` to show.
 - The list is walked once (about 200 small reads); a walk that found nothing (the game was still loading) is made again after 5 s.
 - The six chains of `params.catalog` stay: they win for their tables.
 - **To check in the game:** `probe` lists every slot with the table it was named as, the reason for the ones left out with the texts next
-  to their slot, and the tables of the game not found. The layout of the list is read off the six chains measured in the game, not
-  measured itself yet.
+  to their slot, and the tables of the game not found.
+
+**Checked in the game (2026-10-15, `probe`, 1.17.1 with a build of one spell):** the list is as above: 194 slots (0 to 193), each a param
+file, the six of `catalog` at their slots, the grown tables with their extra rows (Goods 2330, Magic 318, SpEffect 11356, Bullet 15477,
+AtkParam_Pc 11019, ShopLineup 1297). 182 were named by type, rows, ids and digest alone. The other 12 (identical rows) all had their own
+name as the **first** table name next to the slot, the names of the slots around it after it (slot 94: `..._ps4`, then `..._ps5`;
+slot 95: `..._ps5`, then `..._xb1`). Step 4 now takes that first name only (a name further on is a neighbour's), which names all 194.
+The PC game does load the tables of the other platforms (`_ps4`, `_xb1` ...).
 
 ## Tests
 
@@ -1023,3 +1072,27 @@ for `probe` to show.
 by rows and ids, by digest, by the name next to the slot; identical tables and two slots of one table left out; the walk again after
 5 s; `read params.<Table>` and `params.<Table>.*.<field>` through the list; `probe` (text and JSON, read-only); a script's table read
 row by row. The tests of `params.effects` became tests of `params.SpEffectParam` (the same rows, the same checks).
+
+## Optimization (2026-10-15)
+
+Measured on the game's own rows (1.17.1, the rows of `regulation.bin`, outside the game) and a fake game. A whole table is big:
+`read params.SpEffectParam` is 11,354 rows of 359 fields, 4 million values.
+
+| **What** | **Before** | **After** | **How** |
+|:---|---:|---:|:---|
+| decoding a row (SpEffectParam) | 156 us | 46 us | a function made once per table: one `struct.unpack` of the whole row, the values put in a dict; an f32 is rounded for the document once per value (`_SHOWN`) |
+| decoding every row of every table (178,361) | 7.4 s | 2.0 s | the same; the result is the same as field by field for every row of the game (checked once, and by the golden test) |
+| `params.<Table>.*.<field>` | every field decoded, then picked | only the fields that match | a decoder for those fields |
+| the tree of `read params.SpEffectParam` | 8.6 s | 5.7 s | the rows into one list (no nested generators, no dict per level) |
+| printing it | 17 s | 3.6 s | the console asked once whether it takes colours and links, not per line; the lines written 2,000 at a time |
+| `read params.SpEffectParam` in all | about 27 s | about 10 s | |
+| a table's slot | the walk's list scanned per table (the index: 194 tables a second) | one look-up | `{table: slot}` kept with the walk |
+
+**The layouts were made from a build (fixed 2026-10-15).** `paramlayouts.py` of the first Part 4 commit was generated while a `run`
+had the build in the game folder: Goods, Magic, SpEffect, Bullet, AtkParam_Pc and ShopLineup had the build's rows (one or two more) and
+Magic the build's digest. A game without that build would then not have its six tables named by the walk (fewer rows than the layout;
+the six chains of `catalog` still found them). Made again from the original (the vault's backup, sha256 checked), and
+`tools/gen_paramdefs.py` now refuses a file that is not the game's original.
+
+Not changed: `--json` of a whole table (0.5 s), the import of the layouts (2 ms), the walk (once). A whole table in a terminal is still
+millions of lines: `--json` or a file (`> table.txt`) is the quick way to look through one.

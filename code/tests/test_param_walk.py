@@ -40,8 +40,8 @@ def put_file(mem, head, ptype, rows, stride):
 
 
 def put_slot(mem, n, ptype, rows, stride, *, name=None):
-    """Slot n of the list -> its file. `name`: the table's name in UTF-16 behind a pointer in the slot's object, as the game may
-    keep it."""
+    """Slot n of the list -> its file. `name`: the table's name in UTF-16 behind a pointer in the slot's object, as the game
+    keeps it; a list: its own name, then the names of the slots around it, each behind a pointer of its own (as in the game)."""
     if mem.read(BASE + REPO.rva, 8) is None:
         mem.put(BASE + REPO.rva, struct.pack("<Q", OBJ))
     slot = 0x370000000 + n * 0x10000
@@ -49,9 +49,9 @@ def put_slot(mem, n, ptype, rows, stride, *, name=None):
     mem.put(OBJ + REPO.first + n * REPO.stride, struct.pack("<Q", slot))
     mem.put(slot + REPO.tail[0], struct.pack("<Q", slot + 0x1000))
     mem.put(slot + 0x1000 + REPO.tail[1], struct.pack("<Q", head))
-    if name is not None:
-        mem.put(slot + 0x10, struct.pack("<Q", slot + 0x2000))
-        mem.put(slot + 0x2000, name.encode("utf-16-le") + b"\0\0")
+    for i, text in enumerate([name] if isinstance(name, str) else name or []):
+        mem.put(slot + 0x10 + 8 * i, struct.pack("<Q", slot + 0x2000 + 0x100 * i))
+        mem.put(slot + 0x2000 + 0x100 * i, text.encode("utf-16-le") + b"\0\0")
     put_file(mem, head, ptype, rows, stride)
     return head
 
@@ -129,6 +129,19 @@ def test_tables_of_identical_rows_are_told_apart_by_the_name_next_to_their_slot(
     put_like(m, 11, "MultiMPEstusFlaskBonusParam", name="MultiMPEstusFlaskBonusParam")
     found = by_slot(m)
     assert found[10].table == "MultiHPEstusFlaskBonusParam" and found[11].table == "MultiMPEstusFlaskBonusParam"
+
+
+def test_the_first_name_next_to_a_slot_is_its_own_and_the_names_after_it_are_its_neighbours():
+    """As in the game (probe, 2026-10-15): slot 94 reads `..._ps4, ..._ps5`, slot 95 `..._ps5, ..._xb1`."""
+    m = pf.Pages()
+    base = "LoadBalancerDrawDistScaleParam"
+    put_like(m, 93, base, name=[base, "MapMimicryEstablishmentParam", f"{base}_ps4"])
+    put_like(m, 94, f"{base}_ps4", name=[f"{base}_ps4", "LoadBalancerDrawDistScal", f"{base}_ps5"])
+    put_like(m, 95, f"{base}_ps5", name=[f"{base}_ps5", f"{base}_xb1"])
+    put_like(m, 96, "KeyAssignParam_TypeB", name=["MultiPlayCorrectionParam", "KeyAssignParam_TypeB"])   # its own is no candidate
+    found = by_slot(m)
+    assert [found[n].table for n in (93, 94, 95)] == [base, f"{base}_ps4", f"{base}_ps5"]
+    assert found[96].table is None and "cannot be told apart" in found[96].why
 
 
 def test_tables_that_cannot_be_told_apart_are_left_out_with_the_reason_never_guessed():
@@ -236,3 +249,63 @@ def test_a_script_reaches_a_row_by_attribute_and_a_missing_row_says_so_briefly()
     with pytest.raises(KeyError, match="no such row") as e:
         node.NpcParam[7]
     assert "1, 2" not in str(e.value)
+
+
+# ---- export --params: every row of every table to params.json (1.8.0 part 4) ----------------------------------------
+def test_export_params_writes_every_row_of_every_table_one_row_a_line(tmp_path, capsys):
+    m = pf.Pages()
+    put_like(m, 40, "BonfireWarpTabParam")
+    put_like(m, 41, "BuddyParam")                              # no layout fits it: its rows as bytes
+    target = SimpleNamespace(profile=pf.params_profile(), base=BASE, exe_path=tmp_path / "game" / "eldenring.exe",
+                             sha256="ab" * 32, pid=7)
+    m.write = lambda *a, **k: (_ for _ in ()).throw(AssertionError("export must not write to the game"))
+    assert read_cmd._export_params(SimpleNamespace(out=str(tmp_path / "out")), target, m) == 0
+    path = tmp_path / "out" / "params.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert doc["profile"]["sha256"] == "ab" * 32 and doc["profile"]["pid"] == 7 and doc["skipped"] == {}
+    first = LAYOUTS["BonfireWarpTabParam"]["first"]
+    assert len(doc["params"]["BonfireWarpTabParam"]) == 19
+    assert doc["params"]["BonfireWarpTabParam"][str(first)] == PT.decode_row("BonfireWarpTabParam", like("BonfireWarpTabParam")[first])
+    buddy = doc["params"]["BuddyParam"]
+    assert len(buddy) == LAYOUTS["BuddyParam"]["rows"] and all(len(r["_raw"]) == 2 * LAYOUTS["BuddyParam"]["stride"] for r in buddy.values())
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert any(l.strip().startswith(f'"{first}": {{') and l.rstrip(",").endswith("}") for l in lines)    # a row is one line
+    assert not (tmp_path / "out" / "params.json.tmp").exists()
+
+
+def test_a_table_that_cannot_be_read_is_left_out_with_the_reason():
+    class Broken:
+        def index(self):
+            return {"BonfireWarpTabParam": {}, "Magic": {}}
+
+        def all_rows(self, table, raw=False):
+            if table == "Magic":
+                raise PT.ParamError("Magic: the file's rows are 1 bytes")
+            return {7: bytes(LAYOUTS[table]["size"])}
+    from eldendisk.reader.export import params_chunks
+    stats = {}
+    doc = json.loads("".join(params_chunks(Broken(), {}, None, stats)))
+    assert list(doc["params"]) == ["BonfireWarpTabParam"] and doc["skipped"] == {"Magic": "Magic: the file's rows are 1 bytes"}
+    assert stats["tables"] == 1 and stats["rows"] == 1
+
+
+def test_export_params_is_written_once_not_live():
+    import eldendisk.__main__ as cli
+    with pytest.raises(SystemExit):
+        cli.main(["export", "--params", "--live"])
+
+
+def test_a_scripts_document_has_every_table_though_disk_json_has_none(tmp_path):
+    """The tables left disk.json (1.8.0 part 4); a script still reaches them: x.params.<Table>[id] reads the row from the game."""
+    from eldendisk.creative.scripts.backend import LiveBackend
+    from tests.test_disk import full_world, state_ids
+    m = full_world()
+    pf.build_file(m, pf.small_ids())
+    pf.wire(m, 2)
+    target = SimpleNamespace(profile=pf.params_profile(), base=BASE, pid=1, started=1.0, sha256="ab" * 32,
+                             exe_path=tmp_path / "eldenring.exe")
+    doc = LiveBackend(m, target, state_ids(), tmp_path / "vault").document()
+    assert list(doc)[:3] == ["systems", "character", "params"] and list(doc)[-1] == "creative"
+    rows = doc["params"]["SpEffectParam"]
+    assert isinstance(rows, LazyRows) and len(rows) == len(pf.small_ids())
+    assert rows[1621000]["effectEndurance"] == 2.0

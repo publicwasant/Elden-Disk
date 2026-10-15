@@ -12,7 +12,7 @@ from eldendisk.game.profile import load_profile
 from eldendisk.game.values import is_param_name, normalize
 from eldendisk.reader import view
 from eldendisk.reader.export import build_document
-from eldendisk.reader.sampler import PARAMS_EVERY_S, PARAMS_RETRY_S, Sampler
+from eldendisk.reader.sampler import Sampler
 from tests import paramfile as pf
 from tests.test_disk import BASE, SCHEMA, FakeMem, state_ids, full_world, valid
 
@@ -305,7 +305,7 @@ def test_a_profile_without_params_still_loads_and_has_no_params(tmp_path):
     p.write_text(json.dumps(data))
     prof, why = load_profile(p, pf.EXE_SHA)
     assert why is None and prof.params is None
-    assert Sampler(FakeMem(), prof, state_ids(), BASE).read_params(NOW) == (None, None)
+    assert Sampler(FakeMem(), prof, state_ids(), BASE).sample(NOW).state
 
 
 @pytest.mark.parametrize("mutate,why", [
@@ -345,108 +345,23 @@ def sampler(m):
     return Sampler(m, pf.params_profile(), state_ids(), BASE)
 
 
-INDEX = {"SpEffectParam": {"rows": len(pf.small_ids())}}
-
-
-def test_the_sample_carries_the_index_of_the_tables_and_the_document_shows_it_after_character():
-    """1.8.0 part 4: the disk holds every table with its rows; the rows are read when a table is named, not here."""
+def test_disk_json_has_no_params_and_the_sampler_does_not_read_the_tables():
+    """1.8.0 part 4: the tables are not the disk's; `read params...` reads them from the game, `export --params` writes them."""
     m = world_with_params()
+    reads = []
+    real = m.read
+    m.read = lambda addr, size: reads.append(addr) or real(addr, size)
     s = sampler(m).sample(NOW)
-    assert s.state == "CONNECTED" and s.params == INDEX and s.params_error is None
+    assert s.state == "CONNECTED" and not hasattr(s, "params")
+    assert not any(pf.HEAD <= a < pf.HEAD + 0x1000000 for a in reads)          # no param file was looked at
     doc = build_document(state="CONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE", exe_sha256="ab" * 32,
                          profile_label="Elden Ring 1.17.1", sample=s)
-    assert list(doc) == ["systems", "character", "params"] and doc["params"] == s.params
+    assert list(doc) == ["systems", "character"]
     valid(doc)
 
 
-def test_the_index_is_looked_at_about_once_a_second_not_every_frame():
-    m = world_with_params()
-    sp = sampler(m)
-    calls = []
-    real = sp.tables.index
-    sp.tables.index = lambda: calls.append(1) or real()
-    sp.sample(NOW)
-    sp.sample(NOW + timedelta(seconds=PARAMS_EVERY_S / 2))
-    assert len(calls) == 1
-    sp.sample(NOW + timedelta(seconds=PARAMS_EVERY_S + 0.01))
-    assert len(calls) == 2
-
-
-def test_params_that_cannot_be_read_say_why_and_are_tried_again_soon():
-    m = full_world()                                   # a world, but no param file yet
-    sp = sampler(m)
-    s = sp.sample(NOW)
-    assert s.state == "CONNECTED" and s.params is None and "no param table" in s.params_error
-    pf.build_file(m, pf.small_ids())
-    pf.wire(m, 2)
-    assert sp.sample(NOW + timedelta(seconds=PARAMS_RETRY_S / 2)).params is None
-    assert sp.sample(NOW + timedelta(seconds=PARAMS_RETRY_S + 0.01)).params == INDEX
-
-
-def test_params_never_stop_the_character_from_being_read():
-    s = sampler(full_world()).sample(NOW)
-    assert s.state == "CONNECTED" and s.character["level"] == 386 and s.params is None
-
-
-@pytest.mark.parametrize("state,shown", [("CONNECTED", True), ("IDLE", True), ("WAITING_FOR_WORLD", True),
-                                         ("DISCONNECTED", False), ("EAC_DETECTED", False)])
-def test_params_are_null_when_there_is_no_game_to_look_at(state, shown):
-    s = sampler(world_with_params()).sample(NOW)
-    doc = build_document(state=state, pid=1, anti_cheat="UNKNOWN", exe_sha256=None, profile_label=None, sample=s)
-    assert (doc["params"] is not None) is shown
-    if state not in ("EAC_DETECTED",):
-        valid(doc)
-    assert build_document(state=state, pid=None, anti_cheat="UNKNOWN", exe_sha256=None, profile_label=None,
-                          sample=None)["params"] is None
-
-
-def test_the_schema_checks_the_params_block():
-    doc = build_document(state="CONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE", exe_sha256="ab" * 32,
-                         profile_label="Elden Ring 1.17.1", sample=sampler(world_with_params()).sample(NOW))
-    valid(doc)
-    for mutate in (lambda d: d["params"].update(SpEffectParam=5), lambda d: d["params"].update({"1 bad name": {}})):
-        bad = json.loads(json.dumps(doc))
-        mutate(bad)
-        with pytest.raises(jsonschema.ValidationError):
-            jsonschema.validate(bad, SCHEMA)
-
-
-def test_a_document_of_1_6_2_without_params_is_still_valid():
-    doc = build_document(state="CONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE", exe_sha256="ab" * 32,
-                         profile_label="x", sample=sampler(world_with_params()).sample(NOW))
-    del doc["params"]
-    valid(doc)
-
-
-# ---- looking things up ----
-def doc_with_params():
-    s = sampler(world_with_params()).sample(NOW)
-    return build_document(state="CONNECTED", pid=1, anti_cheat="DISABLED_OFFLINE", exe_sha256="ab" * 32,
-                          profile_label="x", sample=s)
-
-
-def test_a_query_finds_a_table_of_the_index_in_any_letter_case():
-    doc = doc_with_params()
-    for name in ("params.SpEffectParam.rows", "PARAMS.speffectparam.ROWS"):
-        assert view.select(doc, name) == [("params.SpEffectParam.rows", 30)]
-    assert view.select(doc, "params") == [("params", INDEX)]
-
-
-def test_character_patterns_never_include_params():
-    doc = doc_with_params()
-    assert not any(p.startswith("params") for p, _ in view.select(doc, "character.*"))
-
-
-def test_params_numbers_are_shown_as_they_are():
-    doc = doc_with_params()
-    rows = {r.path: r.value for r in view.rows(view.select(doc, "params"), flat=True)}
-    assert rows["params.SpEffectParam.rows"] == "30"
-
-
-def test_a_change_of_the_index_is_a_change_for_the_live_view():
-    a, b = doc_with_params(), doc_with_params()
-    b["params"]["SpEffectParam"]["rows"] = 31
-    assert view.changes(view.flatten(a), view.flatten(b)) == [("params.SpEffectParam.rows", 30, 31)]
+def test_the_schema_no_longer_describes_params():
+    assert "params" not in SCHEMA["properties"] and "params" not in SCHEMA["required"]
 
 
 def test_a_write_to_the_real_sized_file_lands_where_cheat_engine_wrote_it(tmp_path):

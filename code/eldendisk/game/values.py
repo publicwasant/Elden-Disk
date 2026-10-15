@@ -32,6 +32,7 @@ _ROOTS = ("character", "systems", "params")
 PARAMS = "params"   # the third block of the document: tables of the game itself, always typed in full (`params.effects...`)
 CREATIVE = "creative"   # the fourth (1.8.0): the creative features, always typed in full (`creative.innovate_spells...`)
 FULL_ROOTS = (PARAMS, CREATIVE)
+DISK = "disk"        # `read disk...`: a path of disk.json, said so (`read params...` reads the game's tables)
 _READ_ONLY_WHY = (
     ("character.vitals.", ("maximum", "base"),
      "computed by the game from your stats (set the attribute, or use hp/fp/stamina for the current value)"),
@@ -57,6 +58,8 @@ def normalize(name: str) -> str:
     shortening: `character.` or `creative.` may be left out for common heads (`hp`, `vigor`, `runes`, `resurrect`, `spells`...)."""
     n = name.strip().lower()
     parts = [s for s in n.split(".") if s != ""]
+    if parts[:1] == [DISK]:          # `disk.character.level`: the document is the disk (1.8.0 part 4: `params` are not in it)
+        parts = parts[1:]
     if not parts or parts[0] in FULL_ROOTS or parts[0] == "systems":   # below `params` / `creative` the names are the game's
         return ".".join(parts)
     segs = [_SEGMENTS.get(s, s) for s in parts]

@@ -30,13 +30,13 @@ from . import paramcheck
 from ..game.params import ParamError, ParamNameError, ParamStore
 from ..game.probe import as_json as probe_json, lines as probe_lines, probe, walk_lines, walk_report
 from ..game.profile import load_state_ids
-from ..game.values import UnknownName, is_param_name
+from ..game.values import UnknownName
 from ..logbook import book
 from ..paths import describe_resource, get_resource_path
 from ..reader import baselines, view
 from ..reader.animations import AnimationsMonitor
 from ..reader.buffs import BuffsMonitor
-from ..reader.export import ExportWriter, JsonLogger
+from ..reader.export import PARAMS_NAME, ExportWriter, JsonLogger, params_chunks
 from ..reader.sampler import Sampler
 from ..vault import VaultError, authorise, resolve_vault
 from ..vault import session as vault_session
@@ -93,8 +93,6 @@ def _export_log(message: str) -> None:
 def _why_unknown(exc: UnknownName, doc: dict, sample, names) -> str:
     """The message for a name that matched nothing; a `params` name with no params to look in says why there are none."""
     wanted = [names] if isinstance(names, str) else names or []
-    if doc.get("params") is None and any(is_param_name(n) for n in wanted):
-        return f"params cannot be read: {sample.params_error or 'this exe version has no params block in offsets.json'}"
     creative = doc.get("creative") or {}
     if not creative.get("innovate_spells") and any(n.strip().lower().startswith("creative.innovate_spells") for n in wanted):
         return ("no spells are built in this vault yet (spells.resolved.json is written by every build: `run`, or "
@@ -141,10 +139,10 @@ def read_words(args) -> int:
     words = [w for w in words if w not in ("*", "all")]
     refs = [w for w in words if _is_table_ref(w)]
     if refs and len(refs) != len(words):
-        book.e("read", "rows of the six tables (params.Magic.6230 ...) are read on their own: give them without other names")
+        book.e("read", "the game's tables (params...) are read on their own, from the game: give them without disk names")
         return EXIT_ERROR
     if refs and args.live:
-        book.e("read", "rows of the six tables are read once: --live does not go with them")
+        book.e("read", "the game's tables (params...) are read once: --live does not go with them")
         return EXIT_ERROR
     args.param = refs or None
     args.query = None if refs else (words or None)
@@ -153,8 +151,11 @@ def read_words(args) -> int:
 
 def _is_table_ref(name: str) -> bool:
     """`params.<Table>[.<id or *>[.<field>]]` for a table of the game (1.8.0 part 4: every table, read when named); `params` alone and
-    `params.*` are the disk's index of the tables. `params.effects` (before 1.8.0) too, so that it says where its rows went."""
+    `params.*`: every table of the game with its rows. All read from the game: the tables are not in disk.json. `params.effects`
+    (before 1.8.0) too, so that it says where its rows went."""
     parts = name.strip().split(".")
+    if parts[0].lower() == "params" and (len(parts) == 1 or (len(parts) == 2 and parts[1] == "*")):
+        return True
     if len(parts) < 2 or parts[0].lower() != "params" or parts[1] in ("*", ""):
         return False
     from ..game.paramnames import TABLES
@@ -162,8 +163,10 @@ def _is_table_ref(name: str) -> bool:
 
 
 def cmd_export(args) -> int:
-    """`export [--live]`: the whole document to <TOOLS-DIR>\\output\\disk.json."""
+    """`export [--disk] [--params] [--live]`: the whole document to <TOOLS-DIR>\\output\\disk.json (`--disk`, the default); every row of
+    every table of the game to params.json (`--params`, 1.8.0 part 4)."""
     args.export, args.query, args.param, args.live_buffs, args.live_animations = True, None, None, False, False
+    args.disk = bool(getattr(args, "disk", False)) or not getattr(args, "params", False)
     return cmd_read(args)
 
 
@@ -222,6 +225,9 @@ def cmd_read(args) -> int:
     for text in args.param or []:
         try:
             parts = text.strip().split(".")
+            if len(parts) == 1 or (len(parts) == 2 and parts[1] == "*"):
+                refs.append((None, None, None))          # `params`: the tables of the game and their rows
+                continue
             if len(parts) >= 2 and parts[1].lower() == "effects":
                 raise ParamNameError(f"{text}: `params.effects` is gone (1.8.0): its rows are SpEffectParam's, for example "
                                      "params.SpEffectParam.1621000")
@@ -258,7 +264,7 @@ def cmd_read(args) -> int:
     try:
         vault = resolve_vault(args.vault)
     except VaultError as exc:
-        if args.export:   # the export is labelled by the session record, so a vault that cannot be found is an error
+        if args.export and getattr(args, "disk", True):   # disk.json is labelled by the session record, so a vault that cannot be found is an error
             book.e("read", str(exc))
             return EXIT_ERROR
         book.w("read", str(exc))
@@ -283,6 +289,8 @@ def cmd_read(args) -> int:
             return _param_check(args, target, mem, checked)
         if args.live_buffs or args.live_animations:
             return _monitors(args, target, mem, sampler, vault, watch)
+        if args.export and getattr(args, "params", False) and not getattr(args, "disk", True):
+            return _export_params(args, target, mem)
         export = _exporter(args, target, vault)
         export.creative_block = _creative_block(args, target, mem, vault, sampler)
         if args.export and not args.live:
@@ -344,14 +352,13 @@ def _read_params(args, target: Target, mem, refs) -> int:
         tables = Tables(mem, target.profile, target.base)
         selection: list[tuple[str, object]] = []
         for table, row_id, pattern in refs:
-            if row_id is None or row_id == "*":
-                rows = {str(rid): row for rid, row in tables.read_table(table).items()}
-                if pattern is not None:
-                    rows = {rid: _pick_some(row, pattern) for rid, row in rows.items()}
-                    rows = {rid: row for rid, row in rows.items() if row}
-                    if not rows:
-                        raise ParamNameError(f"no field of {table} matches {pattern!r}")
-                path, value = f"params.{table}", rows
+            if table is None:
+                index = tables.index()
+                if not index:
+                    raise ParamError("no param table found yet (the game is still loading them)")
+                path, value = "params", index
+            elif row_id is None or row_id == "*":
+                path, value = f"params.{table}", {str(rid): row for rid, row in tables.read_table(table, pattern).items()}
             else:
                 path, value = f"params.{table}.{row_id}", pick(tables.read_row(table, row_id), pattern)
             if all(path != p for p, _ in selection):
@@ -366,13 +373,6 @@ def _read_params(args, target: Target, mem, refs) -> int:
     else:
         ui.rows(view.rows(selection, flat=args.flat))
     return 0
-
-
-def _pick_some(row: dict, pattern: str) -> dict:
-    try:
-        return pick(row, pattern)
-    except ParamNameError:
-        return {}
 
 
 def _open_check_file(path: str, default: bool = False):
@@ -505,6 +505,43 @@ def _export_once(args, target: Target, mem, sampler: Sampler, export: ExportWrit
         return EXIT_ERROR
     size = export.logger.path.stat().st_size
     book.ok("export", f"{EXPORT_NAME} ({size / 1024:.1f} KB) written to {export.logger.path.parent}")
+    if getattr(args, "params", False):
+        return _export_params(args, target, mem)
+    return 0
+
+
+def _export_params(args, target: Target, mem) -> int:
+    """`export --params`: every row of every table of the game, every field, read now, to params.json (1.8.0 part 4). Reads only."""
+    if target.profile.params is None:
+        book.e("export", "this exe version has no params block in offsets.json")
+        return EXIT_ERROR
+    try:
+        tables = Tables(mem, target.profile, target.base)
+        logger = JsonLogger(Path(args.out), target.exe_path.parent, filename=PARAMS_NAME)
+    except (ParamError, ValueError) as exc:
+        book.e("export", str(exc))
+        return EXIT_ERROR
+    if not tables.index():
+        book.e("export", "no param table found yet (the game is still loading them)")
+        return EXIT_ERROR
+    label = target.profile.label or ""
+    profile = {"sha256": target.sha256, "game": "eldenring.exe", "version": label.replace("Elden Ring ", "") or None, "pid": target.pid}
+    stats: dict = {}
+    started = time.monotonic()
+    with ui.working("export", f"writing every param table to {logger.path}", short="reading the param tables") as step:
+        def progress(i: int, n: int, table: str) -> None:
+            step.short = f"params {i + 1}/{n}: {table}"
+        ok = logger.write_chunks(params_chunks(tables, profile, progress, stats))
+        if not ok:
+            book.e("export", f"could not write {logger.path}: the file is busy")
+            return EXIT_ERROR
+        size = logger.path.stat().st_size
+        step.done(f"{PARAMS_NAME} ({size / 1048576:.1f} MB) written to {logger.path.parent}: {stats['tables']} tables, "
+                  f"{stats['rows']:,} rows in {time.monotonic() - started:.1f} s")
+    if stats["raw"]:
+        book.i("export", f"{len(stats['raw'])} table(s) as bytes (no layout decodes them yet): {', '.join(stats['raw'])}")
+    for table, why in stats["skipped"].items():
+        book.w("export", f"{table} left out: {why}")
     return 0
 
 

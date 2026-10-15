@@ -76,16 +76,30 @@ def _one(ftype: str, raw: bytes, off: int, bpos: int, bits: int):
     return (value >> bpos) & ((1 << bits) - 1) if bits else value
 
 
-def decode_row(table: str, raw: bytes) -> dict:
-    """{field: value} in the order of the layout; a field that is an array is a list; padding is not listed."""
+def decode_row(table: str, raw: bytes, fields: tuple[str, ...] | None = None) -> dict:
+    """{field: value} in the order of the layout; a field that is an array is a list; padding is not listed. `fields`: only
+    these (names of the layout, see `fields_like`)."""
     table = canonical(table) or table
     layout = LAYOUTS[table]
     if layout["fields"] is None:
         raise ParamError(f"{table}: its rows cannot be decoded ({layout['why']})")
     if len(raw) != layout["size"]:
         raise ParamError(f"{table}: a row is {layout['size']} bytes, got {len(raw)}")
+    return _decoder(table, fields)(raw)
+
+
+def fields_like(table: str, pattern: str) -> tuple[str, ...]:
+    """The fields of `table` whose name matches `pattern` (letter case does not matter; `*` and `?` work), in the layout's order."""
+    want = pattern.lower()
+    return tuple(n for n in LAYOUTS[table]["fields"] or () if fnmatchcase(n.lower(), want))
+
+
+def _decode_slow(table: str, raw: bytes, fields: tuple[str, ...] | None) -> dict:
+    """The decoder field by field: what `_compile` makes quicker, and what it falls back to for a layout it cannot compile."""
     out: dict = {}
-    for name, (ftype, off, size, bpos, bits, arr) in layout["fields"].items():
+    layout = LAYOUTS[table]["fields"]
+    for name in fields or layout:
+        ftype, off, size, bpos, bits, arr = layout[name]
         if ftype in ("fixstr", "fixstrW"):
             out[name] = raw[off:off + size].decode("utf-16-le" if ftype == "fixstrW" else "ascii", "replace").split("\0")[0]
         elif arr > 1:
@@ -94,6 +108,74 @@ def decode_row(table: str, raw: bytes) -> dict:
         else:
             out[name] = _one(ftype, raw, off, bpos, bits)
     return out
+
+
+# A row is decoded by a function made once per table (and per set of fields): one struct.unpack of the whole row, then the values
+# placed in a dict. Field by field it took 100-160 us a row (SpEffectParam: 1.8 s for its 11,354 rows).
+_DECODERS: dict = {}
+_SHOWN: dict = {}           # f32 -> what the document shows; the tables repeat a few thousand values
+
+
+def _f32(value: float) -> float:
+    """`shown(value)`, remembered (the decoders look in `_SHOWN` first)."""
+    if not value:
+        return value                  # 0.0 and -0.0 as they are (equal, so never kept: one would come back as the other)
+    out = shown(value)
+    if value == value and len(_SHOWN) < 1 << 17:    # not NaN
+        _SHOWN[value] = out
+    return out
+
+
+def _decoder(table: str, fields: tuple[str, ...] | None):
+    key = (table, fields)
+    fn = _DECODERS.get(key)
+    if fn is None:
+        fn = _DECODERS[key] = _compile(table, fields) or (lambda raw: _decode_slow(table, raw, fields))
+    return fn
+
+
+def _compile(table: str, fields: tuple[str, ...] | None):
+    """A function `raw -> {field: value}`, the same as `_decode_slow`; None when the layout's numbers overlap in a way one
+    struct format cannot read (never in the game's layouts, checked by a test)."""
+    layout = LAYOUTS[table]
+    names = list(fields or layout["fields"])
+    units: dict[tuple[int, str], tuple[int, int]] = {}            # (offset, type) -> (count, bytes): what one unpack reads
+    for name in names:
+        ftype, off, size, _bpos, _bits, arr = layout["fields"][name]
+        if ftype not in ("fixstr", "fixstrW"):
+            units[(off, ftype)] = (arr if arr > 1 else 1, size if arr > 1 else struct.calcsize(_FMT[ftype]))
+    fmt, pos, index, values = ["<"], 0, {}, 0
+    for (off, ftype), (count, size) in sorted(units.items()):
+        if off < pos:
+            return None
+        if off > pos:
+            fmt.append(f"{off - pos}x")
+        fmt.append(f"{count}{_FMT[ftype][1]}")
+        index[(off, ftype)], values, pos = values, values + count, off + size
+    if pos > layout["size"]:
+        return None
+    if pos < layout["size"]:
+        fmt.append(f"{layout['size'] - pos}x")
+    parts = []
+    for name in names:
+        ftype, off, size, bpos, bits, arr = layout["fields"][name]
+        if ftype in ("fixstr", "fixstrW"):
+            enc = "utf-16-le" if ftype == "fixstrW" else "ascii"
+            expr = f"raw[{off}:{off + size}].decode({enc!r}, 'replace').split('\\0')[0]"
+        else:
+            i = index[(off, ftype)]
+            one = (lambda j: f"(_s[x] if (x := v[{j}]) in _s else _f(x))") if ftype == "f32" else (lambda j: f"v[{j}]")
+            if arr > 1:
+                expr = "[" + ", ".join(one(i + k) for k in range(arr)) + "]"
+            elif bits:
+                expr = f"(v[{i}] >> {bpos}) & {(1 << bits) - 1}"
+            else:
+                expr = one(i)
+        parts.append(f"{name!r}: {expr}")
+    source = "def decode(raw):\n    v = _unpack(raw)\n    return {" + ", ".join(parts) + "}\n"
+    scope = {"_unpack": struct.Struct("".join(fmt)).unpack, "_f": _f32, "_s": _SHOWN}
+    exec(compile(source, f"<decoder of {table}>", "exec"), scope)      # the source is made from LAYOUTS only
+    return scope["decode"]
 
 
 def pick(row: dict, pattern: str | None) -> dict:
@@ -152,6 +234,7 @@ class Tables:
         self.catalog = dict(profile.params.catalog)
         self.repository = profile.params.repository
         self._seen: list[Seen] | None = None
+        self._slot_of: dict[str, int] = {}     # table -> its slot of the list (from the walk)
         self._walked_at = -1e9
         self._index: dict = {}         # table -> (head, count, data start, {row id: descriptor number}): see row_address
 
@@ -161,6 +244,7 @@ class Tables:
         now = time.monotonic()
         if self._seen is None or (not self._seen and now - self._walked_at >= WALK_AGAIN_S):   # none yet, or none loaded at the last walk
             self._seen, self._walked_at = (self._walk() if self.repository is not None else []), now
+            self._slot_of = {s.table: s.slot for s in self._seen if s.table}
         return self._seen
 
     def _walk(self) -> list[Seen]:
@@ -260,9 +344,12 @@ class Tables:
         return texts
 
     def _named_next_to_slot(self, s: Seen) -> list[str]:
-        """The candidates whose name (UTF-16, as the game keeps resource names) is in the slot's object or behind a pointer in it."""
-        texts = self._near_slot(s)
-        return [n for n in s.candidates if any(n.encode("utf-16-le") + b"\0\0" in t for t in texts)]
+        """[the slot's own name] when it is one of the candidates: the first text next to the slot that is the name of a table of
+        the game (UTF-16, as the game keeps resource names). The names of the slots around it come after it (the probe in the game,
+        2026-10-15: slot 94 reads `..._ps4, ..., ..._ps5`, slot 95 `..._ps5, ..., ..._xb1`), so any name but the first is a
+        neighbour's."""
+        own = next((t for t in self.texts_next_to_slot(s) if t in LAYOUTS), None)
+        return [own] if own in s.candidates else []
 
     def texts_next_to_slot(self, s: Seen) -> list[str]:
         """Every UTF-16 text of 4 letters or more next to the slot, in the order found (for `probe`: where the names are)."""
@@ -280,9 +367,9 @@ class Tables:
         chain = self.catalog.get(table)
         if chain is not None:
             return chain
-        for s in self.found():
-            if s.table == table:
-                return self.repository.chain(s.slot)
+        self.found()
+        if table in self._slot_of:
+            return self.repository.chain(self._slot_of[table])
         why = next((s.why for s in self.found() if table in s.candidates and s.why), None)
         if why is None and self.repository is None:
             why = "no params.repository in offsets.json"
@@ -291,8 +378,9 @@ class Tables:
     def index(self) -> dict[str, dict]:
         """{table: {"rows": n}} of every table found (the document's `params` before a table is named), in the order of the game's file."""
         out: dict[str, dict] = {}
+        self.found()
         for table in LAYOUTS:
-            if table not in self.catalog and not any(s.table == table for s in self.found()):
+            if table not in self.catalog and table not in self._slot_of:
                 continue
             try:
                 _head, count, _data = self._head(table)
@@ -389,10 +477,11 @@ class Tables:
             raise ParamError(f"{table}: row {row_id} is unreadable")
         return head + off, data
 
-    def all_rows(self, table: str) -> dict[int, bytes]:
-        """{row id: the row's bytes} of the whole table, read in a few big pieces (checked like `row_address`)."""
+    def all_rows(self, table: str, raw: bool = False) -> dict[int, bytes]:
+        """{row id: the row's bytes} of the whole table, read in a few big pieces (checked like `row_address`). `raw`: the whole
+        step of each row, for a table no layout decodes too (`export --params`)."""
         table = table_name(table)
-        size = self._need_fields(table)
+        size = LAYOUTS[table]["stride"] if raw else self._need_fields(table)
         head, count, data_start, raw = self.locate(table)
         lay = self.store.spec.layout
         offs: dict[int, int] = {}
@@ -416,6 +505,13 @@ class Tables:
     def read_row(self, table: str, row_id: int) -> dict:
         return decode_row(table, self.row_address(table, row_id)[1])
 
-    def read_table(self, table: str) -> dict[int, dict]:
-        """{row id: {field: value}} of every row of `table`."""
-        return {rid: decode_row(table, raw) for rid, raw in self.all_rows(table).items()}
+    def read_table(self, table: str, pattern: str | None = None) -> dict[int, dict]:
+        """{row id: {field: value}} of every row of `table`; with `pattern`, only the fields it matches (only they are decoded)."""
+        table = table_name(table)
+        fields = None
+        if pattern is not None:
+            self._need_fields(table)
+            fields = fields_like(table, pattern)
+            if not fields:
+                raise ParamNameError(f"no field of {table} matches {pattern!r}")
+        return {rid: decode_row(table, raw, fields) for rid, raw in self.all_rows(table).items()}

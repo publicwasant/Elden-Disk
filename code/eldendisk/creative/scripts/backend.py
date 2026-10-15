@@ -56,6 +56,16 @@ class Refused(Exception):
     """A write that was not made; the message says why."""
 
 
+def _index_of(tables) -> dict:
+    """{table: {"rows": n}} of the game's tables, or {} when they cannot be read now."""
+    if tables is None:
+        return {}
+    try:
+        return tables.index()
+    except ParamError:
+        return {}
+
+
 class LazyRows(dict):
     """A table of the game in a script's document (1.8.0 part 4): its rows are read from the game when one is touched
     (`x.params.NpcParam[10000000].hp`), not when the document is built: all the tables are hundreds of MB. `read_row(id)` and `ids()`
@@ -530,9 +540,10 @@ class LiveBackend:
                                  mode="creative", read_only=False, creative=True)
             doc["creative"] = self.creative.block()
             tables = self.creative.table_index()
-            if tables is not None and isinstance(doc.get("params"), dict):     # every table, its rows read when touched
-                doc["params"] = {t: LazyRows(t, v.get("rows", 0) if isinstance(v, dict) else 0, tables.read_row, tables.ids)
-                                 for t, v in doc["params"].items()}
+            index = _index_of(tables)
+            if index:      # every table of the game, its rows read when touched (not disk.json's: the scripts' own, 1.8.0 part 4)
+                params = {t: LazyRows(t, v["rows"], tables.read_row, tables.ids) for t, v in index.items()}
+                doc = {**{k: v for k, v in doc.items() if k != "creative"}, "params": params, "creative": doc.get("creative")}
             self._doc, self._doc_at = doc, now
             return doc
 

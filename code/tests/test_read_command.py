@@ -76,6 +76,21 @@ def test_no_flag_prints_every_value_once_and_exits(rig, capsys):
     assert mem.closed == 1 and box["sleeps"] == 0 and not (tmp / "out").exists()   # nothing written, no loop
 
 
+def test_disk_names_read_the_document_and_say_disk(rig, capsys):
+    """1.8.0: `read disk...` is a path of disk.json, shown as such (`read params...` is the game's tables); names without it still work."""
+    tmp, mem, target, box, args = rig
+    assert rcmd.cmd_read(args(query=["disk.character.level"], flat=True)) == 0
+    assert capsys.readouterr().out.split() == ["disk.character.level", "386"]
+    assert rcmd.cmd_read(args(query=["DISK.level"], json=True)) == 0
+    assert json.loads(capsys.readouterr().out) == {"disk.character.level": 386}
+    for whole in ("disk", "disk.*"):
+        assert rcmd.cmd_read(args(query=[whole], json=True)) == 0
+        assert set(json.loads(capsys.readouterr().out)["disk"]) == {"systems", "character", "creative"}
+    assert rcmd.cmd_read(args(query=["level"], flat=True)) == 0
+    assert capsys.readouterr().out.split() == ["character.level", "386"]
+    assert rcmd.cmd_read(args(query=["disk.nothing"])) == 1
+
+
 def test_query_a_group_a_value_and_a_pattern(rig, capsys):
     tmp, mem, target, box, args = rig
     assert rcmd.cmd_read(args(query="runes")) == 0
@@ -640,22 +655,22 @@ def test_params_effects_is_gone_and_says_where_its_rows_are(prig, capsys):
     assert "params.SpEffectParam.1621000" in capsys.readouterr().err
 
 
-def test_no_flag_prints_the_tables_of_the_game_and_character_stars_do_not(prig, capsys):
+def test_the_disk_has_no_params_and_read_params_lists_the_tables_from_the_game(prig, capsys):
+    """1.8.0 part 4: the tables are not in disk.json; `read params` reads the game for them."""
     tmp, mem, target, box, args = prig
     assert rcmd.cmd_read(args()) == 0
-    out = capsys.readouterr().out
-    assert "params" in out and "SpEffectParam" in out and "rows" in out
-    assert rcmd.cmd_read(args(query="character.*")) == 0
-    assert "params" not in capsys.readouterr().out
+    assert "SpEffectParam" not in capsys.readouterr().out
+    for name in ("params", "params.*"):
+        assert rcmd.cmd_read(args(param=[name], json=True)) == 0
+        assert json.loads(capsys.readouterr().out) == {"params": {"SpEffectParam": {"rows": len(pf.small_ids())}}}
 
 
-def test_the_export_has_the_index_of_the_tables_and_it_is_valid(prig):
+def test_the_export_has_no_params_and_it_is_valid(prig):
     tmp, mem, target, box, args = prig
     assert rcmd.cmd_read(args(export=True)) == 0
     d = doc(tmp)
     valid(d)
-    assert list(d) == ["systems", "character", "params", "creative"] and d["creative"] is None      # no build, no host, no flags here
-    assert d["params"] == {"SpEffectParam": {"rows": len(pf.small_ids())}}       # the rows are read when a table is named
+    assert list(d) == ["systems", "character", "creative"] and d["creative"] is None      # no build, no host, no flags here
 
 
 def test_params_that_cannot_be_read_are_a_clear_error_and_the_rest_still_works(prig, capsys):
@@ -665,7 +680,9 @@ def test_params_that_cannot_be_read_are_a_clear_error_and_the_rest_still_works(p
     assert "data start" in capsys.readouterr().err
     assert rcmd.cmd_read(args(query="level")) == 0
     assert rcmd.cmd_read(args(export=True)) == 0
-    assert doc(tmp)["params"] is None and doc(tmp)["character"]["level"] == 386
+    assert "params" not in doc(tmp) and doc(tmp)["character"]["level"] == 386
+    assert rcmd.cmd_read(args(param=["params"])) == 1           # the tables of the game: none can be read now
+    assert "no param table" in capsys.readouterr().err
 
 
 def test_a_game_version_without_params_says_so(rig, capsys):

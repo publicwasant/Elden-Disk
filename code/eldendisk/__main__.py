@@ -15,7 +15,7 @@ Creative
   resurrect           NAME | ID | PATH ... | * | all [--dry-run] [--when-loaded]
 
 Data
-  export              the document to <TOOLS-DIR>\\output\\disk.json [--live]
+  export              the document to <TOOLS-DIR>\\output\\disk.json [--live]; --params: every row of every table to params.json
   reset               [* | all | runes | buffs | animations | monitor]: the read baselines start again from now
   check               [FILE]: a regulation.bin against the game, row by row
   probe               where the game's param tables lie in memory
@@ -69,7 +69,7 @@ cmd_write = _lazy("write", "cmd_write")
 READ_DEFAULTS = dict(query=None, param=None, param_check=None, probe_params=False, export=False, live=False, live_buffs=False,
                      live_animations=False, mapped=False, unmapped=False, flat=False, json=False, quiet=False, hz=60.0, timeout=15.0,
                      no_idle=False, out=default_out_dir(), export_interval=0.5, timer_interval=2.0, state_ids=None, spec=None, creative_dir=None,
-                     words=None, file=None)
+                     words=None, file=None, disk=False, params=False)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -244,6 +244,9 @@ def build_parser() -> argparse.ArgumentParser:
     # ---- data ----
     ex = sub.add_parser("export", help="the document (the single source of truth) to <TOOLS-DIR>\\output\\disk.json")
     ex.set_defaults(**READ_DEFAULTS)
+    ex.add_argument("--disk", action="store_true", help="the document to disk.json (the default)")
+    ex.add_argument("--params", action="store_true",
+                    help="every row of every table of the game, every field, to params.json (hundreds of MB; once, not with --live)")
     ex.add_argument("--live", action="store_true", help="do not stop: write it again each time it changes")
     hz(ex)
     ex.add_argument("--out", default=default_out_dir(), metavar="DIR", help="the folder of disk.json (default: %(default)s)")
@@ -311,6 +314,8 @@ def main(argv=None) -> int:
             ap.error("--export-interval and --timer-interval must not be negative")
     if args.cmd in ("read", "export", "reset", "check", "probe") and args.timeout <= 0:
         ap.error("--timeout must be positive")
+    if args.cmd == "export" and args.params and args.live:
+        ap.error("export --params is written once (every table, hundreds of MB): not with --live")
     if args.cmd == "read" and args.json and args.live:
         ap.error("--json is for a one-shot read (export --live keeps a file current)")
     if args.cmd == "scripts" and args.when_loaded and (args.words or ["start"])[0] != "start":

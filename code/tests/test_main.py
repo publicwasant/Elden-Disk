@@ -123,7 +123,11 @@ def test_read_words_parse_into_what_read_does(monkeypatch):
     seen.clear()
     assert cli.main(["read", "params.NpcParam"]) == 0 and seen["param"] == ["params.NpcParam"] and seen["query"] is None
     seen.clear()
-    assert cli.main(["read", "params"]) == 0 and seen["query"] == ["params"] and not seen["param"]      # the index of the tables
+    assert cli.main(["read", "params"]) == 0 and seen["param"] == ["params"] and seen["query"] is None  # the tables, from the game
+    seen.clear()
+    assert cli.main(["read", "params.*"]) == 0 and seen["param"] == ["params.*"] and seen["query"] is None
+    seen.clear()
+    assert cli.main(["read", "disk.character.*"]) == 0 and seen["query"] == ["disk.character.*"] and not seen["param"]
     seen.clear()
     for whole in (["read"], ["read", "*"], ["read", "all"], ["read", "--tree"]):
         cli.main(whole)

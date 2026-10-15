@@ -14,9 +14,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from ..game.paramnames import has_fields
+from ..game.params import ParamError
+from ..game.paramtables import Tables, decode_row
 from .sampler import Sample
 
-NO_PARAMS_STATES = ("DISCONNECTED", "EAC_DETECTED", "EAC_ACTIVE", "WAITING_FOR_PROCESS", "UNSUPPORTED_VERSION")
 RETRIES = 5
 RETRY_DELAY_S = 0.01
 
@@ -45,6 +47,55 @@ class JsonLogger:
             except PermissionError:  # tmp or target locked by another process
                 time.sleep(RETRY_DELAY_S)
         return False
+
+    def write_chunks(self, chunks) -> bool:
+        """`write` of a document too big to hold as one string (`params.json`: hundreds of MB): the pieces go to the temp file as
+        they come, then it replaces the target. False if the target stayed locked."""
+        with open(self._tmp, "w", encoding="utf-8", newline="\n") as f:
+            for piece in chunks:
+                f.write(piece)
+        for _ in range(RETRIES * 10):
+            try:
+                os.replace(self._tmp, self.path)
+                return True
+            except PermissionError:
+                time.sleep(RETRY_DELAY_S * 10)
+        return False
+
+
+PARAMS_NAME = "params.json"
+
+
+def params_chunks(tables: Tables, profile: dict, progress: Callable[[int, int, str], None] | None = None,
+                  stats: dict | None = None):
+    """The pieces of `params.json` (1.8.0 part 4, `export --params`): every table of the game the tool finds, every row with every
+    field, read from the game now, one table at a time and one row a line (`findstr "10000000"` gives the row). A table no layout
+    decodes has each row as its bytes (`{"_raw": "hex"}`); a table that cannot be read is listed under `skipped` with the reason.
+    `stats` gets tables, rows, raw (the tables given as bytes) and skipped."""
+    stats = stats if stats is not None else {}
+    stats.update(tables=0, rows=0, raw=[], skipped={})
+    names = list(tables.index())
+    head = {"profile": profile, "written": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+    yield "{\n" + "".join(f"  {json.dumps(k)}: {json.dumps(v)},\n" for k, v in head.items()) + '  "params": {'
+    first = True
+    for i, table in enumerate(names):
+        if progress:
+            progress(i, len(names), table)
+        try:
+            if has_fields(table):
+                rows = {rid: decode_row(table, raw) for rid, raw in tables.all_rows(table).items()}
+            else:
+                rows = {rid: {"_raw": raw.hex()} for rid, raw in tables.all_rows(table, raw=True).items()}
+                stats["raw"].append(table)
+        except ParamError as exc:
+            stats["skipped"][table] = str(exc)
+            continue
+        body = ",\n".join(f"      {json.dumps(str(rid))}: {json.dumps(row)}" for rid, row in rows.items())
+        yield ("" if first else ",") + f"\n    {json.dumps(table)}: {{\n{body}\n    }}"
+        first = False
+        stats["tables"] += 1
+        stats["rows"] += len(rows)
+    yield f'\n  }},\n  "skipped": {json.dumps(stats["skipped"])}\n}}\n'
 
 
 def build_document(*, now: datetime | None = None, state: str, pid: int | None, anti_cheat: str,
@@ -118,14 +169,11 @@ def build_document(*, now: datetime | None = None, state: str, pid: int | None, 
             "timestamp": ts_str,
         }
 
-    # the param tables belong to the running game: with no game (DISCONNECTED, EAC) there is nothing to show, and the
-    # values would be wrong anyway, since an edit is gone with the game
-    params = sample.params if sample is not None and state not in NO_PARAMS_STATES else None
-
+    # no `params`: the tables are not the disk's (1.8.0 part 4). `read params...` reads them from the game, `export --params`
+    # writes every row to params.json
     return {
         "systems": systems,
         "character": character,
-        "params": params,
     }
 
 

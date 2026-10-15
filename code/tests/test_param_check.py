@@ -183,7 +183,7 @@ ORIG = os.environ.get("ELDENDISK_REGULATION_ORIG")
 @pytest.mark.skipif(not ORIG or not Path(ORIG).is_file(), reason="set ELDENDISK_REGULATION_ORIG to the pristine regulation.bin")
 def test_the_real_file_gives_the_six_tables_with_the_rows_the_survey_found():
     rows = PC.file_rows(Path(ORIG))
-    assert {t: len(r) for t, r in rows.items()} == {"Goods": 2329, "Magic": 317, "SpEffect": 11354, "Bullet": 15475,
-                                                     "AtkParam_Pc": 11017, "ShopLineup": 1296}
+    assert {t: len(r) for t, r in rows.items()} == {"EquipParamGoods": 2329, "Magic": 317, "SpEffectParam": 11354,
+                                                     "Bullet": 15475, "AtkParam_Pc": 11017, "ShopLineupParam": 1296}
     from eldendisk.game.paramtables import decode_row
     assert decode_row("Magic", rows["Magic"][6230])["mp"] == 21

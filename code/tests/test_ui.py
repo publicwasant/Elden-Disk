@@ -429,10 +429,12 @@ def test_ids_and_addresses_have_their_own_colours_and_nothing_else_does(monkeypa
     assert ui.paint_numbers(text, False) == text
 
 
-def test_a_colour_in_a_line_is_shown_in_that_colour_and_its_digits_are_not_an_id():
+def test_a_colour_in_a_line_gets_a_square_of_that_colour_and_its_text_and_digits_stay_plain():
+    """1.8.0: a small square in the colour (one cell, one colour: not an emoji); `#90D5FF` itself stays in the colour of its line."""
     got = ui.paint_numbers("main colour -> #90D5FF: 68 places in 524400; #900000", True, "\x1b[2m")
-    assert "\x1b[22;38;2;144;213;255m#90D5FF\x1b[0m\x1b[2m" in got                   # bright, then back to the dim line
-    assert "\x1b[22;38;2;144;0;0m#900000\x1b[0m" in got and ID.format("900000") not in got
+    assert "\x1b[22;38;2;144;213;255m\u25a0\x1b[0m\x1b[2m #90D5FF:" in got         # a bright square, then back to the dim line
+    assert "\x1b[22;38;2;144;0;0m\u25a0\x1b[0m\x1b[2m #900000" in got and ID.format("900000") not in got
+    assert ui.printable("\u25a0 #90D5FF", "cp874") == "# #90D5FF"                     # a legacy code page
     assert ID.format("524400") in got
     assert ui.paint_numbers("#90D5FF", False) == "#90D5FF" and ui.paint_hex("a#90D5FF, #90D5FFF, &#123456", True).count("38;2") == 0
 
@@ -491,3 +493,12 @@ def test_a_problem_of_the_design_has_its_place_in_cyan(monkeypatch):
     with ui.Block("design", stream=err):
         ui.pretty_sink(stream=err)(ev(level="E", tag=CREATIVE_TAG, msg="  $.innovate_items.spells.slots[x].customs.basic: unknown field"))
     assert "\x1b[36m$.innovate_items.spells.slots[x].customs.basic\x1b[0m\x1b[31m: unknown field" in err.getvalue()
+
+
+def test_many_rows_go_out_in_chunks_exactly_as_one_line_each(capsys, monkeypatch):
+    """1.8.0 part 4: a whole table of the game is millions of rows; they are written in chunks, the text unchanged."""
+    from eldendisk.reader.view import Row
+    monkeypatch.setattr(ui, "EMIT_CHUNK", 3)
+    items = [Row(0, "params", None, "params")] + [Row(1, f"k{i}", str(i), f"params.k{i}") for i in range(7)]
+    ui.rows(items)
+    assert capsys.readouterr().out.splitlines() == ui.format_rows(items)

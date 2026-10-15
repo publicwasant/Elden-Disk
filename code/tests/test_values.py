@@ -32,6 +32,8 @@ DOC = {
     ("resurrect", "creative.resurrect"), ("resurrect.*", "creative.resurrect.*"),
     ("resurrect.great_enemies.*", "creative.resurrect.great_enemies.*"),
     ("great_enemies", "creative.resurrect.great_enemies"), ("spells", "creative.innovate_spells"),
+    ("disk.character.level", "character.level"), ("DISK.hp", "character.vitals.hit_point"), ("disk.systems.status.pid", "systems.status.pid"),
+    ("disk.resurrect.*", "creative.resurrect.*"),          # 1.8.0: `disk.` names the document, the same paths under it
 ])
 def test_normalize(name, path):
     assert normalize(name) == path

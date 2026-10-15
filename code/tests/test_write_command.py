@@ -242,6 +242,13 @@ def test_params_effects_is_gone_and_says_where_its_rows_are(rig, capsys):
     assert "params.SpEffectParam.1621000.effectEndurance" in capsys.readouterr().err
 
 
+def test_a_disk_name_writes_the_same_value(rig):
+    """1.8.0: `disk.character.level` is `level` (the path as disk.json holds it)."""
+    vault, mem, box, open_session, args = rig
+    open_session()
+    assert wcmd.cmd_write(args("disk.character.level=150")) == 0 and level(mem) == 150
+
+
 def test_a_param_edit_without_a_session_writes_nothing(rig, capsys):
     vault, mem, box, open_session, args = rig
     refused(box, mem, EXIT_NO_SESSION, wcmd.cmd_write(args(f"{BF}.effectEndurance=-1")))

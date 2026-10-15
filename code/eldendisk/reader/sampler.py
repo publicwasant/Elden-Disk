@@ -11,13 +11,9 @@ from datetime import datetime, timedelta, timezone
 
 from ..game.layout import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout, parse_vitals_block
 from ..game.memory import is_user_ptr, read_ptr, read_u32
-from ..game.params import ParamError
-from ..game.paramtables import Tables
 from ..game.profile import Profile, StateIds
 
 MAX_BUFFS = 512
-PARAMS_EVERY_S = 1.0   # the param tables change only when something edits them: look about once a second, not every frame
-PARAMS_RETRY_S = 0.25  # ... but while they cannot be read (not loaded yet) look again soon
 WORLD_LOST_RESET_S = 10.0  # title screen / long load this long -> forget baseline + animation
 
 
@@ -36,8 +32,6 @@ class Sample:
     ignored_animations: int = 0
     error: str | None = None  # diagnostic only; None for the normal title-screen case
     runes: int | None = None
-    params: dict | None = None        # the `params` block of the document (None: unsupported or not readable now)
-    params_error: str | None = None   # why `params` is None when the profile does support it
 
 
 class Sampler(Layout):
@@ -49,11 +43,6 @@ class Sampler(Layout):
         self._last_animation: dict[str, dict] = {}
         self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
         self._world_lost_at: datetime | None = None
-        self.tables = Tables(mem, profile, module_base) if profile.params is not None and (
-            profile.params.catalog or profile.params.repository) else None    # 1.8.0 part 4: every table of the game
-        self._params: dict | None = None
-        self._params_error: str | None = None
-        self._params_at: datetime | None = None
 
     def _reset_session(self) -> None:
         """Forget per-character state (the player left the world, possibly to load another character)."""
@@ -93,27 +82,9 @@ class Sampler(Layout):
         return v, (None if w is None else self._wait(w.error))
 
     # -- main ------------------------------------------------------------
-    def read_params(self, now: datetime) -> tuple[dict | None, str | None]:
-        """The document's `params` as (value, None) or (None, why not), read at most every PARAMS_EVERY_S: every table of the game
-        with its number of rows ({"NpcParam": {"rows": 7045}, ...}); the rows themselves are read when a table is named (`read
-        params.NpcParam`, a script's x.params.NpcParam[id]), not here (1.8.0 part 4: hundreds of MB in all)."""
-        if self.tables is None:
-            return None, None
-        gap = PARAMS_EVERY_S if self._params is not None else PARAMS_RETRY_S
-        if self._params_at is None or (now - self._params_at).total_seconds() >= gap:
-            self._params_at = now
-            try:
-                self._params, self._params_error = self.tables.index() or None, None
-                if self._params is None:
-                    self._params_error = "no param table found yet (the game is still loading them)"
-            except ParamError as exc:
-                self._params, self._params_error = None, str(exc)
-        return self._params, self._params_error
-
     def sample(self, now: datetime | None = None) -> Sample:
         now = now or datetime.now(timezone.utc)
         s = self._sample(now)
-        s.params, s.params_error = self.read_params(now)
         if s.state == "CONNECTED":
             self._world_lost_at = None
         elif s.error is None:  # normal title-screen / loading wait (not a read failure)
