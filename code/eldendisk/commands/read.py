@@ -28,9 +28,10 @@ from ..game.processes import is_window_active, process_started
 from ..game.paramtables import Tables, parse_ref, pick
 from . import paramcheck
 from ..game.params import ParamError, ParamNameError, ParamStore
+from ..game.invprobe import as_json as inventory_json, lines as inventory_lines, probe_inventory
 from ..game.probe import as_json as probe_json, lines as probe_lines, probe, walk_lines, walk_report
 from ..game.profile import load_state_ids
-from ..game.values import UnknownName
+from ..game.values import UnknownName, normalize
 from ..logbook import book
 from ..paths import describe_resource, get_resource_path
 from ..reader import baselines, view
@@ -147,6 +148,26 @@ def read_words(args) -> int:
     args.param = refs or None
     args.query = None if refs else (words or None)
     return cmd_read(args)
+
+
+def _wants_inventory(args) -> bool:
+    """Whether this command shows `character.inventory` (1.8.1): the whole document, an export, a name under `character` or a pattern
+    that may reach it. Otherwise the inventory and its names (a look of about a second for the text) are not read."""
+    if args.export or getattr(args, "live_buffs", False) or getattr(args, "live_animations", False):
+        return bool(args.export)
+    names = [args.query] if isinstance(args.query, str) else list(args.query or [])
+    if not names:
+        return True
+    for name in names:
+        n = name.strip().lower()
+        if n.startswith("disk"):
+            n = n[4:].lstrip(".")
+        if not n or "*" in n or "?" in n:
+            return True
+        path = normalize(n)
+        if path in ("character", "") or path.startswith("character.inventory"):
+            return True
+    return False
 
 
 def _is_table_ref(name: str) -> bool:
@@ -278,10 +299,13 @@ def cmd_read(args) -> int:
 
     mem = open_read(target)
     sampler = Sampler(mem, profile, state_ids, target.base)
+    sampler.inventory_wanted = _wants_inventory(args)
     watch = baselines.Watch(target.pid, target.started, since=time.time())
     _take_baselines(watch, sampler, [])          # a runes baseline `reset` set for this game counts at once
     try:
         if args.probe_params:
+            if getattr(args, "what", None) == "inventory":
+                return _probe_inventory(args, target, mem, sampler)
             return _probe_params(args, target, mem)
         if refs:
             return _read_params(args, target, mem, refs)
@@ -340,6 +364,29 @@ def _probe_params(args, target: Target, mem) -> int:
         book.e("read", "no param file found from the known chains (is a character loaded? try again in the world)")
         return EXIT_ERROR
     return 0
+
+
+def _probe_inventory(args, target: Target, mem, sampler: Sampler) -> int:
+    """`probe inventory` (1.8.1): look for the inventory in PlayerGameData. Reads only."""
+    game_data, why = sampler.locate_game_data()
+    goods: set[int] = set()
+    if game_data is not None:
+        try:
+            goods = set(Tables(mem, target.profile, target.base).ids("EquipParamGoods"))
+        except ParamError as exc:
+            book.e("read", f"the goods ids cannot be read: {exc}")
+            return EXIT_ERROR
+    result = probe_inventory(mem, game_data, goods, why or "", tuple(getattr(args, "find", None) or ()))
+    book.d("read", f"probe inventory: {len(result.runs)} list(s), {result.read_bytes / 1048576:.1f} MB read")
+    if args.json:
+        ui.out(view.as_json([("probe_inventory", inventory_json(result))]))
+    else:
+        for line in inventory_lines(result):
+            ui.out(line)
+    if game_data is None:
+        book.e("read", "no character in the world: load one and probe again")
+        return EXIT_ERROR
+    return 0 if result.runs else EXIT_ERROR
 
 
 def _read_params(args, target: Target, mem, refs) -> int:
@@ -483,8 +530,13 @@ def _query_once(args, mem, sampler: Sampler, export: ExportWriter) -> int:
         selection = view.select(doc, args.query)
     except UnknownName as exc:
         book.e("read", _why_unknown(exc, doc, sample, args.query))
+        if getattr(sampler, "names_error", None) and "inventory" in view.label(args.query).lower():
+            book.w("read", f"an item cannot be found by its name now: {sampler.names_error}")
         return EXIT_ERROR
     book.d("read", f"query {view.label(args.query)}: {len(selection)} result(s)")
+    if getattr(sampler, "names_error", None) and any(p.startswith(("character.inventory", "disk.character.inventory", "character"))
+                                                     or p in ("", "disk") for p, _v in selection):
+        book.w("read", f"the items' names are not shown: {sampler.names_error}")
     if not selection:
         book.i("read", f"nothing matches {view.label(args.query)!r} right now (no such buff or animation is active)")
     if args.json:

@@ -414,8 +414,10 @@ def test_the_shipped_names_json_loads_and_has_no_sources():
 
 # ---- safety ----
 def test_write_capability_is_confined_to_the_writer_package():
-    """game/memory.py stays read-only; WriteProcessMemory / PROCESS_VM_WRITE exist in one module (writer/writer.py)."""
-    assert memory_reader.ACCESS_MASK == 0x1010
+    """game/memory.py stays read-only; WriteProcessMemory / PROCESS_VM_WRITE exist in one module (writer/writer.py). The read handle:
+    VM_READ and the two query rights (1.8.1: QUERY_INFORMATION, for VirtualQueryEx when the reader looks for the item names; it reads
+    information about the process, nothing more)."""
+    assert memory_reader.ACCESS_MASK == 0x1410
     never = ["CreateRemoteThread", "VirtualProtectEx", "NtWriteVirtualMemory", "SetThreadContext"]
     writer_py = PKG / "writer" / "writer.py"
     for f in PKG.rglob("*.py"):

@@ -8,7 +8,7 @@ IS_WINDOWS = sys.platform == "win32"
 
 PROCESS_VM_READ = 0x0010
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-PROCESS_QUERY_INFORMATION = 0x0400      # VirtualQueryEx (only the writer asks for it, to list the game's memory regions)
+PROCESS_QUERY_INFORMATION = 0x0400      # VirtualQueryEx: to list the game's memory regions (a scan: the writer, and since 1.8.1 the item names)
 STILL_ACTIVE = 259
 PROCESS_MODE_BACKGROUND_BEGIN = 0x00100000      # SetPriorityClass: low CPU, I/O and memory priority for this process
 TH32CS_SNAPPROCESS = 0x2

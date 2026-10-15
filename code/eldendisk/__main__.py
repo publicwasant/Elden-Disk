@@ -18,7 +18,7 @@ Data
   export              the document to <TOOLS-DIR>\\output\\disk.json [--live]; --params: every row of every table to params.json
   reset               [* | all | runes | buffs | animations | monitor]: the read baselines start again from now
   check               [FILE]: a regulation.bin against the game, row by row
-  probe               where the game's param tables lie in memory
+  probe               [inventory]: where the game's param tables (or the inventory) lie in memory
 
 Tooling
   hash                SHA-256 of eldenring.exe (the key of its profile in offsets.json)
@@ -287,8 +287,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_verbose(ck)
     ck.set_defaults(fn=cmd_check)
 
-    pr = sub.add_parser("probe", help="where the game's param tables lie in memory (for a new game version)")
+    pr = sub.add_parser("probe", help="where the game's param tables lie in memory (for a new game version); "
+                                      "`probe inventory`: where the inventory is (1.8.1)")
     pr.set_defaults(**READ_DEFAULTS)
+    pr.add_argument("what", nargs="?", choices=["inventory"], help="inventory: look for the inventory in PlayerGameData")
+    pr.add_argument("--find", type=int, action="append", default=[], metavar="ID",
+                    help="probe inventory: also print every place this goods id is, with the bytes around it (again for more)")
     pr.add_argument("--json", action="store_true", help="the result as JSON")
     timeout(pr)
     offsets(pr)

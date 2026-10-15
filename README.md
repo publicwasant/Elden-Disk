@@ -201,7 +201,9 @@ All the scripts of a session run in **one host process**, each in a thread of it
     "session": { "mode": "creative", "read_only": false, "creative": true }
   },
   "character": { "level": 386, "vitals": { "...": "..." }, "runes": { "total": 55214603, "baseline": 55214603, "delta": 0 },
-                 "attributes": { "...": "..." }, "buffs": { "...": "..." }, "animations": { "...": "..." }, "equipment": { "...": "..." } },
+                 "attributes": { "...": "..." }, "buffs": { "...": "..." }, "animations": { "...": "..." }, "equipment": { "...": "..." },
+                 "inventory": { "goods": { "1200": { "name": "Gold-Pickled Fowl Foot", "type": "consumable",
+                                         "quantity": { "total": 562, "held": 10, "stored": 552 } } }, "...": "..." } },
   "creative": {
     "scripts": { "host": { "process_id": 26528, "state": "running", "started": "...", "scripts": 1 }, "defaults": { "...": "..." }, "added": {} },
     "innovate_spells": { "2230000": { "id": "reverse_cursed_technique", "slot": 1, "rows": { "...": "..." }, "design": { "...": "..." } } },
@@ -244,7 +246,7 @@ the exe; one next to the exe wins). The full document is in [spec 1.8.0 part 2](
 ```
 
 `offsets.json` holds one **profile** per `eldenring.exe` (by its SHA-256, see `hash`): the pointer chains and the blocks each feature
-needs (`text`, `equipment`, `event_flags`, ...). A new game version: [docs/handbook/adding-a-profile.md](docs/handbook/adding-a-profile.md).
+needs (`text`, `equipment`, `inventory`, `event_flags`, ...). A new game version: [docs/handbook/adding-a-profile.md](docs/handbook/adding-a-profile.md).
 
 ---
 

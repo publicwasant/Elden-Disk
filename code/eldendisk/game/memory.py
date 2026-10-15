@@ -11,7 +11,11 @@ from dataclasses import dataclass
 
 from . import _win
 
-ACCESS_MASK = _win.PROCESS_VM_READ | _win.PROCESS_QUERY_LIMITED_INFORMATION
+# QUERY_INFORMATION (not only LIMITED): VirtualQueryEx needs it to list the regions a scan reads (1.8.1: the reader finds the item
+# names). Still read-only: nothing here can write or change the game.
+ACCESS_MASK = _win.PROCESS_VM_READ | _win.PROCESS_QUERY_LIMITED_INFORMATION | _win.PROCESS_QUERY_INFORMATION
+MEM_COMMIT, PAGE_NOACCESS, PAGE_GUARD = 0x1000, 0x01, 0x100
+PAGE_NOCACHE, PAGE_WRITECOMBINE, MEM_PRIVATE = 0x200, 0x400, 0x20000      # a scan skips the first two (slow to read) and keeps private memory only
 
 USER_MIN = 0x10000
 USER_MAX = 0x7FFFFFFF0000
@@ -66,6 +70,27 @@ class ProcessMemory:
         if not ok or n.value != size:
             return None
         return buf.raw
+
+    def regions(self, strict: bool = False) -> list[tuple[int, int]]:
+        """(base, size) of every committed region of the game that can be read (not no-access, not guard), user space only. `strict`
+        (for a scan of the whole game) keeps only the game's own private memory (its heap) and leaves out what is slow or pointless to
+        read: write-combined and uncached memory (shared with the graphics card), mapped files and the program's own image."""
+        out, addr, mbi = [], 0, _win.MEMORY_BASIC_INFORMATION()
+        while addr < 0x7FFFFFFF0000 and _win.k32.VirtualQueryEx(self._h, ctypes.c_void_p(addr), ctypes.byref(mbi), ctypes.sizeof(mbi)):
+            size = mbi.RegionSize
+            if mbi.State == MEM_COMMIT and mbi.Protect and not mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD):
+                if not strict or (mbi.Type == MEM_PRIVATE and not mbi.Protect & (PAGE_NOCACHE | PAGE_WRITECOMBINE)):
+                    out.append((mbi.BaseAddress or 0, size))
+            addr = (mbi.BaseAddress or 0) + size
+        return out
+
+    def describe(self, addr: int) -> str:
+        """What kind of memory `addr` is in (for the log): type, protection, the size of its region."""
+        mbi = _win.MEMORY_BASIC_INFORMATION()
+        if not _win.k32.VirtualQueryEx(self._h, ctypes.c_void_p(addr), ctypes.byref(mbi), ctypes.sizeof(mbi)):
+            return "unknown"
+        kind = {0x20000: "private", 0x40000: "mapped", 0x1000000: "image"}.get(mbi.Type, f"type {mbi.Type:#x}")
+        return f"{kind}, protect {mbi.Protect:#x}, region {mbi.RegionSize >> 20} MB at {mbi.BaseAddress or 0:#x}"
 
     def alive(self) -> bool:
         code = _win.wintypes.DWORD(0)

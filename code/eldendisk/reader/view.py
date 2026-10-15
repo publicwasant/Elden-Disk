@@ -144,8 +144,34 @@ def _by_label(doc: dict, path: str) -> str:
     return path
 
 
+INVENTORY = "character.inventory."
+
+
+def _by_item_name(doc: dict, path: str) -> list[str] | None:
+    """`character.inventory.<name>...` (1.8.1) -> the paths of every item of that name, in any kind (`gold_pickled_fowl_foot`, as a
+    boss is found by name); None when `<name>` is a kind of the inventory, a pattern, or no item's name."""
+    head, _dot, rest = path[len(INVENTORY):].partition(".")
+    inv = (doc.get("character") or {}).get("inventory") or {}
+    if not head or head in inv or is_pattern(head):
+        return None
+    hits = [f"{INVENTORY}{group}.{iid}" + ("." + rest if rest else "") for group, items in inv.items() if isinstance(items, dict)
+            for iid, item in items.items() if isinstance(item, dict) and item.get("name") and _enemy_key(item["name"]) == head]
+    return hits or None
+
+
 def _select_one(doc: dict, name: str) -> list[tuple[str, object]]:
     path = _by_label(doc, normalize(name))
+    if path.startswith(INVENTORY):
+        named = _by_item_name(doc, path)
+        if named:
+            out = []
+            for p in named:
+                try:
+                    out.append((p, _walk(p, doc)))
+                except KeyError:
+                    pass
+            if out:
+                return out
     leaves = flatten(doc)
     if is_pattern(path):
         hits = [(p, v) for p, v in leaves.items() if fnmatchcase(p.lower(), path)]

@@ -11,10 +11,16 @@ from datetime import datetime, timedelta, timezone
 
 from ..game.layout import ATTR_NAMES, ATTR_RANGE, LEVEL_RANGE, RUNES_MAX, Layout, parse_vitals_block
 from ..game.memory import is_user_ptr, read_ptr, read_u32
+from ..game.inventory import InventoryError, read_inventory
+from ..game.params import ParamError, ParamNameError
+from ..game.paramtables import Tables
 from ..game.profile import Profile, StateIds
+from ..game.textmem import item_names
 
 MAX_BUFFS = 512
 WORLD_LOST_RESET_S = 10.0  # title screen / long load this long -> forget baseline + animation
+INVENTORY_EVERY_S = 1.0    # the inventory is read about once a second, not every frame (1.8.1)
+NAMES_BUDGET_S = 20.0      # the look for the item names' text tables gives up after this (then every name is null)
 
 
 def iso(dt: datetime) -> str:
@@ -43,6 +49,16 @@ class Sampler(Layout):
         self._last_animation: dict[str, dict] = {}
         self._activations: dict[int, tuple[datetime, float]] = {}  # eid -> (activation_time, last_remaining)
         self._world_lost_at: datetime | None = None
+        self._inventory: dict | None = None
+        self._inventory_at: datetime | None = None
+        self._inventory_gd: int | None = None
+        self.inventory_error: str | None = None   # why character.inventory is null now
+        self._goods_types: dict[int, int] | None = None
+        self._goods_types_tried = False
+        self.item_names: dict | None = None        # (table, row id) -> the game's name of the item (names(); a test may set it)
+        self._names_tried = False
+        self.names_error: str | None = None
+        self.inventory_wanted = True              # a `read` of other names turns it off: the inventory (and its names) is not read
 
     def _reset_session(self) -> None:
         """Forget per-character state (the player left the world, possibly to load another character)."""
@@ -189,7 +205,47 @@ class Sampler(Layout):
         equipment = self._read_equipment(gd)
         if equipment is not None:
             character["equipment"] = equipment
+        if self.profile.inventory is not None and self.inventory_wanted:
+            character["inventory"] = self._read_inventory(gd, now)
         return Sample("CONNECTED", character, ignored, ignored_anim, None, runes)
+
+    def _read_inventory(self, gd: int, now: datetime) -> dict | None:
+        """`character.inventory` (1.8.1), read at most every INVENTORY_EVERY_S (a few thousand places, tens of KB): what the character
+        carries. None while it cannot be read (the reason in the log once); the rest of the sample is not held back by it."""
+        if self._inventory_at is not None and (now - self._inventory_at).total_seconds() < INVENTORY_EVERY_S \
+                and self._inventory_gd == gd:
+            return self._inventory
+        self._inventory_at, self._inventory_gd = now, gd
+        try:
+            self._inventory = read_inventory(self.mem, gd, self.profile.inventory, self.goods_types(), self.names())
+            self.inventory_error = None
+        except InventoryError as exc:
+            self._inventory, self.inventory_error = None, str(exc)
+        return self._inventory
+
+    def names(self) -> dict | None:
+        """{(param table, row id): the game's name of the item}, found once (the look for the text tables takes about a second);
+        None when they cannot be found (then every `name` is null; the reason in `names_error`)."""
+        if self.item_names is None and not self._names_tried and self.profile.text is not None:
+            self._names_tried = True
+            try:
+                found, why = item_names(self.mem, self.profile.text, budget=NAMES_BUDGET_S)
+            except Exception as exc:          # the names are extras: no failure of the look may stop the read
+                found, why = {}, f"the look for the text failed: {exc}"
+            self.item_names, self.names_error = (found or None), (why or None)
+        return self.item_names
+
+    def goods_types(self) -> dict[int, int] | None:
+        """{goods id: EquipParamGoods.goodsType} of the running game, read once (the table's goodsType field only); None when the
+        tables cannot be read (then `type` is left out)."""
+        if self._goods_types is None and not self._goods_types_tried:
+            self._goods_types_tried = True
+            try:
+                rows = Tables(self.mem, self.profile, self.base).read_table("EquipParamGoods", "goodsType")
+                self._goods_types = {rid: row["goodsType"] for rid, row in rows.items()}
+            except (ParamError, ParamNameError):
+                pass
+        return self._goods_types
 
     def _read_equipment(self, gd: int) -> dict | None:
         """`character.equipment` (1.7.2): {"magic": {"selected": {"slot", "id"}, "slots": {"1": id, ...}}}: the spells memorised in the

@@ -70,6 +70,16 @@
       "required": ["level", "vitals", "runes", "attributes", "buffs", "animations"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
+        "inventory": {
+          "type": ["object", "null"],
+          "description": "1.8.1, when the profile has an inventory block: what the character carries, by kind; each item by its id (the row of its table; a weapon: the row plus its level) with its name (the game's text, null when unknown), quantity (total, held: carried, stored: in the storage chest), type (goods) and upgrade (weapons). null while it cannot be read.",
+          "required": ["goods", "key_items", "talismans", "weapons", "armor", "ashes_of_war"],
+          "additionalProperties": false,
+          "properties": {
+            "goods": { "$ref": "#/$defs/items" }, "key_items": { "$ref": "#/$defs/items" }, "talismans": { "$ref": "#/$defs/items" },
+            "weapons": { "$ref": "#/$defs/items" }, "armor": { "$ref": "#/$defs/items" }, "ashes_of_war": { "$ref": "#/$defs/items" }
+          }
+        },
         "equipment": {
           "type": "object",
           "description": "1.7.2, when the profile has an equipment block: the spells memorised in the magic slots (numbered from 1) and the selected one",
@@ -194,6 +204,32 @@
               "additionalProperties": { "type": "object", "required": ["name", "defeated"] }
             }
           }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "items": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[0-9]+$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name", "quantity"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": ["string", "null"] },
+          "quantity": {
+            "type": "object",
+            "required": ["total", "held", "stored"],
+            "additionalProperties": false,
+            "properties": {
+              "total": { "type": ["integer", "null"], "minimum": 1 },
+              "held": { "type": "integer", "minimum": 0 },
+              "stored": { "type": ["integer", "null"], "minimum": 0 }
+            }
+          },
+          "type": { "type": ["string", "integer", "null"] },
+          "upgrade": { "type": "integer", "minimum": 0 }
         }
       }
     }

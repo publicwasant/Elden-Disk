@@ -158,6 +158,28 @@ class EquipmentLayout:
 
 
 @dataclass(frozen=True)
+class InventoryList:
+    """One list of the inventory: at `start` from the object the chain of `pointers` leads to from PlayerGameData ([[PlayerGameData +
+    p1] + p2] ...; none: PlayerGameData itself), `capacity` places."""
+    pointers: tuple[int, ...]
+    start: int
+    capacity: int
+
+
+@dataclass(frozen=True)
+class InventoryLayout:
+    """Where PlayerGameData keeps the inventory (1.8.1; measured on 1.17.1 with `probe inventory`, read-only): two lists of entries of
+    `entry_size` bytes, the handle, the id and the quantity at the offsets given (spec 1.8.1 section 4)."""
+    entry_size: int
+    entry_handle: int
+    entry_id: int
+    entry_quantity: int
+    items: InventoryList
+    key_items: InventoryList
+    storage: InventoryList | None = None      # the storage chest (what `stored` counts); None: not read
+
+
+@dataclass(frozen=True)
 class EventFlagsLayout:
     """Where the game keeps its event flags (1.8.0; found read-only on 1.17.1, spec 1.8.0 section 13): the static at man_rva points at
     CSEventFlagMan, whose first member is CSFD4VirtualMemoryFlag; it must hold `divisor` at +0x1C and `holder_size` at +0x20."""
@@ -173,6 +195,11 @@ class TextProfile:
     the game's own file of that table, in bytes, in the language the game is played in."""
     files: dict[str, int]
     sizes: dict[str, int]
+    names: dict[str, tuple[int, ...]] = field(default_factory=dict)   # 1.8.1: param table -> the numbers of its name text files
+    # 1.8.1: the tables the array is found by for the names (files, sizes as above): tables `innovate-spells apply` never replaces (it
+    # replaces GoodsName/Info/Caption, after which the array no longer points at the game's own ones)
+    name_files: dict[str, int] = field(default_factory=dict)
+    name_sizes: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -194,6 +221,7 @@ class Profile:
     text: TextProfile | None = None       # None -> `innovate-spells apply` unsupported for this exe
     equipment: EquipmentLayout | None = None   # None -> character.equipment is not read for this exe
     event_flags: EventFlagsLayout | None = None   # None -> resurrect cannot read or change a boss on this exe
+    inventory: InventoryLayout | None = None      # None -> character.inventory is not read for this exe
 
 
 def _parse_sp_effect(d: dict) -> tuple[SpEffectLayout | None, str | None]:
@@ -328,8 +356,17 @@ def _parse_text(d: dict) -> TextProfile | None:
         raise Incomplete("text.files must be an object: table name -> text file number")
     if not isinstance(sizes, dict) or set(sizes) != set(files):
         raise Incomplete("text.sizes must be an object: the same table names -> the size of the game's own file in bytes")
+    names = t.get("names") or {}
+    if not isinstance(names, dict) or not all(isinstance(v, list) and v for v in names.values()):
+        raise Incomplete("text.names must be an object: param table -> the numbers of its name text files")
+    nf, ns = t.get("name_files") or {}, t.get("name_sizes") or {}
+    if not isinstance(nf, dict) or not isinstance(ns, dict) or set(nf) != set(ns):
+        raise Incomplete("text.name_files and text.name_sizes must name the same tables")
     return TextProfile({str(n): _number(v, f"text.files.{n}", 0, 255) for n, v in files.items()},
-                       {str(n): _number(v, f"text.sizes.{n}", 0x28, 64 * 1024 * 1024) for n, v in sizes.items()})
+                       {str(n): _number(v, f"text.sizes.{n}", 0x28, 64 * 1024 * 1024) for n, v in sizes.items()},
+                       {str(n): tuple(_number(x, f"text.names.{n}", 0, 4095) for x in v) for n, v in names.items()},
+                       {str(n): _number(v, f"text.name_files.{n}", 0, 4095) for n, v in nf.items()},
+                       {str(n): _number(v, f"text.name_sizes.{n}", 0x28, 64 * 1024 * 1024) for n, v in ns.items()})
 
 
 def _parse_event_flags(d: dict) -> EventFlagsLayout | None:
@@ -357,6 +394,37 @@ def _parse_equipment(d: dict) -> EquipmentLayout | None:
     if lay.magic_slot_size < 4 or not 1 <= lay.magic_slot_count <= 64:
         raise Incomplete("equipment: magic_slot_size must be at least 4 and magic_slot_count 1 to 64")
     return lay
+
+
+def _parse_inventory(d: dict) -> InventoryLayout | None:
+    """Absent block -> None (no character.inventory). A block that is there must be complete."""
+    e = d.get("inventory")
+    if e is None:
+        return None
+    if not isinstance(e, dict):
+        raise Incomplete("inventory must be an object")
+    size = _num(e.get("entry_size"), "inventory.entry_size")
+    at = {k: _num(e.get(k), f"inventory.{k}") for k in ("entry_handle", "entry_id", "entry_quantity")}
+    if size < 12 or any(v + 4 > size for v in at.values()):
+        raise Incomplete("inventory: entry_size must hold the handle, the id and the quantity (4 bytes each)")
+    lists = {}
+    for name in ("items", "key_items", "storage"):
+        lst = e.get(name)
+        if lst is None and name == "storage":
+            lists[name] = None
+            continue
+        if not isinstance(lst, dict):
+            raise Incomplete(f"inventory.{name} must be an object")
+        chain = lst.get("pointers", [] if lst.get("pointer") is None else [lst.get("pointer")])
+        if not isinstance(chain, list):
+            raise Incomplete(f"inventory.{name}.pointers must be a list of offsets")
+        cap = _num(lst.get("capacity"), f"inventory.{name}.capacity")
+        if not 1 <= cap <= 0x10000:
+            raise Incomplete(f"inventory.{name}.capacity must be 1 to 65536")
+        lists[name] = InventoryList(tuple(_num(p, f"inventory.{name}.pointers") for p in chain),
+                                    _num(lst.get("start"), f"inventory.{name}.start"), cap)
+    return InventoryLayout(size, at["entry_handle"], at["entry_id"], at["entry_quantity"], lists["items"], lists["key_items"],
+                           lists["storage"])
 
 
 def _parse_params(d: dict) -> ParamsProfile | None:
@@ -454,6 +522,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
         text = _parse_text(raw)
         equipment = _parse_equipment(raw)
         event_flags = _parse_event_flags(raw)
+        inventory = _parse_inventory(raw)
         return Profile(
             sha256=exe_sha256.lower(),
             label=str(raw.get("label") or exe_sha256[:12]),
@@ -472,6 +541,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
             text=text,
             equipment=equipment,
             event_flags=event_flags,
+            inventory=inventory,
         ), None
     except Incomplete as exc:
         return None, f"profile incomplete: {exc}"

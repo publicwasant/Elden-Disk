@@ -67,7 +67,7 @@ Rules every command follows:
 | data | `export [--disk] [--params] [--live]` | the document to `<TOOLS-DIR>\output\disk.json`; `--params`: every row of every table to `params.json` |
 | data | `reset [* \| all \| runes \| buffs \| animations \| monitor]` | the read baselines start again from now |
 | data | `check [FILE]` | a `regulation.bin` against the game, row by row |
-| data | `probe` | where the game's param tables lie in memory |
+| data | `probe [inventory]` | where the game's param tables (or the inventory) lie in memory |
 | tooling | `hash`, `--version` | the SHA-256 of `eldenring.exe` (the key of its profile), the tool's version |
 
 `<TOOLS-DIR>` is `%LOCALAPPDATA%\EldenDisk`: everything the tool keeps lives there, never next to the exe.
@@ -182,6 +182,7 @@ handle and works with or without `run` (it waits for `eldenring.exe` and for a l
 | **Form** | **What** |
 |:---|:---|
 | `read`, `read *`, `read all`, `read disk` | the whole document once (what `disk.json` holds) |
+| `read inventory`, `read inventory.gold_pickled_fowl_foot.quantity`, `read inventory.goods.1200` | what the character carries (1.8.1); one item by its name in any kind, or by kind and id |
 | `read disk.character.level`, `read disk.character.*` | a part of it, by its path in `disk.json`; shown as `disk.<path>`. Without `disk.` (`level`, `hp`, `attrs.*`) the same values, shown as before. `write` takes `disk.` names too |
 | `read hp attrs.* character.runes` | one or several values or groups |
 | `read creative.resurrect.great_enemies` | the great enemies defeated now; a boss by name: `read creative.resurrect.great_enemies.margit` |
@@ -357,7 +358,7 @@ rest at a Site of Grace. When the game closes the vault puts the save back and t
 python -m eldendisk export [--disk] [--params] [--live] [--out DIR]
 python -m eldendisk reset [* | all | runes | buffs | animations | monitor]
 python -m eldendisk check [FILE] [--json]
-python -m eldendisk probe [--json]
+python -m eldendisk probe [inventory [--find ID ...]] [--json]
 ```
 
 | **Command** | **What** |
@@ -366,6 +367,7 @@ python -m eldendisk probe [--json]
 | `export`, `export --disk` | the whole document to `<TOOLS-DIR>\output\disk.json`, once (no `params` in it; `--disk --params` writes both files). `--live`: again each time it changes (at most every `--export-interval` s, 0.5; a change that is only a buff countdown at most every `--timer-interval` s, 2; it pauses while the game window is not in front unless `--no-idle`) |
 | `reset` | the game's values now become the read baselines: `runes` (`character.runes.baseline` = the total now, `delta` = 0), `buffs` / `animations` (`monitor`: both; the monitors' history of what has ended is cleared). Nothing is written to the game: a small file (`<TOOLS-DIR>\baselines.json`, for this game process) that every reader takes within a few seconds |
 | `check` | decode a `regulation.bin` (the one in the game folder by default: what the game loaded) and compare the six tables with the game's, row by row; exit `0` only when they agree |
+| `probe inventory` | where the inventory is in PlayerGameData and how an entry is laid out; `--find ID` prints every place a goods id is, with the bytes around it (for a new game version; read-only) |
 | `probe` | find where the game's param tables lie in memory and check them against the profile's chains; then every slot of the game's list of tables with the table it was named as, and the tables not found (for a new game version) |
 
 ---
@@ -434,7 +436,7 @@ A wrong name or value is an error that names its place in the file; nothing is b
 | **Block** | **What** |
 |:---|:---|
 | `systems` | the profile, the features this game version supports (`buffs_supported`, `animations_supported`, `creative_supported`), the status, the session (`mode`: `creative` inside the portal, else `telemetry`; `read_only`; `creative`) |
-| `character` | `level`, `vitals`, `runes` (`total`, `baseline`, `delta`), `attributes`, `buffs`, `animations`, `equipment.magic` |
+| `character` | `level`, `vitals`, `runes` (`total`, `baseline`, `delta`), `attributes`, `buffs`, `animations`, `equipment.magic`, `inventory` (1.8.1: `goods`, `key_items`, `talismans`, `weapons`, `armor`, `ashes_of_war`; each item by id with `name`, `quantity` (`total`, `held`, `stored`: in the storage chest), goods' `type`, weapons' `upgrade`) |
 | `creative` | `scripts` (`host` and every script), `innovate_spells.<goods id>` (`id`, `slot`, `rows`, and apart `design`), `resurrect.great_enemies.<id>` (the defeated ones only) |
 
 The full example is in [spec 1.8.0 part 2, "The single source of truth"](../specs/elden-disk-spec-v1.8.0.md).

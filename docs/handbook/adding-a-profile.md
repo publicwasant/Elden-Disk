@@ -514,3 +514,25 @@ How the 1.17.1 value was found (2026-10-13, read-only, a character in the world)
 as a pointer, and the one object they point at whose vftable lies in the exe and whose `+0x1C` / `+0x20` are 1000 / 125 was the
 manager; one candidate, in 1.9 s. Its tree then gave Godrick's and Margit's defeat flags as the game shows them.
 
+## Optional block: `inventory` (since 1.8.1)
+
+`inventory` tells the reader where PlayerGameData keeps what the character carries (`character.inventory`). Without it there is no
+`character.inventory`; a block that is there must be complete.
+
+```json
+"inventory": {
+  "entry_size": "0x18", "entry_handle": "0x0", "entry_id": "0x4", "entry_quantity": "0x8",
+  "items": { "pointer": "0x418", "start": "0x0", "capacity": 2688 },
+  "key_items": { "start": "0xB10", "capacity": 384 }
+}
+```
+
+- **`items`, `key_items`:** a list of `capacity` entries at `[PlayerGameData + pointer] + start`, or at `PlayerGameData + start` when
+  there is no `pointer`.
+- **`entry_*`:** the size of an entry and where the handle, the item id and the quantity are in it.
+- To measure them on a new game version: load a character and run `probe inventory --find <goods id> ...` with the ids of a few items
+  whose counts the Inventory menu shows; the lists of 24-byte entries it prints, and the words around each id, give every number above
+  (spec 1.8.1 section 4).
+
+The names of the items come from `text.names` (param table -> the numbers of its name text files in `item.msgbnd`, the DLC's last;
+`tools/dump_msgbnd.py` lists them): for example `"EquipParamGoods": [10, 319, 419]`.
