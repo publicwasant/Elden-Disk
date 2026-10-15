@@ -207,7 +207,7 @@ def plan_params(spec: ParamsProfile | None, policy: EditPolicy, snapshot: Snapsh
     cat_sets = list(policy.param_sets)
     cat_resets = [n for n in policy.param_resets if n != "all"]
     if "all" in policy.param_resets and snapshot is not None:
-        cat_resets += [f"params.{k}" for k in snapshot.keys()]
+        cat_resets += [f"params.{k}" for k in snapshot.keys() if not k.startswith("inventory.")]   # 1.8.1: the inventory's own
     if (cat_sets or cat_resets) and not (spec.catalog or spec.repository):
         raise ParamNameError("this game version has no params.catalog or params.repository in offsets.json (run `probe`)")
     cat_edits, notes = plan_catalog(cat_sets, cat_resets, snapshot) if (cat_sets or cat_resets) else ([], [])

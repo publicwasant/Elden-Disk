@@ -31,6 +31,8 @@ from ..game.processes import process_started
 from ..game.values import is_param_name
 from ..vault import VaultError, authorise, resolve_vault
 from ..vault import session as vault_session
+from ..writer import inventoryedit as ie
+from ..writer.inventoryedit import is_inventory_name
 from ..writer.paramedit import SNAPSHOT_NAME, Snapshot
 from ..writer import fxr as wfxr
 from ..writer import scan as wscan
@@ -537,6 +539,24 @@ def _write_creative(args, target: Target, mem, gate, snapshot, sets: list) -> tu
     return ok, bad
 
 
+def _write_inventory(target: Target, mem, gate, snapshot, items: list[str]) -> tuple[int, int]:
+    """`write inventory.<kind>.<id or name>.quantity[.held|.stored]=N|default` and `inventory=default` (1.8.1 part 2): the count of an
+    item the character already has (writer/inventoryedit.py). -> (written, refused). All are checked before the first is written."""
+    try:
+        results = ie.write_counts(mem, target, gate, snapshot, [i.partition("=")[::2] for i in items])
+    except ie.InventoryEditError as exc:
+        book.e("write", f"not applied: {exc}")
+        return 0, 1
+    if not results:
+        book.i("write", "no count of the inventory was changed in this game process")
+    for r in results:
+        if r.wrote:
+            book.ok("write", f"{r.name} = {r.value}")
+        else:
+            book.i("write", f"{r.name}: {r.note}")
+    return sum(1 for r in results if r.wrote), 0
+
+
 WRITABLE_NAMES = [   # what `write` alone lists: (name, range or values, what it is)
     ("level", f"{LEVEL_RANGE[0]}-{LEVEL_RANGE[1]}", "the character's level (the runes it cost are not given back)"),
     ("runes", f"0-{RUNES_MAX:,}", "the runes held (character.runes.total)"),
@@ -545,6 +565,8 @@ WRITABLE_NAMES = [   # what `write` alone lists: (name, range or values, what it
     ("hp  fp  stamina", "0-maximum", "the current value (a number above the maximum is the maximum)"),
     ("params.effects.<id>.<field>", "the field's type, or default", "the rows offsets.json names (Black Flame 1621000, ...); a pattern "
      "such as params.effects.*.effectEndurance writes every row"),
+    ("inventory.<goods|key_items>.<id or name>.quantity.held / .stored", "1 to the game's cap, or default",
+     "the count of an item the character already has (1.8.1; inventory=default puts every count back)"),
     ("params.<Table>.<id>.<field>", "the field's type, or default", "any row of Goods, Magic, SpEffect, Bullet, AtkParam_Pc, ShopLineup"),
     ("params", "default", "every params value changed in this game process back to the game's own"),
     ("creative.innovate_spells.<goods id>.design.<path>", "as the design says", "the spells of the last build: requires.*, customs.basic.*, "
@@ -595,6 +617,7 @@ def cmd_write(args) -> int:
     def head(item):
         return item.partition("=")[0].strip().lower()
     scripts = [s for s in pairs if head(s).startswith("creative.scripts.")]
+    inv_sets = [s for s in pairs if is_inventory_name(s.partition("=")[0])]           # 1.8.1 part 2
     ext_sets = [s for s in pairs if head(s).startswith("creative.") and s not in scripts]
     for item in ext_sets:
         name = item.partition("=")[0].strip()
@@ -606,7 +629,7 @@ def cmd_write(args) -> int:
             return 1
     sets, resets = [], []
     for item in pairs:
-        if item in ext_sets or item in scripts:
+        if item in ext_sets or item in scripts or item in inv_sets:
             continue
         name, _sep, raw = item.partition("=")
         if raw.strip().lower() != "default":
@@ -625,7 +648,7 @@ def cmd_write(args) -> int:
     except ValueError as exc:   # unknown or unsettable name, bad value
         book.e("write", str(exc))
         return 1
-    if scripts and policy.empty and not ext_sets:
+    if scripts and policy.empty and not ext_sets and not inv_sets:
         return _scripts_state(args, scripts)
 
     try:
@@ -669,6 +692,9 @@ def cmd_write(args) -> int:
                               log=lambda m: book.d("write", m), snapshot=snapshot)
         results = writer.apply_once()
         ext_ok, ext_bad = _write_creative(args, target, mem, gate, snapshot, ext_sets) if ext_sets else (0, 0)
+        if inv_sets:
+            inv_ok, inv_bad = _write_inventory(target, mem, gate, snapshot, inv_sets)
+            ext_ok, ext_bad = ext_ok + inv_ok, ext_bad + inv_bad
     finally:
         mem.close()
         try:

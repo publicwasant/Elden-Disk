@@ -4,7 +4,9 @@
 > `read inventory` and `export --disk` with every kind, the counts (Gold-Pickled Fowl Foot 10, Smithing Stone [1] 16, Stonesword Key 6)
 > and the names in the game's language, after `innovate-spells apply` had replaced GoodsName (section 5); `quantity.stored` from the
 > storage chest (Gold-Pickled Fowl Foot: total 562, held 10, stored 552, as the menu shows). One read soon after the world was
-> loaded gave `stored` 0 for it; the reads after gave 552 (not explained; to watch).  
+> loaded gave `stored` 0 for it; the reads after gave 552 (not explained; to watch).
+> Part 2 (writing the inventory): IMPLEMENTED (closed) on 2026-10-15, decided by the author the same day (P5: the defaults); tried
+> in the real game the same day (a held count written, read back and put back: passed).  
 > **Last Updated:** _2026-10-15_
 
 # Elden-Disk spec 1.8.1: `character.inventory`
@@ -242,3 +244,90 @@ Correct-or-silent, as everywhere: a value that does not pass its checks is not s
    ash, physick tear, great rune, upgrade material ...; the words checked against the Inventory menu's tabs when it is measured), the
    number otherwise.
 3. **The names' language**: the game's (the text the running game holds).
+
+
+# Part 2: writing the inventory (2026-10-15)
+
+Asked by the author: `character.inventory` reads every item; it should be written the same way, as every other value of the disk.
+Implemented the same day, with the author's choices of P5 (all three defaults).
+
+## P1. The names
+
+The same paths that are read, through the same portal and gate as every write (`write`, a script's `tools.write`):
+
+```text
+write inventory.gold_pickled_fowl_foot.quantity.held=20
+write disk.character.inventory.goods.1200.quantity.stored=600
+write inventory.smithing_stone_1.quantity.held=default        the count before the first change in this game process
+write inventory=default                                        every count changed in this game process back
+```
+
+- **Writable:** `quantity.held` and `quantity.stored` (section P2 says of which items). `quantity` alone means `held`, as `runes` means
+  `runes.total`.
+- **Read-only:** `quantity.total` (computed: held + stored), `name`, `type`, `upgrade`, and the ids themselves (an id is not changed into
+  another item).
+- **`=default`:** the value the game had before the first change in this game process, kept with the params' snapshot
+  (`<vault>\params-snapshot.json`, tied to the game's pid and start time).
+
+## P2. What can be written (by kind)
+
+| **Kind**                               | **`held`**                           | **`stored`**                     | **Why**                                                    |
+|:---------------------------------------|:-------------------------------------|:---------------------------------|:-----------------------------------------------------------|
+| goods (consumables, materials ...)     | 1 to the item's `maxNum`             | 1 to its `maxRepositoryNum`      | the game's own caps, read from the item's `EquipParamGoods` row |
+| key items                              | 1 to `maxNum`                        | (none: key items are not stored) | the same row                                               |
+| talismans, armor, ashes of war         | read-only                            | read-only                        | one of each is one item; a count of 2 is two items          |
+| weapons: arrows and bolts              | (P5.3)                               | (P5.3)                           | stackable; their caps are not in a param field             |
+| other weapons                          | read-only                            | read-only                        | each is its own item (its level, its affinity)              |
+
+- **Only an entry that is already there** (the item is held, or stored) is changed: its quantity, the 4 bytes at +8. The handle, the id
+  and the place in the menu are not touched (P5.1: adding an item the character does not have).
+- **Never 0:** a count is 1 or more; taking the last one out (an entry with 0) is not how the game removes an item (P5.2).
+- A value out of range is an error (exit `2`, nothing written), not a clamp, as the params.
+
+## P3. How a write is made safe
+
+1. The session check, the gate, the record of the first value (for `=default`), as every write.
+2. The entry is found **again** just before the write: the list read now, the entry with that kind and id, its handle and id as they were
+   when the value was planned. If it moved (the game sorted or used the item meanwhile), the write is not made and the reason is shown.
+3. One aligned 4-byte write, read back. A count that the game changed between the read and the write (an item used in that moment)
+   is reported, not overwritten blindly.
+
+## P4. The save and the vault
+
+The inventory is part of the save: when the game saves (it does so often), a changed count goes into `ER0000.sl2`. That is why
+writing it is a portal write, like `runes` and `level`:
+
+- **Vault ON** (`run`): the vault puts the save back when the session ends; the counts written are gone with it, the real world is
+  as it was. `vault keep` takes the changed save as the new baseline (the author's choice, `--yes`).
+- **Vault OFF**: nothing is written (the portal is closed), as every write.
+
+## P5. Decided by the author (2026-10-15: the three defaults)
+
+1. **Adding an item the character does not have** (a goods or a talisman: their handle is their id): a new entry in an empty place,
+   with a place in the menu and the list's count of items. Where the game keeps that count and the next place number is not measured
+   yet (a probe in the game first). Default: **not in part 2**; only counts of what is already there.
+2. **Removing an item** (`held=0`): the game clears the entry and its place; doing that by hand risks a half-removed item in the save.
+   Default: **refused**; `held` is 1 or more.
+3. **Arrows and bolts**: change their count too (caps by the game's rules: 99 held per kind ... to be measured), or leave them
+   read-only. Default: **read-only in part 2**.
+
+## P6. Tests
+
+- A fake game with the three lists: `held`/`stored` written for goods and key items, the caps from a fake `EquipParamGoods` row, values
+  out of range refused, read-only kinds and fields refused with the reason.
+- The entry found again before the write: moved, used up or changed meanwhile, nothing written.
+- `=default` and `inventory=default` from the snapshot; the session check and the gate, as every write; a script's `tools.write`.
+
+`tests/test_inventory_write.py`: held, stored and a key item written and put back; only the 4 bytes of the quantity change; twelve
+refusals (a cap, 0, total, a name, a talisman, a weapon, a key item stored, an item not held, an item only in the chest written as held,
+not a number, an unknown name); by name; an entry that changed meanwhile; no session; a script's `tools.write`.
+
+## P7. Implemented (2026-10-15)
+
+- `writer/inventoryedit.py`: `resolve` (a path or an item's name -> kind, id, held or stored, with every refusal of P2), `check_value`
+  (1 to the cap of the item's `EquipParamGoods` row), `find_entry` (the one entry of that id in the list, read now), `apply` (the entry
+  read again just before the write: unchanged, or nothing is written; 4 bytes written and read back; the first value remembered under
+  `inventory.<held|stored>.<kind>.<id>` in the params' snapshot), `write_counts` (all names and values checked before the first write).
+- `write` (`commands/write.py`) and a script's `tools.write` (`creative/scripts/backend.py`) both go through `write_counts`, after the
+  session check and with the open gate; `params=default` leaves the inventory's values alone, `inventory=default` puts them back.
+- `write` alone lists the inventory's names.

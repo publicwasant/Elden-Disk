@@ -39,6 +39,7 @@ from ...writer import fxr as wfxr
 from ...writer import text as wtext
 from ...writer.cache import CACHE_NAME, MemoryCache
 from ...writer.eventflags import FlagRefused, turn_off
+from ...writer.inventoryedit import InventoryEditError, is_inventory_name, write_counts
 from ...writer.paramedit import SNAPSHOT_NAME, Snapshot
 from ...writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
 from ..innovate_spells.fmg import Fmg, FmgError
@@ -123,7 +124,23 @@ class LazyRows(dict):
 
 
 def write_values(mem, target, gate, snapshot, values: dict, say, tables=None) -> dict:
-    """{name `write --set` takes: number} through the MemoryWriter -> {name: value} written. Refused when anything was not applied."""
+    """{name `write --set` takes: number} through the MemoryWriter -> {name: value} written. Refused when anything was not applied.
+    A count of the inventory (1.8.1 part 2) goes through writer/inventoryedit.py."""
+    inv = {k: v for k, v in values.items() if is_inventory_name(k)}
+    values = {k: v for k, v in values.items() if k not in inv}
+    done: dict = {}
+    if inv:
+        try:
+            done = {r.name: r.value for r in write_counts(mem, target, gate, snapshot, [(k, str(v)) for k, v in inv.items()])
+                    if r.wrote}
+        except InventoryEditError as exc:
+            raise Refused(str(exc)) from None
+        if not values:
+            try:
+                snapshot.save()
+            except OSError as exc:
+                say("W", f"could not save {SNAPSHOT_NAME} ({exc})")
+            return done
     sets = [f"{k}={v!r}" if isinstance(v, float) else f"{k}={v}" for k, v in values.items()]
     try:
         policy = parse_policy(sets, None, [])
@@ -142,7 +159,7 @@ def write_values(mem, target, gate, snapshot, values: dict, say, tables=None) ->
     failed = [r.name for r in results if not r.wrote]
     if writer.skipped or failed:
         raise Refused("; ".join(writer.skipped + [f"{n}: did not stick" for n in failed]))
-    return {r.name: r.value for r in results if r.wrote}
+    return {**done, **{r.name: r.value for r in results if r.wrote}}
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- the block

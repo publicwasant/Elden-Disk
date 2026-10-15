@@ -222,6 +222,7 @@ through the gate and reads back.
 | `runes` | 0 - 999,999,999 | the runes held (`character.runes.total`) |
 | `vigor`, `mind`, `endurance`, `strength`, `dexterity`, `intelligence`, `faith`, `arcane` | 1 - 99 | the attributes (`attrs.*` for all) |
 | `hp`, `fp`, `stamina` | 0 - maximum | the current value; a number above the maximum is the maximum (`write hp=99999` fills it) |
+| `inventory.<goods\|key_items>.<id or name>.quantity.held`, `.stored` | 1 to the game's cap, or `default` | the count of an item the character already has (1.8.1); `inventory=default` puts every count back. Not: adding or removing an item, talismans, armor, weapons, arrows |
 | `params.<Table>.<id>.<field>` | the field's type, or `default` | any numeric field of any row of any table of the game (`params.SpEffectParam.1621000.effectEndurance`; a pattern: `params.Magic.6230.mp*`) |
 | `params=default` | | every `params` value changed in this game process back to the game's own |
 | `creative.innovate_spells.<goods id>.design.<path>` | as `creative.json` says | the spells of the last build: `requires.*`, `locations.*`, `customs.basic.*`, `customs.advanced.texts.*`, `customs.advanced.colors.*` |
