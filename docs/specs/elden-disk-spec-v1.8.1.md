@@ -7,8 +7,8 @@
 > storage chest (Gold-Pickled Fowl Foot: total 562, held 10, stored 552, as the menu shows). One read soon after the world was
 > loaded gave `stored` 0 for it; the reads after gave 552 (not explained; to watch).
 > Part 2 (writing the inventory): IMPLEMENTED (closed) on 2026-10-15, decided by the author the same day (P5: the defaults); tried
-> in the real game the same day (a held count written, read back and put back: passed). Part 3 (optimization): IMPLEMENTED on
-> 2026-10-16 (unit tests); the time of the first and later `read inventory` to be seen in a game's log (`-v`).  
+> in the real game the same day (a held count written, read back and put back: passed). Part 3 (optimization): IMPLEMENTED (closed)
+> on 2026-10-16, tried in the real game the same day (passed). 1.8.1 closed by the author (parts 1 to 3).  
 > **Last Updated:** _2026-10-16_
 
 # Elden-Disk spec 1.8.1: `character.inventory`

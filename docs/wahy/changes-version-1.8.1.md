@@ -2,7 +2,7 @@
 > **Version:** `1.8.1`  
 > **Status:** IMPLEMENTED (closed; unit tests: 1,770+). Tried in the real game on 2026-10-15: `probe inventory`, `read inventory`,
 > `export --disk`, the counts (held and stored) and the names; part 2 (`write inventory...`) tried and passed the same day; part 3
-> (optimization, 2026-10-16) in unit tests.  
+> (optimization, 2026-10-16) tried and passed; 1.8.1 closed (parts 1 to 3).  
 > **Last Updated:** _2026-10-15_
 
 **Summary:** **What the character carries.** `character.inventory`: every item the Inventory menu shows (goods, key items, talismans,
