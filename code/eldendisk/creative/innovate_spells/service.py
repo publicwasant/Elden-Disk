@@ -226,6 +226,27 @@ class Spells:
                 if other else None)
         return first, note
 
+    def colours(self, which="all") -> tuple:
+        """({effect id: {"key": the key of `colors`, "values": {offset: [r, g, b, a] or (r, g, b)}}}, note): the colours the spells in
+        `which` give the effects, place by place (1.8.3 part 2, `customs.advanced.colors`); a hex colour is (r, g, b) (the place keeps
+        its brightness and alpha). An effect is shared, so the first spell (by slot) that paints it gives its colours, with a note when
+        another one paints it too. `innovate-spells apply` puts them into the game with the rest."""
+        out, other = {}, []
+        for s in self.items(which):
+            for key, places in s.get("colors", {}).items():
+                fx = specmod.colour_effect(key, s)
+                if fx is None:
+                    continue
+                values = {int(at, 16): (tuple(specmod.colour_of(v)) if isinstance(v, str) else tuple(v)) for at, v in places.items()}
+                if str(fx) in out:
+                    if out[str(fx)]["values"] != values:
+                        other.append(f"{s['id']} ({key})")
+                    continue
+                out[str(fx)] = {"key": key, "values": values}
+        note = (f"the effects are shared: {', '.join(other)} paints an effect a spell before it already paints; the first one's colours "
+                "are used") if other else None
+        return out, note
+
     def texts(self, which="all") -> dict:
         """The text for the game: {goods id: {"goods_name", "goods_info", "goods_captions"}} for EVERY slot of the design (the Goods
         id is the one the slot owns), empty where nothing is to be shown: a slot with no spell, or a spell that is not in `which`
@@ -410,6 +431,24 @@ class Spells:
                "spells": {str(rows[s["id"]]["goods"]): {"id": s["id"], "slot": s["slot"], "rows": rows[s["id"]],
                                                          "design": specmod.design_of(s)} for s in spells}}
         _write_atomic(self.resolved_path, (json.dumps(out, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+
+    def refresh_designs(self, spells: list) -> bool:
+        """When a build is used again without building (nothing the build decides changed), the parts of the design it does not decide
+        (texts, colours) may have changed: write them into spells.resolved.json, so `read` and the scripts see the design as it is
+        (1.8.3 part 2). The ids and rows stay those of the build. -> whether the record changed."""
+        rec = self.read_resolved()
+        if rec is None:
+            return False
+        changed = False
+        for s in spells:
+            for node in rec["spells"].values():
+                if node.get("id") == s["id"] and node.get("slot") == s["slot"]:
+                    new = specmod.design_of(s)
+                    if node.get("design") != new:
+                        node["design"], changed = new, True
+        if changed:
+            _write_atomic(self.resolved_path, (json.dumps(rec, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+        return changed
 
     def read_resolved(self) -> dict | None:
         """The record of spells.resolved.json (the ids of the last build), or None when there is none or it cannot be read."""

@@ -66,7 +66,8 @@ def creative_has_flame(args, vault_path: Path) -> bool:
     try:
         ci = creative.open_spells(creative_folder(args, vault_path), spec_file(args))
         sel, _note = ci.selection()
-        return ci.flame_color(sel)[0] is not None or ci.eyes_color(sel)[0] is not None
+        return (ci.flame_color(sel)[0] is not None or ci.eyes_color(sel)[0] is not None
+                or bool(ci.colours(sel)[0]))
     except CreativeError:
         return False
 

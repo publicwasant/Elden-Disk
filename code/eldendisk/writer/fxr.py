@@ -20,6 +20,13 @@ game session.
 The same is done for the glowing eyes (`positive_curse_energy_eyes` of the design): f000004866 (EYES_PLANS), the eyes of a human NPC of the DLC, with
 their own colour, in the same look. That file is shared with that NPC too.
 
+The sparks a design puts on its spell (1.8.3, SPARK_PLANS: f000004271) are painted the same way, in the same look: their tinted parts with
+the design's `main` colour, their white parts with its `accent` colour (`white` below; the fire keeps its white parts white).
+
+1.8.3 part 2: a design may give every colour place of an effect its own colour (`place_states`, `value_bytes`): the same look and the
+same writes, with a colour per place instead of one colour spread by a rule; `repaint_places` changes some places of the copies a
+cache knows.
+
 This module knows bytes only. The design's colour is read by the command (creative/innovate_spells/service.py: flame_color); the writer
 package may not import the creative package.
 """
@@ -29,9 +36,10 @@ import struct
 from dataclasses import dataclass
 
 from . import scan
-from .fxr_plans import ACCENT_PLANS, EYES_PLANS, PLANS
+from .fxr_plans import ACCENT_PLANS, EYES_PLANS, PLANS, SPARK_PLANS
 
-_ALL = {**PLANS, **EYES_PLANS, **ACCENT_PLANS}
+_ALL = {**PLANS, **EYES_PLANS, **ACCENT_PLANS, **SPARK_PLANS}
+WHITE = (1.0, 1.0, 1.0)
 
 
 class FlameError(Exception):
@@ -39,8 +47,9 @@ class FlameError(Exception):
 
 
 # ---- pure parts ---------------------------------------------------------------------------------------------------
-def recolor(old: bytes, target, bloom: bool = False) -> bytes:
-    """The new 16 bytes of one colour (see the module text). `old` is RGBA as four little-endian floats."""
+def recolor(old: bytes, target, bloom: bool = False, white=None) -> bytes:
+    """The new 16 bytes of one colour (see the module text). `old` is RGBA as four little-endian floats. `white`: the colour the white
+    part of it becomes (default white: it stays white)."""
     r, g, b, a = struct.unpack("<4f", old)
     v = max(r, g, b)
     if v <= 0:
@@ -48,15 +57,16 @@ def recolor(old: bytes, target, bloom: bool = False) -> bytes:
     if bloom:
         return struct.pack("<4f", v * target[0], v * target[1], v * target[2], a)
     w = 1 - (v - min(r, g, b)) / v
-    return struct.pack("<4f", *(v * (w + (1 - w) * t) for t in target), a)
+    wh = WHITE if white is None else white
+    return struct.pack("<4f", *(v * (w * h + (1 - w) * t) for h, t in zip(wh, target)), a)
 
 
-def colour_states(plan: dict, target) -> list[tuple[int, bytes, bytes]]:
+def colour_states(plan: dict, target, white=None) -> list[tuple[int, bytes, bytes]]:
     """[(offset, the game's own bytes, the bytes after the change)] for every colour of the plan (equal where nothing changes)."""
     out = []
     for at, hexa, bloom in plan["colours"]:
         old = bytes.fromhex(hexa)
-        out.append((at, old, recolor(old, target, bloom)))
+        out.append((at, old, recolor(old, target, bloom, white)))
     return out
 
 
@@ -72,9 +82,36 @@ def accent_writes(plan: dict, accent) -> dict[int, tuple[bytes, bytes]]:
     return out
 
 
-def plan_writes(plan: dict, target) -> dict[int, tuple[bytes, bytes]]:
+def places_of(eid: str) -> dict[int, tuple[bytes, bool]]:
+    """offset -> (the game's own 16 bytes, is it a bloom colour) of every colour place of the effect's plan (its colours and its accent
+    places), in the order of the file."""
+    plan = _ALL[str(eid)]
+    return {at: (bytes.fromhex(h), bloom) for at, h, bloom in sorted((*plan["colours"], *plan.get("accent", ())))}
+
+
+def value_bytes(own: bytes, value) -> bytes:
+    """The 16 bytes a place gets for a design's value: [red, green, blue, alpha] as the file holds it, or (red, green, blue) as floats
+    0..1 with the place's own brightness and alpha kept (new RGB = v x colour, v the biggest of its own R, G, B; 1 when it is black).
+    None: the game's own bytes."""
+    if value is None:
+        return own
+    if len(value) == 4:
+        return struct.pack("<4f", *(float(x) for x in value))
+    r, g, b, a = struct.unpack("<4f", own)
+    v = max(r, g, b)
+    v = v if v > 0 else 1.0
+    return struct.pack("<4f", v * value[0], v * value[1], v * value[2], a)
+
+
+def place_states(eid: str, values: dict) -> list[tuple[int, bytes, bytes]]:
+    """[(offset, the game's own bytes, the bytes the design gives)] for EVERY place of the effect (a place the design does not name keeps
+    its own bytes). `values`: {offset: [r, g, b, a] | (r, g, b) | None}."""
+    return [(at, own, value_bytes(own, values.get(at))) for at, (own, _bloom) in places_of(eid).items()]
+
+
+def plan_writes(plan: dict, target, white=None) -> dict[int, tuple[bytes, bytes]]:
     """offset -> (the game's own bytes, the new bytes), only where something changes."""
-    return {at: (old, new) for at, old, new in colour_states(plan, target) if new != old}
+    return {at: (old, new) for at, old, new in colour_states(plan, target, white) if new != old}
 
 
 # The colour each look searches the memory for, by effect: the one found quickest in the game's memory. A search is fast when the last
@@ -85,10 +122,10 @@ def plan_writes(plan: dict, target) -> dict[int, tuple[bytes, bytes]]:
 FIND_AT = {"524400": 0x463C, "524401": 0xACF8, "4866": 0x5B74, "515000": 0x39EC, "515001": 0x5120}
 
 
-def _signature(plan: dict, target, at: int | None = None) -> tuple[int, bytes, bytes]:
+def _signature(plan: dict, target, at: int | None = None, white=None, states=None) -> tuple[int, bytes, bytes]:
     """The changing colour the look searches for: the one at `at` (FIND_AT) when it changes, else the one with the most different
-    numbers in it."""
-    changing = [s for s in colour_states(plan, target) if s[1] != s[2]]
+    numbers in it. `states`: the places and their bytes (1.8.3 part 2) instead of the plan and a colour."""
+    changing = [s for s in (states if states is not None else colour_states(plan, target, white)) if s[1] != s[2]]
     if not changing:
         raise FlameError("this colour changes nothing in the effect")
     for s in changing:
@@ -124,7 +161,7 @@ def _joined(looks: list) -> scan.Walked:
 
 
 def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = True, everything: bool = False,
-             required=None) -> Found:
+             required=None, white=None, states=None) -> Found:
     """One look through the game's memory for all of `eids`; it ends when every one has a copy (own colours, or already changed when
     `painted`). A copy counts only when EVERY colour of the plan has its bytes at its place. `target`: one colour, or {effect: colour}.
 
@@ -132,11 +169,16 @@ def find_all(mem, eids, target, budget: float = scan.BUDGET, painted: bool = Tru
     that stops at the first one did not reach, 2026-10-12). The copies the game draws from lie together, 1300-1330 MB into its biggest
     private block in every log, so the look goes there first (EFFECTS_REACH each way around EFFECTS_AT), then around every copy it found
     (they may lie further on in another game), and stops: about 350 MB instead of all the memory (7 GB, two minutes while the world
-    loads). Only when an effect of `required` (default: all of `eids`) is not found there is all the memory read, as before."""
-    patterns, sig, states = {}, {}, {}
+    loads). Only when an effect of `required` (default: all of `eids`) is not found there is all the memory read, as before. `white`
+    ({effect: colour}): what the white parts of those effects become (the sparks' `accent`). `states` ({effect: place_states(...)}):
+    the bytes of every place, given by the design place by place (1.8.3 part 2); `target` and `white` are then not used for them."""
+    given, patterns, sig, states = states or {}, {}, {}, {}
     for eid in eids:
-        at, old, new = _signature(_ALL[eid], _target(target, eid), FIND_AT.get(eid))
-        patterns[(eid, False)], sig[eid], states[eid] = old, at, colour_states(_ALL[eid], _target(target, eid))
+        wh = (white or {}).get(eid)
+        st = given.get(eid)
+        at, old, new = _signature(_ALL[eid], _target(target, eid) if st is None else None, FIND_AT.get(eid), wh, st)
+        patterns[(eid, False)], sig[eid] = old, at
+        states[eid] = st if st is not None else colour_states(_ALL[eid], _target(target, eid), wh)
         if painted:
             patterns[(eid, True)] = new
     own, changed, seen = {e: [] for e in eids}, {e: [] for e in eids}, set()
@@ -183,6 +225,11 @@ def ring_ids() -> tuple[str, ...]:
     return tuple(ACCENT_PLANS)
 
 
+def spark_ids() -> tuple[str, ...]:
+    """The sparks a design may put on its spell (1.8.3; the game may not hold them)."""
+    return tuple(SPARK_PLANS)
+
+
 # ---- writing ------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Painted:
@@ -194,20 +241,24 @@ class Painted:
 
 
 def paint_many(mem, gate, eids, target, budget: float = scan.BUDGET, painted: bool = True, everything: bool = False,
-               accent=None, required=None) -> tuple[dict, Found]:
+               accent=None, required=None, white=None, states=None) -> tuple[dict, Found]:
     """Change the game's copies of `eids` after ONE look through its memory (find_all). -> ({effect: Painted, only those the game holds},
     what the look found). An effect the game does not hold (yet) is not in the result. A copy is written only when EVERY place still holds the game's
     own bytes; a write that does not stick is an error. `accent` (one colour, or {effect: colour}): the plan's `accent` places of every
-    copy found (painted now or before) are given that colour too, each place only while it holds the game's own bytes."""
+    copy found (painted now or before) are given that colour too, each place only while it holds the game's own bytes. `white`
+    ({effect: colour}): the colour the white parts of those effects take (the sparks). `states` ({effect: place_states(...)}): the
+    bytes of every place given by the design (1.8.3 part 2)."""
     if not gate.allowed:
         raise FlameError(f"writes are not allowed ({gate.reason})")
-    found = find_all(mem, eids, target, budget, painted, everything, required)
+    found = find_all(mem, eids, target, budget, painted, everything, required, white, states)
     out = {}
     for eid in eids:
         bases, done = found.own[eid], found.changed[eid]
         if not bases and not done:
             continue
-        writes = plan_writes(_ALL[eid], _target(target, eid))
+        st = (states or {}).get(eid)
+        writes = ({at: (old, new) for at, old, new in st if new != old} if st is not None
+                  else plan_writes(_ALL[eid], _target(target, eid), (white or {}).get(eid)))
         places = 0
         for base in bases:
             for off, (old, _new) in writes.items():
@@ -235,18 +286,21 @@ class Stale(FlameError):
 
 def repaint(mem, gate, eid: str, bases, before: dict, after: dict) -> tuple[int, list]:
     """Change the colours of the copies of `eid` at `bases` (from the memory cache) from `before` to `after`, without a look through
-    the memory: {"main": rgb | None, "accent": rgb | None}, None = the game's own colours. A copy whose every place does not hold the
-    bytes `before` says is left alone (the game moved or reloaded it). -> (places written, the bases that still hold the colours).
-    Stale when no base does."""
+    the memory: {"main": rgb | None, "accent": rgb | None}, None = the game's own colours (a spark's `accent` is the colour of its
+    white parts, with `main`). A copy whose every place does not hold the bytes `before` says is left alone (the game moved or reloaded
+    it). -> (places written, the bases that still hold the colours). Stale when no base does."""
     if not gate.allowed:
         raise FlameError(f"writes are not allowed ({gate.reason})")
     plan = _ALL[str(eid)]
+    spark = str(eid) in SPARK_PLANS
 
-    def state(at_list, target):
-        return {at: (recolor(bytes.fromhex(h), target, bloom) if target is not None else bytes.fromhex(h),
+    def state(at_list, target, white=None):
+        return {at: (recolor(bytes.fromhex(h), target, bloom, white) if target is not None else bytes.fromhex(h),
                      bytes.fromhex(h), bloom) for at, h, bloom in at_list}
-    now = {**state(plan["colours"], before.get("main")), **state(plan.get("accent", ()), before.get("accent"))}
-    main_after = {at: (recolor(old, after.get("main"), bloom) if after.get("main") is not None else old)
+    now = {**state(plan["colours"], before.get("main"), before.get("accent") if spark else None),
+           **state(plan.get("accent", ()), before.get("accent"))}
+    white_after = after.get("accent") if spark else None
+    main_after = {at: (recolor(old, after.get("main"), bloom, white_after) if after.get("main") is not None else old)
                   for at, (_cur, old, bloom) in state(plan["colours"], None).items()}
     acc_after = {at: (recolor(old, after.get("accent"), bloom) if after.get("accent") is not None else old)
                  for at, (_cur, old, bloom) in state(plan.get("accent", ()), None).items()}
@@ -275,3 +329,35 @@ def repaint(mem, gate, eid: str, bases, before: dict, after: dict) -> tuple[int,
         raise Stale(f"{eid}: no copy holds the colours the cache knows (the game reloaded the file)")
     return places, good
 
+
+def repaint_places(mem, gate, eid: str, bases, before: dict, after: dict) -> tuple[int, list]:
+    """Change some places of the copies of `eid` at `bases` (from the memory cache) without a look through the memory (1.8.3 part 2):
+    `before` and `after` are {offset: 16 bytes}. A copy whose places do not all hold `before` is left alone (the game moved or reloaded
+    it). -> (places written, the bases that hold `after` now). Stale when no base does."""
+    if not gate.allowed:
+        raise FlameError(f"writes are not allowed ({gate.reason})")
+    if not before:
+        return 0, list(bases)
+    lo, hi = min(before), max(before) + 16
+    good, places = [], 0
+    for base in bases:
+        block = mem.read(base + lo, hi - lo)
+        if block is None or not all(block[at - lo:at - lo + 16] == old for at, old in before.items()):
+            continue
+        changed = [(at, new) for at, new in after.items() if new != before[at]]
+        if changed:                            # one write from the first changed place to the end of the last, the bytes between as read
+            a, b = min(at for at, _ in changed), max(at for at, _ in changed) + 16
+            piece = bytearray(block[a - lo:b - lo])
+            for at, new in changed:
+                piece[at - a:at - a + 16] = new
+            if not mem.write(base + a, bytes(piece)):
+                raise FlameError(f"{eid}: could not write at {base + a:#x}")
+            back = mem.read(base + a, b - a)
+            bad = [at for at, new in changed if back is None or back[at - a:at - a + 16] != new]
+            if bad:
+                raise FlameError(f"{eid}: the colour did not stick at {base + bad[0]:#x}")
+        places += len(changed)
+        good.append(base)
+    if not good:
+        raise Stale(f"{eid}: no copy holds the colours the cache knows (the game reloaded the file)")
+    return places, good

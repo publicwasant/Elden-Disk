@@ -228,11 +228,13 @@ def _prepare(args, ci, blk, game_dir_file, which, dry_run, allow_secured, summar
     base, base_sha = ci.read_base(game_dir_file)
     if allow_secured:
         d = ci.decide(spells, base_sha)
+        last = ci.decide_last(spells, sel, base_sha)
+        if (d.use_secured or last.use_secured) and ci.refresh_designs(spells):   # the texts and colours as they are now (not built)
+            book.d(CREATIVE_TAG, "spells.resolved.json: the design's texts and colours written as they are now")
         if d.use_secured:
             book.ok(CREATIVE_TAG, f"{names} unchanged since it was secured: using {ci.secured_bin} (no build)")
             blk.close("no build", "ok")
             return Prepared(ci.secured_bin, "secured")
-        last = ci.decide_last(spells, sel, base_sha)
         if last.use_secured:
             book.ok(CREATIVE_TAG, f"{names} unchanged since the last build: using {ci.output_path} (no build; not secured yet)")
             blk.close("no build", "ok")

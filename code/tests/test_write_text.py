@@ -307,7 +307,8 @@ def rig(tmp_path, monkeypatch):
     box["locate"] = lambda offsets: target
     design = SimpleNamespace(selection=lambda: ("all", None), texts=lambda sel: box["texts"], flame_color=lambda sel: box.get("flame", (None, None)),
                              eyes_color=lambda sel: box.get("eyes", (None, None)),
-                             flame_accent_color=lambda sel: box.get("accent", (None, None)))
+                             flame_accent_color=lambda sel: box.get("accent", (None, None)),
+                             colours=lambda sel: box.get("places", ({}, None)))
 
     def sleep(s):
         clock["t"] += s

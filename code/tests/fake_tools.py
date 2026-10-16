@@ -26,8 +26,9 @@ DOC = {
             "requires": {"status": {"faith": 60}, "cost": {"focus_point": 120}},
             "customs": {"basic": {"SpEffect.1642100.effectEndurance": 20.0},
                         "advanced": {"texts": {"goods_name": "Reverse Cursed Technique"},
-                                     "colors": {"Magic.6421.castSfxId": {"main": "#90D5FF", "accent": "#FF909E"},
-                                                "SpEffect.1642100": "#90D5FF"}}},
+                                     "colors": {"Magic.6421.castSfxId": {"0x4290": [0.5647, 0.8353, 1.0, 0.075],
+                                                                         "0x4334": "#90D5FF"},
+                                                "SpEffectVfx.20090050.midstSfxId": {"0x2a0": [0.5647, 0.8353, 1.0, 1.0]}}}},
         },
     }}},
 }

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import copy
 import json
+import struct
 import os
 import threading
 import time
@@ -43,7 +44,7 @@ from ...writer.paramedit import SNAPSHOT_NAME, Snapshot
 from ...writer.writer import MemoryWriter, WritableProcessMemory, WriteGate, parse_policy, plan_params
 from ..innovate_spells.fmg import Fmg, FmgError
 from ..innovate_spells import live
-from ..innovate_spells.spec import colour_of, colour_text
+from ..innovate_spells.spec import COLOR_KEY_RE, PLACE_RE, colour_effect, colour_of, colour_text, place_value
 from ..resurrect.great_enemies import TableError
 from ..resurrect.great_enemies import load as load_enemies
 
@@ -162,6 +163,18 @@ def write_values(mem, target, gate, snapshot, values: dict, say, tables=None) ->
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- the block
+def shown_place(now: bytes, own: bytes):
+    """A colour place as the design writes it (1.8.3 part 2): "#RRGGBB" when a hex colour gives it (the place's own alpha, not brighter
+    than its own colour), else [r, g, b, a]."""
+    r, g, b, a = struct.unpack("<4f", now)
+    o = struct.unpack("<4f", own)
+    v = max(o[:3]) if max(o[:3]) > 0 else 1.0
+    c = [x / v for x in (r, g, b)]
+    if struct.pack("<f", a) == struct.pack("<f", o[3]) and max(c) <= 1.0 + 1e-6 and min(c) >= 0:
+        return "#%02X%02X%02X" % tuple(round(min(1.0, x) * 255) for x in c)
+    return [round(x, 4) for x in (r, g, b, a)]
+
+
 class CreativeLive:
     """The `creative` block of the document, and its writes. `mem` may be read-only for `block()`; `apply` needs the write handle
     and an open `gate`."""
@@ -373,13 +386,32 @@ class CreativeLive:
             return
         fire = cache.effect(wfxr.effect_ids()[0])
         eyes = cache.effect(wfxr.eyes_ids()[0])
+        basic = {"set": n.get("design", {}).get("customs", {}).get("basic", {})}
         for key, val in list(colors.items()):
-            if key.startswith("Magic.") and fire is not None:
-                main = colour_text(fire["main"]) if fire["main"] is not None else None
-                acc = colour_text(fire["accent"]) if fire["accent"] is not None else None
+            if COLOR_KEY_RE.fullmatch(key) and isinstance(val, dict) and not ({"main", "accent"} & set(val)):
+                colors[key] = self._places_now(key, val, basic, cache)       # 1.8.3 part 2: every place, as the game's copy has it
+                continue
+            two = fire if key.startswith("Magic.") else None
+            if two is not None:
+                main = colour_text(two["main"]) if two["main"] is not None else None
+                acc = colour_text(two["accent"]) if two["accent"] is not None else None
                 colors[key] = {"main": main, "accent": acc} if isinstance(val, dict) or acc is not None else main
             elif key.startswith("SpEffect.") and eyes is not None:
                 colors[key] = colour_text(eyes["main"]) if eyes["main"] is not None else None
+
+    def _places_now(self, key: str, val: dict, basic: dict, cache: MemoryCache) -> dict:
+        """{place: [r, g, b, a]} of every colour place of the effect `key` points at, read from the copy the tool painted (the cache);
+        the design's values when the game process never painted it."""
+        fx = colour_effect(key, basic)
+        known = cache.effect(str(fx)) if fx is not None and str(fx) in wfxr._ALL else None
+        if not known or not known["bases"]:
+            return val
+        places = wfxr.places_of(str(fx))
+        lo, hi = min(places), max(places) + 16
+        block = self.mem.read(known["bases"][0] + lo, hi - lo)
+        if block is None:
+            return val
+        return {"0x%x" % at: shown_place(block[at - lo:at - lo + 16], own) for at, (own, _bloom) in places.items()}
 
     # ---- writing
     def apply(self, goods: str, parts, value) -> dict:
@@ -403,6 +435,8 @@ class CreativeLive:
             return write_values(self.mem, self.target, self.gate, self.snapshot, {what[0]: value}, self.say, self.table_index())
         if kind == "text":
             return self._text(int(what[0]), what[1], value)
+        if kind == "colours":
+            return self._places(rec, what[0], what[1], value)
         return self._colour(what[0], value)
 
     def _text(self, goods: int, field: str, text) -> dict:
@@ -459,6 +493,69 @@ class CreativeLive:
         self._save(cache)
         shown = colour_text(rgb) if rgb is not None else "the game's own"
         return {f"colour.{which}": shown}
+
+    def _places(self, rec: dict, key: str, place, value) -> dict:
+        """1.8.3 part 2: write one colour place (`place`), or every place of the effect (`place` None; `value` an object {place: value}
+        or None), of the effect `key` points at, at the copies `run` painted (the cache). A value: [r, g, b, a], "#RRGGBB", or None /
+        `default` (the game's own)."""
+        fx = colour_effect(key, {"set": rec.get("design", {}).get("customs", {}).get("basic", {})})
+        if fx is None or str(fx) not in wfxr._ALL:
+            raise Refused(f"colors.{key}: no effect with a colour plan (it paints {fx})")
+        eid = str(fx)
+        cache = self.cache()
+        if cache is None:
+            raise Refused("the vault is not known, so the copies of the effects are not either")
+        known = cache.effect(eid)
+        own = {at: b for at, (b, _bloom) in wfxr.places_of(eid).items()}
+        now = {at: ((known or {}).get("places") or {}).get(at, own[at]) for at in own}
+
+        def bytes_of(at: int, v) -> bytes:
+            if isinstance(v, str) and v.strip().startswith("["):
+                try:
+                    v = json.loads(v)
+                except ValueError:
+                    pass
+            if v is None:
+                return own[at]
+            pv = place_value(v)
+            if pv is None:
+                raise Refused(f"colors.{key}.0x{at:x}: {v!r} is not a colour ([r, g, b, a] from 0 to 100, or \"#RRGGBB\")")
+            return wfxr.value_bytes(own[at], tuple(colour_of(pv)) if isinstance(pv, str) else tuple(pv))
+
+        if place is not None:
+            at = int(place, 16)
+            if at not in own:
+                raise Refused(f"colors.{key}.{place}: the effect {eid} has no colour at this place")
+            want = {at: bytes_of(at, value)}
+        else:
+            if value is not None and not isinstance(value, dict):
+                raise Refused(f"colors.{key}: an object {{place: colour}}, or default")
+            given = {int(k, 16): v for k, v in (value or {}).items() if isinstance(k, str) and PLACE_RE.fullmatch(k)}
+            bad = [f"0x{a:x}" for a in given if a not in own]
+            if bad:
+                raise Refused(f"colors.{key}: the effect {eid} has no colour at {', '.join(bad)}")
+            want = {at: bytes_of(at, given.get(at)) for at in own}
+        before = {at: now[at] for at in want}
+        if known is None:
+            raise Refused("the colours of this game were not painted yet (`run` paints them once a character is in the world)")
+        try:
+            _n, bases = wfxr.repaint_places(self.mem, self.gate, eid, known["bases"], before, want)
+        except wfxr.Stale:
+            full = {**now, **want}
+            got, _found = wfxr.paint_many(self.mem, self.gate, [eid], {eid: None}, everything=True, painted=False, required=[],
+                                          states={eid: [(at, own[at], full[at]) for at in own]})
+            p = got.get(eid)
+            bases = list(p.bases) if p is not None else []
+        except wfxr.FlameError as exc:
+            raise Refused(str(exc)) from None
+        places = {at: b for at, b in {**now, **want}.items() if b != own[at]}
+        cache.set_effect(eid, bases, places=places)
+        self._save(cache)
+        if place is not None:
+            shown = "the game's own" if want[int(place, 16)] == own[int(place, 16)] else \
+                str([round(x, 4) for x in struct.unpack("<4f", want[int(place, 16)])])
+            return {f"colour.{key}.{place}": shown}
+        return {f"colour.{key}": f"{len(places)} of {len(own)} places the design's" if places else "the game's own"}
 
     def _again(self, eid: str, after: dict) -> tuple[int, list]:
         """The game reloaded the file: its new copy has the game's own colours; look for it and paint it."""

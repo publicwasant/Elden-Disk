@@ -5,13 +5,14 @@ import pytest
 
 import eldendisk.commands.write as wcmd
 from eldendisk.writer import fxr, scan
-from eldendisk.writer.fxr_plans import ACCENT_PLANS, EYES_PLANS, PLANS
+from eldendisk.writer.fxr_plans import ACCENT_PLANS, EYES_PLANS, PLANS, SPARK_PLANS
 from eldendisk.writer.writer import WriteGate
 
 BLUE = (0.2, 0.65, 1.0)
 RED = (1.0, 0.1, 0.1)
-BASES = {"524400": 0x10000000, "524401": 0x20000000, "4866": 0x30000000, "515000": 0x50000000, "515001": 0x58000000}
-ALL = {**PLANS, **EYES_PLANS, **ACCENT_PLANS}
+BASES = {"524400": 0x10000000, "524401": 0x20000000, "4866": 0x30000000, "515000": 0x50000000, "515001": 0x58000000,
+         "4271": 0x60000000}
+ALL = {**PLANS, **EYES_PLANS, **ACCENT_PLANS, **SPARK_PLANS}
 
 
 class Game:

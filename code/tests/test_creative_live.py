@@ -57,7 +57,7 @@ def test_a_dotted_key_may_also_come_whole():
     ("customs.basic.SpEffect.9999.effectEndurance", "not a row this spell copied"),
     ("customs.basic.Magic.7000.mp", "not the row this spell is made from"),
     ("customs.basic.Weapon.1.x", "not a table a spell is made of"),
-    ("customs.advanced.colors.Magic.6421.fireSfxId", "not a value of the game"),
+    ("customs.advanced.colors.Magic.6421.iconId", "not a value of the game"),
     ("customs.advanced.texts.goods_title", "not a value of the game"),
 ])
 def test_what_is_not_a_value_of_the_game_is_refused_with_why(path, why):
@@ -302,7 +302,7 @@ def test_design_names_are_typed_in_full_and_in_any_case_and_keys_with_dots_are_f
     got = view.select(DOC, "creative.innovate_spells.2230000.design.customs.basic.spEffect.1642100.EFFECTENDURANCE")
     assert got == [("creative.innovate_spells.2230000.design.customs.basic.SpEffect.1642100.effectEndurance", 20.0)]
     both = view.select(DOC, "creative.innovate_spells.2230000.design.customs.advanced.colors.Magic.6421.castSfxId")
-    assert [v for _p, v in both] == ["#90D5FF", "#FF909E"]
+    assert [v for _p, v in both] == [[0.5647, 0.8353, 1.0, 0.075], "#90D5FF"]          # 1.8.3 part 2: a colour per place
     assert view.fmt("goods", 2230000, "creative.innovate_spells.2230000.rows.goods") == "2230000"      # an id: no commas
 
 

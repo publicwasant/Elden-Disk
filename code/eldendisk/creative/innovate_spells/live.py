@@ -11,11 +11,15 @@ label `id`, `slot`, the `rows` it owns) and, apart, its `design` in the structur
   customs.basic.<Table>.<template id>.<field>      the same field of the spell's own row: Magic / Goods <from> -> the spell's Magic /
                                                    Goods row, SpEffect / Bullet / AtkParam_Pc rows -> their copies (rows.copies)
   customs.advanced.texts.goods_name | goods_info | goods_caption    the text in the game's text tables
-  customs.advanced.colors."Magic.<from>.castSfxId"(.main | .accent)  the fire (main) and its accent and the ring (accent)
-  customs.advanced.colors."SpEffect.<id>"                            the Positive Curse Energy Eyes
+  customs.advanced.colors."<key>"(.<place>)       1.8.3 part 2: a colour place of the effect the key points at (`0x4290`), or every
+                                                   place of it (spec.COLOR_KEY_RE)
+  customs.advanced.colors."Magic.<from>.castSfxId"(.main | .accent)  a design written before 1.8.3 part 2: the fire, the ring
+  customs.advanced.colors."SpEffect.<id>"                            a design written before 1.8.3 part 2: the eyes
 
 `id`, `slot`, `rows`, `design.kind` and `design.from` are what the build made; they cannot be written (build again)."""
 from __future__ import annotations
+
+from .spec import COLOR_KEY_RE, PLACE_RE
 
 STATUS = {"intelligence": "requirementIntellect", "faith": "requirementFaith", "arcane": "requirementLuck"}
 COST = {"focus_point": "mp", "stamina": "stamina"}
@@ -47,8 +51,10 @@ def split(parts) -> list[str]:
         return ["customs", "basic", ".".join(flat[2:])]
     if flat[:3] == ["customs", "advanced", "colors"]:
         rest = flat[3:]
-        if rest[:1] == ["Magic"]:
+        if rest[:1] in (["Magic"], ["Bullet"], ["SpEffectVfx"]):   # Magic.<id>.castSfxId, Bullet.<id>.sfxId_Bullet, SpEffectVfx... (1.8.3)
             return ["customs", "advanced", "colors", ".".join(rest[:3]), *rest[3:]]
+        if rest[:1] == ["Sfx"]:
+            return ["customs", "advanced", "colors", ".".join(rest[:2]), *rest[2:]]
         if rest[:1] == ["SpEffect"]:
             return ["customs", "advanced", "colors", ".".join(rest[:2]), *rest[2:]]
     return flat
@@ -58,7 +64,8 @@ def target(goods: str, rec: dict, parts) -> tuple:
     """What a name below the spell `goods` writes in the game:
         ("param", "params.<Table>.<id>.<field>")            a field of a row of the six tables
         ("text", goods id, "goods_name" | "goods_info" | "goods_captions")
-        ("colour", "main" | "accent" | "eyes")
+        ("colour", "main" | "accent" | "eyes")             a design written before 1.8.3 part 2
+        ("colours", key, place | None)                       1.8.3 part 2: a colour place of the effect `key` points at, or all of them
     Locked when it is not a value of the game."""
     p = split(parts)
     rows = rec["rows"]
@@ -100,6 +107,10 @@ def target(goods: str, rec: dict, parts) -> tuple:
         return ("text", rows["goods"], TEXTS[p[3]])
     if p[:3] == ["customs", "advanced", "colors"] and len(p) in (4, 5):
         key, sub = p[3], (p[4] if len(p) == 5 else None)
+        now = design.get("customs", {}).get("advanced", {}).get("colors", {}).get(key)
+        legacy = isinstance(now, (str, list)) or (isinstance(now, dict) and bool({"main", "accent"} & set(now)))
+        if COLOR_KEY_RE.fullmatch(key) and not legacy and (sub is None or PLACE_RE.fullmatch(sub)):
+            return ("colours", key, None if sub is None else "0x%x" % int(sub, 16))
         if key.startswith("Magic.") and key.endswith(".castSfxId"):
             if sub in (None, "main"):
                 return ("colour", "main")

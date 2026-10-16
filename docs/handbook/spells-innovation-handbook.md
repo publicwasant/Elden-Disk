@@ -600,11 +600,12 @@ Since 1.7.1 a remixed spell can be written so that each part answers one questio
   },
   "locations": { "kale": { "price": 34590, "stock": 1 } },
   "customs": {
-    "basic":    { "SpEffect.1642100.effectEndurance": 20, "Magic.6421.refType": 32 },
+    "basic":    { "SpEffect.1642100.effectEndurance": 20, "Magic.6421.refType": 32, "Magic.6421.castSfxId": 524400,
+                  "SpEffect.1642100.vfxId1": 20090050, "SpEffect.1642100.vfxId2": 20090051 },
     "advanced": {
       "texts":  { "goods_name": "Reverse Cursed Technique", "goods_info": "One short line", "goods_caption": "The long story." },
-      "colors": { "Magic.6421.castSfxId": { "main": [0.2, 0.65, 1], "accent": [1.0, 1.0, 1.0] },
-                  "SpEffect.1642100": [0.2, 0.65, 1] }
+      "colors": { "Magic.6421.castSfxId": { "0x4290": [0.56, 0.84, 1.0, 0.075], "0x4334": "#90D5FF" },
+                  "SpEffectVfx.20090050.midstSfxId": { "0x2a0": "#90D5FF" } }
     }
   }
 }
@@ -616,9 +617,9 @@ Since 1.7.1 a remixed spell can be written so that each part answers one questio
 | What does it need? | `requires.status` (to learn it), `requires.cost` (to cast it) | `requires`, `fp_cost`, `stamina_cost` |
 | Where is it sold? | `locations.kale` | `shop` (Kalé only for now; shelves 1-7) |
 | What numbers change? | `customs.basic` | `set` (7.5): built into regulation.bin |
-| What does the game not have a row for? | `customs.advanced.texts`, `customs.advanced.colors` | `text`, `flame_color` + `flame_accent_color`, `positive_curse_energy_eyes`: written into the running game, never a rebuild |
+| What does the game not have a row for? | `customs.advanced.texts`, `customs.advanced.colors` | `text`, `colors` (`flame_color` + `flame_accent_color` before 1.8.3): written into the running game, never a rebuild |
 
-`colors` has two kinds of keys. `"Magic.<from>.castSfxId"` is the fire of the cast: one colour `[r, g, b]`, or `main` (the fire) and `accent` (the ring of runes at the hand, and what the main colour does not reach). It only works when the spell casts `524400`, the fire of Flame, Grant Me Strength (set `Magic.<from>.castSfxId: 524400` in `customs.basic`). `"SpEffect.<id>"` is a buff row: while it lasts, the eyes glow in that colour (`null`: the game's own red).
+`colors` (1.8.3) is the colours as the game holds them. A key is the param field that points at an effect: `"Magic.<from>.castSfxId"` (the fire while casting, 524400), `"Magic.<from>.fireSfxId"` (the burst when the cast ends, 524401), `"Bullet.<id>.sfxId_Bullet"` (what a copied bullet shows, such as the sparks 4271), `"SpEffectVfx.20090050.midstSfxId"` (the glowing eyes, 4866) and `"Sfx.<effect>"` for an effect no param names (the ring of runes at the hand: `Sfx.515000`, `Sfx.515001`). Under a key, every colour place of that effect file by its offset in the file (`"0x4290"`), its value `[red, green, blue, alpha]` as the file holds it (above 1 shines brighter) or `"#RRGGBB"` (the place keeps its own brightness and alpha); a place you leave out keeps the game's colour. `read ...design.customs.advanced.colors` shows every place with what the game holds now; `write ...colors.<key>.<place>=...` changes one in the running game. The effect of a `Magic` or `Bullet` key is the one `customs.basic` puts there, and only the effects with a colour plan can be painted (524400, 524401, 4866, 4271, 515000, 515001). The eyes are put on the buff in `customs.basic` (`"SpEffect.<id>.vfxId1": 20090050, "SpEffect.<id>.vfxId2": 20090051`), as the build writes them.
 
 **Your spell's real id.** The name you give it (`reverse_cursed_technique`) is a label. The game knows it by the ids of its shelf: after a build, `<vault>\design\innovate-items\spells\spells.resolved.json` lists every spell under its Goods id (`2230000` for shelf 1, `2230001` for shelf 2, ...) with all the rows it owns. The console shows the same under the spell (`game  goods 2230000 · magic 2230000 · ...`).
 

@@ -318,13 +318,19 @@ def cmd_apply_both(args, texts: bool = True, colours: bool = True) -> int:
         colour, cnote = ci.flame_color(sel) if colours else (None, None)
         eyes, enote = ci.eyes_color(sel) if colours else (None, None)
         accent, anote = ci.flame_accent_color(sel) if colours else (None, None)
+        places, pnote = ci.colours(sel) if colours else ({}, None)
     except CreativeError as exc:
         book.e("write", str(exc))
         return 1
-    for n in (cnote, enote, anote):
+    wrong = check_places(places)
+    for w in wrong:
+        book.e("write", w)
+    if wrong:
+        return 1
+    for n in (cnote, enote, anote, pnote):
         if n:
             book.w("write", n)
-    paint = colour is not None or eyes is not None
+    paint = colour is not None or eyes is not None or bool(places)
     if not words and not paint:
         book.i("write", "no spell names a text or a colour: nothing to apply")
         return 0
@@ -351,7 +357,7 @@ def cmd_apply_both(args, texts: bool = True, colours: bool = True) -> int:
         got = {}
 
         def put_colours():
-            got["colours"] = _put_flame(mem, gate, colour, passes, eyes, accent, fresh=when_loaded, cache=cache)
+            got["colours"] = _put_flame(mem, gate, colour, passes, eyes, accent, fresh=when_loaded, cache=cache, places=places)
 
         if not words:
             put_colours()
@@ -371,21 +377,50 @@ def _shown(rgb) -> str:
     return t if isinstance(t, str) else str(tuple(round(c, 3) for c in rgb))
 
 
-def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=False, cache: MemoryCache | None = None) -> int:
+def check_places(places: dict) -> list[str]:
+    """What is wrong in the design's colour places (1.8.3 part 2) for the plans the writer has: an effect without a plan, a place that
+    is not one of its colours. Empty when they can all be painted."""
+    out = []
+    for eid, d in places.items():
+        if eid not in wfxr.spark_ids() + wfxr.effect_ids() + wfxr.eyes_ids() + wfxr.ring_ids():
+            out.append(f"colors.{d['key']}: the effect {eid} has no colour plan (these have one: "
+                       f"{', '.join(wfxr.effect_ids() + wfxr.eyes_ids() + wfxr.ring_ids() + wfxr.spark_ids())})")
+            continue
+        known = wfxr.places_of(eid)
+        bad = sorted(at for at in d["values"] if at not in known)
+        if bad:
+            out.append(f"colors.{d['key']}: the effect {eid} has no colour at {', '.join('0x%x' % at for at in bad)} "
+                       f"({len(known)} places: 0x{min(known):x} ... 0x{max(known):x})")
+    return out
+
+
+def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=False, cache: MemoryCache | None = None,
+               places=None) -> int:
     """Recolour the fire (`colour`, the two effects) and the positive curse energy eyes (`eyes`, when the design gives them a colour): one look
     through the game's memory for the effect files not done yet (all in the same look), as the schedule `passes` says (the rest in
     seconds before each look). A look is only made while something is missing. Either colour may be None. `accent`: the second colour
     of the fire (the places the fire's plan leaves out, writer/fxr_plans.py `accent`), with `colour` only. `fresh` (`--when-loaded`, a game
-    `run` has just started): nothing can be painted yet, so the look searches only for the game's own colours (half the searching)."""
+    `run` has just started): nothing can be painted yet, so the look searches only for the game's own colours (half the searching).
+    `places` (1.8.3 part 2): {effect: {"key": the key of `colors`, "values": {offset: value}}}, a colour per place given by the design,
+    in the same look (an effect named here is painted by its places, not by `colour` / `eyes` / `accent`)."""
     ring = accent if colour is not None else None          # the ring of runes at the hand takes the fire's second colour
+    places = dict(places or {})
+    states = {e: wfxr.place_states(e, d["values"]) for e, d in places.items()}
+    for e in [e for e, st in states.items() if all(new == own for _at, own, new in st)]:
+        book.d("write", f"colours {places[e]['key']}: every place is the game's own colour; nothing to write")
+        del places[e], states[e]
     targets = {**({e: colour for e in wfxr.effect_ids()} if colour is not None else {}),
                **({e: eyes for e in wfxr.eyes_ids()} if eyes is not None else {}),
-               **({e: ring for e in wfxr.ring_ids()} if ring is not None else {})}
+               **({e: ring for e in wfxr.ring_ids()} if ring is not None else {}),
+               **{e: None for e in places}}
     label = {**{e: "flame colour" for e in wfxr.effect_ids()}, **{e: "eyes colour" for e in wfxr.eyes_ids()},
-             **{e: "ring colour" for e in wfxr.ring_ids()}}
-    optional = set(wfxr.ring_ids())                        # the game may hold no ring: it is painted when it is there
-    what = "flame colour" if eyes is None else "eyes colour" if colour is None else "flame and eyes colour"
+             **{e: "ring colour" for e in wfxr.ring_ids()}, **{e: f"colours {d['key']}" for e, d in places.items()}}
+    optional = set(wfxr.ring_ids()) | (set(wfxr.spark_ids()) & set(places))   # the game may hold no ring, no sparks: painted when there
+    what = ("flame colour" if eyes is None and colour is not None else "eyes colour" if colour is None and eyes is not None
+            else "flame and eyes colour" if colour is not None else "colours")
     todo, done = list(targets), {}
+    if not todo:
+        return 0
     for number, rest in enumerate(passes, 1):
         if rest:
             book.d("write", f"{what}: the game does not hold {', '.join(todo)} yet; looking again in {rest:g} s")
@@ -394,8 +429,9 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=Fal
             # the eyes and the ring: every copy (the game holds the eyes' file more than once and draws from one a first find missed)
             got, found = wfxr.paint_many(mem, gate, todo, {e: targets[e] for e in todo},
                                          everything=any(e in wfxr.eyes_ids() or e in optional for e in todo),
-                                         accent=accent if colour is not None else None,
-                                         required=[e for e in todo if e not in optional], painted=not fresh)
+                                         accent=accent if colour is not None and not places else None,
+                                         required=[e for e in todo if e not in optional] or list(todo),
+                                         painted=not fresh, states=states)    # only optional ones: looked for in all the memory
         except wfxr.FlameError as exc:
             book.e("write", f"{what}: {exc}")
             return 1
@@ -413,7 +449,8 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=Fal
         if not [e for e in todo if e not in optional]:
             break
     for e in [e for e in todo if e in optional]:
-        book.d("write", f"{label[e]}: the game does not hold {e} (the ring of runes) now; left as it is")
+        book.d("write", f"{label[e]}: the game does not hold {e} ({'the sparks' if e in wfxr.spark_ids() else 'the ring of runes'}) "
+                        "now; left as it is")
     todo = [e for e in todo if e not in optional]
     if todo:
         book.e("write", f"{what}: the game does not hold the effect file(s) {', '.join(todo)} after {len(passes)} look(s)"
@@ -421,23 +458,28 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=Fal
         return 1
     if cache is not None:                       # every copy and the colours it carries now: a later change of colour needs no look
         for eid, p in done.items():
-            if eid in wfxr.effect_ids():
+            if eid in places:                   # the places the design gave, with the bytes they hold now
+                cache.set_effect(eid, p.bases, places={at: new for at, own, new in states[eid] if new != own})
+            elif eid in wfxr.effect_ids():
                 cache.set_effect(eid, p.bases, colour, accent)
             elif eid in wfxr.eyes_ids():
                 cache.set_effect(eid, p.bases, eyes, None)
             else:
                 cache.set_effect(eid, p.bases, ring, None)
         _keep(cache, "colours")
-    fire = [done[e] for e in wfxr.effect_ids() if e in done]
+    fire = [done[e] for e in wfxr.effect_ids() if e in done and e not in places]
     if fire:
         second = f" and {_shown(accent)}" if accent is not None else ""
         book.ok("write", f"flame colour: the fire of Flame, Grant Me Strength is now {_shown(colour)}{second} in {len(fire)} "
                          f"effects ({sum(g.places for g in fire)} places written); it lasts until the game closes")
-    rings = [done[e] for e in wfxr.ring_ids() if e in done]
+    rings = [done[e] for e in wfxr.ring_ids() if e in done and e not in places]
     if rings:
         book.ok("write", f"ring colour: the ring of runes at the hand is now {_shown(ring)} ({sum(g.places for g in rings)} "
                          "places written); it lasts until the game closes")
-    glow = [done[e] for e in wfxr.eyes_ids() if e in done]
+    for e in [e for e in places if e in done]:
+        book.ok("write", f"colours: {places[e]['key']} (effect {e}) has the design's colours, {len(places[e]['values'])} of its "
+                         f"{len(states[e])} places given ({done[e].places} places written); it lasts until the game closes")
+    glow = [done[e] for e in wfxr.eyes_ids() if e in done and e not in places]
     if glow:
         book.ok("write", f"eyes colour: the glowing eyes are now {_shown(eyes)} ({sum(g.places for g in glow)} places "
                          "written); it lasts until the game closes")
@@ -458,14 +500,20 @@ def cmd_write_flame(args) -> int:
         colour, cnote = ci.flame_color(sel)
         eyes, enote = ci.eyes_color(sel)
         accent, anote = ci.flame_accent_color(sel)
+        places, pnote = ci.colours(sel)
     except CreativeError as exc:
         book.e("write", str(exc))
         return 1
-    for n in (cnote, enote, anote):
+    wrong = check_places(places)
+    for w in wrong:
+        book.e("write", w)
+    if wrong:
+        return 1
+    for n in (cnote, enote, anote, pnote):
         if n:
             book.w("write", n)
-    if colour is None and eyes is None:
-        book.i("write", "no spell names a flame_color or a positive_curse_energy_eyes color: no colour to put")
+    if colour is None and eyes is None and not places:
+        book.i("write", "no spell names a flame_color, a positive_curse_energy_eyes color or colors: no colour to put")
         return 0
     target, code, record = _attach(args, wait)
     if target is None:
@@ -481,8 +529,8 @@ def cmd_write_flame(args) -> int:
             if not _wait_world(mem, target, "flame colour", stable=0.0 if getattr(args, "world_ready", False) else None):
                 book.i("write", "flame colour: the game closed before a character was in the world; nothing was written")
                 return 0
-            return _put_flame(mem, gate, colour, LOOKS, eyes, accent, fresh=True, cache=_cache_of(args, target))
-        return _put_flame(mem, gate, colour, LOOKS if wait > 0 else ONCE, eyes, accent, cache=_cache_of(args, target))
+            return _put_flame(mem, gate, colour, LOOKS, eyes, accent, fresh=True, cache=_cache_of(args, target), places=places)
+        return _put_flame(mem, gate, colour, LOOKS if wait > 0 else ONCE, eyes, accent, cache=_cache_of(args, target), places=places)
     finally:
         mem.close()
 

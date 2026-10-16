@@ -67,14 +67,21 @@ class MemoryCache:
 
     # ---- effect files
     def effect(self, eid: str) -> dict | None:
-        """{"bases": [addresses], "main": rgb | None, "accent": rgb | None}, or None when nothing is known of it."""
+        """{"bases": [addresses], "main": rgb | None, "accent": rgb | None, "places": {offset: 16 bytes}}, or None when nothing is
+        known of it. `places` (1.8.3 part 2): the places a design gave their own colour, with the bytes they hold now."""
         e = self.fxr.get(str(eid))
-        return None if e is None else {"bases": [int(b) for b in e.get("bases", ())], "main": e.get("main"), "accent": e.get("accent")}
+        if e is None:
+            return None
+        out = {"bases": [int(b) for b in e.get("bases", ())], "main": e.get("main"), "accent": e.get("accent")}
+        if e.get("places"):
+            out["places"] = {int(at, 16): bytes.fromhex(h) for at, h in e["places"].items()}
+        return out
 
-    def set_effect(self, eid: str, bases, main=None, accent=None) -> None:
+    def set_effect(self, eid: str, bases, main=None, accent=None, places=None) -> None:
         self.fxr[str(eid)] = self._mine["fxr"][str(eid)] = {
             "bases": sorted({int(b) for b in bases}), "main": list(main) if main is not None else None,
-            "accent": list(accent) if accent is not None else None}
+            "accent": list(accent) if accent is not None else None,
+            **({"places": {"0x%x" % at: b.hex() for at, b in sorted(places.items())}} if places else {})}
 
     def save(self) -> None:
         """The file as it is now, with what this object changed written over it (an OSError when it cannot be written)."""

@@ -12,20 +12,27 @@ from tests.z4 import file_of
 
 BLUE, PURPLE = [0.2, 0.65, 1.0], [0.54, 0.4, 0.8]
 SET = {"SpEffect.1642100.effectEndurance": 20, "SpEffect.1642100.vfxId": -1, "Magic.6421.castSfxId": 524400, "Goods.6421.iconId": 6806}
+EYES = {"SpEffect.1642100.vfxId1": 20090050, "SpEffect.1642100.vfxId2": 20090051}     # 1.8.3 part 2: the eyes on the buff, in basic
+COLORS = {"Magic.6421.castSfxId": {"0x4290": [1.0, 0.5, 0.25, 0.075], "0x4334": "#90D5FF"},     # 1.8.3 part 2: a colour per place
+          "SpEffectVfx.20090050.midstSfxId": {"0x2a0": "#90D5FF"}}
 
 V2 = {
     "__info__": "a comment about the whole spell", "kind": "projectile", "from": 6421,
     "requires": {"__info__": "x", "status": {"intelligence": 0, "faith": 60, "arcane": 10}, "cost": {"focus_point": 120}},
     "locations": {"__info__": "x", "kale": {"price": 34590, "stock": 1}},
     "customs": {
-        "basic": {"__info__": "numbers of the game's rows", **SET},
+        "basic": {"__info__": "numbers of the game's rows", **SET, **EYES},
         "advanced": {"__info__": "put into the running game",
                      "texts": {"goods_name": "N", "goods_info": "I", "goods_caption": "C"},
-                     "colors": {"Magic.6421.castSfxId": {"main": BLUE, "accent": PURPLE}, "SpEffect.1642100": BLUE}}},
+                     "colors": {"__info__": "x", **COLORS}}},
 }
 LEGACY = {
     "kind": "projectile", "from": 6421, "requires": {"intelligence": 0, "faith": 60, "arcane": 10}, "fp_cost": 120,
     "shop": {"price": 34590, "stock": 1}, "set": dict(SET), "text": {"goods_name": "N", "goods_info": "I", "goods_captions": "C"},
+    "positive_curse_energy_eyes": {"on": "SpEffect.1642100"}, "colors": {k: dict(v) for k, v in COLORS.items()},
+}
+OLD_COLOURS = {   # the colours before 1.8.3 part 2, still read in the earlier fields (flame_color, ...)
+    **{k: v for k, v in LEGACY.items() if k != "colors"},
     "flame_color": BLUE, "flame_accent_color": PURPLE, "positive_curse_energy_eyes": {"on": "SpEffect.1642100", "color": BLUE},
 }
 
@@ -56,7 +63,7 @@ def test_design_of_gives_the_new_structure_back_and_it_reads_the_same():
     d = spec.design_of(canon)
     assert d["requires"] == {"status": {"intelligence": 0, "faith": 60, "arcane": 10}, "cost": {"focus_point": 120}}
     assert d["locations"] == {"kale": {"price": 34590, "stock": 1}}
-    assert d["customs"]["advanced"]["colors"] == {"Magic.6421.castSfxId": {"main": BLUE, "accent": PURPLE}, "SpEffect.1642100": BLUE}
+    assert d["customs"]["advanced"]["colors"] == COLORS and d["customs"]["basic"] == {**SET, **EYES}
     assert d["customs"]["advanced"]["texts"]["goods_caption"] == "C"
     assert one(d) == canon
 
@@ -70,11 +77,9 @@ def test_every_comment_is_left_out_and_a_comment_alone_on_an_earlier_spell_is_fi
 def test_the_long_description_is_goods_caption_or_goods_captions_and_the_eyes_may_keep_the_games_colour():
     s = mutate(lambda s: s["customs"]["advanced"]["texts"].update(goods_captions=s["customs"]["advanced"]["texts"].pop("goods_caption")))
     assert one(s)["text"]["goods_captions"] == "C"
-    gold = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": None}))
-    assert one(gold)["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100"}
-    plain = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": BLUE}))
-    got = one(plain)
-    assert got["flame_color"] == BLUE and "flame_accent_color" not in got
+    gold = mutate(lambda s: s["customs"]["advanced"]["colors"].pop("SpEffectVfx.20090050.midstSfxId"))
+    assert one(gold)["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100"}                     # the eyes in the game's colour
+    assert "SpEffectVfx.20090050.midstSfxId" not in one(gold)["colors"]
 
 
 @pytest.mark.parametrize("fn, where, why", [
@@ -89,12 +94,17 @@ def test_the_long_description_is_goods_caption_or_goods_captions_and_the_eyes_ma
     (lambda s: s["customs"]["basic"].update({"Magic.6422.mp": 1}), "customs.basic", "must be this spell's `from`"),
     (lambda s: s["customs"]["basic"].update({"Nothing": 1}), "customs.basic", "a key looks like"),
     (lambda s: s["customs"]["advanced"]["texts"].update(goods_name="x" * 81), "texts", "at most 80 characters"),
-    (lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.fireSfxId": BLUE}), "colors.Magic.6421.fireSfxId", "castSfxId"),
-    (lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6422.castSfxId": BLUE}), "colors.Magic.6422.castSfxId", "`from` (6421)"),
-    (lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": [3, 0, 0]}), "colors.SpEffect.1642100", "null"),
-    (lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": {"main": BLUE, "accent": [1, 1]}}), "castSfxId.accent", "three numbers"),
-    (lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": {"mian": BLUE}}), "castSfxId.mian", "unknown field"),
-    (lambda s: s["customs"]["basic"].update({"Magic.6421.castSfxId": 525000}), "colors.Magic.6421.castSfxId", "no colour plan"),
+    (lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.iconId": {}}), "colors.Magic.6421.iconId", "a key is the param field"),
+    (lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6422.castSfxId": {}}), "colors.Magic.6422.castSfxId", "`from` (6421)"),
+    (lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": BLUE}), "colors.SpEffect.1642100", "are gone"),
+    (lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": {"main": BLUE}}), "colors.Magic.6421.castSfxId", "are gone"),
+    (lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4290": [1, 1]}), "castSfxId.0x4290", "[red, green, blue, alpha]"),
+    (lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4290": [1, 1, 1, 101]}), "castSfxId.0x4290", "0 to 100"),
+    (lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"mian": BLUE}), "castSfxId.mian", "offset"),
+    (lambda s: s["customs"]["basic"].pop("Magic.6421.castSfxId"), "colors.Magic.6421.castSfxId", "puts none"),
+    (lambda s: s["customs"]["advanced"]["colors"].update({"Sfx.524400": {}}), "colors.Sfx.524400", "which Magic.6421.castSfxId paints too"),
+    (lambda s: s["customs"]["basic"].pop("SpEffect.1642100.vfxId2"), "customs.basic.SpEffect.1642100", "give both"),
+    (lambda s: [s["customs"]["basic"].pop(k) for k in EYES], "colors.SpEffectVfx.20090050.midstSfxId", "put the eyes on the buff"),
 ])
 def test_a_mistake_is_named_where_the_user_wrote_it(fn, where, why):
     got = problems(mutate(fn))
@@ -111,7 +121,7 @@ def test_the_diff_names_the_places_the_user_edits():
         s["locations"]["kale"].update(price=40000), s["customs"]["basic"].update({"SpEffect.1642100.effectEndurance": 30})))}, maximum=7))
     lines = service.diff_specs(spec.design_view(a), spec.design_view(b))
     assert lines == ["p.customs.basic.SpEffect.1642100.effectEndurance  20.0 -> 30.0", "p.locations.kale.price  34590 -> 40000"]
-    c = spec.normalise(file_of({"p": mutate(lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": [1, 0, 0]}))}, maximum=7))
+    c = spec.normalise(file_of({"p": mutate(lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4290": "#FF0000"}))}, maximum=7))
     assert service.diff_specs(spec.design_view(a), spec.design_view(c)) == []                     # a colour is no reason to build
 
 
@@ -120,9 +130,13 @@ def test_the_shipped_design_is_written_in_the_new_structure_and_holds_its_hex_co
     raw = doc["innovate_spells"]["slots"]["reverse_cursed_technique"]
     assert {"__info__", "requires", "locations", "customs"} <= set(raw) and {"basic", "advanced"} == set(raw["customs"])
     got = spec.normalise(doc)["spells"][0]
-    assert raw["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"] == {"main": "#90D5FF", "accent": "#E0F3FF"}
-    assert got["flame_color"] == [0x90 / 255, 0xD5 / 255, 1.0] and got["flame_accent_color"] == [0xE0 / 255, 0xF3 / 255, 255 / 255]
-    assert got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100", "color": [0x90 / 255, 0xD5 / 255, 1.0]}
+    colors = raw["customs"]["advanced"]["colors"]                                         # 1.8.3 part 2: every place of six effects
+    assert {k: len(v) for k, v in colors.items() if k != "__info__"} == {
+        "Magic.6421.castSfxId": 22, "Magic.6421.fireSfxId": 82, "Sfx.515000": 30, "Sfx.515001": 49,
+        "SpEffectVfx.20090050.midstSfxId": 16, "Bullet.10642101.sfxId_Bullet": 39}
+    assert colors["Magic.6421.castSfxId"]["0x4290"] == "#90D5FF"                        # hex (the author's choice), the place's own alpha
+    assert all(isinstance(v, str) for k, places in colors.items() if k != "__info__" for v in places.values())
+    assert got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100"} and "flame_color" not in got
     assert got["requires"] == {"intelligence": 0, "faith": 60, "arcane": 10} and got["fp_cost"] == 120 and got["shop"] == {"price": 34590, "stock": 1}
 
 
@@ -135,6 +149,8 @@ def test_the_schema_and_the_validator_agree_on_the_new_structure():
                lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": None}),
                lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": [3, 0, 0]}),
                lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": {"accent": BLUE}}),
+               lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4290": [1, 1]}),
+               lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"x": "#90D5FF"}),
                lambda s: s["customs"]["advanced"]["texts"].update(goods_name="x" * 81),
                lambda s: s.pop("from"), lambda s: s["locations"]["kale"].update(stock=0)):
         cases.append(mutate(fn))
@@ -207,10 +223,10 @@ def test_with_v_the_console_shows_the_log_and_no_block(world, capsys):
 
 
 def test_golden_eyes_is_now_positive_curse_energy_eyes_and_an_old_record_builds_nothing_new():
-    old = dict(LEGACY)
+    old = dict(OLD_COLOURS)
     old["golden_eyes"] = old.pop("positive_curse_energy_eyes")
     assert any("golden_eyes" in p and "use positive_curse_energy_eyes" in p for p in problems(old))
-    now = spec.normalise(file_of({"p": LEGACY}, maximum=7))
+    now = spec.normalise(file_of({"p": OLD_COLOURS}, maximum=7))
     record = {"format": now["format"], "spells": [{("golden_eyes" if k == "positive_curse_energy_eyes" else k): v
                                                    for k, v in now["spells"][0].items()}]}
     assert spec.build_view(record) == spec.build_view(now)
@@ -231,18 +247,17 @@ def test_anything_else_is_not_a_colour(bad):
 
 def test_a_hex_colour_is_written_back_as_hex_and_a_brighter_one_as_numbers():
     assert spec.colour_text([0x90 / 255, 0xD5 / 255, 1.0]) == "#90D5FF" and spec.colour_text([0.2, 0.65, 2.0]) == [0.2, 0.65, 2.0]
-    hexed = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"Magic.6421.castSfxId": {"main": "#90D5FF", "accent": "#FF909E"},
-                                                                      "SpEffect.1642100": "#90d5ff"}))
+    hexed = mutate(lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4334": "#90d5ff", "0x4344": "9DF"}))
     canon = one(hexed)
-    back = spec.design_of(canon)["customs"]["advanced"]["colors"]
-    assert back == {"Magic.6421.castSfxId": {"main": "#90D5FF", "accent": "#FF909E"}, "SpEffect.1642100": "#90D5FF"}
+    back = spec.design_of(canon)["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"]
+    assert back == {"0x4290": [1.0, 0.5, 0.25, 0.075], "0x4334": "#90D5FF", "0x4344": "#99DDFF"}
     assert one(spec.design_of(canon)) == canon
 
 
 def test_a_bad_hex_is_named_where_it_is_written_and_says_what_a_colour_is():
-    got = problems(mutate(lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": "#12345"})))
-    assert any("colors.SpEffect.1642100" in p and '"#RRGGBB"' in p for p in got), got
-    old = dict(LEGACY, flame_color="#zzzzzz")
+    got = problems(mutate(lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4334": "#12345"})))
+    assert any("colors.Magic.6421.castSfxId.0x4334" in p and '"#RRGGBB"' in p for p in got), got
+    old = dict(OLD_COLOURS, flame_color="#zzzzzz")
     assert any(".flame_color" in p and '"#RRGGBB"' in p for p in problems(old))
 
 
@@ -250,7 +265,7 @@ def test_the_schema_takes_hex_colours_too():
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((service.PKG_DIR / "spells.schema.json").read_text(encoding="utf-8"))
     v = jsonschema.Draft202012Validator(schema)
-    good = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": "#90D5FF"}))
-    bad = mutate(lambda s: s["customs"]["advanced"]["colors"].update({"SpEffect.1642100": "#90D5F"}))
+    good = mutate(lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4334": "#90D5FF"}))
+    bad = mutate(lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4334": "#90D5F"}))
     assert v.is_valid(file_of({"p": good}, maximum=7)) and not v.is_valid(file_of({"p": bad}, maximum=7))
-    assert v.is_valid(file_of({"p": dict(LEGACY, flame_color="#90D5FF")}, maximum=7))
+    assert v.is_valid(file_of({"p": dict(OLD_COLOURS, flame_color="#90D5FF")}, maximum=7))

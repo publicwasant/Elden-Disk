@@ -253,3 +253,56 @@ ACCENT_PLANS = {
         ],
     },
 }
+
+
+# The sparks a design puts on its spell (1.8.3: `customs.advanced.colors."Bullet.<id>.sfxId_Bullet"`, the effect its `customs.basic` sets
+# there): f000004271, a burst of ice shards with sparks (the game's program plays it itself; tried in the game on 2026-10-17 on the
+# second bullet of Reverse Cursed Technique). White and light blue in the game's file. Painted with the design's `main` colour; its
+# white parts take the design's `accent` colour (writer/fxr.py `recolor`, `white`). Made with tools/fxr_places.py from the file of the
+# common effect archive (tools/dump_sfx.py --sfx 4271), game 1.17.1. The game may not hold it yet: it is looked for, not required.
+SPARK_PLANS = {
+    "4271": {
+        "size": 25520,
+        "colours": [
+            (0x55cc, "0000803f0000803f0000803f0000803f", True),
+            (0x56c8, "efeeee3e9897173fc0bf3f3f00000000", False),
+            (0x56d8, "c0bf3f3fe0df5f3f0000803f0000803f", False),
+            (0x56f8, "c0bf3f3fe0df5f3f0000803f00000000", False),
+            (0x5708, "aead2d3fcecd4d3ff0ef6f3f0000803f", False),
+            (0x5718, "8a89093faaa9293fd0cf4f3f0000803f", False),
+            (0x5728, "efeeee3e9897173fc0bf3f3f00000000", False),
+            (0x573c, "0000803f0000803f0000803f0000003f", False),
+            (0x574c, "0000c03f0000c03f0000c03f0000803f", False),
+            (0x5764, "0000c03f0000c03f0000c03f0000803f", False),
+            (0x5774, "0000803f0000803f0000803f0000003f", False),
+            (0x5788, "0000803f0000803f0000803f8180003f", False),
+            (0x5798, "0000803f0000803f0000803fc1c0403f", False),
+            (0x57b0, "0000803f0000803f0000803f8180003f", False),
+            (0x57c0, "0000803f0000803f0000803fc1c0403f", False),
+            (0x57d4, "0000803f0000803f0000803f8180003f", False),
+            (0x57e4, "0000803f0000803f0000803fc1c0403f", False),
+            (0x57fc, "0000803f0000803f0000803f8180003f", False),
+            (0x580c, "0000803f0000803f0000803fc1c0403f", False),
+            (0x59a4, "c0bf3f3fe0df5f3f0000803f0000803f", False),
+            (0x5a20, "0000403f0000603f0000803fcdcccc3d", True),
+            (0x5ae8, "8180003fc0bf3f3f0000803f00000000", False),
+            (0x5af8, "c0bf3f3fe0df5f3f0000803f0000803f", False),
+            (0x5b14, "c0bf3f3fe0df5f3f0000803f00000000", False),
+            (0x5b24, "2020203fd0cf4f3f0000803f0000803f", False),
+            (0x5b34, "8180003fc0bf3f3f0000803f00000000", False),
+            (0x5e90, "8e8d8d3edfdede3e0000403f0000803f", False),
+            (0x5ea0, "abaaaa3fabaaaa3fabaaaa3f0000803f", False),
+            (0x60cc, "e2e0e03ec9c7273f0000803f0000803f", False),
+            (0x60dc, "c9c7273fe5e3433f0000803f0000803f", False),
+            (0x60f4, "c9c7273fe5e3433f0000803f0000803f", False),
+            (0x6104, "e2e0e03ec9c7273f0000803f0000803f", False),
+            (0x6114, "1212923f1212923f0000803f0000803f", False),
+            (0x6154, "00002041000020410000204100002041", False),
+            (0x62bc, "0000803f0000803f0000803f00000000", False),
+            (0x62cc, "0000803f0000803f0000803f0000803f", False),
+            (0x62e8, "0000803f0000803f0000803f8180003f", False),
+            (0x62f8, "0000803f0000803f0000803f0000803f", False),
+            (0x6308, "0000803f0000803f0000803f00000000", False),
+        ],
+    },
+}

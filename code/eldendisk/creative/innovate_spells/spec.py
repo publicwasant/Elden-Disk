@@ -333,7 +333,7 @@ def _template(c, it, p, n, iid, kind):
     """A spell made from a game spell: `clone` (copy of the Goods and Magic rows, it keeps calling the template's own chain),
     `buff` with `from` and `enchant` (the same, and the template's own SpEffect rows are copied too, so they can be tuned with
     `set`). What is not named stays the template's, so the canonical form holds only what the design says."""
-    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set", "flame_color", "flame_accent_color", "positive_curse_energy_eyes"])
+    c.keys(it, p, ["kind", "from"], ["type", "text", "requires", "fp_cost", "stamina_cost", "shop", "set", "flame_color", "flame_accent_color", "positive_curse_energy_eyes", "colors"])
     o = {"slot": n, "id": iid, "kind": kind, "text": _text_object(c, it, p)}
     src = c.integer(it, "from", p, 1, 2**31 - 1)
     if src is not None:
@@ -355,6 +355,7 @@ def _template(c, it, p, n, iid, kind):
         o["set"] = _set(c, it["set"], p + ".set", o)
     _flame_color(c, it, p, o)
     _positive_curse_energy_eyes(c, it, p, o, True)
+    _colors(c, it, p, o)
     return o
 
 
@@ -419,13 +420,23 @@ def _set(c, raw, path, o):
 #    "customs":   {"basic":    {"__info__": "...", "SpEffect.<id>.<field>": n, "Magic.<from>.<field>": n, ...},
 #                  "advanced": {"__info__": "...", "texts": {"goods_name", "goods_info", "goods_caption"},
 #                               "colors": {"Magic.<from>.castSfxId": [r, g, b] | {"main": [r, g, b], "accent": [r, g, b]},
-#                                          "SpEffect.<id>": [r, g, b] | null}}}}
+#                                          "SpEffect.<id>": [r, g, b] | null,
+#                                          "Bullet.<id>.sfxId_Bullet": [r, g, b] | {"main": [r, g, b], "accent": [r, g, b]}}}}}
 # (a spell made from a game spell: `from`). `upgrade_spell` turns it into the fields the rest of the tool has always read; the
 # earlier fields stay valid, so a design written either way builds the same file. `design_of` goes the other way.
 SHOP_PLACES = {"kale": "Kale, the merchant of the Church of Elleh (the lines 100508, 100509, ... of ShopLineupParam)"}
 _SHOP_KEY_RE = re.compile("kal[eé]|<shop-id-[0-9]+>", re.IGNORECASE)
 _CAST_COLOR_RE = re.compile(r"Magic\.([0-9]+)\.castSfxId")
 _EYES_COLOR_RE = re.compile(r"SpEffect\.([0-9]+)")
+# 1.8.3 part 2: `customs.advanced.colors` as the game holds them: a key is the param field that points at an effect, under it every colour
+# place of that effect file by its offset (writer/fxr_plans.py), its value [r, g, b, a] as the file holds it or "#RRGGBB" (the place
+# keeps its own brightness and alpha).
+COLOR_KEY_RE = re.compile(r"Magic\.[0-9]+\.(?:castSfxId|fireSfxId)|Bullet\.[0-9]+\.sfxId_Bullet|SpEffectVfx\.20090050\.midstSfxId|Sfx\.[0-9]+")
+PLACE_RE = re.compile(r"0x[0-9a-fA-F]{1,6}")
+EYES_VFX = (20090050, 20090051)     # the eyes' SpEffectVfx rows (recipes.EYES_VFX): in customs.basic, the build puts the eyes on that row
+EYES_EFFECT = 4866                  # what they show (SpEffectVfx.20090050.midstSfxId)
+_EYES_BASIC_RE = re.compile(r"SpEffect\.([0-9]+)\.vfxId([1-7])")
+FXR_VALUE_MAX = 100.0               # a channel of a colour place: 0..1 the colour, above 1 shines brighter (the game's files reach 50)
 FIRE_EFFECT = 524400          # the cast effect of Flame, Grant Me Strength: the one `colors` has a colour plan for (writer/fxr_plans.py)
 STATUS_KEYS = ("intelligence", "faith", "arcane")
 COST_KEYS = {"focus_point": ("fp_cost", 999), "stamina": ("stamina_cost", 999)}
@@ -499,6 +510,7 @@ def upgrade_spell(c, it: dict, p: str) -> dict:
                 c.bad(p + ".customs.basic", 'must be an object: "Magic.<from>.<field>": number, "SpEffect.<id>.<field>": number, ...')
             else:
                 raw = {k: v for k, v in basic.items() if k != "__info__"}
+                _eyes_of_basic(c, raw, p + ".customs.basic", out)
                 pseudo = {"kind": it.get("kind", "buff")}
                 if src is not None:
                     pseudo["from"] = src
@@ -506,6 +518,42 @@ def upgrade_spell(c, it: dict, p: str) -> dict:
         if "advanced" in cus:
             _advanced(c, cus["advanced"], p + ".customs.advanced", src, out)
     return out
+
+
+def _eyes_of_basic(c, raw: dict, path: str, out: dict) -> None:
+    """1.8.3 part 2: the eyes in `customs.basic` as the build writes them, `"SpEffect.<id>.vfxId<n>": 20090050` and `... 20090051` (both
+    eyes, one copied SpEffect row) -> positive_curse_energy_eyes {"on": "SpEffect.<id>"}; the two keys are taken out of `raw` (the build
+    puts them in the free visual fields of the copy)."""
+    rows: dict[int, set] = {}
+    for key in [k for k in raw if isinstance(k, str)]:
+        m = _EYES_BASIC_RE.fullmatch(key)
+        if m and raw[key] in EYES_VFX:
+            rows.setdefault(int(m.group(1)), set()).add(raw.pop(key))
+    for sp, got in rows.items():
+        if got != set(EYES_VFX):
+            c.bad("%s.SpEffect.%d" % (path, sp), "the eyes are two rows, one per eye: give both %s and %s (vfxId1 ... vfxId7)"
+                  % EYES_VFX)
+            return
+    if len(rows) > 1:
+        c.bad(path, "the eyes go on one SpEffect row (the buff): %s" % ", ".join("SpEffect.%d" % r for r in rows))
+        return
+    for sp in rows:
+        out["positive_curse_energy_eyes"] = {"on": "SpEffect.%d" % sp}
+
+
+def place_value(v):
+    """A value of a colour place -> [r, g, b, a] (floats) or "#RRGGBB", or None when it is not one."""
+    if isinstance(v, list) and len(v) == 4 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v) \
+            and all(0 <= x <= FXR_VALUE_MAX for x in v):
+        return [float(x) for x in v]
+    if isinstance(v, str) and _HEX_RE.fullmatch(v.strip()):
+        rgb = colour_of(v)
+        return colour_text(rgb) if rgb is not None else None
+    return None
+
+
+PLACE_HELP = ('[red, green, blue, alpha] as the game\'s file holds it (each 0 to %g; above 1 shines brighter), or a hex colour '
+              '"#RRGGBB" (the place keeps its own brightness and alpha)' % FXR_VALUE_MAX)
 
 
 def _advanced(c, adv, path, src, out):
@@ -521,47 +569,92 @@ def _advanced(c, adv, path, src, out):
     if not isinstance(colors, dict):
         c.bad(path + ".colors", 'must be an object: "Magic.<from>.castSfxId": [r, g, b], "SpEffect.<id>": [r, g, b]')
         return
-    bad_colour = "must be " + COLOUR_HELP
+    new = {}
     for key, val in colors.items():
         if key == "__info__":
             continue
         kp = "%s.colors.%s" % (path, key)
-        m, e = _CAST_COLOR_RE.fullmatch(key), _EYES_COLOR_RE.fullmatch(key)
-        if m:
-            if src is not None and int(m.group(1)) != src:
-                c.bad(kp, "the row id must be this spell's `from` (%d)" % src)
+        old = (isinstance(val, (str, list)) or val is None or (isinstance(val, dict) and bool({"main", "accent"} & set(val))))
+        if not COLOR_KEY_RE.fullmatch(key) or old:
+            c.bad(kp, "1.8.3: a key is the param field that points at an effect (Magic.<from>.castSfxId, Magic.<from>.fireSfxId, "
+                      "Bullet.<id>.sfxId_Bullet, SpEffectVfx.20090050.midstSfxId for the eyes, Sfx.<effect> for one no param names); "
+                      'under it every colour place of that effect by its offset: {"0x4290": [r, g, b, a] or "#RRGGBB", ...}'
+                      + (" (main / accent and one colour are gone; the eyes are put on the buff in customs.basic: "
+                         '"SpEffect.<id>.vfxId1": 20090050, "SpEffect.<id>.vfxId2": 20090051)' if old else ""))
+            continue
+        places = {}
+        for at, v in val.items():
+            if at == "__info__":
                 continue
-            if isinstance(val, dict):
-                for k in val:
-                    if k not in ("main", "accent"):
-                        c.bad("%s.%s" % (kp, k), "unknown field (use main and accent)")
-                main, accent = val.get("main"), val.get("accent")
+            if not (isinstance(at, str) and PLACE_RE.fullmatch(at)):
+                c.bad("%s.%s" % (kp, at), 'a colour place is named by its offset in the effect file: "0x4290"')
+                continue
+            pv = place_value(v)
+            if pv is None:
+                c.bad("%s.%s" % (kp, at), "must be " + PLACE_HELP)
+                continue
+            places["0x%x" % int(at, 16)] = pv
+        new[key] = places
+    if new:
+        out["colors"] = new
+
+
+def colour_effect(key: str, spell: dict) -> int | None:
+    """The effect a key of `colors` paints for this spell (1.8.3 part 2): the one `set` puts in that field, 4866 for the eyes, the
+    number of `Sfx.<effect>`; None when it is not known."""
+    if key.startswith("Sfx."):
+        return int(key.split(".", 1)[1])
+    if key.startswith("SpEffectVfx."):
+        return EYES_EFFECT
+    v = spell.get("set", {}).get(key)
+    return v if isinstance(v, int) else None
+
+
+def _colors(c, it, p, o):
+    """`colors` (1.8.3 part 2; see COLOR_KEY_RE): each key paints one effect, at its colour places; not part of the build. Whether the
+    effect has a colour plan and the places are places of it is checked by `innovate-spells apply` (the writer knows the plans)."""
+    if "colors" not in it:
+        return
+    v, q = it["colors"], p + ".colors"
+    if not isinstance(v, dict):
+        c.bad(q, 'must be an object: {"Magic.<from>.castSfxId": {"0x4290": [r, g, b, a], ...}, ...}')
+        return
+    seen, out = {}, {}
+    for key, places in v.items():
+        kq = "%s.%s" % (q, key)
+        if not (isinstance(key, str) and COLOR_KEY_RE.fullmatch(key)) or not isinstance(places, dict):
+            c.bad(kq, "not a key of colors (see customs.advanced.colors)")
+            continue
+        if key.startswith("Magic.") and "from" in o and int(key.split(".")[1]) != o["from"]:
+            c.bad(kq, "the row id must be this spell's `from` (%d)" % o["from"])
+            continue
+        if key.startswith("Bullet.") and o.get("kind") != "projectile":
+            c.bad(kq, "only kind projectile copies Bullet rows")
+            continue
+        if key.startswith("SpEffectVfx.") and "positive_curse_energy_eyes" not in o:
+            c.bad(kq, 'the colour of the eyes: put the eyes on the buff in customs.basic first ("SpEffect.<id>.vfxId1": 20090050, '
+                      '"SpEffect.<id>.vfxId2": 20090051)')
+            continue
+        fx = colour_effect(key, o)
+        if fx is None:
+            c.bad(kq, "paints the effect that customs.basic puts in %s, and it puts none: set %s in customs.basic" % (key, key))
+            continue
+        if fx in seen:
+            c.bad(kq, "paints the effect %d, which %s paints too" % (fx, seen[fx]))
+            continue
+        seen[fx] = key
+        good = {}
+        for at, val in places.items():
+            n = int(at, 16) if isinstance(at, str) and PLACE_RE.fullmatch(at) else None
+            pv = place_value(val)
+            if n is None:
+                c.bad("%s.%s" % (kq, at), 'a colour place is named by its offset in the effect file: "0x4290"')
+            elif pv is None:
+                c.bad("%s.%s" % (kq, at), "must be " + PLACE_HELP)
             else:
-                main, accent = val, None
-            if not _colour(main):
-                c.bad(kp + (".main" if isinstance(val, dict) else ""), bad_colour)
-                continue
-            out["flame_color"] = colour_of(main)
-            if accent is not None:
-                if _colour(accent):
-                    out["flame_accent_color"] = colour_of(accent)
-                else:
-                    c.bad(kp + ".accent", bad_colour)
-            fx = out.get("set", {}).get("Magic.%d.castSfxId" % src) if src is not None else None
-            if fx is not None and fx != FIRE_EFFECT:
-                c.bad(kp, "the spell casts the effect %d, which has no colour plan (only %d, the fire of Flame, Grant Me Strength, "
-                          "has one): set Magic.%d.castSfxId to %d in `customs.basic`" % (fx, FIRE_EFFECT, src, FIRE_EFFECT))
-        elif e:
-            eyes = {"on": "SpEffect.%d" % int(e.group(1))}
-            if val is not None:
-                if not _colour(val):
-                    c.bad(kp, "must be null (the game's own colour) or " + COLOUR_HELP)
-                    continue
-                eyes["color"] = colour_of(val)
-            out["positive_curse_energy_eyes"] = eyes
-        else:
-            c.bad(kp, 'a key is "Magic.<from>.castSfxId" (the fire and the ring of the cast) or "SpEffect.<id>" (the eyes while '
-                      "that buff row lasts)")
+                good["0x%x" % n] = pv
+        out[key] = good
+    o["colors"] = out
 
 
 def design_of(spell: dict) -> dict:
@@ -584,6 +677,9 @@ def design_of(spell: dict) -> dict:
     customs, adv = {}, {}
     if s.get("set"):
         customs["basic"] = dict(s["set"])
+    eyes = s.get("positive_curse_energy_eyes")
+    if eyes and "on" in eyes and "color" not in eyes:      # 1.8.3 part 2: the eyes as the build writes them
+        customs.setdefault("basic", {}).update({"%s.vfxId%d" % (eyes["on"], n): vfx for n, vfx in enumerate(EYES_VFX, 1)})
     if "text" in s:
         t = s["text"]
         adv["texts"] = {"goods_name": t.get("goods_name", ""), "goods_info": t.get("goods_info", ""),
@@ -593,9 +689,11 @@ def design_of(spell: dict) -> dict:
         main = colour_text(s["flame_color"])
         colors["Magic.%d.castSfxId" % s["from"]] = ({"main": main, "accent": colour_text(s["flame_accent_color"])}
                                                     if "flame_accent_color" in s else main)
-    if "positive_curse_energy_eyes" in s:
+    if "positive_curse_energy_eyes" in s and "color" in s["positive_curse_energy_eyes"]:     # a design written before 1.8.3
         g = s["positive_curse_energy_eyes"]
-        colors[g["on"]] = colour_text(g["color"]) if "color" in g else None
+        colors[g["on"]] = colour_text(g["color"])
+    for key, places in s.get("colors", {}).items():
+        colors[key] = dict(places)
     if colors:
         adv["colors"] = colors
     if adv:
@@ -692,7 +790,7 @@ def build_view(spec: dict) -> dict:
     the same, so it does not build again."""
     def view(it):
         it = {("positive_curse_energy_eyes" if k == "golden_eyes" else k): v for k, v in it.items()}
-        out = {k: v for k, v in it.items() if k not in ("text", "name", "description", "flame_color", "flame_accent_color")}
+        out = {k: v for k, v in it.items() if k not in ("text", "name", "description", "flame_color", "flame_accent_color", "colors")}
         if "positive_curse_energy_eyes" in out:
             out["positive_curse_energy_eyes"] = {k: v for k, v in out["positive_curse_energy_eyes"].items() if k != "color"}
         return out

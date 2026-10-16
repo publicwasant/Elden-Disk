@@ -509,6 +509,47 @@
           "additionalProperties": {
             "type": "number"
           }
+        },
+        "colors": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {},
+          "patternProperties": {
+            "^(Magic\\.[0-9]+\\.(castSfxId|fireSfxId)|Bullet\\.[0-9]+\\.sfxId_Bullet|SpEffectVfx\\.20090050\\.midstSfxId|Sfx\\.[0-9]+)$": {
+              "type": "object",
+              "description": "1.8.3: the effect this param field points at (Sfx.<effect>: one no param names); every colour place of its file by its offset in the file",
+              "properties": {
+                "__info__": {
+                  "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                  "type": "string"
+                }
+              },
+              "propertyNames": {
+                "pattern": "^(__info__|0x[0-9a-fA-F]{1,6})$"
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "description": "[red, green, blue, alpha] as the game's file holds it (above 1 shines brighter)"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$",
+                    "description": "a hex colour: \"#90D5FF\" (the place keeps its own brightness and alpha)"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "1.8.3 part 2, the earlier fields: the same as customs.advanced.colors (without comments)"
         }
       },
       "dependentRequired": {
@@ -704,104 +745,41 @@
                     }
                   },
                   "patternProperties": {
-                    "^Magic\\.[0-9]+\\.castSfxId$": {
-                      "oneOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$",
-                              "description": "a hex colour: \"#90D5FF\" (or \"#9DF\")"
+                    "^(Magic\\.[0-9]+\\.(castSfxId|fireSfxId)|Bullet\\.[0-9]+\\.sfxId_Bullet|SpEffectVfx\\.20090050\\.midstSfxId|Sfx\\.[0-9]+)$": {
+                      "type": "object",
+                      "description": "1.8.3: the effect this param field points at (Sfx.<effect>: one no param names); every colour place of its file by its offset in the file",
+                      "properties": {
+                        "__info__": {
+                          "description": "a comment for people: what the spell or this part is and how it works; the tool does not read it",
+                          "type": "string"
+                        }
+                      },
+                      "propertyNames": {
+                        "pattern": "^(__info__|0x[0-9a-fA-F]{1,6})$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "minItems": 4,
+                            "maxItems": 4,
+                            "items": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
                             },
-                            {
-                              "type": "array",
-                              "minItems": 3,
-                              "maxItems": 3,
-                              "items": {
-                                "type": "number",
-                                "minimum": 0,
-                                "maximum": 2
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "object",
-                          "additionalProperties": false,
-                          "required": [
-                            "main"
-                          ],
-                          "properties": {
-                            "main": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$",
-                                  "description": "a hex colour: \"#90D5FF\" (or \"#9DF\")"
-                                },
-                                {
-                                  "type": "array",
-                                  "minItems": 3,
-                                  "maxItems": 3,
-                                  "items": {
-                                    "type": "number",
-                                    "minimum": 0,
-                                    "maximum": 2
-                                  }
-                                }
-                              ]
-                            },
-                            "accent": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$",
-                                  "description": "a hex colour: \"#90D5FF\" (or \"#9DF\")"
-                                },
-                                {
-                                  "type": "array",
-                                  "minItems": 3,
-                                  "maxItems": 3,
-                                  "items": {
-                                    "type": "number",
-                                    "minimum": 0,
-                                    "maximum": 2
-                                  }
-                                }
-                              ]
-                            }
+                            "description": "[red, green, blue, alpha] as the game's file holds it (above 1 shines brighter)"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$",
+                            "description": "a hex colour: \"#90D5FF\" (the place keeps its own brightness and alpha)"
                           }
-                        }
-                      ]
-                    },
-                    "^SpEffect\\.[0-9]+$": {
-                      "oneOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$",
-                              "description": "a hex colour: \"#90D5FF\" (or \"#9DF\")"
-                            },
-                            {
-                              "type": "array",
-                              "minItems": 3,
-                              "maxItems": 3,
-                              "items": {
-                                "type": "number",
-                                "minimum": 0,
-                                "maximum": 2
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                        ]
+                      }
                     }
                   },
-                  "description": "put into the running game after the world loads: the fire (and its accent, the ring of runes) of the effect the spell casts, the eyes while a buff row lasts"
+                  "description": "put into the running game after the world loads (1.8.3): a key is the param field that points at an effect, under it the colour of every place of that effect file"
                 }
               },
               "description": "Level 3: texts and colours, put into the running game's memory (never built into regulation.bin)"

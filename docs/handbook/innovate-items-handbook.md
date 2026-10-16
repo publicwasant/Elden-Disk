@@ -932,6 +932,20 @@ The same idea, for the fire of *Flame, Grant Me Strength*, which is made of effe
 
 Real game, 2026-10-11, three `run` sessions with the colour `[0.2, 0.65, 1.0]`: one copy of each effect found (about 1312 MB into the largest private block, of 2560 MB, in all three runs), 68 colour places written (18 + 50; a place that would not change, such as black, is not written), read back, in 6.4-6.6 s (1712 MB read); the fire is written about 7 s after the character is in the world. The head of the blocks did not hold the fire (the look ended in the rest of the memory), which is why the look goes on to the rest. The colour lasts until the game closes.
 
+
+### 19.8 The sparks when the cast ends (1.8.3)
+
+A burst of sparks around the caster when Reverse Cursed Technique finishes its cast, in the spell's colours. Spec:
+[elden-disk-spec-v1.8.3.md](../specs/elden-disk-spec-v1.8.3.md).
+
+| What | How |
+|---|---|
+| Where it plays | the spell's second bullet (Heal's 10642101, copied to 500000001: the ring of 6 m around the caster) has no effect of its own; `customs.basic` gives it one: `"Bullet.10642101.sfxId_Bullet": 4271`. It plays at every cast (an effect on the buff's SpEffectVfx row, `initSfxId`, plays only when the buff starts) |
+| Trying an effect live | while the game runs (`run`), without a build: `eldendisk write params.Bullet.500000001.sfxId_Bullet=<effect>`, cast, then `=default`. Tried on 2026-10-17: 680035 smoke, 680030 a whirlwind, 525002 a golden ring, 8020 / 8030 / 8031 golden, 4122 smoke, **4271 ice shards with sparks (chosen)**, 4631 golden sparks |
+| Torrent's sparkles | not found: no param table and no animation (the player's, Torrent's `c8000`) names them; the game's program plays them itself. The effects only the program names were tried (the table above) |
+| The colour | part 1: `{"main": "#90D5FF", "accent": "#E0F3FF"}` (`accent` on the white parts). Part 2 (1.8.3): `customs.advanced.colors."Bullet.10642101.sfxId_Bullet"` holds each of the 39 colour places of 4271 (`writer/fxr_plans.py` `SPARK_PLANS`, made with `tools/fxr_places.py`), like every other effect of the spell. Painted in the same look as the fire, the ring and the eyes; not required (the game may not hold it yet) |
+| Only while the spell is selected | 4271 is the game's own effect, shared: the script `RctColoursFollowTheSpell` gives the sparks their colours with the fire's when the spell is selected and the game's own ice when another is |
+
 ---
 
 # Appendices

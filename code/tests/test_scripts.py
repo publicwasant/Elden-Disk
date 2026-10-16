@@ -35,8 +35,9 @@ def test_tools_read_gives_the_document_as_an_object():
         rct = x.creative.innovate_spells[2230000]
         assert rct is not None and rct.id == "reverse_cursed_technique"
         assert x.creative.innovate_spells.reverse_cursed_technique.slot == 1    # a spell also by its label
-        assert rct.design.customs.advanced.colors["SpEffect.1642100"] == "#90D5FF"     # a dotted key whole
-        assert rct.design.customs.advanced.colors.SpEffect[1642100] == "#90D5FF"        # or in two parts
+        eyes = [0.5647, 0.8353, 1.0, 1.0]
+        assert rct.design.customs.advanced.colors["SpEffectVfx.20090050.midstSfxId"]["0x2a0"] == eyes      # a dotted key whole
+        assert rct.design.customs.advanced.colors.SpEffectVfx[20090050].midstSfxId["0x2a0"] == eyes       # or in parts
         assert rct.design.customs.basic["SpEffect.1642100.effectEndurance"] == 20.0
         assert "21951000" in x.character.buffs and x.character.buffs[21951000].name == "reverse_cursed_technique"
 
@@ -52,9 +53,9 @@ def test_tools_write_writes_only_what_was_changed_and_under_the_part_given():
     with FakeBackend() as b:
         x = tools.read()
         x.character.attributes.vigor = 61
-        x.creative.innovate_spells[2230000].design.customs.advanced.colors["SpEffect.1642100"] = "#FF909E"
+        x.creative.innovate_spells[2230000].design.customs.advanced.colors["Magic.6421.castSfxId"]["0x4334"] = "#FF909E"
         assert tools.write(x.creative) is True                                   # only the part under `creative`
-        assert b.writes == [("creative.innovate_spells.2230000.design.customs.advanced.colors.SpEffect.1642100", "#FF909E")]
+        assert b.writes == [("creative.innovate_spells.2230000.design.customs.advanced.colors.Magic.6421.castSfxId.0x4334", "#FF909E")]
         assert tools.write(x) is True and b.writes[-1] == ("character.attributes.vigor", 61)
         assert tools.write(x) is True and len(b.writes) == 2                        # nothing changed since: nothing written
 
@@ -350,7 +351,7 @@ def test_buff_logger_says_what_came_and_went():
 
 def test_eyes_follow_hp_writes_the_colour_of_the_spell_once_per_change():
     s = example("eyes_follow_hp.py")
-    key = "creative.innovate_spells.2230000.design.customs.advanced.colors.SpEffect.1642100"
+    key = "creative.innovate_spells.2230000.design.customs.advanced.colors.SpEffectVfx.20090050.midstSfxId"
     with FakeBackend() as b:
         ed._set_current(s)
         s.setup()
@@ -360,7 +361,7 @@ def test_eyes_follow_hp_writes_the_colour_of_the_spell_once_per_change():
         b.doc["character"]["vitals"]["hit_point"]["current"] = 1900
         s.loop()
         ed._set_current(None)
-    assert b.writes == [(key, "#FF909E"), (key, "#90D5FF")]
+    assert b.writes == [(key, {"0x2a0": "#FF909E"}), (key, {"0x2a0": "#90D5FF"})]
 
 
 # ------------------------------------------------------------------------------------------------------------------------ the command
@@ -634,8 +635,8 @@ def test_the_colours_follow_the_spell_that_is_selected():
         s.loop()
         s.teardown()                                                                  # left as `run` left them
         ed._set_current(None)
-    assert b.writes == [(key + ".main", None), (key + ".accent", None), (key + ".main", "#90D5FF"), (key + ".accent", "#FF909E"),
-                        (key + ".main", None), (key + ".accent", None), (key + ".main", "#90D5FF"), (key + ".accent", "#FF909E")]
+    fire = {"0x4290": [0.5647, 0.8353, 1.0, 0.075], "0x4334": "#90D5FF"}          # 1.8.3 part 2: every place of the key, the eyes left alone
+    assert b.writes == [(key, None), (key, fire), (key, None), (key, fire)]
 
 
 def test_write_of_a_scripts_state_asks_the_running_host_and_never_becomes_one(tmp_path, monkeypatch, capsys):

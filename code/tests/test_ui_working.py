@@ -143,4 +143,4 @@ def test_a_child_step_shows_its_progress_and_marks_what_it_finished():
 def test_the_closing_words_are_what_both_write_steps_really_say():
     from pathlib import Path
     src = (Path(ui.__file__).parent / "commands" / "write.py").read_text(encoding="utf-8")
-    assert src.count(ui.CHILD_DONE) == 4             # the text step, the fire, the ring and the eyes: if one is reworded the check mark is lost
+    assert src.count(ui.CHILD_DONE) == 5             # the text step, the fire, the ring, the sparks (1.8.3) and the eyes: if one is reworded the check mark is lost
