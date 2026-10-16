@@ -11,7 +11,7 @@ from eldendisk.game.attach import EXIT_EAC, AttachError, Target
 from eldendisk.game.memory import Module
 from eldendisk.game.profile import AnimLayout
 from eldendisk.vault import SaveVault, SessionState
-from tests.test_disk import BASE, GD, state_ids, full_world, make_profile
+from tests.test_disk import BASE, GD, Sampler, state_ids, full_world, make_profile
 
 EXE_SHA = "ab" * 32
 HOST_PID, HOST_STARTED, GAME_PID, GAME_STARTED = 100, 555, 4242, 777
@@ -47,6 +47,7 @@ def rig(tmp_path, monkeypatch):
     monkeypatch.setattr(rcmd, "locate", lambda offsets: box["locate"](offsets))
     monkeypatch.setattr(rcmd, "open_read", lambda t: mem)
     monkeypatch.setattr(rcmd, "load_state_ids", lambda p: state_ids())
+    monkeypatch.setattr(rcmd, "Sampler", Sampler)          # 1.8.2: the held items that name the buffs (tests/test_disk.py)
     monkeypatch.setattr(rcmd, "eac_loaded", lambda pid: box["eac"])
     monkeypatch.setattr(rcmd, "is_window_active", lambda pid: box["active"])
     monkeypatch.setattr(rcmd, "process_started",
@@ -348,6 +349,9 @@ def test_mapped_and_unmapped_filter_the_ids(rig, capsys):
     mem.ticks = 3
     assert rcmd.cmd_read(args(live_buffs=True, mapped=True)) == 0
     assert [l.split()[1] for l in _lines(capsys.readouterr().out, "+")] == ["100", "200"]
+    mem.ticks = 3
+    assert rcmd.cmd_read(args(live_buffs=True, mapped=True, unmapped=True)) == 0       # 1.8.2: both, the default of `read monitor...`
+    assert [l.split()[1] for l in _lines(capsys.readouterr().out, "+")] == ["100", "200", "999"]
 
 
 def test_both_monitors_share_one_process_and_are_prefixed(rig, capsys):
@@ -375,7 +379,7 @@ def test_on_a_terminal_the_monitors_draw_one_table_each_in_place(rig, monkeypatc
 def test_names_json_is_reloaded_when_it_changes(rig, monkeypatch, capsys):
     tmp, mem, target, box, args = rig
     names = tmp / "names.json"
-    names.write_text(json.dumps({"buffs": {"100": {"name": "Golden Vow"}}}), encoding="utf-8")
+    names.write_text(json.dumps({"animations": {"5": {"name": "Stand"}}}), encoding="utf-8")
     mem.ticks = 6
     from eldendisk.game.profile import load_state_ids as real_load
     monkeypatch.setattr(rcmd, "load_state_ids", real_load)   # the rig fakes it; this test reads real files
@@ -387,16 +391,14 @@ def test_names_json_is_reloaded_when_it_changes(rig, monkeypatch, capsys):
         clock["t"] += 2.5
         n["i"] += 1
         if n["i"] == 1:
-            names.write_text(json.dumps({"buffs": {"100": {"name": "Golden Vow"}, "999": {"name": "Found It"}, "x": 1}}),
-                             encoding="utf-8")
+            names.write_text(json.dumps({"animations": {"5": {"name": "Stand"}, "x": 1}}), encoding="utf-8")
         if n["i"] == 2:
-            names.write_text(json.dumps({"buffs": {"100": {"name": "Golden Vow"}, "999": {"name": "Found It"}},
-                                         "animations": {"7": {"name": "Walk"}}}), encoding="utf-8")
+            names.write_text(json.dumps({"animations": {"5": {"name": "Stand"}, "7": {"name": "Walk"}}}), encoding="utf-8")
 
     monkeypatch.setattr(rcmd.time, "sleep", sleep)
-    assert rcmd.cmd_read(args(live_buffs=True, state_ids=str(names), unmapped=False)) == 0
+    assert rcmd.cmd_read(args(live_animations=True, state_ids=str(names), unmapped=False)) == 0
     err = capsys.readouterr().err
-    assert "changed but cannot be read" in err and "names.json reloaded (2 buffs, 1 animations)" in err
+    assert "changed but cannot be read" in err and "names.json reloaded (2 animations)" in err
 
 
 def test_an_old_flat_names_file_is_a_clear_error_before_the_game_is_looked_for(rig, monkeypatch, capsys):

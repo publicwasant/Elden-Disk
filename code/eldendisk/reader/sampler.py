@@ -4,6 +4,7 @@ Rule: one failed check discards the whole sample (correct-or-silent).
 """
 from __future__ import annotations
 
+import copy
 import math
 import struct
 import time
@@ -17,6 +18,7 @@ from ..game.params import ParamError, ParamNameError
 from ..game.paramtables import Tables
 from ..game.profile import Profile, StateIds
 from ..game.textmem import item_names
+from .buffitems import ItemEffects, build_index, held_key, path_of, table_reader
 
 MAX_BUFFS = 512
 WORLD_LOST_RESET_S = 10.0  # title screen / long load this long -> forget baseline + animation
@@ -62,6 +64,13 @@ class Sampler(Layout):
         self.names_note: str | None = None       # how many names, how long the look took (for the log)
         self.inventory_wanted = True              # a `read` of other names turns it off: the inventory (and its names) is not read
         self.game: tuple | None = None            # (pid, start time) of the game: the array of its text tables is remembered for it
+        self.item_effects: ItemEffects | None = None   # which SpEffects the rows of the item tables give (1.8.2; made when first needed)
+        self.spell_buffs: dict[int, int] = {}     # {SpEffect id: goods id}: the copied SpEffect rows of the design's spells
+        self._tables: Tables | None = None
+        self._index: dict[int, list] = {}
+        self._index_key: tuple | None = None
+        self._index_of: dict | None = None
+        self._index_spells: dict = {}
 
     def _reset_session(self) -> None:
         """Forget per-character state (the player left the world, possibly to load another character)."""
@@ -145,13 +154,16 @@ class Sampler(Layout):
         if err is not None:
             return self._wait(err)
 
+        inventory = None
+        if self.profile.inventory is not None and self.inventory_wanted:
+            inventory = self._read_inventory(gd, now)
         buffs: dict[str, dict] = {}
         ignored = 0
         if p.sp_effect is not None:
             entries, err = self._read_buff_list(player)
             if err is not None:
                 return self._wait(err)
-            buffs, ignored = self._classify(entries, now)
+            buffs, ignored = self._classify(entries, now, inventory)
 
         # Read Site of Grace interaction/resting state directly from CSChrTimeActModule in game memory
         anim_id = self.read_animation_id(player)
@@ -209,7 +221,7 @@ class Sampler(Layout):
         if equipment is not None:
             character["equipment"] = equipment
         if self.profile.inventory is not None and self.inventory_wanted:
-            character["inventory"] = self._read_inventory(gd, now)
+            character["inventory"] = inventory
         return Sample("CONNECTED", character, ignored, ignored_anim, None, runes)
 
     def _read_inventory(self, gd: int, now: datetime) -> dict | None:
@@ -246,11 +258,49 @@ class Sampler(Layout):
         if self._goods_types is None and not self._goods_types_tried:
             self._goods_types_tried = True
             try:
-                rows = Tables(self.mem, self.profile, self.base).read_table("EquipParamGoods", "goodsType")
+                rows = self.tables().read_table("EquipParamGoods", "goodsType")
                 self._goods_types = {rid: row["goodsType"] for rid, row in rows.items()}
             except (ParamError, ParamNameError):
                 pass
         return self._goods_types
+
+    def tables(self) -> Tables:
+        """The game's param tables, one walk for the sampler (ParamError when this exe version has none in offsets.json)."""
+        if self._tables is None:
+            self._tables = Tables(self.mem, self.profile, self.base)
+        return self._tables
+
+    def buff_index(self, inventory: dict | None) -> dict[int, list]:
+        """{SpEffect id: [(group, id key), ...]}: the held items of `inventory` that give each buff (1.8.2), made again only when
+        the held items (or the design's spells) change."""
+        if inventory is not None and inventory is self._index_of and self.spell_buffs == self._index_spells:
+            return self._index            # the same read of the inventory (it is read about once a second; a sample is 60 a second)
+        self._index_of, self._index_spells = inventory, dict(self.spell_buffs)
+        key = (held_key(inventory), tuple(sorted(self.spell_buffs.items())))
+        if key != self._index_key:
+            if self.item_effects is None:
+                try:
+                    self.item_effects = ItemEffects(table_reader(self.tables()))
+                except (ParamError, ParamNameError):
+                    self.item_effects = ItemEffects(None)       # no tables: no item gives a buff (every buff is unmapped)
+            self._index, self._index_key = build_index(inventory, self.item_effects, self.spell_buffs), key
+        return self._index
+
+    def buff_index_now(self) -> dict[int, list]:
+        """The index of the items held now, for `read monitor-buffs` (the inventory read as a sample reads it, at most once a second)."""
+        if self.profile.inventory is None:
+            return self.buff_index(None)
+        gd, _why = self.locate_game_data()
+        if gd is None:
+            return self._index
+        return self.buff_index(self._read_inventory(gd, datetime.now(timezone.utc)))
+
+    def buff_item(self, eid: int) -> dict | None:
+        """The inventory object of the first held item that gives the buff `eid` (from the last index and inventory), or None."""
+        refs = self._index.get(eid)
+        if not refs or not self._inventory:
+            return None
+        return (self._inventory.get(refs[0][0]) or {}).get(refs[0][1])
 
     def _read_equipment(self, gd: int) -> dict | None:
         """`character.equipment` (1.7.2): {"magic": {"selected": {"slot", "id"}, "slots": {"1": id, ...}}}: the spells memorised in the
@@ -324,15 +374,18 @@ class Sampler(Layout):
             cur = nxt
         return out, None
 
-    def _classify(self, entries, now: datetime) -> tuple[dict[str, dict], int]:
+    def _classify(self, entries, now: datetime, inventory: dict | None = None) -> tuple[dict[str, dict], int]:
+        """The buffs a held item gives (1.8.2): {SpEffect id: the item's object of `inventory` + `reference` (+ `times` when timed)};
+        the others are counted (ignored)."""
         mode = self.profile.sp_effect.entry.timer_mode
         buffs: dict[str, dict] = {}
         ignored = 0
         active_eids: set[int] = set()
+        index = self.buff_index(inventory)
 
         for eid, dur, timer in entries:
-            cfg = self.state_ids.buffs.get(eid)
-            if cfg is None or not (math.isfinite(dur) and math.isfinite(timer)):
+            refs = index.get(eid)
+            if not refs or not (math.isfinite(dur) and math.isfinite(timer)):
                 ignored += 1
                 continue
 
@@ -364,12 +417,8 @@ class Sampler(Layout):
                 }
 
             key = str(eid)
-            buff = {
-                "name": cfg.name,
-                "categories": cfg.categories or "CONSUMABLES",
-            }
-            if cfg.abilities:
-                buff["abilities"] = cfg.abilities
+            buff = copy.deepcopy(inventory[refs[0][0]][refs[0][1]])
+            buff["reference"] = [path_of(r) for r in refs]
             if kind == "TIMED":
                 buff["times"] = times
 

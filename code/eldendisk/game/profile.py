@@ -1,4 +1,4 @@
-"""Loads offsets.json (per exe version) and names.json (buff and animation ID tables)."""
+"""Loads offsets.json (per exe version) and names.json (the animation ID table; 1.8.2: buffs are named by their items)."""
 from __future__ import annotations
 
 import json
@@ -549,7 +549,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
 
 @dataclass(frozen=True)
 class StateConfig:
-    """What the tool knows about one buff or one animation id (the entry of `names.json`)."""
+    """What the tool knows about one animation id (the entry of `names.json`)."""
     name: str
     categories: str | None = None
     abilities: str | None = None
@@ -557,9 +557,10 @@ class StateConfig:
 
 @dataclass(frozen=True)
 class StateIds:
-    """`names.json`: the names of buff ids and of animation ids (two tables; the same number may be in both)."""
-    buffs: dict[int, StateConfig]
+    """`names.json`: the names of animation ids. Its `buffs` section (before 1.8.2) is not read: a buff is named by the held item that
+    gives it (`reader/buffitems.py`); `old_buffs` says the file still has one (a note in the log)."""
     animations: dict[int, StateConfig]
+    old_buffs: bool = False
 
 
 def _state_table(data, kind: str, where: Path) -> dict[int, StateConfig]:
@@ -581,13 +582,12 @@ def load_state_ids(path: Path) -> StateIds:
     """A missing file means empty tables. Malformed content raises ValueError."""
     p = Path(path)
     if not p.exists():
-        return StateIds({}, {})
+        return StateIds({})
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or not ({"buffs", "animations"} & set(data)):
-            raise ValueError('expected an object with "buffs" and "animations" (an old flat file? '
+            raise ValueError('expected an object with "animations" (an old flat file? '
                              'python tools/convert_state_ids.py FILE converts it)')
-        return StateIds(_state_table(data.get("buffs", {}), "buffs", p),
-                        _state_table(data.get("animations", {}), "animations", p))
+        return StateIds(_state_table(data.get("animations", {}), "animations", p), old_buffs="buffs" in data)
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise ValueError(f"malformed {p}: {exc!r}") from exc

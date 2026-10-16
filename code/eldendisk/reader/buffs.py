@@ -1,4 +1,4 @@
-"""`read monitor-buffs`: the character's buff ids (the game's SpEffects) over time (for names.json)."""
+"""`read monitor-buffs`: the character's buff ids (the game's SpEffects) over time; mapped: a held item gives it (1.8.2)."""
 from __future__ import annotations
 
 import math
@@ -11,6 +11,7 @@ from .sampler import Sampler
 
 class BuffsMonitor(LedgerMonitor):
     name = "buffs"
+    unknown_means = "no held item gives it"
 
     def __init__(self, sampler: Sampler, out: Callable[[str], None] | None = None, *, quiet: bool = False,
                  show: str = "all", now: Callable[[], datetime] = lambda: datetime.now().astimezone()):
@@ -19,7 +20,12 @@ class BuffsMonitor(LedgerMonitor):
 
     @property
     def table(self):
-        return self.sampler.state_ids.buffs
+        """{SpEffect id: the held items that give it} (1.8.2: the inventory, not names.json)."""
+        return self.sampler._index
+
+    def name_of(self, eid: int) -> str | None:
+        item = self.sampler.buff_item(eid)
+        return item.get("name") if item is not None else None
 
     @staticmethod
     def unsupported(profile) -> str | None:
@@ -32,6 +38,7 @@ class BuffsMonitor(LedgerMonitor):
         entries, err = self.sampler.raw_buffs()
         if entries is None:
             return None, err
+        self.sampler.buff_index_now()      # which ids are mapped: the items held now
         return {eid: (dur, timer) for eid, dur, timer in entries if not self.quiet or dur < 0 or dur >= 1.0}, None
 
     def detail_text(self, detail) -> str:

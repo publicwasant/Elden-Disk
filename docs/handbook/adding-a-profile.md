@@ -291,8 +291,9 @@ identical. On a throwaway character raise **one** attribute by one point and con
 
 ## Part E — Buffs (optional, after Part D)
 
-Buffs need two things: the **layout** of the buff list (already filled with starting values in A2 — you *verify* it) and a
-table of **buff IDs** with names (`names.json`, the `buffs` object).
+Buffs need the **layout** of the buff list (already filled with starting values in A2 — you *verify* it) and, to be named, the
+profile's `inventory` and `params` blocks: since 1.8.2 a buff is named by the held item that gives it (the game's own tables say which
+SpEffect each item gives), not by `names.json`.
 
 **E1. Verify the layout.** In-world, run (with the game started by `eldendisk run`):
 
@@ -328,23 +329,17 @@ Set it in the profile. A wrong value does not crash — it reports wrong times w
 
 Ignore anything that flickers with a duration under 1 s (internal engine buffs; `-q` hides them) and anything whose timer stays equal to its duration forever (refreshed every frame, not a real countdown).
 
-**E4. Write `names.json`.** Two objects, keys are the IDs as strings. Buff ids go under `buffs`; animation ids (`read monitor-animations`) go under `animations`. Each entry has a `name`, and optionally `categories` and `abilities`:
+**E4. Write `names.json`.** One object, `animations`, keys are the IDs as strings (`read monitor-animations`). Each entry has a `name`, and optionally `categories` and `abilities`. The buffs need no entry (1.8.2): `read monitor-buffs` shows each one with the name of the held item that gives it, and `Unknown` for the rest; a `buffs` object left in an older file is not read.
 
 ```json
 {
-  "buffs": {
-    "3971":    { "name": "Gold-Pickled Fowl Foot", "categories": "CONSUMABLES" },
-    "1605000": { "name": "Flame, Grant Me Strength", "categories": "INCANTATIONS" },
-    "1660000": { "name": "Golden Vow", "categories": "INCANTATIONS" },
-    "311100":  { "name": "Gold Scarab", "categories": "TALISMANS" }
-  },
   "animations": {
     "2020110": { "name": "Running", "categories": "MANNER" }
   }
 }
 ```
 
-A buff and an animation may use the same number: they are two tables. A 1.6.2 file (one flat list with a `sources` field) is converted by `python code/tools/convert_state_ids.py names.json`. The monitors re-read the file while they run, so names you add show at once.
+A 1.6.2 file (one flat list with a `sources` field) is converted by `python code/tools/convert_state_ids.py names.json`. The monitors re-read the file while they run, so names you add show at once.
 
 **E5. End-to-end test.** While a buff is running: `python -m eldendisk read buffs` twice, about five seconds apart.
 `buff_duration` must have dropped by about five, `max_duration` must equal the duration you saw, and the buff must vanish when it ends.
@@ -397,16 +392,10 @@ It reproduces the profile that was verified on this build: stats matched the in-
 }
 ```
 
-Starter `names.json` for the same build (IDs observed in-game):
+Starter `names.json` for the same build (1.8.2: animations only; the buffs are named by their items):
 
 ```json
 {
-  "buffs": {
-    "3971":    { "name": "Gold-Pickled Fowl Foot", "categories": "CONSUMABLES" },
-    "1605000": { "name": "Flame, Grant Me Strength", "categories": "INCANTATIONS" },
-    "1660000": { "name": "Golden Vow", "categories": "INCANTATIONS" },
-    "311100":  { "name": "Gold Scarab", "categories": "TALISMANS" }
-  },
   "animations": {}
 }
 ```

@@ -59,7 +59,7 @@ Rules every command follows:
 | the portal | `run` | back up, swap in the build, launch offline; once a character is in the world: `innovate-spells apply`, `resurrect` (the list of `creative.json`) and `scripts start *`; restore when the game closes |
 | 1st: vault | `vault status \| list \| verify \| restore \| keep \| prune` | the snapshots and the session record |
 | 2nd: core | `read [* \| all \| NAME \| ID \| PATH ...] [--live] [--tree \| --flat \| --json]` | the document, or a part of it |
-| 2nd: core | `read monitor \| monitor-buffs \| monitor-animations [--mapped \| --unmapped]` | one row per buff / animation id that appears |
+| 2nd: core | `read monitor \| monitor-buffs \| monitor-animations [--mapped] [--unmapped]` | one row per buff / animation id that appears |
 | 2nd: core | `write NAME=VALUE ...`, `write NAME=default`, `write` | change values in the running game; `write` alone lists the names and their ranges |
 | 3rd: creative | `scripts [* \| all]`, `scripts start \| restart \| stop \| status [NAME[:ID[:PROCESS_ID]] \| * \| all]`, `scripts add \| remove \| change PATH` | your scripts |
 | 3rd: creative | `innovate-spells`, `innovate-spells build [* \| all \| NAME \| ID ...] \| secure \| apply` | new spells |
@@ -87,7 +87,7 @@ alone. The character's values have short forms: `character.` may be left out, `a
 | `--save-dir DIR` | the game's save folder, for several Steam accounts (remembered) | `run`, `vault restore` |
 | `--game-dir DIR` | where `eldenring.exe` is (found through Steam otherwise) | `run`, `innovate-spells`, `hash` |
 | `--offsets FILE` | the profile: the pointer chains of each game version (`offsets.json`; the one in the exe by default) | `run`, `read`, `write`, `scripts`, `innovate-spells`, `resurrect`, data |
-| `--names FILE` | `names.json`: the names of the buffs and the animations (the one next to the exe, else the one in it) | `read`, `scripts`, `export`, `reset` |
+| `--names FILE` | `names.json`: the names of the animations (the one next to the exe, else the one in it; 1.8.2: a buff is named by its item) | `read`, `scripts`, `export`, `reset` |
 | `--spec FILE` | the creative file (`creative.json` next to the exe, else the one in the exe) | `run`, `read`, `write`, `scripts`, `innovate-spells`, `resurrect`, `export` |
 | `--creative-dir DIR` | where builds, secured files and the scripts' status are kept (`<vault>\creative`) | the same |
 | `--vault-on`, `--vault-off` | open the portal (default) / play without it | `run` |
@@ -173,7 +173,7 @@ python -m eldendisk vault status | list | verify SNAPSHOT | restore | keep | pru
 
 ```commandline
 python -m eldendisk read [* | all | NAME | ID | PATH ...] [--live] [--tree | --flat | --json]
-python -m eldendisk read monitor | monitor-buffs | monitor-animations [--mapped | --unmapped]
+python -m eldendisk read monitor | monitor-buffs | monitor-animations [--mapped] [--unmapped]
 ```
 
 `read` follows the profile's pointer chains, builds the document and prints it, or the parts you name. Read-only: it never opens a write
@@ -194,13 +194,21 @@ handle and works with or without `run` (it waits for `eldenring.exe` and for a l
 | `--tree` (default), `--flat`, `--json` | a tree; one `full.path  value` row per value; JSON (not with `--live`) |
 
 **Monitors.** `read monitor-buffs` polls the active buffs (the game's SpEffects), `read monitor-animations` the animation, `read monitor`
-both: one `+` / `-` row per id with its time, named from `names.json`. `--unmapped` (the default) shows only the ids `names.json` does not
-name yet (what a monitor is for: finding new ids), `--mapped` only those it names. `-q` hides short internal buffs. `names.json` is read
-again when it changes, so names added while a monitor runs show at once.
+both: one `+` / `-` row per id with its time and its name. Both kinds by default (1.8.2): the mapped ids (a buff that a held item gives,
+an animation `names.json` names) and the unmapped ones (`Unknown`); `--mapped` shows only the first, `--unmapped` only the others (what is
+left to find). `-q` hides short internal buffs. `names.json` is read again when it changes, so animation names added while a monitor runs
+show at once.
 
-`names.json` names the buffs and the animations the game gives no readable name for (`311100` "Gold Scarab", `TALISMANS`; `26030000`
-"Attacking (R1)", `MANNER`). It belongs to the reader (`code/eldendisk/reader/names.json`) and is always in the exe; a `names.json` next to
-the exe wins, so names can be added without a new build. The buffs of the spells in `creative.json` are named by the build.
+**Buffs (1.8.2).** A buff is named by the item the character holds that gives it: the game's own tables say which SpEffect each item
+gives (a goods item's `refId_default`, a spell's Magic row and its bullet, a talisman's `refId` and resident effects, a weapon's, armor's
+and ash of war's resident effects). `character.buffs.<SpEffect id>` is that item's object of `character.inventory` (`name`, `type`,
+`upgrade`, `quantity`), `reference` (the inventory paths of every held item that gives it) and `times` for a timed buff. A buff no held
+item gives (a Site of Grace, an enemy, the game's own) is counted in `systems.status.ignored.buffs`. The buffs of the spells in
+`creative.json` are given by the spell's goods item.
+
+`names.json` names the animations the game gives no readable name for (`26030000` "Attacking (R1)", `MANNER`); its `buffs` section is
+not read any more (1.8.2). It belongs to the reader (`code/eldendisk/reader/names.json`) and is always in the exe; a `names.json` next to
+the exe wins, so names can be added without a new build.
 
 ---
 
@@ -437,7 +445,7 @@ A wrong name or value is an error that names its place in the file; nothing is b
 | **Block** | **What** |
 |:---|:---|
 | `systems` | the profile, the features this game version supports (`buffs_supported`, `animations_supported`, `creative_supported`), the status, the session (`mode`: `creative` inside the portal, else `telemetry`; `read_only`; `creative`) |
-| `character` | `level`, `vitals`, `runes` (`total`, `baseline`, `delta`), `attributes`, `buffs`, `animations`, `equipment.magic`, `inventory` (1.8.1: `goods`, `key_items`, `talismans`, `weapons`, `armor`, `ashes_of_war`; each item by id with `name`, `quantity` (`total`, `held`, `stored`: in the storage chest), goods' `type`, weapons' `upgrade`) |
+| `character` | `level`, `vitals`, `runes` (`total`, `baseline`, `delta`), `attributes`, `buffs` (1.8.2: by the held item that gives them), `animations`, `equipment.magic`, `inventory` (1.8.1: `goods`, `key_items`, `talismans`, `weapons`, `armor`, `ashes_of_war`; each item by id with `name`, `quantity` (`total`, `held`, `stored`: in the storage chest), goods' `type`, weapons' `upgrade`) |
 | `creative` | `scripts` (`host` and every script), `innovate_spells.<goods id>` (`id`, `slot`, `rows`, and apart `design`), `resurrect.great_enemies.<id>` (the defeated ones only) |
 
 The full example is in [spec 1.8.0 part 2, "The single source of truth"](../specs/elden-disk-spec-v1.8.0.md).
@@ -490,7 +498,7 @@ python -m eldendisk read runes hp attrs.*
 python -m eldendisk read character.runes --live
 python -m eldendisk read creative --flat
 
-# the monitors: the ids names.json does not name yet
+# the monitors: every id (--mapped: the named ones, --unmapped: the others)
 python -m eldendisk read monitor
 python -m eldendisk read monitor-buffs --mapped
 
@@ -536,7 +544,7 @@ python -m eldendisk vault restore
 | `read --query NAME` | `read NAME` |
 | `read --export`, `disk-state.json` | `export`, `<TOOLS-DIR>\output\disk.json` |
 | `read --param Table.ID`, `--param-check FILE`, `--probe-params` | `read params.Table.ID`, `check FILE`, `probe` |
-| `read --live-buffs`, `--live-animations` | `read monitor-buffs`, `monitor-animations`, `monitor` (`--unmapped` by default) |
+| `read --live-buffs`, `--live-animations` | `read monitor-buffs`, `monitor-animations`, `monitor` (both kinds by default since 1.8.2) |
 | `write --set NAME=VALUE`, `--reset NAME`, `--refill LIST` | `write NAME=VALUE`, `write NAME=default`, `write hp=<a big number>` |
 | (none) | `reset`, `scripts start \| restart \| stop \| status`, `creative.scripts` in the document |
 | `chr_state_ids.json` next to `offsets.json` | `names.json` in the reader's package (one next to the exe still wins) |

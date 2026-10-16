@@ -232,8 +232,8 @@ def cmd_scripts_host(args, only: list[str] | None = None) -> int:
     try:
         state_ids = load_state_ids(names_file(args))
     except ValueError as exc:
-        book.w(TAG, f"{exc}; buffs and animations are read without names")
-        state_ids = StateIds({}, {})
+        book.w(TAG, f"{exc}; animations are read without names")
+        state_ids = StateIds({})
     folder = creative_folder(args, vault_root)
     try:
         resolved = creative.open_spells(folder, spec_file(args)).resolved_path

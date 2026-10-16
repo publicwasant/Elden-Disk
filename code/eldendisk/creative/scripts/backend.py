@@ -30,7 +30,6 @@ from ...game.layout import Layout
 from ...game.params import ParamError, ParamLockedError, ParamNameError
 from ...game.paramtables import Tables
 from ...game.processes import process_started
-from ...game.profile import StateConfig, StateIds
 from ...reader.export import build_document
 from ...reader.sampler import Sampler
 from ...vault import VaultError, authorise
@@ -477,16 +476,10 @@ class CreativeLive:
             self.say("W", f"could not save {CACHE_NAME} ({exc})")
 
 
-def with_spell_buffs(state_ids: StateIds, spells: dict) -> StateIds:
-    """`state_ids` with the buffs of the design's spells named (their copied SpEffect rows, by the spell's label), so the document
-    lists them under character.buffs like any buff the tool knows (they are in no names.json)."""
-    extra = {}
-    for goods, rec in spells.items():
-        for sp in rec.get("rows", {}).get("sp_effect", ()):
-            extra[int(sp)] = StateConfig(rec.get("id", str(goods)), "CREATIVE", f"a buff of the design's spell {rec.get('id')} (goods {goods})")
-    if not extra:
-        return state_ids
-    return StateIds({**extra, **state_ids.buffs}, state_ids.animations)
+def spell_buffs(spells: dict) -> dict[int, int]:
+    """{SpEffect id: goods id}: the copied SpEffect rows of the design's spells (1.8.2: listed under character.buffs with the spell's
+    goods item of the inventory when the character holds it, like any buff an item gives)."""
+    return {int(sp): int(goods) for goods, rec in spells.items() for sp in rec.get("rows", {}).get("sp_effect", ())}
 
 
 ENEMIES = ["creative", "resurrect", "great_enemies"]
@@ -529,7 +522,7 @@ class LiveBackend:
         self.snapshot.load()
         self.creative = CreativeLive(mem, target, self.vault_root, resolved_path, gate=self.gate, snapshot=self.snapshot, say=say,
                                      status_path=status_path)
-        self.sampler.state_ids = with_spell_buffs(state_ids, self.creative.spells())
+        self.sampler.spell_buffs = spell_buffs(self.creative.spells())
         self._clock = clock
         self._read_lock, self._write_lock = threading.Lock(), threading.Lock()
         self._doc, self._doc_at = None, -1e9

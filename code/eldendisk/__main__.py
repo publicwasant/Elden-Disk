@@ -6,7 +6,7 @@ The portal
 
 The game (core)
   read                [* | all | NAME | ID | PATH ...] [--live] [--tree | --flat | --json]
-  read                monitor | monitor-buffs | monitor-animations [--mapped | --unmapped]
+  read                monitor | monitor-buffs | monitor-animations [--mapped] [--unmapped]
   write               NAME=VALUE ... (NAME=default: the game's own value); `write` alone lists the names
 
 Creative
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def names(p):
         p.add_argument("--names", dest="state_ids", default=None, metavar="FILE",
-                       help="names.json, the names of the buffs and the animations (default: the one next to the exe, else the one in it)")
+                       help="names.json, the names of the animations (default: the one next to the exe, else the one in it)")
 
     def creative_files(p, spec=True):
         if spec:
@@ -158,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ---- the game ----
     rd = sub.add_parser("read", help="the game's values: the document or a part of it, or the monitors (read-only)",
                         description="read [* | all | NAME | ID | PATH ...] [--live] [--tree | --flat | --json]\n"
-                                    "read monitor | monitor-buffs | monitor-animations [--mapped | --unmapped]",
+                                    "read monitor | monitor-buffs | monitor-animations [--mapped] [--unmapped]",
                         formatter_class=argparse.RawDescriptionHelpFormatter)
     rd.set_defaults(**READ_DEFAULTS)
     rd.add_argument("words", nargs="*", metavar="NAME",
@@ -166,9 +166,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "params.Magic.6230.mp*, creative.resurrect.great_enemies; or monitor, monitor-buffs, monitor-animations")
     rd.add_argument("--live", action="store_true", help="do not stop: keep the values current (at --hz)")
     outputs(rd)
-    m = rd.add_mutually_exclusive_group()
-    m.add_argument("--mapped", action="store_true", help="the monitors: only ids that are in names.json")
-    m.add_argument("--unmapped", action="store_true", help="the monitors: only ids that are NOT in names.json yet (the default)")
+    rd.add_argument("--mapped", action="store_true",
+                    help="the monitors: the named ids (a buff: a held item gives it; an animation: in names.json); with --unmapped too: "
+                         "both (the default)")
+    rd.add_argument("--unmapped", action="store_true", help="the monitors: the ids nothing names yet")
     rd.add_argument("-q", "--quiet", action="store_true",
                     help="monitor-buffs: hide short-lived internal buffs (0 <= duration < 1 s)")
     hz(rd)

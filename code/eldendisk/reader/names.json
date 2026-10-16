@@ -1,31 +1,4 @@
 {
-  "buffs": {
-    "311100": {
-      "name": "Gold Scarab",
-      "categories": "TALISMANS",
-      "abilities": "Permanently increases Runes gained by 20% while equipped."
-    },
-    "3971": {
-      "name": "Gold-Pickled Fowl Foot",
-      "categories": "CONSUMABLES",
-      "abilities": "Increases Runes gained by 30% for 3 minutes."
-    },
-    "1605000": {
-      "name": "Flame! Grant Me Strength",
-      "categories": "INCANTATIONS",
-      "abilities": "Raises physical and fire-alignment attack power."
-    },
-    "1660000": {
-      "name": "Golden Vow",
-      "categories": "INCANTATIONS",
-      "abilities": "Increases attack power and defense for self and nearby allies."
-    },
-    "21950111": {
-      "name": "Reverse Curse Technique",
-      "categories": "INCANTATIONS",
-      "abilities": "Regenerates HP, FP and stamina over time for 15 s (custom spell, goods/magic id 2230000)."
-    }
-  },
   "animations": {
     "2000000": {
       "name": "Standing",

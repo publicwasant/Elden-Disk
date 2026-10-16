@@ -4,9 +4,9 @@
     read NAME | ID | PATH ...          a part of it: `hp`, `attrs.*`, `character.runes`, `creative.resurrect.great_enemies`,
                                        `params.effects.1621000`, and any row of the six tables: `params.Magic.6230`, `params.Magic.6230.mp*`
     read ... --live                    the same, kept current (at --hz)
-    read monitor | monitor-buffs | monitor-animations [--mapped | --unmapped]
-                                       the monitors: one row per id that appears; `--unmapped` (the default) shows only the ids names.json
-                                       does not name yet, `--mapped` only those it names
+    read monitor | monitor-buffs | monitor-animations [--mapped] [--unmapped]
+                                       the monitors: one row per id that appears; both kinds by default (1.8.2), `--mapped` only the
+                                       named ids (a buff: a held item gives it; an animation: names.json names it), `--unmapped` the others
     export [--live]                    the whole document to <TOOLS-DIR>\\output\\disk.json (again each time it changes with --live)
     check [FILE]                       a regulation.bin (the game folder's by default) against the game, row by row
     probe                              where the param files of the other tables are in memory
@@ -121,7 +121,7 @@ def read_words(args) -> int:
     args.live_buffs = args.live_animations = False
     if words and words[0].lower() in MONITORS:
         if len(words) > 1:
-            book.e("read", f"`read {words[0]}` stands alone (--mapped or --unmapped go with it)")
+            book.e("read", f"`read {words[0]}` stands alone (--mapped and --unmapped go with it)")
             return EXIT_ERROR
         if args.live or args.json or args.flat:
             book.e("read", "the monitors are live by themselves: --live, --flat and --json do not go with them")
@@ -129,7 +129,7 @@ def read_words(args) -> int:
         kinds = MONITORS[words[0].lower()]
         args.live_buffs, args.live_animations = "buffs" in kinds, "animations" in kinds
         if not (args.mapped or args.unmapped):
-            args.unmapped = True                 # 1.8.0: the ids names.json does not name yet are what a monitor is for
+            args.mapped = args.unmapped = True   # 1.8.2: both kinds by default
         return cmd_read(args)
     if args.mapped or args.unmapped:
         book.e("read", "--mapped / --unmapped go with read monitor, monitor-buffs, monitor-animations")
@@ -154,7 +154,7 @@ def _wants_inventory(args) -> bool:
     """Whether this command shows `character.inventory` (1.8.1): the whole document, an export, a name under `character` or a pattern
     that may reach it. Otherwise the inventory and its names (a look of about a second for the text) are not read."""
     if args.export or getattr(args, "live_buffs", False) or getattr(args, "live_animations", False):
-        return bool(args.export)
+        return bool(args.export or getattr(args, "live_buffs", False))      # 1.8.2: a buff is mapped by the held items
     names = [args.query] if isinstance(args.query, str) else list(args.query or [])
     if not names:
         return True
@@ -165,8 +165,8 @@ def _wants_inventory(args) -> bool:
         if not n or "*" in n or "?" in n:
             return True
         path = normalize(n)
-        if path in ("character", "") or path.startswith("character.inventory"):
-            return True
+        if path in ("character", "") or path.startswith(("character.inventory", "character.buffs", "systems")):
+            return True                  # 1.8.2: the buffs are named by the held items (and `systems` counts the others)
     return False
 
 
@@ -296,6 +296,9 @@ def cmd_read(args) -> int:
                              ("mode", _mode_text(args))])
     if profile.buffs_note:
         book.w("read", profile.buffs_note)
+    if state_ids.old_buffs:
+        book.i("read", f"{names_file(args).name}: its \"buffs\" section is not read any more (1.8.2: a buff is named by the held item "
+                       "that gives it)")
 
     mem = open_read(target)
     sampler = Sampler(mem, profile, state_ids, target.base)
@@ -483,7 +486,7 @@ def _creative_block(args, target: Target, mem, vault: Path | None, sampler: Samp
     from .innovate import creative_folder, spec_file
     from .. import creative
     from ..creative.scripts import host as shost
-    from ..creative.scripts.backend import CreativeLive, with_spell_buffs
+    from ..creative.scripts.backend import CreativeLive, spell_buffs
     from ..creative.innovate_spells.service import CreativeError
     status = None
     try:
@@ -493,8 +496,8 @@ def _creative_block(args, target: Target, mem, vault: Path | None, sampler: Samp
     except CreativeError:
         resolved = None                # no build: the scripts and the great enemies (1.8.0) are still there
     ext = CreativeLive(mem, target, vault, resolved, status_path=status)
-    if sampler is not None:            # the buffs of the design's spells are named in character.buffs
-        sampler.state_ids = with_spell_buffs(sampler.state_ids, ext.spells())
+    if sampler is not None:            # the buffs of the design's spells: given by the spell's goods item when it is held
+        sampler.spell_buffs = spell_buffs(ext.spells())
     last = {"at": -1e9, "block": None}
 
     def block():
@@ -737,7 +740,7 @@ class _Board:
 
 
 class _TableReload:
-    """Re-reads names.json when it changed, so names added while a monitor runs show up at once."""
+    """Re-reads names.json when it changed, so animation names added while a monitor runs show up at once."""
 
     def __init__(self, path: Path, sampler: Sampler):
         self.path, self.sampler = Path(path), sampler
@@ -763,7 +766,7 @@ class _TableReload:
             book.w("read", f"{self.path.name} changed but cannot be read, keeping the old names: {exc}")
             return
         self.sampler.state_ids = table
-        book.i("read", f"{self.path.name} reloaded ({len(table.buffs)} buffs, {len(table.animations)} animations)")
+        book.i("read", f"{self.path.name} reloaded ({len(table.animations)} animations)")
 
 
 def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vault: Path | None,
@@ -788,7 +791,7 @@ def _live(args, target: Target, mem, sampler: Sampler, export: ExportWriter, vau
 
 def _monitors(args, target: Target, mem, sampler: Sampler, vault: Path | None, watch: baselines.Watch | None = None) -> int:
     both = args.live_buffs and args.live_animations
-    show = "mapped" if args.mapped else "unmapped" if args.unmapped else "all"
+    show = "mapped" if args.mapped and not args.unmapped else "unmapped" if args.unmapped and not args.mapped else "all"
     redraw = ui.can_redraw()
 
     def out_for(name: str):

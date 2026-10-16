@@ -17,6 +17,7 @@ SHOW = ("all", "mapped", "unmapped")
 
 class LedgerMonitor:
     name = "ids"
+    unknown_means = "not in names.json"
 
     def __init__(self, sampler: Sampler, out: Callable[[str], None] | None, *, show: str = "all",
                  now: Callable[[], datetime] = lambda: datetime.now().astimezone()):
@@ -34,7 +35,7 @@ class LedgerMonitor:
 
     @property
     def table(self) -> dict:
-        """The names of this monitor's ids (`names.json`: buffs or animations)."""
+        """What maps this monitor's ids (the animations: `names.json`; the buffs: the held items that give them)."""
         raise NotImplementedError
 
     def is_mapped(self, eid: int) -> bool:
@@ -46,7 +47,7 @@ class LedgerMonitor:
     # -- shared -----------------------------------------------------------
     def start(self) -> None:
         if self.out:
-            self.out("Format: + appeared, - disappeared | id | name (Unknown = not in names.json) | time")
+            self.out(f"Format: + appeared, - disappeared | id | name (Unknown = {self.unknown_means}) | time")
 
     def _shown(self, eid: int) -> bool:
         return self.show == "all" or (self.show == "mapped") == self.is_mapped(eid)

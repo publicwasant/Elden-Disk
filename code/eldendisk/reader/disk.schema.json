@@ -144,13 +144,21 @@
         },
         "buffs": {
           "type": "object",
+          "description": "1.8.2: the buffs a held item gives, by their SpEffect id: the item's object of character.inventory (name, quantity, type, upgrade), reference (the inventory paths of every held item that gives it; the object is the first one's) and times (a timed buff).",
+          "propertyNames": { "pattern": "^[0-9]+$" },
           "additionalProperties": {
             "type": "object",
-            "required": ["name", "categories"],
+            "required": ["name", "quantity", "reference"],
+            "additionalProperties": false,
             "properties": {
-              "name": { "type": "string" },
-              "categories": { "type": "string" },
-              "abilities": { "type": "string" },
+              "name": { "type": ["string", "null"] },
+              "type": { "type": ["string", "integer", "null"] },
+              "upgrade": { "type": "integer", "minimum": 0 },
+              "quantity": { "$ref": "#/$defs/items/additionalProperties/properties/quantity" },
+              "reference": {
+                "type": "array", "minItems": 1,
+                "items": { "type": "string", "pattern": "^character\\.inventory\\.(goods|key_items|talismans|weapons|armor|ashes_of_war)\\.[0-9]+$" }
+              },
               "times": {
                 "type": "object",
                 "required": ["buff_duration", "max_duration", "last_activated_at"],

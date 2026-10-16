@@ -10,8 +10,9 @@ import eldendisk
 from eldendisk.game import memory as memory_reader
 from eldendisk.game.profile import (EntryLayout, Profile, SpEffectLayout, StateConfig, StateIds, VitalsLayout,
                                     load_profile, load_state_ids)
+from eldendisk.reader.buffitems import ItemEffects
 from eldendisk.reader.export import JsonLogger, build_document
-from eldendisk.reader.sampler import Sampler
+from eldendisk.reader.sampler import Sampler as _Sampler
 
 PKG = Path(eldendisk.__file__).parent
 SCHEMA = json.loads((PKG / "reader" / "disk.schema.json").read_text())
@@ -51,15 +52,40 @@ def make_profile(mode="remaining", sp=True):
 
 def state_ids():
     return StateIds(
-        buffs={
-            100: StateConfig("Golden Vow", categories="INCANTATIONS", abilities="Buff"),
-            200: StateConfig("Gold Scarab", categories="TALISMANS", abilities="More runes"),
-        },
         animations={
             2020210: StateConfig("Sprint", categories="MANNER"),
             68011: StateConfig("Resting", categories="MANNER", abilities="Resets: HP, FP, Stamina, etc."),
         },
     )
+
+
+# 1.8.2: a buff is named by the held item that gives it. The character holds the incantation goods 6600 (its Magic row gives SpEffect 100
+# through a bullet) and the talisman 1110 (SpEffect 200); SpEffect 999 is given by no held item.
+INV = {"goods": {"6600": {"name": "Golden Vow", "type": "incantation", "quantity": {"total": 1, "held": 1, "stored": 0}}},
+       "key_items": {}, "talismans": {"1110": {"name": "Gold Scarab", "quantity": {"total": 1, "held": 1, "stored": 0}}},
+       "weapons": {}, "armor": {}, "ashes_of_war": {}}
+ROWS = {"EquipParamGoods": {6600: {}}, "Magic": {6600: {"refCategory1": 1, "refId1": 10660000}},
+        "Bullet": {10660000: {"spEffectId0": 100}}, "EquipParamAccessory": {1110: {"refCategory": 2, "refId": 200}}}
+
+
+class Sampler(_Sampler):
+    """The sampler with the inventory INV and the item tables ROWS (the fake memory has neither)."""
+
+    def __init__(self, *a, inventory=INV, **k):
+        super().__init__(*a, **k)
+        self.item_effects = ItemEffects(lambda table, fields: ROWS.get(table, {}))
+        self._fake_inventory = inventory
+
+    def _sample(self, now):
+        self._inventory = self._fake_inventory
+        return super()._sample(now)
+
+    def buff_index_now(self):
+        self._inventory = self._fake_inventory
+        return self.buff_index(self._fake_inventory)
+
+    def _classify(self, entries, now, inventory=None):
+        return super()._classify(entries, now, self._fake_inventory if inventory is None else inventory)
 
 
 def entry(m, addr, eid, dur, timer, nxt):
@@ -126,20 +152,16 @@ def test_connected_sample(mode):
     assert c["attributes"]["strength"] == 90 and c["attributes"]["arcane"] == 10
     assert "100" in c["buffs"]
     b = c["buffs"]["100"]
-    assert b["name"] == "Golden Vow"
-    assert "kind" not in b
-    assert b["categories"] == "INCANTATIONS"
-    assert b["abilities"] == "Buff"
+    assert b["name"] == "Golden Vow" and b["type"] == "incantation" and b["quantity"] == {"total": 1, "held": 1, "stored": 0}
+    assert b["reference"] == ["character.inventory.goods.6600"]
+    assert "kind" not in b and "categories" not in b and "abilities" not in b
     assert b["times"]["buff_duration"] == 45.0 and b["times"]["max_duration"] == 80.0
     assert b["times"]["last_activated_at"] == "2026-09-30 11:59:25.000000+00:00"  # now - (80-45), UTC offset always present
     assert "200" in c["buffs"]
     p = c["buffs"]["200"]
-    assert p["name"] == "Gold Scarab"
-    assert "kind" not in p
-    assert p["categories"] == "TALISMANS"
-    assert p["abilities"] == "More runes"
-    assert "times" not in p
-    assert r.ignored_buffs == 1  # id 999 not in tables
+    assert p == {"name": "Gold Scarab", "quantity": {"total": 1, "held": 1, "stored": 0}, "reference": ["character.inventory.talismans.1110"]}
+    assert r.ignored_buffs == 1  # id 999: no held item gives it
+    assert p["quantity"] is not INV["talismans"]["1110"]["quantity"]       # a copy: the buff and the inventory stay apart
     valid(doc_for(s, r))
 
 
@@ -380,20 +402,19 @@ def test_profile_partial_buffs_disables_only_buffs(tmp_path):
 
 
 def test_state_ids_loader(tmp_path):
-    assert load_state_ids(tmp_path / "missing.json") == StateIds({}, {})
-    p = write_json(tmp_path, "e.json", {"buffs": {"_readme": "x", "100": {"name": "A", "categories": "CONSUMABLES"},
-                                                  "200": {"name": "P", "categories": "TALISMANS", "abilities": "up"}},
-                                        "animations": {"100": {"name": "Same number, another table"}}})
+    assert load_state_ids(tmp_path / "missing.json") == StateIds({})
+    p = write_json(tmp_path, "e.json", {"animations": {"_readme": "x", "100": {"name": "A", "categories": "MANNER"},
+                                                       "200": {"name": "P", "abilities": "up"}}})
     e = load_state_ids(p)
-    assert e.buffs[100].name == "A" and e.buffs[200].categories == "TALISMANS" and e.buffs[200].abilities == "up"
-    assert e.animations[100].name == "Same number, another table" and 100 in e.buffs      # two tables: no clash
-    only = write_json(tmp_path, "only.json", {"buffs": {"1": {"name": "B"}}})
-    assert load_state_ids(only).animations == {}
+    assert e.animations[100].name == "A" and e.animations[200].abilities == "up" and not e.old_buffs
+    old = write_json(tmp_path, "old.json", {"buffs": {"1": "NOT_AN_OBJECT"}, "animations": {"5": {"name": "B"}}})
+    e = load_state_ids(old)                      # 1.8.2: the buffs section is not read (not even checked), only noted
+    assert e.old_buffs and e.animations[5].name == "B" and not hasattr(e, "buffs")
 
 
 @pytest.mark.parametrize("content", [
     {"1": {"name": "x", "sources": "EFFECTS"}},                  # the 1.6.2 flat shape: not read as if it were new
-    {"buffs": {"1": "NOT_AN_OBJECT"}}, {"buffs": {"1": {"abilities": "no name"}}}, {"buffs": [1]}, [],
+    {"animations": {"1": "NOT_AN_OBJECT"}}, {"animations": {"1": {"abilities": "no name"}}}, {"animations": [1]}, [],
 ])
 def test_a_malformed_state_ids_file_is_an_error(tmp_path, content):
     with pytest.raises(ValueError, match="malformed"):
@@ -408,7 +429,7 @@ def test_the_flat_file_error_says_how_to_convert_it(tmp_path):
 def test_the_shipped_names_json_loads_and_has_no_sources():
     path = Path(eldendisk.__file__).parent / "reader" / "names.json"      # 1.8.0: the reader's (chr_state_ids.json next to offsets.json before)
     ids = load_state_ids(path)
-    assert ids.buffs and ids.animations
+    assert ids.animations and not ids.old_buffs                    # 1.8.2: no buffs section
     assert "sources" not in path.read_text(encoding="utf-8")
 
 

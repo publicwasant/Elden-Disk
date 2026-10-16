@@ -59,8 +59,7 @@ def test_the_highlight_lasts_a_second_after_a_change():
 
 
 def table():
-    return StateIds(buffs={100: StateConfig("Golden Vow")},
-                    animations={2020110: StateConfig("Running"), 300: StateConfig("An animation id")})
+    return StateIds(animations={2020110: StateConfig("Running"), 300: StateConfig("An animation id")})
 
 
 class Fake(SimpleNamespace):
@@ -68,7 +67,9 @@ class Fake(SimpleNamespace):
 
 
 def monitor(cls, out, **kw):
-    sampler = Fake(state_ids=table(), profile=Fake(sp_effect=Fake(entry=Fake(timer_mode="remaining"))))
+    sampler = Fake(state_ids=table(), profile=Fake(sp_effect=Fake(entry=Fake(timer_mode="remaining"))),
+                   _index={100: [("goods", "6600")]}, buff_index_now=lambda: None)      # 1.8.2: a held item gives buff 100
+    sampler.buff_item = lambda eid: {"name": "Golden Vow"} if eid in sampler._index else None
     return cls(sampler, out, now=lambda: monitor.clock[0], **kw), sampler
 
 
@@ -110,7 +111,7 @@ def test_buffs_monitor_shows_timer_and_treats_animation_rows_as_unmapped():
     m, sampler = monitor(BuffsMonitor, got.append)
     sampler.raw_buffs = lambda: ([(100, 80.0, 45.0), (200, -1.0, 0.0), (300, 10.0, 5.0)], None)
     m.tick()
-    assert "45.0 / 80.0 s" in got[0] and "permanent" in got[1] and "Unknown" in got[2]
+    assert "Golden Vow" in got[0] and "45.0 / 80.0 s" in got[0] and "permanent" in got[1] and "Unknown" in got[2]
     assert m.summary() == "3 active · 3 seen · 2 unmapped"
     m.show = "unmapped"
     assert [l.id for l in m.lines(T0)] == [200, 300] and m.summary().endswith("showing unmapped")

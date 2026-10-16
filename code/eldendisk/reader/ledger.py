@@ -30,7 +30,7 @@ class Line(NamedTuple):
     """One row of the table, ready to draw."""
     active: bool
     id: int
-    name: str | None            # None = not mapped in names.json
+    name: str | None            # None = not mapped (an animation: not in names.json; a buff: no held item gives it)
     detail: str
     stamp: str                  # HH:MM:SS.mmm of the last change
     hot: bool

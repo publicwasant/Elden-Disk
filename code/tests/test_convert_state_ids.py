@@ -31,7 +31,7 @@ def test_the_command_keeps_a_backup_and_the_result_loads(tmp_path, capsys):
     assert conv.main([str(f)]) == 0
     assert json.loads((tmp_path / "names.json.bak").read_text(encoding="utf-8")) == OLD
     ids = load_state_ids(f)
-    assert set(ids.buffs) == {311100, 5} and set(ids.animations) == {2000000}
+    assert ids.old_buffs and set(ids.animations) == {2000000}      # 1.8.2: the buffs section is no longer read
     assert conv.main([str(f)]) == 1 and "already in the new shape" in capsys.readouterr().err
 
 

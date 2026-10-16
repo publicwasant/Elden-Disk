@@ -99,10 +99,14 @@ def test_read_words_parse_into_what_read_does(monkeypatch):
     monkeypatch.setattr(rcmd, "cmd_read", lambda a: seen.update(vars(a)) or 0)
     assert cli.main(["read", "monitor", "-q", "--hz", "30"]) == 0
     assert seen["live_buffs"] and seen["live_animations"] and seen["quiet"] and not seen["live"] and not seen["export"]
-    assert seen["hz"] == 30.0 and seen["unmapped"] and not seen["mapped"]          # --unmapped is the default of a monitor
+    assert seen["hz"] == 30.0 and seen["unmapped"] and seen["mapped"]          # 1.8.2: both kinds are the default of a monitor
     seen.clear()
     assert cli.main(["read", "monitor-animations"]) == 0
-    assert seen["live_animations"] and not seen["live_buffs"] and seen["unmapped"]
+    assert seen["live_animations"] and not seen["live_buffs"] and seen["unmapped"] and seen["mapped"]
+    seen.clear()
+    assert cli.main(["read", "monitor", "--mapped", "--unmapped"]) == 0 and seen["mapped"] and seen["unmapped"]
+    seen.clear()
+    assert cli.main(["read", "monitor-buffs", "--unmapped"]) == 0 and seen["unmapped"] and not seen["mapped"]
     seen.clear()
     assert cli.main(["read", "monitor-buffs", "--mapped"]) == 0 and seen["mapped"] and not seen["unmapped"] and seen["live_buffs"]
     seen.clear()
@@ -143,7 +147,7 @@ def test_read_words_parse_into_what_read_does(monkeypatch):
 @pytest.mark.parametrize("argv", [
     ["read", "--hz", "500"], ["read", "--hz", "0"], ["export", "--export-interval", "-1"], ["export", "--hz", "0"],
     ["read", "--timeout", "0"], ["read", "--json", "--live"], ["read", "--once"], ["read", "--flat", "--json"],
-    ["read", "--tree", "--flat"], ["read", "monitor", "--mapped", "--unmapped"],
+    ["read", "--tree", "--flat"],
     ["read", "--query", "hp"], ["read", "--export"], ["read", "--live-buffs"], ["read", "--param", "Magic.6230"],
     ["read", "--probe-params"], ["read", "--param-check"], ["export", "hp"], ["probe", "x"],
 ])

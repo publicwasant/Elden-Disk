@@ -14,7 +14,7 @@ the game's own `regulation.bin` back, byte for byte: **nothing you did inside co
 |:---|:---|
 | `eldendisk.exe` | the tool; run it from a terminal (`.\eldendisk.exe <command>`) |
 | `README.md` | this file (written when the exe is built) |
-| `offsets.json`, `names.json`, `creative.json` | only when you put them here: they win over the copies in the exe (the profile of each game version, the names of the buffs and the animations, what you create) |
+| `offsets.json`, `names.json`, `creative.json` | only when you put them here: they win over the copies in the exe (the profile of each game version, the names of the animations, what you create) |
 
 Nothing is written next to the exe: everything the tool keeps lives in `%LOCALAPPDATA%\EldenDisk` (`<TOOLS-DIR>`): the vault in `vault\`
 (snapshots, the session record, `eldendisk.log`, the creative files in `vault\creative\`) and what `export` writes in `output\`. So the exe
