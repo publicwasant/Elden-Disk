@@ -6,8 +6,11 @@ from the tables the profile's `text.names` numbers say (spec 1.8.1 section 5).
 """
 from __future__ import annotations
 
+import json
+import os
 import struct
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from . import scan
 from .memory import is_user_ptr
@@ -187,20 +190,81 @@ def fmg_entries(data: bytes) -> dict[int, str]:
     return out
 
 
-def item_names(mem, text: TextProfile, budget: float = scan.BUDGET) -> tuple[dict[tuple[str, int], str], str]:
+ARRAY_CACHE = "text-array.json"     # in %LOCALAPPDATA%\EldenDisk: where the array of the text tables is, for one game process
+
+
+def _array_cache() -> Path:
+    base = os.environ.get("LOCALAPPDATA")
+    return (Path(base) if base else Path.home() / "AppData" / "Local") / "EldenDisk" / ARRAY_CACHE
+
+
+def array_holds(mem, text: TextProfile, array: int) -> bool:
+    """Whether `array` still points, at every number of `text.files`, at a table of the game of the size `text.sizes` says (three
+    small reads: how a remembered array is checked before it is used)."""
+    for name, number in text.files.items():
+        raw = mem.read(array + 8 * number, 8)
+        base = struct.unpack("<Q", raw)[0] if raw else 0
+        head = mem.read(base, HEADER) if is_user_ptr(base) else None
+        if head is None or table_size(head, 0, base) != text.sizes.get(name):
+            return False
+    return True
+
+
+def remembered_array(game: tuple | None, cache: Path | None = None) -> int | None:
+    if game is None:
+        return None
+    try:
+        doc = json.loads((cache or _array_cache()).read_text(encoding="utf-8"))
+        if doc.get("game") == list(game) and isinstance(doc.get("array"), int):
+            return doc["array"]
+    except (OSError, ValueError, AttributeError):
+        pass
+    return None
+
+
+def remember_array(game: tuple | None, array: int, cache: Path | None = None) -> None:
+    """Keep where the array is for this game process; a failure only means the next command looks again."""
+    if game is None:
+        return
+    try:
+        f = cache or _array_cache()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"game": list(game), "array": array}), encoding="utf-8")
+        os.replace(tmp, f)
+    except OSError:
+        pass
+
+
+def find_array(mem, text: TextProfile, budget: float = scan.BUDGET, game: tuple | None = None,
+               cache: Path | None = None) -> tuple[int | None, str, bool]:
+    """(the array of the text tables, why not, whether it was remembered). `game` (pid, start time): the array found for this game
+    process is remembered in %LOCALAPPDATA%\\EldenDisk\\text-array.json and only checked by later commands (1.8.1 part 3: the look
+    takes about a second; the check three small reads)."""
+    known = remembered_array(game, cache)
+    if known is not None and array_holds(mem, text, known):
+        return known, "", True
+    seen = find_tables(mem, text, budget=budget)
+    if not all(seen.found.values()):
+        return None, "the game's text tables were not found (another language than the profile's sizes?)", False
+    arrays = find_arrays(mem, text, seen.found, budget=budget)
+    if not arrays.found:
+        return None, "the array of the text tables was not found", False
+    remember_array(game, arrays.found[0][0], cache)
+    return arrays.found[0][0], "", False
+
+
+def item_names(mem, text: TextProfile, budget: float = scan.BUDGET, game: tuple | None = None,
+               cache: Path | None = None) -> tuple[dict[tuple[str, int], str], str]:
     """({(param table, row id): the game's name of the item}, "") from the tables `text.names` lists (later numbers win: the DLC's), or
-    ({}, why not). One look for the tables and the array (about a second), then a few tables read."""
+    ({}, why not). The array is looked for once per game process (about a second, `find_array`), then a few tables are read."""
     if not text.names:
         return {}, "the profile's text block has no names"
     if text.name_files:          # found by tables a build never replaces (the game in the log of 2026-10-15: GoodsName replaced)
         text = TextProfile(text.name_files, text.name_sizes, text.names)
-    seen = find_tables(mem, text, budget=budget)
-    if not all(seen.found.values()):
-        return {}, "the game's text tables were not found (another language than the profile's sizes?)"
-    arrays = find_arrays(mem, text, seen.found, budget=budget)
-    if not arrays.found:
-        return {}, "the array of the text tables was not found"
-    array = arrays.found[0][0]
+    array, why, _known = find_array(mem, text, budget, game, cache)
+    if array is None:
+        return {}, why
     out: dict[tuple[str, int], str] = {}
     for table, numbers in text.names.items():
         for number in numbers:

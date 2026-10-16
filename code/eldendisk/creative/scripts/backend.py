@@ -522,6 +522,7 @@ class LiveBackend:
                  say=lambda level, msg: None, clock=time.monotonic, status_path: Path | None = None):
         self.mem, self.target, self.vault_root, self.say = mem, target, Path(vault_root), say
         self.sampler = Sampler(mem, target.profile, state_ids, target.base)
+        self.sampler.game = (target.pid, target.started)          # the array of the text tables is remembered for this game
         self.gate = WriteGate()
         self.gate.open()                       # made only after the session check
         self.snapshot = Snapshot(self.vault_root / SNAPSHOT_NAME, target.pid, target.started)

@@ -194,7 +194,7 @@ def write_counts(mem, target, gate, snapshot, items: list[tuple[str, str]]) -> l
 
     def by_name(key: str):
         if not names and target.profile.text is not None:
-            names.update(item_names(mem, target.profile.text)[0] or {("", 0): ""})
+            names.update(item_names(mem, target.profile.text, game=(target.pid, target.started))[0] or {("", 0): ""})
         return [(g, int(i)) for g, its in inv.items() if g in WRITABLE_GROUPS for i in its
                 if names.get(("EquipParamGoods", int(i))) and name_key(names[("EquipParamGoods", int(i))]) == key]
 

@@ -97,7 +97,7 @@ def test_an_item_is_written_by_its_name(inv, monkeypatch):
     open_session()
     prof = replace(pf.params_profile(), inventory=LAY, text=TextProfile({"GoodsName": 10}, {"GoodsName": 40}))
     box["locate"] = lambda offsets: Target(GAME_PID, GAME_STARTED, Module("eldenring.exe", BASE, "x"), EXE_SHA, prof)
-    monkeypatch.setattr(ie, "item_names", lambda mem, text: ({("EquipParamGoods", 1200): "Gold-Pickled Fowl Foot"}, ""))
+    monkeypatch.setattr(ie, "item_names", lambda mem, text, **kw: ({("EquipParamGoods", 1200): "Gold-Pickled Fowl Foot"}, ""))
     assert wcmd.cmd_write(args("inventory.gold_pickled_fowl_foot.quantity.held=33")) == 0 and held(mem, 0) == 33
 
 

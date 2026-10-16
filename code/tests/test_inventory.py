@@ -210,3 +210,31 @@ def test_a_chest_that_cannot_be_read_leaves_stored_and_total_null_and_the_rest_i
     m.u64(GD + 0x5F0, 0)
     inv = INV.read_inventory(m, GD, LAY)
     assert inv["goods"]["1200"]["quantity"] == q(None, 10, None) and "2900" not in inv["goods"]
+
+
+def test_the_array_of_the_text_is_remembered_for_the_game_and_only_checked_after(tmp_path, monkeypatch):
+    """1.8.1 part 3: the look for the array (about a second in the game) is made once per game process."""
+    from eldendisk.game import textmem
+    from eldendisk.game.profile import TextProfile
+    from tests.test_write_text import FILES, SIZES, game_with_tables
+    g = game_with_tables()
+    text = TextProfile(FILES, SIZES, {"EquipParamGoods": (10,)})
+    cache = tmp_path / "text-array.json"
+    looks = []
+    real = textmem.find_tables
+    monkeypatch.setattr(textmem, "find_tables", lambda *a, **k: looks.append(1) or real(*a, **k))
+    first = textmem.find_array(g, text, game=(7, 1.5), cache=cache)
+    assert first[0] and first[2] is False and len(looks) == 1
+    assert textmem.find_array(g, text, game=(7, 1.5), cache=cache) == (first[0], "", True) and len(looks) == 1
+    assert textmem.find_array(g, text, game=(8, 2.5), cache=cache)[2] is False and len(looks) == 2     # another game process
+    struct.pack_into("<Q", g.mem[0x20000000], 0x100 + FILES["GoodsName"] * 8, 0)                       # the array no longer holds
+    assert textmem.find_array(g, text, game=(8, 2.5), cache=cache)[0] is None and len(looks) == 3
+
+
+def test_the_quick_parse_of_a_list_gives_what_the_entry_checks_give():
+    m = game()
+    lay24 = LAY
+    odd = InventoryLayout(24, 0, 4, 8, InventoryList((0x418,), 0, 32), InventoryList((), 0xB10, 8))
+    quick = INV.read_list(m, GD, lay24, lay24.items)
+    slow = [e for n in range(32) if (e := INV.entry(m.read(ITEMS, 32 * 24), n * 24, odd)) is not None]
+    assert quick == slow and len(quick) == 8

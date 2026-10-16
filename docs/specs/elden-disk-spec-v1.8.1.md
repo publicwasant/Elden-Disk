@@ -1,17 +1,25 @@
 > [!NOTE]
 > **Version:** `1.8.1`  
-> **Status:** IMPLEMENTED (closed) on 2026-10-15. Tried in the real game the same day: the layout of section 4 (`probe inventory`),
+> **Status:** Part 1 (reading the inventory): IMPLEMENTED (closed) on 2026-10-15. Tried in the real game the same day: the layout of
+> section 4 (`probe inventory`),
 > `read inventory` and `export --disk` with every kind, the counts (Gold-Pickled Fowl Foot 10, Smithing Stone [1] 16, Stonesword Key 6)
 > and the names in the game's language, after `innovate-spells apply` had replaced GoodsName (section 5); `quantity.stored` from the
 > storage chest (Gold-Pickled Fowl Foot: total 562, held 10, stored 552, as the menu shows). One read soon after the world was
 > loaded gave `stored` 0 for it; the reads after gave 552 (not explained; to watch).
 > Part 2 (writing the inventory): IMPLEMENTED (closed) on 2026-10-15, decided by the author the same day (P5: the defaults); tried
-> in the real game the same day (a held count written, read back and put back: passed).  
-> **Last Updated:** _2026-10-15_
+> in the real game the same day (a held count written, read back and put back: passed). Part 3 (optimization): IMPLEMENTED on
+> 2026-10-16 (unit tests); the time of the first and later `read inventory` to be seen in a game's log (`-v`).  
+> **Last Updated:** _2026-10-16_
 
 # Elden-Disk spec 1.8.1: `character.inventory`
 
 Reads on top of [spec 1.8.0](elden-disk-spec-v1.8.0.md). Only what changes is written here. Branch `feat/character-inventory`.
+
+- **Part 1:** reading the inventory (`character.inventory`): sections 1 to 10.
+- **Part 2:** writing the inventory (the counts): sections P1 to P7.
+- **Part 3:** optimization of parts 1 and 2: sections O1 to O4.
+
+# Part 1: reading the inventory (2026-10-15)
 
 ## 1. Idea
 
@@ -331,3 +339,38 @@ not a number, an unknown name); by name; an entry that changed meanwhile; no ses
 - `write` (`commands/write.py`) and a script's `tools.write` (`creative/scripts/backend.py`) both go through `write_counts`, after the
   session check and with the open gate; `params=default` leaves the inventory's values alone, `inventory=default` puts them back.
 - `write` alone lists the inventory's names.
+
+# Part 3: optimization of parts 1 and 2 (2026-10-16)
+
+Asked by the author once parts 1 and 2 passed in the game. Rule, as in 1.8.0 part 3: nothing that keeps a read correct or a write safe is
+made weaker (every list still read whole and checked entry by entry, every write still finds its entry again).
+
+## O1. Measured (before)
+
+| **What**                                                    | **Time**             | **Where it goes**                                                     |
+|:------------------------------------------------------------|---------------------:|:----------------------------------------------------------------------|
+| a `read` that shows the inventory (`read inventory...`)     | about 0.95 s         | the look for the text tables and their array for the names: 0.5 s + 0.3 s of memory read (the logs of 2026-10-15), at every command |
+| a `write` of a count by an item's name                      | about 1 s            | the same look                                                          |
+| reading the three lists (5,000 places), once a second       | 2.7 ms               | a struct unpack of three words per place                              |
+
+## O2. Made quicker
+
+| **What**                                   | **Before**          | **After**                                         | **How** |
+|:-------------------------------------------|--------------------:|--------------------------------------------------:|:--------|
+| the item names in a later command          | about 1 s           | three small reads, then the name tables (a few hundred KB) | the array of the text tables is remembered for the game process (`%LOCALAPPDATA%\EldenDisk\text-array.json`: the game's pid and start time, the array's address); a later command only checks that it still points at the tables the profile's `name_files` / `name_sizes` say, and looks again when it does not (another game process, a moved array) |
+| reading the three lists                    | 2.7 ms              | 1.0 ms                                            | the entries checked on 32-bit words of one view of the bytes (the same checks as `entry`; a profile whose offsets are not 4-byte aligned keeps the old way) |
+
+`read -v` says in the log how long the names took (`item names: N in X s`), so the first command of a game process (the look) and the
+later ones (the remembered array) can be told apart in a game's log.
+
+## O3. Not changed
+
+- `read hp`, `read disk.character.level` and every `read` that does not show the inventory already read neither the lists nor the names
+  (part 1, section 3).
+- The goods' types: one read of the `goodsType` field of EquipParamGoods per command (the decoder of 1.8.0 part 4 for that field only).
+- A write: the inventory read once, the entry found again before each write; already a few milliseconds.
+
+## O4. Tests
+
+`tests/test_inventory.py`: the array found once per game process and only checked after (another game process or an array that no
+longer holds: looked for again); the quick parse gives what `entry` gives.

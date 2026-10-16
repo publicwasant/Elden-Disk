@@ -66,11 +66,23 @@ def read_list(mem, game_data: int, lay: InventoryLayout, lst: InventoryList) -> 
     raw = mem.read(addr, lst.capacity * lay.entry_size)
     if raw is None:
         raise InventoryError(f"{lst.capacity} places at 0x{addr:X} are unreadable")
+    if lay.entry_size % 4 or lay.entry_handle % 4 or lay.entry_id % 4 or lay.entry_quantity % 4:
+        return [e for n in range(lst.capacity) if (e := entry(raw, n * lay.entry_size, lay)) is not None]
+    # 1.8.1 part 3: the same checks as `entry`, on 32-bit words (a few thousand places a second; about three times quicker)
+    words = memoryview(raw).cast("I")
+    step, h_at, i_at, q_at = lay.entry_size // 4, lay.entry_handle // 4, lay.entry_id // 4, lay.entry_quantity // 4
     out = []
-    for n in range(lst.capacity):
-        e = entry(raw, n * lay.entry_size, lay)
-        if e is not None:
-            out.append(e)
+    for b in range(0, lst.capacity * step, step):
+        handle = words[b + h_at]
+        top = handle >> 28
+        if top not in KINDS:
+            continue
+        iid, qty = words[b + i_at], words[b + q_at]
+        if iid >> 28 != ID_TOP[top] or not 1 <= qty <= QTY_MAX:
+            continue
+        if top in (0xA, 0xB) and handle & 0x0FFFFFFF != iid & 0x0FFFFFFF:
+            continue
+        out.append((KINDS[top], iid & 0x0FFFFFFF, qty))
     return out
 
 

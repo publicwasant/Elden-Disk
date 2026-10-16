@@ -300,6 +300,7 @@ def cmd_read(args) -> int:
     mem = open_read(target)
     sampler = Sampler(mem, profile, state_ids, target.base)
     sampler.inventory_wanted = _wants_inventory(args)
+    sampler.game = (target.pid, target.started)
     watch = baselines.Watch(target.pid, target.started, since=time.time())
     _take_baselines(watch, sampler, [])          # a runes baseline `reset` set for this game counts at once
     try:
@@ -534,6 +535,8 @@ def _query_once(args, mem, sampler: Sampler, export: ExportWriter) -> int:
             book.w("read", f"an item cannot be found by its name now: {sampler.names_error}")
         return EXIT_ERROR
     book.d("read", f"query {view.label(args.query)}: {len(selection)} result(s)")
+    if getattr(sampler, "names_note", None):
+        book.d("read", sampler.names_note)
     if getattr(sampler, "names_error", None) and any(p.startswith(("character.inventory", "disk.character.inventory", "character"))
                                                      or p in ("", "disk") for p, _v in selection):
         book.w("read", f"the items' names are not shown: {sampler.names_error}")

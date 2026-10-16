@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import math
 import struct
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -58,7 +59,9 @@ class Sampler(Layout):
         self.item_names: dict | None = None        # (table, row id) -> the game's name of the item (names(); a test may set it)
         self._names_tried = False
         self.names_error: str | None = None
+        self.names_note: str | None = None       # how many names, how long the look took (for the log)
         self.inventory_wanted = True              # a `read` of other names turns it off: the inventory (and its names) is not read
+        self.game: tuple | None = None            # (pid, start time) of the game: the array of its text tables is remembered for it
 
     def _reset_session(self) -> None:
         """Forget per-character state (the player left the world, possibly to load another character)."""
@@ -228,11 +231,13 @@ class Sampler(Layout):
         None when they cannot be found (then every `name` is null; the reason in `names_error`)."""
         if self.item_names is None and not self._names_tried and self.profile.text is not None:
             self._names_tried = True
+            t0 = time.monotonic()
             try:
-                found, why = item_names(self.mem, self.profile.text, budget=NAMES_BUDGET_S)
+                found, why = item_names(self.mem, self.profile.text, budget=NAMES_BUDGET_S, game=self.game)
             except Exception as exc:          # the names are extras: no failure of the look may stop the read
                 found, why = {}, f"the look for the text failed: {exc}"
             self.item_names, self.names_error = (found or None), (why or None)
+            self.names_note = f"item names: {len(found)} in {time.monotonic() - t0:.2f} s" + (f" ({why})" if why else "")
         return self.item_names
 
     def goods_types(self) -> dict[int, int] | None:
