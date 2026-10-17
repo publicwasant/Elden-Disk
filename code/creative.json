@@ -350,7 +350,7 @@
             "Bullet.10680000.sfxId_Hit": -1,
             "Bullet.10680000.createLimitGroupId": 0,
             "__info_cut__": "The cut, AtkParam_Pc.68000 (of every cut): atkPhys = physical damage of one cut before the seal's scaling (a target is hit once a cast; locked on, by all 38), atkAttribute 0 = slash (1 strike, 2 pierce, 3 standard), atkMaterial = what hits, which picks the game's own hit look and sound on what is hit (0: metal, as a sword; 6: magic, Bestial Sling's).",
-            "AtkParam_Pc.68000.atkPhys": 380,
+            "AtkParam_Pc.68000.atkPhys": 280,
             "AtkParam_Pc.68000.atkAttribute": 0,
             "AtkParam_Pc.68000.atkMaterial": 0,
             "__info_bleed__": "The bleed: Bullet.10680000.spEffectId0 = a copy of SpEffect 1625 (the bleed a game bullet carries), bloodAttackPower = bleed per hit; when the meter is full the target loses 15% of its max HP + 100 (the game's).",

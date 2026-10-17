@@ -1,9 +1,9 @@
-"""Dismantle follows the lock-on (1.8.4 part 2): locked on, all 38 cuts go at the one target, cast with the motion of O, Flame!; not
-locked on, the fan of part 1, cast with Catch Flame's motion (the build's). Locked on costs 2.5 times the FP. On the ones hit, next
-to the blood: Beast Claw's claw marks (locked on, the charged Beast Claw's, bigger), played by the game's unused SpEffectVfx row
-999999999. The game reads these rows at every cast, so the script writes the fields of the other mode into the running game when the
-lock-on changes, and nothing while it stays. `teardown()` puts the build's values back. A cast within `every` seconds of locking on
-or off may still be in the mode before."""
+"""Dismantle follows the lock-on (1.8.4 parts 2-4): locked on, ONE cut flies at the target, slower and turning hard, and circles it,
+cutting it again every 0.05 s while it lasts (part 4), cast with the motion of O, Flame!; not locked on, the fan of part 1, cast with
+Catch Flame's motion (the build's). Locked on costs 2.5 times the FP. On the ones hit, next to the blood: Beast Claw's claw marks
+(locked on, the charged Beast Claw's, bigger), played by the game's unused SpEffectVfx row 999999999. The game reads these rows at
+every cast, so the script writes the fields of the other mode into the running game when the lock-on changes, and nothing while it
+stays. `teardown()` puts the build's values back. A cast within `every` seconds of locking on or off may still be in the mode before."""
 
 from eldendisk.creative.scripts.edstdlib import tools, Interface
 
@@ -13,22 +13,41 @@ MAGIC, FAN, BLOOD = "6800", "10680000", "474"
 # (written in the running game only: the game's file keeps it as it is)
 MARKS = 999999999
 UNUSED = {"midstSfxId": -1, "midstDmyId": -1, "existEffectForLarge": 0, "isVisibleDeadChr": 0}     # row MARKS in the game's file
+# the template's own values of the fields the design does not name (Bestial Sling's fan, 10680000): the build's, even when the game
+# holds the locked-on ones (a script started again while locked on)
+TEMPLATE = {("Bullet", "homingAngle"): 0, ("Bullet", "homingBeginDist"): 0.0, ("Bullet", "hormingStopRange"): 0.0,
+            ("Bullet", "lockShootLimitAng"): 30, ("Bullet", "isUseSharedHitList"): 1, ("Bullet", "dmgHitRecordLifeTime"): 999.0}
 # param table -> (its name in the design's keys, the template's row)
 ROWS = {"Magic": ("Magic", MAGIC), "Bullet": ("Bullet", FAN), "SpEffectParam": ("SpEffect", BLOOD), "SpEffectVfxParam": (None, None)}
 
-LOCKED_FP = 2.5          # locked on, the FP a cast costs: the build's x this
+LOCKED_FP = 1.8          # locked on, the FP a cast costs: the build's x this
+# part 4, locked on: one cut that circles the target. The game's cast lets a bullet fire its shots one after the other for about
+# 0.1 s only (shootInterval: 2 of 38 got out), and a HitBulletID written in the running game is not used: so one cut, slow enough
+# and turning hard enough to stay around the target, cuts it again each time it forgets the hit
+REHIT = 0.05             # seconds a cut remembers a hit: it cuts the same target again after this
+SPEED = 120.0            # m/s, as the fan: a target 30 m away is reached in 0.25 s
+TURN = 5760              # degrees a second it turns towards the target: SPEED x 48 keeps it around the target at about 1.2 m
+LIFE = 3.5               # seconds it lasts: the way to the target and the cuts around it
 
 # field -> (not locked on, locked on); None: the value the build gave it (the design's, or the template's); a function: of it
 MODES = {
     ("Magic", "mp"): (None, lambda built: round(built * LOCKED_FP)),     # the FP of a cast (the design's requires.cost.focus_point)
     ("Magic", "refType"): (None, 25),                        # Catch Flame's motion (the build's, 106) / O, Flame!'s
+    ("Bullet", "numShoot"): (None, 1),                       # the fan's 38 cuts / one
     ("Bullet", "shootAngle"): (None, 0),                     # the fan's first cut / straight at the target
-    ("Bullet", "shootAngleInterval"): (None, 0),             # 5 degrees between two / all on one line
-    ("Bullet", "homingAngle"): (None, 720),                  # degrees a second a cut turns towards the target
-    ("Bullet", "lockShootLimitAng"): (None, 180),            # the cuts leave aimed at the target wherever it is around you
-    ("Bullet", "hitRadius"): (None, 0.5),                    # narrow: the target, not the ones around it
-    ("Bullet", "hitRadiusMax"): (None, 0.5),
-    ("Bullet", "isUseSharedHitList"): (None, 0),             # each cut on its own: 38 hits (1: the 38 together hit once)
+    ("Bullet", "shootAngleInterval"): (None, 0),
+    ("Bullet", "lockShootLimitAng"): (None, 180),            # it leaves aimed at the target wherever it is around you
+    ("Bullet", "initVellocity"): (None, SPEED),              # 120 m/s / slower, to turn around the target
+    ("Bullet", "maxVellocity"): (None, SPEED),
+    ("Bullet", "life"): (None, LIFE),                        # 0.84 s (100 m) / LIFE
+    ("Bullet", "homingAngle"): (None, TURN),                 # none / it follows the target
+    ("Bullet", "homingBeginDist"): (None, 0.1),              # metres before it starts to turn (Bestial Sling's homing stones: 0.1)
+    ("Bullet", "hormingStopRange"): (None, 0),               # it never stops following (Elden Stars)
+    ("Bullet", "hitRadius"): (None, 1.0),                    # narrow: the target, not the ones around it
+    ("Bullet", "hitRadiusMax"): (None, 1.0),
+    ("Bullet", "isUseSharedHitList"): (None, 0),
+    ("Bullet", "dmgHitRecordLifeTime"): (None, REHIT),       # a target once a cast (999) / again every REHIT seconds
+    ("SpEffectParam", "effectEndurance"): (None, 0.04),      # the blood lasts 0.5 s / 0.04: it bursts again with each cut
     ("SpEffectParam", "vfxId1"): (MARKS, MARKS),             # the blood's SpEffect also shows the row of the claw marks
     ("SpEffectVfxParam", "midstSfxId"): (530172, 530177),    # Beast Claw's claw marks / the charged Beast Claw's, bigger
     ("SpEffectVfxParam", "midstDmyId"): (220, 220),          # at the middle of the body (as the blood)
@@ -67,8 +86,12 @@ class DismantleFollowsTheLockOn(Interface):
                 self.built[(table, field)] = cost
             elif table == "SpEffectVfxParam":
                 self.built[(table, field)] = UNUSED[field]          # the game's own (it may hold the script's from a run before)
+            elif key in basic:
+                self.built[(table, field)] = basic[key]
+            elif (table, field) in TEMPLATE:
+                self.built[(table, field)] = TEMPLATE[(table, field)]
             else:
-                self.built[(table, field)] = basic[key] if key in basic else disk.params[table][self.ids[table]][field]
+                self.built[(table, field)] = disk.params[table][self.ids[table]][field]
         self.follow(disk)
 
     def put(self, disk, locked):

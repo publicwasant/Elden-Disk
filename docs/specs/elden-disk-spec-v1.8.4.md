@@ -2,7 +2,8 @@
 > **Version:** `1.8.4`  
 > **Status:** Part 1 IMPLEMENTED (closed). Dismantle passed in the game and its design is locked (2026-10-17). Part 2 IMPLEMENTED
 > (closed): Dismantle follows the lock-on, passed in the game (2026-10-17). Part 3 IMPLEMENTED (closed): the claw marks on the ones
-> hit, passed in the game (2026-10-18).  
+> hit, passed in the game (2026-10-18). Part 4 IMPLEMENTED (closed): locked on, one cut circling the
+> target, passed in the game (2026-10-18).  
 > **Last Updated:** _2026-10-18_
 
 # Elden-Disk spec 1.8.4: Dismantle
@@ -15,6 +16,7 @@ Reads on top of [spec 1.8.3](elden-disk-spec-v1.8.3.md). Only what changes is wr
 - **Part 2:** Dismantle follows the lock-on: one target when locked on, the fan when not (`character.lock_on` and a script): sections
   L1 to L13.
 - **Part 3:** Beast Claw's claw marks next to the blood on the ones hit (the script), comments in `customs.basic`: sections C1 to C7.
+- **Part 4:** locked on, cut after cut: one cut circles the target and cuts it again and again: sections S1 to S8.
 
 # Part 1: Dismantle (2026-10-17)
 
@@ -351,3 +353,97 @@ had ended early. Now they log it (`... no build of its own ...`) and end; `teard
 
 The whole suite passes (1887, 109 skipped without the game's file); with the game's file, the design builds and passes the gate (26
 blocks). **Passed in the game (2026-10-18):** the marks on the ones hit, 530172 in the fan, 530177 locked on.
+
+# Part 4: locked on, cut after cut (2026-10-18)
+
+## S1. Idea
+
+Asked by the author: locked on, the target looks cut **once**, though all 38 cuts go at it and hit it (when it does not dodge). It
+should be cut cut cut cut, one cut after the other, as many times as the cuts that hit.
+
+## S2. Why it looks like one cut now
+
+Locked on, the 38 cuts leave the hand together on one line (part 2, L3: `shootAngle` 0, `shootAngleInterval` 0) and each hits on its
+own (`isUseSharedHitList` 0): 38 hits in the same instant. The damage is there, but the game shows one moment: one flinch, the numbers
+added up, the blood and the claw marks once (the same SpEffect given again while it lasts).
+
+## S3. The way: `shootInterval`
+
+A Bullet row with `numShoot` > 1 can fire its shots **one after the other**: `shootInterval` = the seconds between two (f32; 1,254 rows of
+the game use it, such as 20 shots every 0.1 s or 36 every 0.02 s). Dismantle's is 0 (all at once, the fan). The script adds it to the
+locked-on mode, as the other fields of L3:
+
+| **Field** | **Not locked on** | **Locked on** |
+|:--|--:|--:|
+| `Bullet.shootInterval` | 0 (the build's: the fan at once) | **0.05**: one cut every 0.05 s, the 38 in 1.9 s |
+
+- Each cut then hits on its own, in its own instant: a flinch, a number, the blood and the claw marks each time (the SpEffect lasts 0.5 s,
+  so at 0.05 s it is still there when the next cut comes: to be seen whether the blood shows again each time; 0.5 s may be shortened).
+- A target that dies early: the cuts still to come fly on (at what is behind it on that line, 0.5 m wide).
+- To be seen in the game: where the later cuts start (from where the hand was at the cast, or from the hand now), and whether a cast
+  while the cuts of the one before are still coming has its own (`createLimitGroupId` 0: no limit).
+
+## S4. What changes
+
+`dismantle_follows_the_lock_on.py`: `("Bullet", "shootInterval"): (None, INTERVAL)` in MODES, INTERVAL at the head of the file;
+`test_lock_on.py`. No build, no `creative.json`.
+
+## S5. For the author to decide
+
+1. **The rhythm:** **0.05 s** (default: 20 cuts a second, 38 in 1.9 s), or faster (0.03: 1.1 s), or slower (0.1: 3.8 s).
+2. **The blood each cut:** **as it is** (default: the SpEffect lasts 0.5 s; see in the game), or 0.04 s locked on so it comes again with
+   each cut (`SpEffectParam.<copy of 474>.effectEndurance`, written by the script).
+
+## S6. Decided and built (2026-10-18)
+
+Both defaults: **0.05 s** between two cuts; the blood as it is. `dismantle_follows_the_lock_on.py`: `INTERVAL = 0.05` at the head,
+`("Bullet", "shootInterval"): (None, INTERVAL)` in MODES (not locked on, and at `teardown()`: the build's 0). `test_lock_on.py`: the
+locked-on mode writes 0.05, the fan the build's 0. The whole suite passes (1887). The exe carries the script from its next build.
+
+## S7. What the game showed, and the cut that circles (2026-10-18)
+
+| **Tried (live writes, locked on)** | **Seen** | **So** |
+|:--|:--|:--|
+| S6: `shootInterval` 0.05 | one cut | |
+| + `dmgHitRecordLifeTime` 0.04 | one cut | not the hit record alone |
+| + the blood 0.04 s | the claw marks 2 or 3 times | the cuts do hit again, but few |
+| `shootInterval` 0.1 | exactly 2 | **the cast lets a bullet fire its shots for about 0.1 s only**: the rest are never fired |
+| one cut that stops on the target (`isPenetrateChr` 0) and leaves a still cutting zone (`HitBulletID` = the copy of 10680001, still, 1.85 s, re-hit 0.05 s; the Magic's `refId2` -1) | the first cut hits, the zone never appears (made visible: nowhere) | **a `HitBulletID` written in the running game is not used** (the game seems to prepare the bullets a bullet creates when it loads) |
+| **one cut, 30 m/s, turning 1440°/s, never stopping to follow (`hormingStopRange` 0), through characters, re-hit 0.05 s, 3.5 s** | it reaches the target and circles it, cut cut cut, the HP going down step by step | **the author: "this is it"** |
+
+**The locked-on mode now** (the script, in place of S6's `shootInterval`):
+
+| **Field (Bullet 500000016 unless said)** | **Not locked on (the build's)** | **Locked on** |
+|:--|--:|--:|
+| `numShoot`, `shootAngle`, `shootAngleInterval` | 38, -92, 5 | 1, 0, 0 |
+| `initVellocity`, `maxVellocity`, `life` | 120, 120, 0.84 | 30, 30, 3.5 (`SPEED`, `LIFE`) |
+| `homingAngle`, `homingBeginDist`, `hormingStopRange` | 0, 0, 0 (the template's) | 1440, 0.1, 0 (`TURN`; 0.1 as Bestial Sling's homing stones; 0 as Elden Stars) |
+| `lockShootLimitAng` | 30 | 180 |
+| `hitRadius`, `hitRadiusMax` | 1.5, 4.5 | 1.0, 1.0 |
+| `isUseSharedHitList`, `dmgHitRecordLifeTime` | 1, 999 (the template's) | 0, 0.05 (`REHIT`) |
+| SpEffect copy of 474: `effectEndurance` | 0.5 | 0.04 (the blood bursts again with each cut) |
+
+- **How many cuts:** no longer 38: one cut every 0.05 s while it circles, for what is left of its 3.5 s after the way there (30 m: 1 s,
+  then about 50 cuts; point blank about 70). The number follows the distance.
+- The build's values of the fields the design does not name are the template's own (`TEMPLATE` in the script), so a script started
+  again while locked on does not take the locked-on values for the build's.
+- Not used any more: `shootInterval`, `HitBulletID`, the Magic's `refId2` (as built).
+- Tests: `test_lock_on.py` (both modes, the fan back as built after a start while locked on). The whole suite passes.
+
+## S8. Closed (2026-10-18)
+
+Passed in the game with the script built in (the build that came after S7 had first stopped on three tests that held the FP of
+locked on at 150; the author had set `LOCKED_FP` 1.8: the tests now read the numbers at the head of the script). The author tried the
+speeds live, the turn following them so that the circle stays about 1.2 m (`homingAngle` = speed x 48): 30 / 1440, 60 / 2880,
+90 / 4320, 120 / 5760, and chose **120 m/s, 5760° a second**: the same speed as the fan, a target 30 m away reached in 0.25 s.
+
+| **At the head of `dismantle_follows_the_lock_on.py`** | **Value** |
+|:--|--:|
+| `LOCKED_FP` (the author's) | 1.8 |
+| `REHIT` | 0.05 s |
+| `SPEED` | 120 m/s |
+| `TURN` | 5760 °/s |
+| `LIFE` | 3.5 s |
+
+Also on the way: Dismantle's cut 280 (`AtkParam_Pc.68000.atkPhys` in `creative.json`, the author's; the test with the game's file reads
+it from `creative.json`).

@@ -71,17 +71,21 @@ def test_read_lock_on_is_a_name_of_the_character():
 # ---------------------------------------------------------------- the script
 SCRIPT = CODE / "eldendisk" / "creative" / "scripts" / "defaults" / "dismantle_follows_the_lock_on.py"
 MAGIC, BULLET, BLOOD, MARKS = 2230001, 500000016, 21951009, 999999999      # BLOOD: the copy of 474; MARKS: the game's unused visual
-BUILT = {"Magic.6800.refType": 106, "Bullet.10680000.shootAngle": -92, "Bullet.10680000.shootAngleInterval": 5,
-         "Bullet.10680000.hitRadius": 1.5, "Bullet.10680000.hitRadiusMax": 4.5}
-GAME_BULLET = {"shootAngle": -92, "shootAngleInterval": 5, "homingAngle": 0, "lockShootLimitAng": 30, "hitRadius": 1.5,
-               "hitRadiusMax": 4.5, "isUseSharedHitList": 1}
+BUILT = {"Magic.6800.refType": 106, "Bullet.10680000.numShoot": 38, "Bullet.10680000.shootAngle": -92,
+         "Bullet.10680000.shootAngleInterval": 5, "Bullet.10680000.initVellocity": 120.0, "Bullet.10680000.maxVellocity": 120.0,
+         "Bullet.10680000.life": 0.84, "Bullet.10680000.hitRadius": 1.5, "Bullet.10680000.hitRadiusMax": 4.5,
+         "SpEffect.474.effectEndurance": 0.5}
+# the fan as built: the design's numbers, and the template's (Bestial Sling's) where the design names none
+GAME_BULLET = {"numShoot": 38, "shootAngle": -92, "shootAngleInterval": 5, "lockShootLimitAng": 30, "initVellocity": 120.0,
+               "maxVellocity": 120.0, "life": 0.84, "homingAngle": 0, "homingBeginDist": 0.0, "hormingStopRange": 0.0,
+               "hitRadius": 1.5, "hitRadiusMax": 4.5, "isUseSharedHitList": 1, "dmgHitRecordLifeTime": 999.0}
 
 
 def _doc(lock_on=False, with_spell=True):
     doc = copy.deepcopy(DOC)
     doc["character"]["lock_on"] = lock_on
     doc["params"] = {"Magic": {str(MAGIC): {"refType": 106, "mp": 60}}, "Bullet": {str(BULLET): dict(GAME_BULLET)},
-                     "SpEffectParam": {str(BLOOD): {"vfxId1": -1}},
+                     "SpEffectParam": {str(BLOOD): {"vfxId1": -1, "effectEndurance": 0.5}},
                      "SpEffectVfxParam": {str(MARKS): {"midstSfxId": -1, "midstDmyId": -1, "existEffectForLarge": 0, "isVisibleDeadChr": 0}}}
     if with_spell:
         doc["creative"]["innovate_spells"]["2230001"] = {
@@ -104,14 +108,19 @@ def _written(b):
     return {k: v for k, v in b.writes}
 
 
-# locked on: O, Flame!'s motion, 60 FP x 2.5, the 38 cuts at the target
-LOCKED = {f"params.Magic.{MAGIC}.refType": 25, f"params.Magic.{MAGIC}.mp": 150, **{f"params.Bullet.{BULLET}.{k}": v for k, v in
-          {"shootAngle": 0, "shootAngleInterval": 0, "homingAngle": 720, "lockShootLimitAng": 180, "hitRadius": 0.5,
-           "hitRadiusMax": 0.5, "isUseSharedHitList": 0}.items()}}
+# the numbers the author tunes at the head of the script (the tests follow them)
+K = __import__("runpy").run_path(str(SCRIPT))
+LOCKED_MP = round(60 * K["LOCKED_FP"])
+# locked on: O, Flame!'s motion, 60 FP x LOCKED_FP, one cut circling the target and cutting it every REHIT s (part 4)
+LOCKED = {f"params.Magic.{MAGIC}.refType": 25, f"params.Magic.{MAGIC}.mp": LOCKED_MP, **{f"params.Bullet.{BULLET}.{k}": v for k, v in
+          {"numShoot": 1, "shootAngle": 0, "shootAngleInterval": 0, "lockShootLimitAng": 180, "initVellocity": K["SPEED"],
+           "maxVellocity": K["SPEED"], "life": K["LIFE"], "homingAngle": K["TURN"], "homingBeginDist": 0.1, "hormingStopRange": 0,
+           "hitRadius": 1.0, "hitRadiusMax": 1.0, "isUseSharedHitList": 0, "dmgHitRecordLifeTime": K["REHIT"]}.items()},
+          f"params.SpEffectParam.{BLOOD}.effectEndurance": 0.04}
 MARKS_ON = {f"params.SpEffectParam.{BLOOD}.vfxId1": MARKS, f"params.SpEffectVfxParam.{MARKS}.midstDmyId": 220,
             f"params.SpEffectVfxParam.{MARKS}.existEffectForLarge": 1, f"params.SpEffectVfxParam.{MARKS}.isVisibleDeadChr": 1}
 LOCKED.update(MARKS_ON, **{f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530177})      # the charged Beast Claw's marks
-FAN = {f"params.Magic.{MAGIC}.refType": 106, f"params.Magic.{MAGIC}.mp": 60, **MARKS_ON, f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530172, **{f"params.Bullet.{BULLET}.{k}": v for k, v in GAME_BULLET.items()}}
+FAN = {f"params.Magic.{MAGIC}.refType": 106, f"params.Magic.{MAGIC}.mp": 60, f"params.SpEffectParam.{BLOOD}.effectEndurance": 0.5, **MARKS_ON, f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530172, **{f"params.Bullet.{BULLET}.{k}": v for k, v in GAME_BULLET.items()}}
 AS_BUILT = {**FAN, f"params.SpEffectParam.{BLOOD}.vfxId1": -1, f"params.SpEffectVfxParam.{MARKS}.midstSfxId": -1,
             f"params.SpEffectVfxParam.{MARKS}.midstDmyId": -1, f"params.SpEffectVfxParam.{MARKS}.existEffectForLarge": 0,
             f"params.SpEffectVfxParam.{MARKS}.isVisibleDeadChr": 0}      # the build, and the game's unused row as it was
@@ -191,12 +200,12 @@ def test_out_of_the_world_the_loop_waits():
 
 def test_the_fp_locked_on_comes_from_the_design_even_when_the_game_holds_the_locked_one():
     doc = _doc(lock_on=True)
-    doc["params"]["Magic"][str(MAGIC)]["mp"] = 150          # the script stopped while locked on, and started again
+    doc["params"]["Magic"][str(MAGIC)]["mp"] = LOCKED_MP    # the script stopped while locked on, and started again
     s = _script()
     with FakeBackend(doc) as b:
         ed._set_current(s)
         s.setup()
-        assert _written(b)[f"params.Magic.{MAGIC}.mp"] == 150 and s.built[("Magic", "mp")] == 60
+        assert _written(b)[f"params.Magic.{MAGIC}.mp"] == LOCKED_MP and s.built[("Magic", "mp")] == 60
         b.doc["character"]["lock_on"] = False
         s.loop()
         assert _written(b)[f"params.Magic.{MAGIC}.mp"] == 60
@@ -225,3 +234,18 @@ def test_a_session_without_a_build_of_its_own_ends_the_default_scripts_quietly(n
         found.scripts[0].teardown()
         ed._set_current(None)
     assert b.writes == [] and any("no build of its own" in m for _l, m in b.lines)
+
+
+def test_the_fan_comes_back_as_built_even_when_the_game_holds_the_locked_on_cut():
+    """A script started again while locked on: the game holds the circling cut; unlocking writes the design's and the template's."""
+    doc = _doc(lock_on=True)
+    doc["params"]["Bullet"][str(BULLET)].update(numShoot=1, homingAngle=1440, homingBeginDist=0.1, dmgHitRecordLifeTime=0.05, life=3.5)
+    s = _script()
+    with FakeBackend(doc) as b:
+        ed._set_current(s)
+        s.setup()
+        b.writes.clear()
+        b.doc["character"]["lock_on"] = False
+        s.loop()
+        ed._set_current(None)
+    assert _written(b) == FAN

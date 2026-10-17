@@ -165,7 +165,8 @@ def test_dismantle_is_a_fan_of_38_invisible_cuts_100_m_deep_cast_like_catch_flam
         want.get("faith", 0), want.get("arcane", 0), want.get("intelligence", 0))
     assert D["magic"].get(m, "refType") == 106
     a = P["atk"].find(D["bullet"].get(fan, "atkId_Bullet"))[2]
-    assert (D["atk"].get(a, "atkPhys"), D["atk"].get(a, "atkAttribute"), D["atk"].get(a, "atkMaterial")) == (380, 0, 0)     # a sword's metal: blood
+    assert (D["atk"].get(a, "atkPhys"), D["atk"].get(a, "atkAttribute"), D["atk"].get(a, "atkMaterial")) == (
+        built[0][1]["set"]["AtkParam_Pc.68000.atkPhys"], 0, 0)     # the author's number in creative.json; slash; a sword's metal: blood
     assert D["magic"].get(m, "castSfxId") == 4122
     g = P["goods"].find(ids["goods"])[2]
     O, _OD, _C = _orig(src)
