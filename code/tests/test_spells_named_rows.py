@@ -160,7 +160,9 @@ def test_dismantle_is_a_fan_of_38_invisible_cuts_100_m_deep_cast_like_catch_flam
             D["sp"].get(blood, "invocationConditionsStateChange1")) == (6, 0.0, 0, 0)
     assert [D["bullet"].get(fan, n) for n in ("lifeRandomRange", "gravityInRange", "gravityOutRange", "accelTime", "damageDamp")] == [0.0] * 4 + [0]
     assert D["sp"].get(P["sp"].find(D["bullet"].get(fan, "spEffectId0"))[2], "bloodAttackPower") == 60
-    assert (D["magic"].get(m, "requirementFaith"), D["magic"].get(m, "requirementLuck"), D["magic"].get(m, "requirementIntellect")) == (60, 10, 15)
+    want = built[0][1]["requires"]                     # the author's balance in creative.json, as written
+    assert (D["magic"].get(m, "requirementFaith"), D["magic"].get(m, "requirementLuck"), D["magic"].get(m, "requirementIntellect")) == (
+        want.get("faith", 0), want.get("arcane", 0), want.get("intelligence", 0))
     assert D["magic"].get(m, "refType") == 106
     a = P["atk"].find(D["bullet"].get(fan, "atkId_Bullet"))[2]
     assert (D["atk"].get(a, "atkPhys"), D["atk"].get(a, "atkAttribute"), D["atk"].get(a, "atkMaterial")) == (380, 0, 0)     # a sword's metal: blood

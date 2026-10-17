@@ -1,6 +1,6 @@
 """Development pipeline for EldenDisk: tests -> build `./build/dist/eldendisk.exe` -> status. It ends there; it does not start the game.
 
-    python code/tools/dev_pipeline.py [--skip-tests] [--no-embed] [--engine pyinstaller|nuitka] [--icon ICO] [--keep-app-data]
+    python code/tools/dev_pipeline.py [--skip-tests] [--no-embed] [--engine pyinstaller|nuitka] [--icon ICO | --no-icon] [--keep-app-data]
 
 1. Tests: runs the whole test suite (pytest); a failure stops the pipeline.
 2. Build: compiles `./build/dist/eldendisk.exe` (PyInstaller; `--engine nuitka` for Nuitka). The build always starts clean
@@ -8,7 +8,8 @@
    them next to the exe instead. It also removes the tool's own folder `%LOCALAPPDATA%\\EldenDisk` (the vault and its save
    snapshots, the creative files, the exports), never while a vault in it owes a restore or the game or the tool runs;
    `--keep-app-data` keeps it. A README.md (quick start + the exe's command reference, from `docs/guilde/`) is written next to
-   the exe. Building the exe is a developer's job, so it lives here and not in the `eldendisk` command line.
+   the exe. The exe's icon is code/assets/eldendisk.ico (`--icon ICO` another, `--no-icon` none). Building the exe is a developer's
+   job, so it lives here and not in the `eldendisk` command line.
 3. Status: where the exe is, its size and SHA-256, the version, what was embedded, how long each step took, and the command
    that starts it. Everything the exe produces goes to `%LOCALAPPDATA%\\EldenDisk`, so the exe can be copied anywhere.
 """
@@ -104,6 +105,7 @@ def build_layout() -> dict:
         "dist_dir": dist_dir,                       # the exe is dist_dir / eldendisk.exe
         "work_dir": build_root / "work",
         "entry_point": CODE_DIR / "eldendisk" / "__main__.py",
+        "icon": CODE_DIR / "assets" / "eldendisk.ico",   # the exe's icon unless --icon / --no-icon says otherwise
     }
 
 
@@ -170,13 +172,32 @@ def user_scripts(layout: dict) -> list[Path]:
     return sorted(p for p in folder.glob("*.py") if p.is_file() and not p.name.startswith("_")) if folder.is_dir() else []
 
 
+def icon_file(icon: str | None, layout: dict, warn: bool = True) -> Path | None:
+    """The icon the exe gets: `icon` None -> the default (code/assets/eldendisk.ico) when it is there, "" -> none, a path -> that
+    file (a warning and none when it is not there)."""
+    if icon == "":
+        return None
+    if icon is None:
+        default = layout.get("icon")
+        if default is not None and Path(default).is_file():
+            return Path(default).resolve()
+        if warn:
+            log(f"WARNING: the default icon is not there ({default}): the exe gets none")
+        return None
+    path = Path(icon)
+    if not path.is_file():
+        if warn:
+            log(f"WARNING: icon file not found: {icon}")
+        return None
+    return path.resolve()
+
+
 def build_command(engine: str, *, embed: bool, icon: str | None, layout: dict, configs: list[Path],
                   scripts: list[Path] = ()) -> list[str]:
-    """The compiler command line for `engine` (pure, so it can be unit-tested without compiling)."""
+    """The compiler command line for `engine` (pure, so it can be unit-tested without compiling). `icon`: None for the default
+    icon (layout["icon"], when the file is there), "" for none, else the file."""
     entry, dist_dir = layout["entry_point"], layout["dist_dir"]
-    icon_path = Path(icon).resolve() if icon and Path(icon).exists() else None
-    if icon and icon_path is None:
-        log(f"WARNING: icon file not found: {icon}")
+    icon_path = icon_file(icon, layout)
     sep = ";" if sys.platform == "win32" else ":"
 
     if engine == "pyinstaller":
@@ -308,7 +329,7 @@ def _path_text(text: str, color: bool, links: bool) -> str:
 
 
 def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path], tests_s: float | None, build_s: float,
-                 total_s: float, color: bool = False, links: bool = False) -> list[str]:
+                 total_s: float, color: bool = False, links: bool = False, icon: Path | None = None) -> list[str]:
     """What the pipeline prints at the end (pure apart from reading the finished exe, so a test can check it).
     `color` / `links`: the look of the tool's console (dim labels, orange file names, clickable paths, cyan start command); both
     off gives plain text."""
@@ -325,6 +346,7 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
         ("scripts", (", ".join(s.name for s in user_scripts(layout)) + (" embedded in the exe (the default scripts; `scripts add PATH` "
                                                                            "adds more)" if embed else f" copied to {dist / SCRIPTS_FOLDER}"))
          if user_scripts(layout) else "none in creative/scripts/defaults (nothing embedded)"),
+        ("icon", str(icon) if icon else "none"),
         ("readme", str(dist / "README.md") if (dist / "README.md").exists() else "not written (no docs/guilde/)"),
         ("tests", "skipped" if tests_s is None else _fmt_seconds(tests_s)),
         ("build", _fmt_seconds(build_s)),
@@ -335,7 +357,7 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
     width = max(len(k) for k, _ in rows)
 
     def value(key: str, v: str) -> str:
-        if key in ("exe", "readme", "data"):
+        if key in ("exe", "readme", "data") or (key == "icon" and icon):
             return _path_text(v, color, links)
         if key == "sha256":
             return ui.paint(v, "dim", color)
@@ -352,7 +374,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-embed", action="store_true",
                         help="do not embed offsets.json and creative.json in the exe (copy them next to it; names.json is always in it)")
     parser.add_argument("--engine", choices=ENGINES, default="pyinstaller", help="compiler for the exe (default: pyinstaller)")
-    parser.add_argument("--icon", metavar="ICO", default=None, help="icon file (.ico) for the exe")
+    icon = parser.add_mutually_exclusive_group()
+    icon.add_argument("--icon", metavar="ICO", default=None, help="icon file (.ico) for the exe (default: code/assets/eldendisk.ico)")
+    icon.add_argument("--no-icon", action="store_true", help="build the exe without an icon")
     parser.add_argument("--keep-app-data", action="store_true",
                         help="do not remove %%LOCALAPPDATA%%\\EldenDisk (the vault and its save snapshots, the creative files, the "
                              "exports) before the build; by default it is removed, never while a vault in it owes a restore or the game runs")
@@ -368,7 +392,8 @@ def main(argv: list[str] | None = None) -> int:
         log("Step 1/2: tests skipped (--skip-tests)")
 
     t0 = time.monotonic()
-    if not run_build(clean=True, embed=not args.no_embed, engine=args.engine, icon=args.icon, app_data=not args.keep_app_data):
+    if not run_build(clean=True, embed=not args.no_embed, engine=args.engine, icon="" if args.no_icon else args.icon,
+                     app_data=not args.keep_app_data):
         return 1
     build_s = time.monotonic() - t0
 
@@ -376,7 +401,8 @@ def main(argv: list[str] | None = None) -> int:
     log("Done:")
     color, links = ui.use_color(sys.stdout), ui.use_links(sys.stdout)
     for line in status_lines(layout=layout, engine=args.engine, embed=not args.no_embed, configs=config_files(layout),
-                             tests_s=tests_s, build_s=build_s, total_s=time.monotonic() - started, color=color, links=links):
+                             tests_s=tests_s, build_s=build_s, total_s=time.monotonic() - started, color=color, links=links,
+                             icon=icon_file("" if args.no_icon else args.icon, layout, warn=False)):
         print(line, flush=True)
     return 0
 

@@ -137,7 +137,9 @@ def test_the_shipped_design_is_written_in_the_new_structure_and_holds_its_hex_co
     assert colors["Magic.6421.castSfxId"]["0x4290"] == "#90D5FF"                        # hex (the author's choice), the place's own alpha
     assert all(isinstance(v, str) for k, places in colors.items() if k != "__info__" for v in places.values())
     assert got["positive_curse_energy_eyes"] == {"on": "SpEffect.1642100"} and "flame_color" not in got
-    assert got["requires"] == {"intelligence": 0, "faith": 60, "arcane": 10} and got["fp_cost"] == 120 and got["shop"] == {"price": 34590, "stock": 1}
+    # the numbers are the author's balance (changed in creative.json at will): they must come through as written
+    assert got["requires"] == raw["requires"]["status"] and got["fp_cost"] == raw["requires"]["cost"]["focus_point"]
+    assert got["shop"] == raw["locations"]["kale"]
 
 
 def test_the_schema_and_the_validator_agree_on_the_new_structure():

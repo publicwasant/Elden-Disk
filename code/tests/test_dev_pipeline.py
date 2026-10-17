@@ -360,3 +360,41 @@ def test_without_embedding_the_scripts_go_next_to_the_exe(project, monkeypatch):
 def test_no_scripts_no_folder_embedded(project, monkeypatch):
     ok, calls = build(monkeypatch)
     assert ok and not any(c.endswith((";scripts", ":scripts")) or "=scripts/" in c for c in calls[0])
+
+
+# ---------- the exe's icon (code/assets/eldendisk.ico by default) ----------
+def test_the_default_icon_goes_into_the_exe_when_it_is_there(project, monkeypatch, capsys):
+    ico = project / "code" / "assets" / "eldendisk.ico"
+    _ok, calls = build(monkeypatch)
+    assert not any(c.startswith("--icon=") for c in calls[0]) and "the default icon is not there" in capsys.readouterr().out
+    ico.parent.mkdir(parents=True)
+    ico.write_bytes(b"\0\0\1\0")
+    _ok, calls = build(monkeypatch)
+    assert f"--icon={ico.resolve()}" in calls[0]
+    _ok, calls = build(monkeypatch, icon="")                                   # --no-icon
+    assert not any(c.startswith("--icon=") for c in calls[0])
+    other = project / "other.ico"
+    other.write_bytes(b"\0\0\1\0")
+    _ok, calls = build(monkeypatch, icon=str(other))                         # --icon another one
+    assert f"--icon={other.resolve()}" in calls[0]
+    _ok, calls = build(monkeypatch, engine="nuitka")
+    assert f"--windows-icon-from-ico={ico.resolve()}" in calls[0]
+
+
+def test_no_icon_and_icon_are_passed_to_the_build(monkeypatch):
+    got = []
+    monkeypatch.setattr(dev_pipeline, "run_precheck", lambda: True)
+    monkeypatch.setattr(dev_pipeline, "run_build", lambda **kw: got.append(kw["icon"]) or False)
+    dev_pipeline.main([])
+    dev_pipeline.main(["--no-icon"])
+    dev_pipeline.main(["--icon", "x.ico"])
+    assert got == [None, "", "x.ico"]
+    with pytest.raises(SystemExit):
+        dev_pipeline.main(["--icon", "x.ico", "--no-icon"])
+
+
+def test_the_status_says_which_icon(project):
+    _built(project)
+    ico = project / "code" / "assets" / "eldendisk.ico"
+    icon_line = lambda text: next(l.split(None, 1)[1] for l in text.splitlines() if l.split()[0] == "icon")
+    assert icon_line(_status(project)) == "none" and icon_line(_status(project, icon=ico)) == str(ico)
