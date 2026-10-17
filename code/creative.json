@@ -8,8 +8,8 @@
         "from": 6421,
         "requires": {
           "status": {
-            "intelligence": 0,
-            "faith": 60,
+            "intelligence": 15,
+            "faith": 90,
             "arcane": 10
           },
           "cost": {
@@ -18,7 +18,7 @@
         },
         "locations": {
           "kale": {
-            "price": 34590,
+            "price": 44000,
             "stock": 1
           }
         },
@@ -313,16 +313,16 @@
         "requires": {
           "status": {
             "intelligence": 15,
-            "faith": 60,
+            "faith": 90,
             "arcane": 10
           },
           "cost": {
-            "focus_point": 20
+            "focus_point": 185
           }
         },
         "locations": {
           "kale": {
-            "price": 8000,
+            "price": 74000,
             "stock": 1
           }
         },
