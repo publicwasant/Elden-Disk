@@ -3,7 +3,7 @@
 > **Status:** Part 1 IMPLEMENTED (closed). Dismantle passed in the game and its design is locked (2026-10-17). Part 2 IMPLEMENTED
 > (closed): Dismantle follows the lock-on, passed in the game (2026-10-17). Part 3 IMPLEMENTED (closed): the claw marks on the ones
 > hit, passed in the game (2026-10-18). Part 4 IMPLEMENTED (closed): locked on, one cut circling the
-> target, passed in the game (2026-10-18).  
+> target, passed in the game (2026-10-18). Part 5 IMPLEMENTED (closed): the fan 120°, passed in the game (2026-10-18).  
 > **Last Updated:** _2026-10-18_
 
 # Elden-Disk spec 1.8.4: Dismantle
@@ -17,6 +17,7 @@ Reads on top of [spec 1.8.3](elden-disk-spec-v1.8.3.md). Only what changes is wr
   L1 to L13.
 - **Part 3:** Beast Claw's claw marks next to the blood on the ones hit (the script), comments in `customs.basic`: sections C1 to C7.
 - **Part 4:** locked on, cut after cut: one cut circles the target and cuts it again and again: sections S1 to S8.
+- **Part 5:** the fan 120° wide, the field of binocular vision: sections B1 to B3.
 
 # Part 1: Dismantle (2026-10-17)
 
@@ -447,3 +448,33 @@ speeds live, the turn following them so that the circle stays about 1.2 m (`homi
 
 Also on the way: Dismantle's cut 280 (`AtkParam_Pc.68000.atkPhys` in `creative.json`, the author's; the test with the game's file reads
 it from `creative.json`).
+
+# Part 5: the fan 120° wide (2026-10-18)
+
+## B1. Idea
+
+The author: by binocular vision, the middle part where what both eyes see overlaps, about 120°, is where the brain works out depth
+(stereopsis). Dismantle's fan cuts that field, not the edge of sight: from 185° (38 cuts 5° apart, -92° to +93°) to 120°.
+
+## B2. The fan
+
+The angle between two cuts is a whole number of degrees, so 38 cuts cannot fill 120° (3°: 111°, 4°: 148°). The ways that fill it, from
+-60° to +60°, each cut grown at the end so that two cuts meet 100 m away:
+
+| **Cuts** | **Apart** | **Apart 100 m away** | **`hitRadiusMax`** |
+|--:|--:|--:|--:|
+| 25 | 5° | 8.7 m | 4.5 m |
+| **31 (chosen)** | **4°** | **7.0 m** | **3.5 m** |
+| 41 | 3° | 5.2 m | 2.6 m |
+
+Decided by the author: **31 cuts, 4° apart**. `creative.json`: `Bullet.10680000.numShoot` 31, `shootAngle` -60, `shootAngleInterval`
+4, `hitRadiusMax` 3.5; `__info_fan__` says why 120° (binocular vision), the spell's `__info__` the new fan.
+
+- What is at your side (more than 60° from the front) is not cut by the fan; locked on, the cut that circles (part 4) reaches it.
+- 31 bullets a cast, 7 fewer than before.
+
+## B3. Tests
+
+The test with the game's file: the fan 31 / -60 / 4, its width 1.5 m to 3.5 m. The whole suite passes (1888).
+
+**Passed in the game (2026-10-18).**

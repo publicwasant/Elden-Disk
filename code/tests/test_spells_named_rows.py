@@ -151,9 +151,9 @@ def test_dismantle_is_a_fan_of_38_invisible_cuts_100_m_deep_cast_like_catch_flam
     ids = recipes.slot_rows(2)
     m = P["magic"].find(ids["magic"])[2]
     fan = P["bullet"].find(D["magic"].get(m, "refId1"))[2]
-    assert [D["bullet"].get(fan, n) for n in ("numShoot", "shootAngle", "shootAngleInterval", "sfxId_Bullet", "isPenetrateMap")] == [38, -92, 5, -1, 1]
+    assert [D["bullet"].get(fan, n) for n in ("numShoot", "shootAngle", "shootAngleInterval", "sfxId_Bullet", "isPenetrateMap")] == [31, -60, 4, -1, 1]   # 120 degrees
     assert D["bullet"].get(fan, "maxVellocity") * D["bullet"].get(fan, "life") == pytest.approx(100.8, abs=0.01)
-    assert (D["bullet"].get(fan, "hitRadius"), D["bullet"].get(fan, "hitRadiusMax")) == (1.5, 4.5)
+    assert (D["bullet"].get(fan, "hitRadius"), D["bullet"].get(fan, "hitRadiusMax")) == (1.5, 3.5)
     assert D["bullet"].get(fan, "sfxId_Hit") == -1            # nothing where a cut ends ...
     blood = P["sp"].find(D["bullet"].get(fan, "spEffectId1"))[2]      # ... the blood is on the ones hit
     assert (D["sp"].get(blood, "vfxId"), D["sp"].get(blood, "changeHpRate"), D["sp"].get(blood, "changeHpPoint"),
