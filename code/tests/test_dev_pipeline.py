@@ -398,3 +398,53 @@ def test_the_status_says_which_icon(project):
     ico = project / "code" / "assets" / "eldendisk.ico"
     icon_line = lambda text: next(l.split(None, 1)[1] for l in text.splitlines() if l.split()[0] == "icon")
     assert icon_line(_status(project)) == "none" and icon_line(_status(project, icon=ico)) == str(ico)
+
+
+# ---------- --zip: ./build/dist/eldendisk-<version>-<platform>.zip ----------
+def test_the_zip_is_named_by_version_and_platform(monkeypatch):
+    monkeypatch.setattr(dev_pipeline.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(dev_pipeline.sys, "platform", "win32")
+    assert dev_pipeline.zip_name() == f"eldendisk-{dev_pipeline.__version__}-win-x64.zip"
+    monkeypatch.setattr(dev_pipeline.platform, "machine", lambda: "ARM64")
+    assert dev_pipeline.platform_tag() == "win-arm64"
+
+
+def test_the_zip_holds_the_exe_and_its_readme_compressed(project):
+    import zipfile
+    exe = _built(project)
+    z = dev_pipeline.make_zip(dev_pipeline.build_layout())
+    assert z == exe.parent / dev_pipeline.zip_name() and z.is_file()
+    with zipfile.ZipFile(z) as f:
+        assert sorted(f.namelist()) == ["README.md", "eldendisk.exe"]
+        assert all(i.compress_type == zipfile.ZIP_DEFLATED for i in f.infolist())
+        assert f.read("eldendisk.exe") == exe.read_bytes()
+    assert dev_pipeline.make_zip(dev_pipeline.build_layout()) == z            # again: replaced, the zip not packed into itself
+    with zipfile.ZipFile(z) as f:
+        assert sorted(f.namelist()) == ["README.md", "eldendisk.exe"]
+
+
+def test_with_no_embed_the_zip_takes_what_travels_next_to_the_exe(project):
+    import zipfile
+    exe = _built(project)
+    (exe.parent / "creative.json").write_text("{}")
+    (exe.parent / "scripts").mkdir()
+    (exe.parent / "scripts" / "a.py").write_text("")
+    with zipfile.ZipFile(dev_pipeline.make_zip(dev_pipeline.build_layout())) as f:
+        assert sorted(f.namelist()) == ["README.md", "creative.json", "eldendisk.exe", "scripts/a.py"]
+
+
+def test_no_exe_no_zip(project, capsys):
+    (project / "build" / "dist").mkdir(parents=True)
+    assert dev_pipeline.make_zip(dev_pipeline.build_layout()) is None and "nothing to zip" in capsys.readouterr().out
+
+
+def test_zip_is_made_after_the_build_and_shown_in_the_status(project, monkeypatch, capsys):
+    monkeypatch.setattr(dev_pipeline, "run_precheck", lambda: True)
+    monkeypatch.setattr(dev_pipeline, "run_build", lambda **kw: _built(project) and True)
+    assert dev_pipeline.main(["--zip"]) == 0
+    out = capsys.readouterr().out
+    assert (project / "build" / "dist" / dev_pipeline.zip_name()).is_file() and dev_pipeline.zip_name() in out
+    import shutil
+    shutil.rmtree(project / "build")
+    assert dev_pipeline.main([]) == 0
+    assert not (project / "build" / "dist" / dev_pipeline.zip_name()).exists()        # only with --zip

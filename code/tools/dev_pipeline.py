@@ -1,6 +1,6 @@
 """Development pipeline for EldenDisk: tests -> build `./build/dist/eldendisk.exe` -> status. It ends there; it does not start the game.
 
-    python code/tools/dev_pipeline.py [--skip-tests] [--no-embed] [--engine pyinstaller|nuitka] [--icon ICO | --no-icon] [--keep-app-data]
+    python code/tools/dev_pipeline.py [--skip-tests] [--no-embed] [--engine pyinstaller|nuitka] [--icon ICO | --no-icon] [--keep-app-data] [--zip]
 
 1. Tests: runs the whole test suite (pytest); a failure stops the pipeline.
 2. Build: compiles `./build/dist/eldendisk.exe` (PyInstaller; `--engine nuitka` for Nuitka). The build always starts clean
@@ -9,7 +9,8 @@
    snapshots, the creative files, the exports), never while a vault in it owes a restore or the game or the tool runs;
    `--keep-app-data` keeps it. A README.md (quick start + the exe's command reference, from `docs/guilde/`) is written next to
    the exe. The exe's icon is code/assets/eldendisk.ico (`--icon ICO` another, `--no-icon` none). Building the exe is a developer's
-   job, so it lives here and not in the `eldendisk` command line.
+   job, so it lives here and not in the `eldendisk` command line. `--zip` also packs what the build put in ./build/dist (the exe and
+   its README.md; with --no-embed the configs and scripts\\ too) into ./build/dist/eldendisk-<version>-<platform>.zip.
 3. Status: where the exe is, its size and SHA-256, the version, what was embedded, how long each step took, and the command
    that starts it. Everything the exe produces goes to `%LOCALAPPDATA%\\EldenDisk`, so the exe can be copied anywhere.
 """
@@ -23,8 +24,10 @@ import re
 import shutil
 import subprocess
 import sys
+import platform
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 # Resolve root directory
@@ -308,6 +311,39 @@ def run_build(clean: bool = True, embed: bool = True, engine: str = "pyinstaller
     return True
 
 
+def platform_tag() -> str:
+    """The platform in the zip's name: win-x64 (64-bit Windows on an Intel/AMD processor, what the exe is built for), win-arm64, or
+    the system and machine as Python names them elsewhere."""
+    machine = platform.machine().lower()
+    arch = {"amd64": "x64", "x86_64": "x64", "arm64": "arm64", "aarch64": "arm64", "x86": "x86", "i386": "x86", "i686": "x86"}.get(machine, machine)
+    system = "win" if sys.platform == "win32" else sys.platform
+    return f"{system}-{arch}"
+
+
+def zip_name() -> str:
+    return f"eldendisk-{__version__}-{platform_tag()}.zip"
+
+
+def make_zip(layout: dict) -> Path | None:
+    """./build/dist/eldendisk-<version>-<platform>.zip: every file the build put in ./build/dist (the exe, README.md; with --no-embed
+    the configs and scripts\\ too), at the top of the zip, compressed. None (and the reason in the log) when it cannot be made."""
+    dist = layout["dist_dir"]
+    target = dist / zip_name()
+    files = sorted(f for f in dist.rglob("*") if f.is_file() and f.suffix.lower() != ".zip")
+    if not any(f.name == EXE_NAME for f in files):
+        log(f"ERROR: no {EXE_NAME} in {dist}: nothing to zip")
+        return None
+    try:
+        with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            for f in files:
+                z.write(f, f.relative_to(dist).as_posix())
+    except OSError as exc:
+        log(f"ERROR: could not write {target}: {exc}")
+        return None
+    log(f"SUCCESS: zipped {', '.join(f.relative_to(dist).as_posix() for f in files)} into {target.name}")
+    return target
+
+
 def _fmt_seconds(sec: float) -> str:
     m, r = divmod(sec, 60)
     return f"{int(m)} min {r:04.1f} s" if m else f"{r:.1f} s"
@@ -329,7 +365,8 @@ def _path_text(text: str, color: bool, links: bool) -> str:
 
 
 def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path], tests_s: float | None, build_s: float,
-                 total_s: float, color: bool = False, links: bool = False, icon: Path | None = None) -> list[str]:
+                 total_s: float, color: bool = False, links: bool = False, icon: Path | None = None,
+                 zipped: Path | None = None) -> list[str]:
     """What the pipeline prints at the end (pure apart from reading the finished exe, so a test can check it).
     `color` / `links`: the look of the tool's console (dim labels, orange file names, clickable paths, cyan start command); both
     off gives plain text."""
@@ -347,6 +384,7 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
                                                                            "adds more)" if embed else f" copied to {dist / SCRIPTS_FOLDER}"))
          if user_scripts(layout) else "none in creative/scripts/defaults (nothing embedded)"),
         ("icon", str(icon) if icon else "none"),
+        *((("zip", f"{zipped} ({zipped.stat().st_size / (1 << 20):.1f} MB)"),) if zipped else ()),
         ("readme", str(dist / "README.md") if (dist / "README.md").exists() else "not written (no docs/guilde/)"),
         ("tests", "skipped" if tests_s is None else _fmt_seconds(tests_s)),
         ("build", _fmt_seconds(build_s)),
@@ -357,7 +395,7 @@ def status_lines(*, layout: dict, engine: str, embed: bool, configs: list[Path],
     width = max(len(k) for k, _ in rows)
 
     def value(key: str, v: str) -> str:
-        if key in ("exe", "readme", "data") or (key == "icon" and icon):
+        if key in ("exe", "readme", "data", "zip") or (key == "icon" and icon):
             return _path_text(v, color, links)
         if key == "sha256":
             return ui.paint(v, "dim", color)
@@ -377,6 +415,8 @@ def main(argv: list[str] | None = None) -> int:
     icon = parser.add_mutually_exclusive_group()
     icon.add_argument("--icon", metavar="ICO", default=None, help="icon file (.ico) for the exe (default: code/assets/eldendisk.ico)")
     icon.add_argument("--no-icon", action="store_true", help="build the exe without an icon")
+    parser.add_argument("--zip", action="store_true",
+                        help="also pack the exe and its README.md into ./build/dist/eldendisk-<version>-<platform>.zip")
     parser.add_argument("--keep-app-data", action="store_true",
                         help="do not remove %%LOCALAPPDATA%%\\EldenDisk (the vault and its save snapshots, the creative files, the "
                              "exports) before the build; by default it is removed, never while a vault in it owes a restore or the game runs")
@@ -398,11 +438,16 @@ def main(argv: list[str] | None = None) -> int:
     build_s = time.monotonic() - t0
 
     layout = build_layout()
+    zipped = None
+    if args.zip:
+        zipped = make_zip(layout)
+        if zipped is None:
+            return 1
     log("Done:")
     color, links = ui.use_color(sys.stdout), ui.use_links(sys.stdout)
     for line in status_lines(layout=layout, engine=args.engine, embed=not args.no_embed, configs=config_files(layout),
                              tests_s=tests_s, build_s=build_s, total_s=time.monotonic() - started, color=color, links=links,
-                             icon=icon_file("" if args.no_icon else args.icon, layout, warn=False)):
+                             icon=icon_file("" if args.no_icon else args.icon, layout, warn=False), zipped=zipped):
         print(line, flush=True)
     return 0
 
