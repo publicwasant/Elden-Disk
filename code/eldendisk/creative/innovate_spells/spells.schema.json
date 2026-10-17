@@ -695,6 +695,10 @@
                 }
               },
               "patternProperties": {
+                "^__info_[A-Za-z0-9_]+__$": {
+                  "description": "1.8.4: a comment at the head of a group of keys (what that part of the spell is and how it works); the tool does not read it",
+                  "type": "string"
+                },
                 "^(Magic|Goods|SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$": {
                   "anyOf": [ { "type": "number" }, { "type": "string", "pattern": "^(SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+$", "description": "1.8.4: a field that calls another row may name a row of the game; the build copies it into the slot and points the field at the copy" } ]
                 }

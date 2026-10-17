@@ -271,3 +271,22 @@ def test_the_schema_takes_hex_colours_too():
     bad = mutate(lambda s: s["customs"]["advanced"]["colors"]["Magic.6421.castSfxId"].update({"0x4334": "#90D5F"}))
     assert v.is_valid(file_of({"p": good}, maximum=7)) and not v.is_valid(file_of({"p": bad}, maximum=7))
     assert v.is_valid(file_of({"p": dict(OLD_COLOURS, flame_color="#90D5FF")}, maximum=7))
+
+
+def test_a_comment_heads_each_part_of_basic_and_is_not_read():
+    """1.8.4: "__info_<part>__": "..." at the head of a group of keys of customs.basic (what that part is and how it works)."""
+    doc = json.loads((service.CODE_DIR / "creative.json").read_text(encoding="utf-8"))
+    raw = doc["innovate_spells"]["slots"]["dismantle"]["customs"]["basic"]
+    parts = [k for k in raw if k.startswith("__info_") and k != "__info__"]
+    assert parts and all(isinstance(raw[k], str) and raw[k] for k in parts)
+    got = spec.normalise(doc)["spells"][1]["set"]
+    assert not any(k.startswith("__info") for k in got) and len(got) == len(raw) - len(parts) - 1
+    bad = copy.deepcopy(doc)
+    bad["innovate_spells"]["slots"]["dismantle"]["customs"]["basic"]["__info_fan__"] = 5
+    with pytest.raises(spec.SpecError) as e:
+        spec.normalise(bad)
+    assert any("__info_fan__" in p and "a comment (__info_<section>__) is text" in p for p in e.value.problems)
+    jsonschema = pytest.importorskip("jsonschema")
+    from pathlib import Path
+    schema = json.loads((Path(spec.__file__).parent / "spells.schema.json").read_text(encoding="utf-8"))
+    assert jsonschema.Draft202012Validator(schema).is_valid(doc) and not jsonschema.Draft202012Validator(schema).is_valid(bad)

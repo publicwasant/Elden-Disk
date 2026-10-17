@@ -70,7 +70,7 @@ def test_read_lock_on_is_a_name_of_the_character():
 
 # ---------------------------------------------------------------- the script
 SCRIPT = CODE / "eldendisk" / "creative" / "scripts" / "defaults" / "dismantle_follows_the_lock_on.py"
-MAGIC, BULLET = 2230001, 500000016
+MAGIC, BULLET, BLOOD, MARKS = 2230001, 500000016, 21951009, 999999999      # BLOOD: the copy of 474; MARKS: the game's unused visual
 BUILT = {"Magic.6800.refType": 106, "Bullet.10680000.shootAngle": -92, "Bullet.10680000.shootAngleInterval": 5,
          "Bullet.10680000.hitRadius": 1.5, "Bullet.10680000.hitRadiusMax": 4.5}
 GAME_BULLET = {"shootAngle": -92, "shootAngleInterval": 5, "homingAngle": 0, "lockShootLimitAng": 30, "hitRadius": 1.5,
@@ -80,12 +80,15 @@ GAME_BULLET = {"shootAngle": -92, "shootAngleInterval": 5, "homingAngle": 0, "lo
 def _doc(lock_on=False, with_spell=True):
     doc = copy.deepcopy(DOC)
     doc["character"]["lock_on"] = lock_on
-    doc["params"] = {"Magic": {str(MAGIC): {"refType": 106, "mp": 60}}, "Bullet": {str(BULLET): dict(GAME_BULLET)}}
+    doc["params"] = {"Magic": {str(MAGIC): {"refType": 106, "mp": 60}}, "Bullet": {str(BULLET): dict(GAME_BULLET)},
+                     "SpEffectParam": {str(BLOOD): {"vfxId1": -1}},
+                     "SpEffectVfxParam": {str(MARKS): {"midstSfxId": -1, "midstDmyId": -1, "existEffectForLarge": 0, "isVisibleDeadChr": 0}}}
     if with_spell:
         doc["creative"]["innovate_spells"]["2230001"] = {
             "id": "dismantle", "slot": 2,
             "rows": {"goods": MAGIC, "magic": MAGIC, "sp_effect": [21951008, 21951009], "bullet": [BULLET, BULLET + 1],
-                     "atk": [710000008], "shop": 100509, "copies": {"Bullet": {"10680000": BULLET, "10680001": BULLET + 1}}},
+                     "atk": [710000008], "shop": 100509, "copies": {"Bullet": {"10680000": BULLET, "10680001": BULLET + 1},
+                                                                         "SpEffect": {"1625": BLOOD - 1, "474": BLOOD}}},
             "design": {"kind": "projectile", "from": 6800, "requires": {"cost": {"focus_point": 60}},
                        "customs": {"basic": dict(BUILT)}}}
     return doc
@@ -105,8 +108,13 @@ def _written(b):
 LOCKED = {f"params.Magic.{MAGIC}.refType": 25, f"params.Magic.{MAGIC}.mp": 150, **{f"params.Bullet.{BULLET}.{k}": v for k, v in
           {"shootAngle": 0, "shootAngleInterval": 0, "homingAngle": 720, "lockShootLimitAng": 180, "hitRadius": 0.5,
            "hitRadiusMax": 0.5, "isUseSharedHitList": 0}.items()}}
-FAN = {f"params.Magic.{MAGIC}.refType": 106, f"params.Magic.{MAGIC}.mp": 60, **{f"params.Bullet.{BULLET}.{k}": v for k, v in GAME_BULLET.items()}}
-AS_BUILT = FAN                         # not locked on is the build: Catch Flame's motion and the fan
+MARKS_ON = {f"params.SpEffectParam.{BLOOD}.vfxId1": MARKS, f"params.SpEffectVfxParam.{MARKS}.midstDmyId": 220,
+            f"params.SpEffectVfxParam.{MARKS}.existEffectForLarge": 1, f"params.SpEffectVfxParam.{MARKS}.isVisibleDeadChr": 1}
+LOCKED.update(MARKS_ON, **{f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530177})      # the charged Beast Claw's marks
+FAN = {f"params.Magic.{MAGIC}.refType": 106, f"params.Magic.{MAGIC}.mp": 60, **MARKS_ON, f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530172, **{f"params.Bullet.{BULLET}.{k}": v for k, v in GAME_BULLET.items()}}
+AS_BUILT = {**FAN, f"params.SpEffectParam.{BLOOD}.vfxId1": -1, f"params.SpEffectVfxParam.{MARKS}.midstSfxId": -1,
+            f"params.SpEffectVfxParam.{MARKS}.midstDmyId": -1, f"params.SpEffectVfxParam.{MARKS}.existEffectForLarge": 0,
+            f"params.SpEffectVfxParam.{MARKS}.isVisibleDeadChr": 0}      # the build, and the game's unused row as it was
 
 
 def test_setup_writes_the_mode_of_the_lock_on_now_and_nothing_while_it_stays():
@@ -201,3 +209,19 @@ def test_the_fp_locked_on_comes_from_the_design_even_when_the_game_holds_the_loc
         s.setup()
         assert s.built[("Magic", "mp")] == 60
         ed._set_current(None)
+
+
+@pytest.mark.parametrize("name", ["dismantle_follows_the_lock_on.py", "rct_colours_follow_the_spell.py"])
+def test_a_session_without_a_build_of_its_own_ends_the_default_scripts_quietly(name):
+    """`run --regulation FILE` (an experiment): the disk has no creative.innovate_spells; the scripts log it and end, teardown too."""
+    doc = _doc()
+    del doc["creative"]["innovate_spells"]
+    found = host.load_file(SCRIPT.parent / name)
+    assert found.error is None, found.error
+    with FakeBackend(doc) as b:
+        ed._set_current(found.scripts[0])
+        with pytest.raises(ed._Dead):
+            found.scripts[0].setup()
+        found.scripts[0].teardown()
+        ed._set_current(None)
+    assert b.writes == [] and any("no build of its own" in m for _l, m in b.lines)

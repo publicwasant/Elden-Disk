@@ -68,6 +68,8 @@ ID_FIELDS = {
 LINK_TARGET = {"sp": {f: t for t, f in SP_PAIRS}, "bullet": {f: t for t, f in BULLET_LINKS}, "atk": {f: t for t, f in ATK_PAIRS}}
 ROW_REF_RE = re.compile(r"(SpEffect|Bullet|AtkParam_Pc)\.(\d+)")
 TABLE_LABEL = {"sp": "SpEffect", "bullet": "Bullet", "atk": "AtkParam_Pc"}
+# 1.8.4: `customs.basic` may carry a comment at the head of each group of keys, "__info_<section>__": "..." (not read by the tool)
+INFO_SECTION_RE = re.compile(r"__info_[A-Za-z0-9_]+__")
 LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "model"}
 FLAME_COLOR_MAX = 2.0     # a colour channel: 0..1 is the colour, up to 2 shines brighter
 EYES_ON_RE = re.compile(r"SpEffect\.(\d+)")    # positive_curse_energy_eyes.on: the copied SpEffect row the caster has while the buff lasts
@@ -531,7 +533,15 @@ def upgrade_spell(c, it: dict, p: str) -> dict:
             if not isinstance(basic, dict):
                 c.bad(p + ".customs.basic", 'must be an object: "Magic.<from>.<field>": number, "SpEffect.<id>.<field>": number, ...')
             else:
-                raw = {k: v for k, v in basic.items() if k != "__info__"}
+                raw = {}
+                for k, v in basic.items():
+                    if k == "__info__":
+                        continue
+                    if isinstance(k, str) and INFO_SECTION_RE.fullmatch(k):        # a comment at the head of a group of keys
+                        if not isinstance(v, str):
+                            c.bad("%s.customs.basic.%s" % (p, k), "a comment (__info_<section>__) is text")
+                        continue
+                    raw[k] = v
                 _eyes_of_basic(c, raw, p + ".customs.basic", out)
                 pseudo = {"kind": it.get("kind", "buff")}
                 if src is not None:

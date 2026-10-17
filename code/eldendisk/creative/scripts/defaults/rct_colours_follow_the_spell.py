@@ -15,7 +15,11 @@ class RctColoursFollowTheSpell(Interface):
         self.magic = None
 
     def setup(self):
-        rct = tools.read().creative.innovate_spells[self.spell]
+        spells = tools.read().creative.get("innovate_spells") or {}     # none without a build of this session (`run --regulation FILE`)
+        if self.spell not in spells:
+            tools.log(f"{self.spell} is not in the last build (or this session has no build of its own): no colours to follow", "warn")
+            tools.dead()
+        rct = spells[self.spell]
 
         # the spell's id in the magic slots
         self.magic = rct.rows.magic
@@ -47,7 +51,7 @@ class RctColoursFollowTheSpell(Interface):
 
     def teardown(self):
         # leave the design's colors as `run` left them
-        if not self.on:
+        if self.on is False:            # None: setup() ended before anything was painted
             disk = tools.read()
             self.put(disk, True)
             tools.write(disk)

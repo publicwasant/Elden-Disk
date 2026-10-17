@@ -1,8 +1,9 @@
 > [!NOTE]
 > **Version:** `1.8.4`  
 > **Status:** Part 1 IMPLEMENTED (closed). Dismantle passed in the game and its design is locked (2026-10-17). Part 2 IMPLEMENTED
-> (closed): Dismantle follows the lock-on, passed in the game (2026-10-17).  
-> **Last Updated:** _2026-10-17_
+> (closed): Dismantle follows the lock-on, passed in the game (2026-10-17). Part 3 IMPLEMENTED (closed): the claw marks on the ones
+> hit, passed in the game (2026-10-18).  
+> **Last Updated:** _2026-10-18_
 
 # Elden-Disk spec 1.8.4: Dismantle
 
@@ -12,7 +13,8 @@ Reads on top of [spec 1.8.3](elden-disk-spec-v1.8.3.md). Only what changes is wr
 - **Part 1:** Dismantle, the spell of slot 2, and what the builder needed for it (a field of a copied row may name a row of the
   game): sections 1 to 8.
 - **Part 2:** Dismantle follows the lock-on: one target when locked on, the fan when not (`character.lock_on` and a script): sections
-  L1 to L8.
+  L1 to L13.
+- **Part 3:** Beast Claw's claw marks next to the blood on the ones hit (the script), comments in `customs.basic`: sections C1 to C7.
 
 # Part 1: Dismantle (2026-10-17)
 
@@ -278,3 +280,74 @@ Asked by the author: locked on, a cast costs the build's FP x 2.5 (`creative.jso
 other fields of L3: `round(built x LOCKED_FP)`, LOCKED_FP 2.5; not locked on (and at `teardown()`), the build's. The build's FP is the
 design's `requires.cost.focus_point` (so a script started again while locked on does not take the locked value for the build's), else
 what the game holds at `setup()`. Tests: `test_lock_on.py` (60 / 150, a start while locked on, a design without a cost).
+
+# Part 3: the claw marks on the ones hit (2026-10-18)
+
+## C1. Idea
+
+Asked by the author (2026-10-17): on the ones Dismantle hits, next to the burst of blood, a slash. Chosen in the game among the hit effects
+of the game's purely physical spells (Bestial Sling 529523, Beast Claw 530172 / 530177, Pest Threads 526303, Aspects of the Crucible:
+Thorns 540103, Pest-Thread Spears 541013 / 541018, Divine Bird Feathers 541353), tried live by borrowing the frostbite's visual (260):
+
+- **Not locked on: 530172**, Beast Claw's claw marks.
+- **Locked on: 530177**, the charged Beast Claw's, bigger.
+
+"It comes one step closer to the real Dismantle" (the author, after the test).
+
+## C2. Why a visual row, and which
+
+- A bullet's own `sfxId_Hit` plays also where a cut ends without hitting anything (part 1, section 3: 38 bursts in the air, a stutter), so
+  the marks must be a visual of the SpEffect the cut gives to the ones it hits (the copy of 474, part 1 section 4): one of its visual
+  fields (`vfxId1`; `vfxId` is the blood) shows a SpEffectVfx row.
+- No SpEffectVfx row of the game plays the hit effect of a spell (all 1,513 looked at): the marks need a row that plays 530172 / 530177.
+- **SpEffectVfx 999999999**, the game's debug row: no SpEffect of the game shows it and it plays nothing (all its effects -1). The script
+  makes it the claw marks in the running game; the game's file keeps it as it is.
+
+## C3. The script
+
+`DismantleFollowsTheLockOn` (part 2) writes, with the other fields of its two modes:
+
+| **Row** | **Field** | **Not locked on** | **Locked on** | **Why** |
+|:--|:--|--:|--:|:--|
+| the copy of SpEffect 474 (21951009) | `vfxId1` | 999999999 | 999999999 | the blood's SpEffect also shows the marks |
+| SpEffectVfx 999999999 | `midstSfxId` | 530172 | 530177 | Beast Claw's marks / the charged one's |
+| | `midstDmyId` | 220 | 220 | at the middle of the body, as the blood |
+| | `existEffectForLarge` | 1 | 1 | on big enemies and bosses too |
+| | `isVisibleDeadChr` | 1 | 1 | on the cut that kills, too |
+
+`teardown()`: `vfxId1` as built (-1) and the row as the game's file has it (all -1 / 0). Without the scripts, the blood alone (part 1).
+
+## C4. Tried and dropped: the marks in the build (2026-10-18)
+
+The author asked first for the marks in `creative.json` (`"SpEffect.474.vfxId1": "SpEffectVfx.6"`, `"SpEffectVfx.6.midstSfxId": 530172`,
+the builder copying the game's visual 6 into slot 2's own block). Built and tested by the tests, it grew a seventh table of
+regulation.bin: **28 re-encoded blocks**, one more than the gate's 27 (the most the game was seen to load, T10). The gate stopped `run`,
+as it must; a test file of exactly that design (`tools/envelope_test.py --no-copies`, T11) took the game as far as the world. The author:
+too much for an effect the script gives; the builder change was taken out (it knows six tables again) and the script's way kept. The
+gate stays at 27; the design builds with **26** re-encoded blocks (body +124,560, frame +214,528).
+
+## C5. Comments in `customs.basic`
+
+Asked by the author: `"__info_<part>__": "..."` at the head of each group of keys of `customs.basic`, saying what that part is and how
+it works. The validator takes a key `__info_<letters, digits, _>__` there as a comment (text, never read; one that is not text is an
+error), the schema too. Dismantle's `basic` in seven parts: `__info_cast__`, `__info_fan__`, `__info_cut__`, `__info_bleed__`,
+`__info_blood__`, `__info_claw_marks__` (no keys: it says the script makes them), `__info_stones__`; the general `__info__` first.
+
+## C6. Found on the way
+
+A session without a build of its own (`run --regulation FILE`) has no `creative.innovate_spells`: both default scripts
+(`DismantleFollowsTheLockOn`, `RctColoursFollowTheSpell`) died on it, and the colours' `teardown()` failed again after a `setup()` that
+had ended early. Now they log it (`... no build of its own ...`) and end; `teardown()` does nothing then.
+
+## C7. What changes, tests, closing
+
+| **Where** | **Change** |
+|:--|:--|
+| `code/eldendisk/creative/scripts/defaults/dismantle_follows_the_lock_on.py` | the claw marks (C3); the quiet end (C6) |
+| `code/eldendisk/creative/scripts/defaults/rct_colours_follow_the_spell.py` | the quiet end and `teardown()` (C6) |
+| `code/eldendisk/creative/innovate_spells/spec.py`, `spells.schema.json` | the comments of `customs.basic` (C5) |
+| `code/creative.json` | Dismantle's `basic` in parts (the numbers unchanged) |
+| `code/tests/test_lock_on.py`, `test_spells_structure.py` | the marks in both modes and at `teardown()`, the quiet end of both scripts, the comments |
+
+The whole suite passes (1887, 109 skipped without the game's file); with the game's file, the design builds and passes the gate (26
+blocks). **Passed in the game (2026-10-18):** the marks on the ones hit, 530172 in the fan, 530177 locked on.
