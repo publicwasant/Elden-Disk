@@ -235,6 +235,7 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
             if len(ids) > block:
                 raise RecipeError("%s: the chain of %d has %d %s rows of its own; a slot has room for %d" % (who, src, len(ids), name, block))
             own[t] = {old: base + k for k, old in enumerate(ids)}
+        _named_rows(spell, chain, own, who)
         for n, t, rid in refs:
             if t in own and rid in own[t]:
                 D["magic"].set(m, "refId%d" % n, own[t][rid])
@@ -247,8 +248,12 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
             if int(rid) not in own[t]:
                 reach = chain.reach(t, int(rid))
                 why = ("is shared with %d spells of the game and is not copied" % reach) if int(rid) in chain.closure(src)[t] and reach > SHARED_ABOVE \
-                    else "is not part of the chain of %d that is copied" % src
+                    else ("is not part of the chain of %d that is copied (a row of the game outside it is copied when a field of a "
+                          "copied row names it: \"<Table>.<id>.<field>\": \"%s.%s\")" % (src, table, rid))
                 raise RecipeError("%s: set %s: %s %s %s (copied %s rows: %s)" % (who, key, table, rid, why, table, ", ".join(map(str, own[t])) or "none"))
+            if isinstance(v, str):          # a row of the game named by the design: the field points at its copy
+                label, ref = v.split(".")
+                v = own[_TABLE_KEY[label]][int(ref)]
             sets[t].setdefault(int(rid), []).append((name, v))
         eyes_on = None
         if "positive_curse_energy_eyes" in spell:
@@ -281,6 +286,31 @@ def template_rows(P: dict, D: dict, spell: dict, chain=None) -> Built:
         if table in ("Magic", "Goods"):
             D["magic" if table == "Magic" else "goods"].set(m if table == "Magic" else g, name, v)
     return Built(bytes(g), bytes(m), sp_rows, bullet_rows, atk_rows, own)
+
+
+_TABLE_KEY = {v: k for k, v in _TABLE_NAME.items()}
+_BLOCKS = {"sp": ("sp_copy_base", COPY_SP_BLOCK), "bullet": ("bullet_copy_base", COPY_BULLET_BLOCK), "atk": ("atk_copy_base", COPY_ATK_BLOCK)}
+
+
+def _named_rows(spell: dict, chain, own: dict, who: str) -> None:
+    """1.8.4: the rows of the game that a field of the design names ("Bullet.10600001.spEffectId0": "SpEffect.474") are copied too,
+    after the chain's own rows, in the order the design names them, into the same block of the slot (`own` gets them; a row the chain
+    copies already is not copied twice). The game's row is never changed: other spells keep using it."""
+    ids = slot_rows(spell["slot"])
+    for key, v in spell.get("set", {}).items():
+        if not isinstance(v, str):
+            continue
+        label, ref = v.split(".")
+        t, rid = _TABLE_KEY[label], int(ref)
+        if rid in own[t]:
+            continue
+        if not chain.real(t, rid):
+            raise RecipeError("%s: set %s: %s is not a row of this game" % (who, key, v))
+        base, block = ids[_BLOCKS[t][0]], _BLOCKS[t][1]
+        if len(own[t]) >= block:
+            raise RecipeError("%s: set %s: the slot has room for %d %s rows and the chain's own and the rows the design names "
+                              "already take them all" % (who, key, block, label))
+        own[t][rid] = base + len(own[t])
 
 
 def make_rows(P: dict, D: dict, spells: list, chain=None):

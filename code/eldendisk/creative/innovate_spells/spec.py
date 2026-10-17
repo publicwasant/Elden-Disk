@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 
+from .chain import ATK_PAIRS, BULLET_LINKS, SP_PAIRS
 from .defs import Def
 
 FORMAT = 1                    # the canonical form (what `normalise` returns and the commit record stores)
@@ -62,6 +63,11 @@ ID_FIELDS = {
               "vagrantBonusEneDropItemLotId", "vagrantItemEneDropItemLotId", "reinforceGoodsId", "reinforceMaterialId",
               "goodsType"},      # goodsType decides attack/support and sorcery/incantation: it follows the template
 }
+# 1.8.4: a field of a copied row that calls another row may name a row of the game as text ("SpEffect.474"): the builder copies
+# that row into the slot's own block too and points the field at the copy (the field -> the table it calls)
+LINK_TARGET = {"sp": {f: t for t, f in SP_PAIRS}, "bullet": {f: t for t, f in BULLET_LINKS}, "atk": {f: t for t, f in ATK_PAIRS}}
+ROW_REF_RE = re.compile(r"(SpEffect|Bullet|AtkParam_Pc)\.(\d+)")
+TABLE_LABEL = {"sp": "SpEffect", "bullet": "Bullet", "atk": "AtkParam_Pc"}
 LEVEL3_KEYS = {"icon", "icon_file", "colour", "color", "model"}
 FLAME_COLOR_MAX = 2.0     # a colour channel: 0..1 is the colour, up to 2 shines brighter
 EYES_ON_RE = re.compile(r"SpEffect\.(\d+)")    # positive_curse_energy_eyes.on: the copied SpEffect row the caster has while the buff lasts
@@ -361,7 +367,9 @@ def _template(c, it, p, n, iid, kind):
 
 def _set(c, raw, path, o):
     """`set`: {"Magic.<from>.<field>": number, "Goods.<from>.<field>": number, "SpEffect.<id>.<field>": number} -> the same, values
-    checked against the field. Whether a SpEffect id is one of the copied rows is checked when the rows are built."""
+    checked against the field. Whether a SpEffect id is one of the copied rows is checked when the rows are built. A field of a
+    SpEffect, Bullet or AtkParam_Pc row that calls another row may name a row of the game instead ("SpEffect.474", 1.8.4): kept as
+    that text, the builder copies the row into the slot and points the field at the copy."""
     if not isinstance(raw, dict):
         c.bad(path, "must be an object: \"Magic.<from>.<field>\": number")
         return {}
@@ -374,7 +382,7 @@ def _set(c, raw, path, o):
             continue
         table, rid, name = SET_TABLES[m.group(1)], int(m.group(2)), m.group(3)
         if table in ("sp", "bullet", "atk"):
-            name_ = {"sp": "SpEffect", "bullet": "Bullet", "atk": "AtkParam_Pc"}[table]
+            name_ = TABLE_LABEL[table]
             if o["kind"] == "clone":
                 c.bad(kp, "a clone shares the template's %s rows with the game's own spell and does not copy them: use "
                           "kind buff (with `from`), enchant, projectile or attack to tune a SpEffect, kind projectile for a Bullet, "
@@ -385,6 +393,20 @@ def _set(c, raw, path, o):
                 continue
             if table == "atk" and o["kind"] not in ("projectile", "attack"):
                 c.bad(kp, "only the kinds projectile and attack copy AtkParam_Pc rows (a buff or an enchant calls SpEffect rows only)")
+                continue
+            if isinstance(val, str) or name in LINK_TARGET[table]:
+                target = LINK_TARGET[table].get(name)
+                ref = ROW_REF_RE.fullmatch(val.strip()) if isinstance(val, str) else None
+                if target is None:
+                    c.bad(kp, "%s is not a field that calls another row: it needs a number" % name)
+                elif ref is None:
+                    c.bad(kp, "%s is a field that links rows (it calls a %s row): name a row of the game, \"%s.<id>\" (the builder "
+                              "copies it into this slot and points the field at the copy); a number is not taken here (the builder "
+                              "points the copies at each other itself)" % (name, TABLE_LABEL[target], TABLE_LABEL[target]))
+                elif SET_TABLES[ref.group(1)] != target:
+                    c.bad(kp, "%s calls a %s row, not a %s row" % (name, TABLE_LABEL[target], ref.group(1)))
+                else:
+                    out[key] = "%s.%d" % (ref.group(1), int(ref.group(2)))
                 continue
         elif "from" in o and rid != o["from"]:
             c.bad(kp, "Magic and Goods can only be set on the copied rows: the row id must be this spell's `from` (%d). The "

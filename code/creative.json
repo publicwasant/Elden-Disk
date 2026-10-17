@@ -48,7 +48,7 @@
             "texts": {
               "goods_name": "Reverse Cursed Technique",
               "goods_info": "Converts negative curse energy into a positive cursed energy that resurrects over time.",
-              "goods_caption": "The nature of a curse is to erode, corrupt, and destroy. Yet, this paradox dictates a terrifying truth: when two currents of profound malice are forced to violently collide and multiply, they do not bring absolute ruin. Instead, the multiplied negativity gives birth to a vibrant, positive spark of life capable of reversing death's approach.\n\nThis alien logic was introduced to the Lands Between by an Unknown Sorcerer—a wanderer who fell through the cracks of reality from a universe entirely unalike our own. They wore strange garments, swore fealty to no sovereign, and manipulated an unseen energy that defied every natural law of this world. To them, the impossible was merely a matter of calculation.\n\nThe sorcerer lingered only briefly before the fabric of space swallowed them once more, returning them to their distant home. In their wake, they left nothing but the formula for this absolute contradiction. Perhaps it was a deliberate miracle gifted to those who suffer, or perhaps, to a being who walks between dimensions, rewriting the rules of mortality was simply a fleeting whim"
+              "goods_caption": "Two currents of profound malice colliding can create a vibrant spark of life capable of reversing death. This paradox was brought to the Lands Between by an Unknown Sorcerer—a dimension-jumping wanderer who manipulated unseen energy. Leaving behind only this absolute contradiction, the sorcerer vanished back to their distant home, acting either out of calculated miracle or a fleeting whim."
             },
             "colors": {
               "__info__": "Base of Light Blue Color Palette from https://www.figma.com/colors/light-blue/, I've adjusted Monochromatic Color Palette Sets, using #E0F3FF as the Negative Cursed Energy, and #90D5FF as the Positive Cursed Energy for the concept.",
@@ -306,7 +306,71 @@
           }
         }
       },
-      "<id-2>": null,
+      "dismantle": {
+        "__info__": "Dismantle (1.8.4): an incantation made from Bestial Sling (Magic and Goods 6800), cast with the flick of the hand of Catch Flame (motion 106). One cast cuts everything in front of you, 100 m deep: 38 invisible cuts, one every 5 degrees (from -92 to +93), that go through characters, objects and the ground and hit each target once, slash damage scaled by the seal, blood, the bleed, no knockdown. Its id in the game is 2230001 (slot 2).",
+        "kind": "projectile",
+        "from": 6800,
+        "requires": {
+          "status": {
+            "intelligence": 15,
+            "faith": 60,
+            "arcane": 10
+          },
+          "cost": {
+            "focus_point": 20
+          }
+        },
+        "locations": {
+          "kale": {
+            "price": 8000,
+            "stock": 1
+          }
+        },
+        "customs": {
+          "basic": {
+            "__info__": "Level 2. Bullet.10680000 = the fan of cuts (Bestial Sling's 11 stones): numShoot = how many, shootAngle = the first one's angle, shootAngleInterval = whole degrees between two (38 x 5 = from -92 to +93); initVellocity / maxVellocity = m/s, life = seconds (120 m/s x 0.84 s = 100 m; no gravity, no slowing down: the template's), lifeRandomRange = seconds the game adds or takes from life at random (Bestial Sling's 0.04 s would make it 96 to 106 m; 0: always 100 m), dist = range; hitRadius = metres each cut is wide at the hand, hitRadiusMax = at the end, spreadTime = seconds it takes to grow (at 100 m two cuts 5 degrees apart are 8.7 m apart: 4.5 m each side leaves no gap); isPenetrateMap 1 = the cuts go through the ground and walls (a cut 1.5 m wide thrown from the hand touches the ground at once, and a cut that hits the map ends there); sfxId_Bullet = what flies (-1: nothing, the blade is invisible), sfxId_Hit = an effect where a cut ends, on a target or not (-1: none; the blood is spEffectId1); createLimitGroupId 0 = no limit of the game's group 42; spEffectId0 = the bleed: \"SpEffect.1625\" names a row of the game, the build copies it into this slot (the game's row stays as it is) and SpEffect.1625.<field> changes the copy (bloodAttackPower = bleed per hit); spEffectId1 = the blood on the ones hit, and only on them: \"SpEffect.474\" (a game row that takes HP from the one a bullet hits) copied and emptied: changeHpRate / changeHpPoint 0 (takes nothing), invocationConditionsStateChange1 0 (on every target, not only those in the game's state 452), effectEndurance = seconds it stays, vfxId 6 = the burst of blood of a hemorrhage (effect 4080 at the middle of the body, the visual of every bleed of the game). Bullet.10680001 = Bestial Sling's 3 homing stones of the same cast: numShoot 0 = none. AtkParam_Pc.68000 = the cut of both: atkPhys = physical damage before the seal's scaling, atkAttribute = 0 slash (1 strike, 2 pierce, 3 standard), atkMaterial = what hits, which picks the game's own hit effect and sound on what is hit (0: metal, as a sword: blood on flesh; 6: magic, Bestial Sling's). Magic.6800.refType = the cast motion (106: Catch Flame's flick of the hand; Bestial Sling's own is 38), castSfxId = the effect on the caster while casting (4122; -1: none). Goods.6800.iconId = the inventory icon (6254: Bloodboon's).",
+            "Bullet.10680000.numShoot": 38,
+            "Bullet.10680000.shootAngle": -92,
+            "Bullet.10680000.shootAngleInterval": 5,
+            "Bullet.10680000.initVellocity": 120.0,
+            "Bullet.10680000.maxVellocity": 120.0,
+            "Bullet.10680000.life": 0.84,
+            "Bullet.10680000.lifeRandomRange": 0.0,
+            "Bullet.10680000.dist": 100.0,
+            "Bullet.10680000.hitRadius": 1.5,
+            "Bullet.10680000.hitRadiusMax": 4.5,
+            "Bullet.10680000.spreadTime": 0.84,
+            "Bullet.10680000.isPenetrateMap": 1,
+            "Bullet.10680000.sfxId_Bullet": -1,
+            "Bullet.10680000.sfxId_Hit": -1,
+            "Bullet.10680000.createLimitGroupId": 0,
+            "Bullet.10680000.spEffectId0": "SpEffect.1625",
+            "SpEffect.1625.bloodAttackPower": 60,
+            "Bullet.10680000.spEffectId1": "SpEffect.474",
+            "SpEffect.474.changeHpRate": 0.0,
+            "SpEffect.474.changeHpPoint": 0,
+            "SpEffect.474.invocationConditionsStateChange1": 0,
+            "SpEffect.474.effectEndurance": 0.5,
+            "SpEffect.474.vfxId": 6,
+            "Bullet.10680001.numShoot": 0,
+            "Bullet.10680001.sfxId_Bullet": -1,
+            "Bullet.10680001.sfxId_Hit": -1,
+            "AtkParam_Pc.68000.atkPhys": 380,
+            "AtkParam_Pc.68000.atkAttribute": 0,
+            "AtkParam_Pc.68000.atkMaterial": 0,
+            "Magic.6800.refType": 106,
+            "Magic.6800.castSfxId": 4122,
+            "Goods.6800.iconId": 6254
+          },
+          "advanced": {
+            "texts": {
+              "goods_name": "Dismantle",
+              "goods_info": "Unleashes invisible slashes that cut everything in a wide arc far ahead.",
+              "goods_caption": ""
+            }
+          }
+        }
+      },
       "<id-3>": null,
       "<id-4>": null,
       "<id-5>": null,

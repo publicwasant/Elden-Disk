@@ -507,7 +507,7 @@
             "pattern": "^(Magic|Goods|SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$"
           },
           "additionalProperties": {
-            "type": "number"
+            "anyOf": [ { "type": "number" }, { "type": "string", "pattern": "^(SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+$", "description": "1.8.4: a field that calls another row may name a row of the game; the build copies it into the slot and points the field at the copy" } ]
           }
         },
         "colors": {
@@ -696,10 +696,10 @@
               },
               "patternProperties": {
                 "^(Magic|Goods|SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$": {
-                  "type": "number"
+                  "anyOf": [ { "type": "number" }, { "type": "string", "pattern": "^(SpEffect|Bullet|AtkParam_Pc)\\.[0-9]+$", "description": "1.8.4: a field that calls another row may name a row of the game; the build copies it into the slot and points the field at the copy" } ]
                 }
               },
-              "description": "numbers written over the copies of the game's rows, <Table>.<row id>.<field> (built into regulation.bin)"
+              "description": "numbers written over the copies of the game's rows, <Table>.<row id>.<field> (built into regulation.bin); a field that calls another row may name a row of the game (\"SpEffect.474\"): the build copies it into the slot"
             },
             "advanced": {
               "type": "object",

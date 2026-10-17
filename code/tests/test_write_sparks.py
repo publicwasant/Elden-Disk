@@ -143,7 +143,7 @@ def test_a_hex_place_reaches_the_service_as_a_colour_and_the_first_spell_paints_
     rct(d)["customs"]["advanced"]["colors"][FIRE]["0x4290"] = "#FF0000"
     other = copy.deepcopy(rct(d))
     other["customs"]["advanced"]["colors"] = {FIRE: {"0x4290": "#00FF00"}}
-    d["innovate_spells"]["slots"].pop("<id-2>")
+    d["innovate_spells"]["slots"].pop(next(k for k, v in d["innovate_spells"]["slots"].items() if v is None))   # room for one more
     d["innovate_spells"]["slots"] = {"reverse_cursed_technique": rct(d), "other": other,
                                      **{k: v for k, v in d["innovate_spells"]["slots"].items() if k != "reverse_cursed_technique"}}
     write_spec(ci, d)
