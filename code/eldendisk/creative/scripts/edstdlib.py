@@ -29,6 +29,7 @@ each script in a thread of its own. `tools` is the tool itself:
 When no character is in the world, `x.character` is None and reading in it skips that call of loop() (the script waits)."""
 from __future__ import annotations
 
+import copy
 import threading
 
 __version__ = "0.2.0"
@@ -149,10 +150,10 @@ class Node:
         v = self._data[k]
         if isinstance(v, (dict, list)) or v is None:
             if isinstance(v, list):
-                return list(v)
+                return copy.deepcopy(v)                    # a list is a value: the script's own (buffs, slots: short)
             if v is None and self._path + (k,) == ("character",):
                 return Node(self._root, ("character",), None)
-            return Node(self._root, self._path + (k,), v) if v is not None else None
+            return Node(self._root, self._path + (k,), self._root._own(self._data, k, v)) if v is not None else None
         return v
 
     def __getattr__(self, name):
@@ -203,7 +204,6 @@ class Node:
 
     def to_dict(self):
         """A plain copy (dicts and lists)."""
-        import copy
         return copy.deepcopy(self._data)
 
     def __repr__(self) -> str:
@@ -240,12 +240,26 @@ class _Prefix:
 
 
 class Snapshot(Node):
-    """What tools.read() returns: the whole document, and what was changed in it since (for tools.write)."""
-    __slots__ = ("_changed",)
+    """What tools.read() returns: the whole document, and what was changed in it since (for tools.write). The document is shared by
+    every script for a moment (the backend's read): a part of it is copied for this snapshot when the script first touches it (1.8.4
+    part 8; a copy of the whole, the inventory with it, at each read was most of a loop's time), so the script changes its own copy only."""
+    __slots__ = ("_changed", "_mine")
 
     def __init__(self, doc: dict):
         object.__setattr__(self, "_changed", {})
-        super().__init__(self, (), doc)
+        object.__setattr__(self, "_mine", {})          # id -> each object copied for this snapshot (held, so an id is never reused)
+        super().__init__(self, (), self._own(None, None, doc))
+
+    def _own(self, parent, key, v):
+        """`v` (a dict at parent[key]) as this snapshot's own: the copy made at the first touch (one level; what is under it is copied
+        when it is touched in turn), put in its parent (already this snapshot's own) in place of the shared one."""
+        if self._mine.get(id(v)) is v:
+            return v
+        mine = copy.copy(v)
+        self._mine[id(mine)] = mine
+        if parent is not None:
+            parent[key] = mine
+        return mine
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- tools
@@ -254,8 +268,7 @@ class Tools:
 
     @staticmethod
     def read() -> Snapshot:
-        import copy
-        return Snapshot(copy.deepcopy(_b().document()))
+        return Snapshot(_b().document())
 
     @staticmethod
     def write(obj) -> bool:

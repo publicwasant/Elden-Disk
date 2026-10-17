@@ -240,12 +240,15 @@ def test_a_scripts_table_reads_a_row_only_when_it_is_touched():
         rows[9]
     kept = copy.deepcopy(rows)
     assert dict.get(kept, "2") == {"hp": 20} and reads == [2]
+    shallow = copy.copy(rows)                                # a snapshot's copy (1.8.4 part 8): the rows read so far, no row read
+    assert dict.get(shallow, "2") is dict.get(rows, "2") and reads == [2] and 3 in shallow and 4 not in shallow
 
 
 def test_a_script_reaches_a_row_by_attribute_and_a_missing_row_says_so_briefly():
     rows = LazyRows("NpcParam", 3, lambda t, i: {"hp": i * 10}, lambda t: [1, 2, 3])
-    node = edstdlib.Node(None, ("params",), {"NpcParam": rows})
+    node = edstdlib.Snapshot({"params": {"NpcParam": rows}}).params
     assert node.NpcParam[3].hp == 30 and node.npcparam["1"].hp == 10
+    assert dict(dict.items(rows)) == {}                     # read into the snapshot's own copy of the table, the shared one untouched
     with pytest.raises(KeyError, match="no such row") as e:
         node.NpcParam[7]
     assert "1, 2" not in str(e.value)

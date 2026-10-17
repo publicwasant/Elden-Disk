@@ -606,3 +606,66 @@ from the design (golden passed with the game's `regulation.bin`).
 ## V4. Closed (2026-10-18)
 
 Part 7 passed in the game.
+
+# Part 8: optimization (2026-10-18)
+
+## O1. What was looked at
+
+Everything 1.8.4 changed (since 1.8.3, `1d72743`): the sampler (`character.lock_on`: one 8-byte read a sample; `character.equipment`),
+the builder (rows a design names: one pass over `set`), `fxr` / `write` (the claw marks' plan: a dict lookup), the backend's colour
+places, the cache's save, and the three default scripts, which run the whole session: `DismantleFollowsTheLockOn` every 0.1 s,
+`DismantleColoursFollowTheSpell` and `RctColoursFollowTheSpell` every 0.2 s: **20 `tools.read()` a second**, the first two new in
+1.8.4. The builder, the sampler, `fxr` and the cache: nothing to gain (a few reads and lookups, once a sample or once a build).
+
+## O2. Found: `tools.read()` copied the whole document at each call
+
+`tools.read()` was `Snapshot(copy.deepcopy(document))`: the whole document, the inventory with it (a dict per item), the designs and a
+`LazyRows` per table of the game, at each loop of each script, though the scripts touch `character.lock_on` or
+`character.equipment.magic.selected.id` only. Measured (a document with 1,330 items in the inventory, the design of `creative.json`, 190
+tables; the size of a real inventory is a guess, the copy grows with it): **3.6 ms a read, 72 ms a second for the three scripts**, about
+7 % of one core, every 0.05 s new garbage of the inventory's size, all of it in the threads of the scripts (the GIL shared with the host).
+
+**Now (`edstdlib.py`):** the snapshot holds the shared document and copies a part of it when the script first touches it: a dict, one
+level at a time, put in its parent in place of the shared one (`Snapshot._own`), so a change is in the snapshot's own copy only; a list
+is given as a deep copy (a value: buffs, slots). The backend's document is built new at each read and never changed, so what a
+snapshot has not touched stays as it was. `LazyRows.__copy__`: the rows read so far, not a walk of every row (which would read each from
+the game). **0.003 ms a read for the lock-on loop, 0.007 ms for a colour loop: 0.1 ms a second for the three** (720 times less), and an
+untouched inventory is never copied.
+
+## O3. Found: "is this a row" walked every id of the table
+
+`LazyRows.__contains__` and `__missing__` looked for the id in the list of every id of the table: 0.15 ms a look in a table of 20,000
+rows, two looks a field. `DismantleFollowsTheLockOn` writes 22 fields at each lock-on change (up to about 6 ms). Now a set beside the
+list: 0.00006 ms a look.
+
+## O4. Accuracy
+
+Nothing found that reads or writes a wrong value. Unchanged: the lock-on rule (`is_handle`), passed in the game.
+
+## O5. Tests
+
+`test_scripts.py`: a change stays in the snapshot that made it, the backend's document and another snapshot unchanged; a list is the
+script's own; an untouched part is not copied, a touched one is copied one level (the inventory under the character still shared).
+`test_param_walk.py`: a script's row read goes into its own copy of the table; `copy.copy` of a table reads no row.
+
+## O6. A minute of play, simulated (2026-10-18)
+
+The three default scripts as they are (their own `setup` / `loop` / `teardown`) on the tests' fake backend for 60 s of play: lock on /
+off every 2 s, RCT / Dismantle selected every 5 s (600 + 300 + 300 loops); the tables as `LazyRows` (Magic 6,000 rows, Bullet and
+SpEffectParam 20,000, SpEffectVfxParam 8,000, 185 more of 1,000); Dismantle's 130 colour places. Before: `deepcopy` at each read and the
+ids in a list; after: part 8. Median of 3; the peak of memory taken during the minute by `tracemalloc` (a separate run).
+
+| Items in the inventory | Before (ms a second) | After (ms a second) | Faster | Peak before | Peak after | Writes (before / after) |
+|---:|---:|---:|---:|---:|---:|---|
+| 0 | 13.6 | 0.40 | 34 x | 648 KB | 489 KB | 706 / 706, the same |
+| 300 | 33.8 | 0.31 | 109 x | 825 KB | 512 KB | 706 / 706, the same |
+| 1,330 | 104.0 | 0.32 | 327 x | 1,460 KB | 513 KB | 706 / 706, the same |
+| 3,000 | 233.4 | 0.40 | 580 x | 2,347 KB | 500 KB | 706 / 706, the same |
+
+At 1,330 items, in the minute: `DismantleFollowsTheLockOn` 3,166 -> 11.8 ms, each colour script about 1,540 -> 3.7 ms. The writes are the
+same values in the same order: the scripts do the same. Not in it: the backend's read of the game (the document built every 0.05 s,
+unchanged by part 8) and the game itself on the same machine.
+
+## O7. Closed (2026-10-18)
+
+Part 8 passed in the game. **1.8.4 (Dismantle) is closed**: parts 1-8.

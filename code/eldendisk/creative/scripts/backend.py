@@ -75,25 +75,30 @@ class LazyRows(dict):
 
     def __init__(self, table: str, rows: int, read_row, ids, loaded=None):
         super().__init__(loaded or {})
-        self.table, self.rows, self._read_row, self._ids, self._known = table, rows, read_row, ids, None
+        self.table, self.rows, self._read_row, self._ids, self._known, self._known_set = table, rows, read_row, ids, None, None
 
     def _all_ids(self) -> list[str]:
         if self._known is None:
             self._known = [str(i) for i in self._ids(self.table)]
+            self._known_set = frozenset(self._known)      # 1.8.4 part 8: "is this a row" in one step, not a walk of every id
         return self._known
+
+    def _has(self, k: str) -> bool:
+        self._all_ids()
+        return k in self._known_set
 
     def __missing__(self, key):
         k = str(key)
         if k != key and dict.__contains__(self, k):       # x[10000000] after x["10000000"]: the row already read
             return dict.__getitem__(self, k)
-        if not k.isdigit() or k not in self._all_ids():
+        if not k.isdigit() or not self._has(k):
             raise KeyError(k)
         row = self._read_row(self.table, int(k))
         dict.__setitem__(self, k, row)
         return row
 
     def __contains__(self, key) -> bool:
-        return str(key) in self._all_ids()
+        return self._has(str(key))
 
     def __iter__(self):
         return iter(self._all_ids())
@@ -119,7 +124,14 @@ class LazyRows(dict):
     def __deepcopy__(self, memo):
         import copy
         out = LazyRows(self.table, self.rows, self._read_row, self._ids, copy.deepcopy(dict(dict.items(self)), memo))     # the rows read so far, not every row
-        out._known = self._known
+        out._known, out._known_set = self._known, self._known_set
+        return out
+
+    def __copy__(self):
+        """The rows read so far, the same row objects (a script's snapshot copies a row when it touches it, 1.8.4 part 8); a plain
+        copy.copy would walk every row of the table, reading each from the game."""
+        out = LazyRows(self.table, self.rows, self._read_row, self._ids, dict(dict.items(self)))
+        out._known, out._known_set = self._known, self._known_set
         return out
 
 

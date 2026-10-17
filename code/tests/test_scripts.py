@@ -42,6 +42,30 @@ def test_tools_read_gives_the_document_as_an_object():
         assert "21951000" in x.character.buffs and x.character.buffs[21951000].name == "reverse_cursed_technique"
 
 
+def test_a_snapshot_copies_what_it_touches_and_the_shared_document_never_changes():
+    """1.8.4 part 8: tools.read() no longer copies the whole document (the inventory with it) at each call: a part is the snapshot's
+    own from the first touch, so a change stays in it, the backend's document and the other snapshots unchanged."""
+    import copy
+    from tests.fake_tools import DOC
+    doc = copy.deepcopy(DOC)
+    doc["character"]["inventory"] = {"goods": {"2919": {"name": "Rune Arc", "quantity": {"total": 3}}}}
+    doc["character"]["slots"] = [1, {"id": 2}]
+    with FakeBackend(doc) as b:
+        before = copy.deepcopy(b.doc)
+        x, y = tools.read(), tools.read()
+        x.character.attributes.vigor = 61
+        x.creative.innovate_spells[2230000].design.customs.advanced.colors["Magic.6421.castSfxId"]["0x4334"] = "#FF909E"
+        x.character.slots[1]["id"] = 3                                          # a list is the script's own value
+        assert x.character.attributes.vigor == 61 and y.character.attributes.vigor == before["character"]["attributes"]["vigor"]
+        assert y.creative.innovate_spells[2230000].design.customs.advanced.colors["Magic.6421.castSfxId"]["0x4334"] != "#FF909E"
+        assert b.doc == before and tools.read().character.attributes.vigor == before["character"]["attributes"]["vigor"]
+        assert x.character.inventory is not None                                 # touched: copied then, not before
+        z = tools.read()
+        assert z._data["character"] is b.doc["character"]                        # untouched: still the shared one, nothing copied
+        z.character.level
+        assert z._data["character"] is not b.doc["character"] and z._data["character"]["inventory"] is b.doc["character"]["inventory"]
+
+
 def test_a_name_that_is_not_there_says_what_is():
     with FakeBackend():
         x = tools.read()
