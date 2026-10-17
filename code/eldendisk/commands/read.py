@@ -540,6 +540,8 @@ def _query_once(args, mem, sampler: Sampler, export: ExportWriter) -> int:
     book.d("read", f"query {view.label(args.query)}: {len(selection)} result(s)")
     if getattr(sampler, "names_note", None):
         book.d("read", sampler.names_note)
+    if getattr(sampler, "lock_on_raw", None) is not None and any("lock_on" in p for p, _v in selection):
+        book.d("read", f"lock_on: PlayerIns +0x{sampler.profile.player_to_lock_on:X} = 0x{sampler.lock_on_raw:016X}")
     if getattr(sampler, "names_error", None) and any(p.startswith(("character.inventory", "disk.character.inventory", "character"))
                                                      or p in ("", "disk") for p, _v in selection):
         book.w("read", f"the items' names are not shown: {sampler.names_error}")

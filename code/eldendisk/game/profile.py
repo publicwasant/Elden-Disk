@@ -222,6 +222,7 @@ class Profile:
     equipment: EquipmentLayout | None = None   # None -> character.equipment is not read for this exe
     event_flags: EventFlagsLayout | None = None   # None -> resurrect cannot read or change a boss on this exe
     inventory: InventoryLayout | None = None      # None -> character.inventory is not read for this exe
+    player_to_lock_on: int | None = None          # 1.8.4: PlayerIns + this = the handle of the lock-on target; None -> no character.lock_on
 
 
 def _parse_sp_effect(d: dict) -> tuple[SpEffectLayout | None, str | None]:
@@ -542,6 +543,7 @@ def load_profile(path: Path, exe_sha256: str) -> tuple[Profile | None, str | Non
             equipment=equipment,
             event_flags=event_flags,
             inventory=inventory,
+            player_to_lock_on=None if raw.get("player_to_lock_on") is None else _num(raw.get("player_to_lock_on"), "player_to_lock_on"),
         ), None
     except Incomplete as exc:
         return None, f"profile incomplete: {exc}"

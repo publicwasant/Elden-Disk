@@ -33,6 +33,12 @@ def iso(dt: datetime) -> str:
     return dt.isoformat(sep=" ", timespec="microseconds")
 
 
+def is_handle(v: int) -> bool:
+    """A 64-bit value is a handle of a character when neither half is 0 or all ones (1.8.4: 0x3C2A2500_17300018 seen while locked on)."""
+    hi, lo = v >> 32, v & 0xFFFFFFFF
+    return hi not in (0, 0xFFFFFFFF) and lo not in (0, 0xFFFFFFFF)
+
+
 @dataclass
 class Sample:
     state: str  # WAITING_FOR_WORLD | CONNECTED | IDLE
@@ -71,6 +77,7 @@ class Sampler(Layout):
         self._index_key: tuple | None = None
         self._index_of: dict | None = None
         self._index_spells: dict = {}
+        self.lock_on_raw: int | None = None       # 1.8.4: the 64 bits at PlayerIns + player_to_lock_on in the last sample (for the log)
 
     def _reset_session(self) -> None:
         """Forget per-character state (the player left the world, possibly to load another character)."""
@@ -222,7 +229,18 @@ class Sampler(Layout):
             character["equipment"] = equipment
         if self.profile.inventory is not None and self.inventory_wanted:
             character["inventory"] = inventory
+        lock_on = self._read_lock_on(player)
+        if lock_on is not None:
+            character["lock_on"] = lock_on
         return Sample("CONNECTED", character, ignored, ignored_anim, None, runes)
+
+    def _read_lock_on(self, player: int) -> bool | None:
+        """`character.lock_on` (1.8.4): whether the player is locked on to something. PlayerIns + player_to_lock_on holds the game's
+        handle of the target while locked on; locked = the 64 bits are a handle (neither half 0 nor all ones). None when the profile
+        has no such field or it cannot be read (then the disk leaves `lock_on` out)."""
+        off = self.profile.player_to_lock_on
+        self.lock_on_raw = None if off is None else read_ptr(self.mem, player + off)
+        return None if self.lock_on_raw is None else is_handle(self.lock_on_raw)
 
     def _read_inventory(self, gd: int, now: datetime) -> dict | None:
         """`character.inventory` (1.8.1), read at most every INVENTORY_EVERY_S (a few thousand places, tens of KB): what the character

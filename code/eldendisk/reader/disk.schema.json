@@ -70,6 +70,10 @@
       "required": ["level", "vitals", "runes", "attributes", "buffs", "animations"],
       "properties": {
         "level": { "type": "integer", "minimum": 1, "maximum": 713 },
+        "lock_on": {
+          "type": "boolean",
+          "description": "1.8.4, when the profile has player_to_lock_on: true while the player is locked on to something (nothing about the target)"
+        },
         "inventory": {
           "type": ["object", "null"],
           "description": "1.8.1, when the profile has an inventory block: what the character carries, by kind; each item by its id (the row of its table; a weapon: the row plus its level) with its name (the game's text, null when unknown), quantity (total, held: carried, stored: in the storage chest), type (goods) and upgrade (weapons). null while it cannot be read.",

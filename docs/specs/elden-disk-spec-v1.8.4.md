@@ -1,6 +1,7 @@
 > [!NOTE]
 > **Version:** `1.8.4`  
-> **Status:** Part 1 IMPLEMENTED (closed). Dismantle passed in the game and its design is locked (2026-10-17).  
+> **Status:** Part 1 IMPLEMENTED (closed). Dismantle passed in the game and its design is locked (2026-10-17). Part 2 IMPLEMENTED
+> (closed): Dismantle follows the lock-on, passed in the game (2026-10-17).  
 > **Last Updated:** _2026-10-17_
 
 # Elden-Disk spec 1.8.4: Dismantle
@@ -10,6 +11,8 @@ Reads on top of [spec 1.8.3](elden-disk-spec-v1.8.3.md). Only what changes is wr
 
 - **Part 1:** Dismantle, the spell of slot 2, and what the builder needed for it (a field of a copied row may name a row of the
   game): sections 1 to 8.
+- **Part 2:** Dismantle follows the lock-on: one target when locked on, the fan when not (`character.lock_on` and a script): sections
+  L1 to L8.
 
 # Part 1: Dismantle (2026-10-17)
 
@@ -138,3 +141,133 @@ Nothing else: no change to the reader, the disk, the scripts or the commands.
 - **Optimization:** nothing to speed up. The copies cost one pass over the design's keys at build time and no extra read of the game's
   file; the gate checks them with the rest. In the game: no script; 38 bullets a cast and one burst of blood per target hit.
 - **Tidied:** one table of the three names (`TABLE_LABEL`) in `spec.py` instead of two.
+
+# Part 2: Dismantle follows the lock-on (2026-10-17)
+
+## L1. Idea
+
+Asked by the author (2026-10-17):
+
+- **Locked on:** a single attack: all 38 cuts go at the one target, cast with **Catch Flame's** motion.
+- **Not locked on:** the fan of part 1, cast with **Bestial Sling's** motion.
+- A script switches between the two; the tool only has to say whether the player is locked on (not who the target is).
+
+A Magic or Bullet row can be changed in the running game and the next cast uses it (1.8.3: `write params.Bullet...` tried live, no
+build). So no new build: the build keeps part 1's rows, the script writes the fields of section L3 when the lock-on changes.
+
+## L2. `character.lock_on`
+
+```json
+"character": { "level": 150, "lock_on": true, ... }
+```
+
+- **true** while the player is locked on to something, **false** when not. Nothing about the target.
+- **Where:** the player's character (`PlayerIns`, which every sample already follows) **+0x6B0** holds the game's handle of the target
+  while locked on: seen by the probes of the dropped `world.units` (two games, 0x3C2A2500_17300018). The field is 64 bits; what it
+  holds when nothing is locked on was not seen (the probes printed only what changed): **locked = the field holds a handle** (neither
+  half 0 nor 0xFFFFFFFF), to be checked first in the game (L7).
+- **Read** every sample (8 bytes, nothing more). `offsets.json`: `"player_to_lock_on": "0x6B0"` in the 1.17.1 profile; a profile without
+  it leaves `lock_on` out of the disk.
+- `read lock_on` (and `read character.lock_on`), `tools.read().character.lock_on` in a script. Not writable.
+
+## L3. The two modes
+
+The rows are slot 2's copies (Magic 2230001, Bullet 500000016 = the copy of 10680000), found by the script in
+`creative.innovate_spells.dismantle` (its `rows` and `copies`), never written as numbers in the script.
+
+| **Field** | **Not locked on (part 1's fan)** | **Locked on** | **Why** |
+|:--|--:|--:|:--|
+| `Magic.refType` | 38 (Bestial Sling) | 106 (Catch Flame) | the author's two motions |
+| `Bullet.shootAngle`, `shootAngleInterval` | -92, 5 | 0, 0 | 38 cuts straight at the target, on one line |
+| `Bullet.homingAngle` | 0 | 720 | degrees a second a cut turns towards the target (it follows it) |
+| `Bullet.lockShootLimitAng` | 30 | 180 | the cuts leave aimed at the target wherever it is around you |
+| `Bullet.hitRadius`, `hitRadiusMax` | 1.5, 4.5 | 0.5, 0.5 | narrow: the target, not the ones around it |
+| `Bullet.isUseSharedHitList` | 1 (a target once per cast) | 0 (each cut on its own: 38 hits) | see L8.2 |
+
+Everything else (100 m, through everything, 380 slash, the bleed, the blood) stays as part 1. **The design's part 1 has `refType` 106 in
+`creative.json`**; the script writes 38 when not locked on, so the build's file stays as locked (L8.4).
+
+## L4. The script
+
+A default script of the exe (`code/eldendisk/creative/scripts/defaults/dismantle_follows_the_lock_on.py`), as the colours of Reverse
+Cursed Technique:
+
+- `every = 0.1` s; `loop()`: `tools.read()`, `character.lock_on`; when it differs from the mode now, the fields of L3 for the other mode,
+  one `tools.write`; nothing written while it stays the same.
+- `setup()`: the mode of the lock-on now (written once); `teardown()`: back to the build's values (part 1), so the spell is as built
+  when the scripts stop.
+- No `dismantle` in the last build (the spell taken out of `creative.json`): the script logs it once and ends (`tools.dead()`).
+
+**Timing:** a cast within 0.1 s of locking on or off may still use the mode before (the script has not seen it yet).
+
+## L5. What changes
+
+| **Where** | **Change** |
+|:--|:--|
+| `code/offsets.json` | `player_to_lock_on` 0x6B0 (1.17.1) |
+| `code/eldendisk/game/profile.py` | the field (optional) |
+| `code/eldendisk/reader/sampler.py`, `export.py`, `disk.schema.json` | `character.lock_on` read each sample, in the disk |
+| `code/eldendisk/commands/read.py` | `read lock_on` |
+| `code/eldendisk/creative/scripts/defaults/dismantle_follows_the_lock_on.py` | new (L4) |
+| `code/creative.json` | nothing |
+
+## L6. Tests
+
+Fake memory: `lock_on` true with a handle at +0x6B0, false with 0, with 0xFFFFFFFF_FFFFFFFF and with a half of ones; left out without
+the profile field; `read lock_on`. The script on a fake backend: setup writes the mode of the lock-on now; a change writes the fields of
+L3 once and nothing while it stays; teardown writes part 1's values; no `dismantle` ends the script.
+
+## L7. In the game (the author)
+
+1. **First:** `eldendisk read lock_on` (or the monitor) while locked on and while not: true / false. If not, the log of `read -v` shows
+   the value at +0x6B0 in both, and the rule of L2 is fixed on it.
+2. Locked on: Catch Flame's motion, 38 cuts on the target only (one standing next to it untouched), a target moving to the side still hit.
+3. Not locked on: Bestial Sling's motion, the fan of part 1.
+4. Lock on and off between casts: each cast in the mode of the moment.
+
+## L8. For the author to decide
+
+1. **`lock_on` in the disk:** **`character.lock_on`, true / false** (default), or another name.
+2. **Locked on, how many hits:** **38: each cut hits** (default, as asked: 38 x the cut, enough to kill almost anything in one cast, and
+   38 x 60 bleed: a hemorrhage at once), or **1**: the 38 cuts together hit once (the target once per cast, as the fan).
+3. **Locked on, how narrow:** **0.5 m** (default: the target only), or part 1's widths (the ones around the target are cut too).
+4. **`creative.json`:** **stays as locked** (default: `refType` 106; the script writes 38 when not locked on; without the scripts the
+   spell is Catch Flame's motion with the fan), or `refType` 38 in it (without the scripts: Bestial Sling's motion with the fan).
+5. **The script:** **a default script of the exe, every 0.1 s** (default), or a script of `scripts.added` (outside the exe).
+
+## L9. Decided by the author (2026-10-17)
+
+1, 3, 4, 5: the defaults. 2: "if 38 hits play 38 bursts of blood at once, then 1 hit". The blood (and the bleed) is a SpEffect the cut
+gives to the one it hits; the same SpEffect given again while it lasts most likely renews it rather than adding a second burst, but the
+game's own hit (the flash and the sound of metal on flesh) plays at every hit. Not known before the game shows it, so **38 hits** first;
+if the game shows 38 bursts or stutters, `isUseSharedHitList` locked on goes from 0 to 1 in the script (one value, L3).
+
+## L10. Built (2026-10-17)
+
+- `offsets.json`: `player_to_lock_on` 0x6B0 (and in its `_readme`); `profile.py`: `Profile.player_to_lock_on` (optional).
+- `sampler.py`: `is_handle()`, `_read_lock_on()` every sample, `lock_on_raw` kept for the log; `character.lock_on` when the field can be
+  read. `disk.schema.json`: `character.lock_on` (boolean). `values.py`: `lock_on` is a name of the character (`read lock_on`).
+  `read.py`: `read -v` of a name with `lock_on` logs the 64 bits (`lock_on: PlayerIns +0x6B0 = 0x...`) for L7.1.
+- `code/eldendisk/creative/scripts/defaults/dismantle_follows_the_lock_on.py` (`DismantleFollowsTheLockOn`, every 0.1 s): the fields of
+  L3; the build's values from the design's `customs.basic`, else from the game at `setup()`; ends itself without `dismantle` in the
+  build or without `character.lock_on`. The exe carries it from its next build (`tools/dev_pipeline.py` embeds every default script).
+- `code/tests/test_lock_on.py`: the handle rule; `lock_on` in the sample and the disk (true, false for 0 and all ones), left out without
+  the field or the memory; the 1.17.1 profile has it, a profile without it loads; the name; the script on a fake backend (setup, a change
+  written once, nothing while it stays, teardown to the build, locked on at the start, no spell, no `lock_on`, out of the world).
+- The whole suite passes (1869, 109 skipped without the game's file).
+
+## L11. The motions, after the tests in the game (2026-10-17)
+
+`character.lock_on` and the script passed in the game. Bestial Sling's motion (38) brought its own brown ring and sound and did not show
+4122: its look is in the animation (the game's Bestial Sling has `castSfxId` and `fireSfxId` -1), not in the spell's rows, so no field
+can take it off. Of the 84 cast motions of the game's incantations, 49 take their look from the spell's rows (every game spell of
+them has a `castSfxId`); the author tried them live (`write params.Magic.2230001.refType=N`) and decided:
+
+- **Locked on: 25**, the motion of O, Flame! (it can be charged in the game: a held cast may fire nothing).
+- **Not locked on: 106**, Catch Flame's, the build's (`creative.json` unchanged): the script writes `refType` only when locked on and
+  puts the build's back when not.
+
+## L12. Closed (2026-10-17)
+
+Passed in the game: `character.lock_on` true / false, the script switching the modes, the motions of L11. Locked on, the 38 cuts all
+hit: 38 x 380 before the seal ("can order anything in this world to die", the author).
