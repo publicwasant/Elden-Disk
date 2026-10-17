@@ -384,3 +384,37 @@ def test_the_cli_imports_a_command_only_when_it_runs():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          cwd=Path(__file__).resolve().parent.parent).stdout.strip()
     assert out == "[]"
+
+
+# ---------- a double click on the exe (1.8.4) ----------
+@pytest.mark.parametrize("frozen, argv, args, clicked", [
+    (True, None, ["eldendisk.exe"], True),                    # nothing after the exe's name
+    (True, None, ["eldendisk.exe", "read"], False),           # a command
+    (True, [], ["eldendisk.exe"], False),                     # main() called with its own argv (a test, a child)
+    (False, None, ["eldendisk"], False),                      # python -m eldendisk alone: still the usage
+])
+def test_a_double_click_is_the_exe_started_without_a_command(monkeypatch, frozen, argv, args, clicked):
+    monkeypatch.setattr(sys, "frozen", frozen, raising=False)
+    monkeypatch.setattr(sys, "argv", args)
+    assert cli.double_clicked(argv) is clicked
+
+
+def test_a_double_click_runs_the_portal_with_the_vault_on_and_the_log_and_waits_for_enter(monkeypatch):
+    seen, asked = [], []
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "argv", ["eldendisk.exe"])
+    monkeypatch.setattr(cli, "cmd_run", lambda args: seen.append((args.cmd, args.protect, args.verbose)) or 0)
+    monkeypatch.setattr(cli.logsetup, "start", lambda *a, **k: None)
+    monkeypatch.setattr(cli.logsetup, "finish", lambda code: None)
+    monkeypatch.setattr(cli, "own_console", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": asked.append(prompt) or "")
+    assert cli.main() == 0
+    assert seen == [("run", True, True)] and len(asked) == 1 and "Enter" in asked[0]
+    monkeypatch.setattr(cli, "own_console", lambda: False)          # typed alone in a terminal: no waiting
+    asked.clear()
+    assert cli.main() == 0 and asked == []
+
+
+def test_the_double_click_command_is_one_the_parser_takes():
+    args = cli.build_parser().parse_args(cli.DOUBLE_CLICK)
+    assert args.cmd == "run" and args.protect is True and args.verbose

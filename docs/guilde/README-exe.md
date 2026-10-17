@@ -12,7 +12,7 @@ the game's own `regulation.bin` back, byte for byte: **nothing you did inside co
 
 | **File** | **What it is** |
 |:---|:---|
-| `eldendisk.exe` | the tool; run it from a terminal (`.\eldendisk.exe <command>`) |
+| `eldendisk.exe` | the tool; run it from a terminal (`.\eldendisk.exe <command>`), or double-click it: `run --vault-on -v` (the window waits for Enter when it ends) |
 | `README.md` | this file (written when the exe is built) |
 | `offsets.json`, `names.json`, `creative.json` | only when you put them here: they win over the copies in the exe (the profile of each game version, the names of the animations, what you create) |
 
@@ -23,7 +23,7 @@ can be anywhere and replacing it loses nothing. `--save-dir` and `--vault` are r
 ## Quick start
 
 1. **Copy your save folder by hand first** (`%APPDATA%\EldenRing\<SteamID64>`). A manual copy is the one backup the tool cannot get wrong.
-2. Terminal 0: `.\eldendisk.exe run`. It backs the save files up, swaps in the `regulation.bin` built from `creative.json`, starts the game
+2. Terminal 0: `.\eldendisk.exe run` (or double-click `eldendisk.exe`: the same, with the log, `run --vault-on -v`). It backs the save files up, swaps in the `regulation.bin` built from `creative.json`, starts the game
    **offline** and, when the game exits, puts everything back byte for byte. Leave it open. (Several Steam accounts: add
    `--save-dir "<folder>"` once.)
 3. Terminal 1, once a character is loaded: `.\eldendisk.exe read` (the whole document once), `read runes hp attrs.*`, `read hp --live`,

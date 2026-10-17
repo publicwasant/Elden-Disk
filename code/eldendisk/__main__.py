@@ -26,6 +26,7 @@ Tooling
 Every write needs the portal: the session `run` started with the vault ON, for this very game process. Every command prints concise
 lines; with -v it prints the log itself, live (the lines that go to <vault>\\eldendisk.log).
 Exit codes: 0 done, 1 error, 2 not supported, 3 anti-cheat running, 4 restore pending, 5 no portal, 130 interrupted.
+The exe started without a command (a double click) runs `run --vault-on -v`, and its window waits for Enter when it ends.
 """
 from __future__ import annotations
 
@@ -309,7 +310,33 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+DOUBLE_CLICK = ["run", "--vault-on", "-v"]   # what the exe does when it is started without a command (a double click in Explorer)
+
+
+def double_clicked(argv) -> bool:
+    """The exe started with nothing after its name: a double click in Explorer (or `eldendisk.exe` typed alone). Only the frozen exe:
+    `python -m eldendisk` alone still shows the usage."""
+    return argv is None and len(sys.argv) <= 1 and bool(getattr(sys, "frozen", False))
+
+
+def own_console() -> bool:
+    """The console window is this process's alone (Explorer made it for the exe), so it closes the moment the exe ends. False in a
+    terminal someone typed in, or not on Windows."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        pids = (ctypes.c_uint32 * 4)()
+        return ctypes.windll.kernel32.GetConsoleProcessList(pids, 4) == 1
+    except (OSError, AttributeError):
+        return False
+
+
 def main(argv=None) -> int:
+    real = argv is None
+    clicked = double_clicked(argv)
+    if clicked:
+        argv = list(DOUBLE_CLICK)
     ap = build_parser()
     args = ap.parse_args(argv)
     if args.cmd in ("read", "export"):
@@ -338,7 +365,9 @@ def main(argv=None) -> int:
         ap.error("--keep must not be negative")
     if args.cmd == "run" and args.launch_timeout <= 0:
         ap.error("--launch-timeout must be positive")
-    logsetup.start(args, logsetup.argv_of(argv), real=argv is None)
+    logsetup.start(args, logsetup.argv_of(argv), real=real and not clicked)
+    if clicked:
+        book.i("client", f"started without a command: eldendisk {' '.join(DOUBLE_CLICK)}")
     try:
         code = args.fn(args)
     except KeyboardInterrupt:
@@ -348,6 +377,11 @@ def main(argv=None) -> int:
         book.e("client", str(exc))
         code = 1
     logsetup.finish(code)
+    if clicked and own_console():       # the window Explorer opened would close with the last lines unread
+        try:
+            input("Press Enter to close this window...")
+        except (EOFError, KeyboardInterrupt):
+            pass
     return code
 
 
