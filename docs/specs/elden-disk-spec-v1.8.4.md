@@ -572,3 +572,37 @@ number points at no slot (it is read as "cannot be read now").
 
 Tests: `test_disk.py` (every slot empty; spells and the number at no slot), `test_write_sparks.py` (no spell selected, the slots
 unreadable, then Dismantle again).
+
+# Part 7: balance (2026-10-18)
+
+## V1. Asked by the author
+
+- Locked on: the cut's speed 120 -> 60 m/s, with the other values computed from it.
+- Base damage 285 (`AtkParam_Pc.68000.atkPhys`, was 280).
+- FP: 60 a cast (the design's `requires.cost.focus_point`, already 60); locked on x 1.48 (`LOCKED_FP`, was 1.8): 60 x 1.48 = 88.8 -> **89**.
+
+## V2. The values (script `DismantleFollowsTheLockOn`)
+
+| Constant | Was | Now | Why |
+|---|---|---|---|
+| `SPEED` | 120 m/s | **60 m/s** | the author's; a target 30 m away is reached in 0.5 s (was 0.25 s) |
+| `TURN` | 5760 °/s | **2880 °/s** | SPEED x 48 keeps the circle: radius = SPEED / TURN (rad/s) = 60 / 50.27 = 1.19 m, as before; once around in 0.125 s (was 0.0625 s) |
+| `LIFE` | 3.5 s | 3.5 s (kept) | the cast lasts as long; it flies 210 m in it (was 420 m) |
+| `REHIT` | 0.05 s | 0.05 s (kept) | shorter than once around (0.125 s): each pass can cut again |
+| `LOCKED_FP` | 1.8 | **1.48** | the author's |
+
+The fan (not locked on) keeps its 120 m/s and 0.84 s (100 m). `creative.json`: atkPhys 285; the `__info_cut__` text says the locked-on cut
+hits again every 0.05 s (it said "by all 38", from part 2). Script comments: the fan's 31 cuts, "LOCKED_FP times the FP".
+
+A guess, to see in the game: whether the cuts a target takes are set by REHIT (the cut stays inside the target's reach on its circle: 20
+a second, as before) or by the circle (8 a second at 0.125 s once around, was 16). The first: the same damage a second, less FP; the second:
+half.
+
+## V3. Tests
+
+`test_lock_on.py` reads the script's constants (`LOCKED_MP` = round(60 x LOCKED_FP) = 89); `test_spells_named_rows.py` reads atkPhys
+from the design (golden passed with the game's `regulation.bin`).
+
+## V4. Closed (2026-10-18)
+
+Part 7 passed in the game.

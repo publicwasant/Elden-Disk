@@ -1,6 +1,6 @@
 """Dismantle follows the lock-on (1.8.4 parts 2-4): locked on, ONE cut flies at the target, slower and turning hard, and circles it,
 cutting it again every 0.05 s while it lasts (part 4), cast with the motion of O, Flame!; not locked on, the fan of part 1, cast with
-Catch Flame's motion (the build's). Locked on costs 2.5 times the FP. On the ones hit, next to the blood: Beast Claw's claw marks
+Catch Flame's motion (the build's). Locked on costs LOCKED_FP times the FP. On the ones hit, next to the blood: Beast Claw's claw marks
 (530172 in both modes; their colours: the design's Sfx.530172), played by the game's unused SpEffectVfx row 999999999. The game reads these rows at
 every cast, so the script writes the fields of the other mode into the running game when the lock-on changes, and nothing while it
 stays. `teardown()` puts the build's values back. A cast within `every` seconds of locking on or off may still be in the mode before."""
@@ -20,24 +20,25 @@ TEMPLATE = {("Bullet", "homingAngle"): 0, ("Bullet", "homingBeginDist"): 0.0, ("
 # param table -> (its name in the design's keys, the template's row)
 ROWS = {"Magic": ("Magic", MAGIC), "Bullet": ("Bullet", FAN), "SpEffectParam": ("SpEffect", BLOOD), "SpEffectVfxParam": (None, None)}
 
-LOCKED_FP = 1.8          # locked on, the FP a cast costs: the build's x this
+LOCKED_FP = 1.48         # locked on, the FP a cast costs: the build's x this (part 7: 60 -> 89)
 # part 4, locked on: one cut that circles the target. The game's cast lets a bullet fire its shots one after the other for about
 # 0.1 s only (shootInterval: 2 of 38 got out), and a HitBulletID written in the running game is not used: so one cut, slow enough
 # and turning hard enough to stay around the target, cuts it again each time it forgets the hit
 REHIT = 0.05             # seconds a cut remembers a hit: it cuts the same target again after this
-SPEED = 120.0            # m/s, as the fan: a target 30 m away is reached in 0.25 s
-TURN = 5760              # degrees a second it turns towards the target: SPEED x 48 keeps it around the target at about 1.2 m
+SPEED = 60.0             # m/s (part 7: half the fan's 120): a target 30 m away is reached in 0.5 s
+TURN = 2880              # degrees a second it turns towards the target: SPEED x 48 keeps it around the target at about 1.2 m
+                         # (radius = SPEED / TURN in radians a second: 60 / 50.3 = 1.19 m; once around in 0.125 s)
 LIFE = 3.5               # seconds it lasts: the way to the target and the cuts around it
 
 # field -> (not locked on, locked on); None: the value the build gave it (the design's, or the template's); a function: of it
 MODES = {
     ("Magic", "mp"): (None, lambda built: round(built * LOCKED_FP)),     # the FP of a cast (the design's requires.cost.focus_point)
     ("Magic", "refType"): (None, 25),                        # Catch Flame's motion (the build's, 106) / O, Flame!'s
-    ("Bullet", "numShoot"): (None, 1),                       # the fan's 38 cuts / one
+    ("Bullet", "numShoot"): (None, 1),                       # the fan's 31 cuts / one
     ("Bullet", "shootAngle"): (None, 0),                     # the fan's first cut / straight at the target
     ("Bullet", "shootAngleInterval"): (None, 0),
     ("Bullet", "lockShootLimitAng"): (None, 180),            # it leaves aimed at the target wherever it is around you
-    ("Bullet", "initVellocity"): (None, SPEED),              # 120 m/s / slower, to turn around the target
+    ("Bullet", "initVellocity"): (None, SPEED),              # 120 m/s / SPEED, slower, to turn around the target
     ("Bullet", "maxVellocity"): (None, SPEED),
     ("Bullet", "life"): (None, LIFE),                        # 0.84 s (100 m) / LIFE
     ("Bullet", "homingAngle"): (None, TURN),                 # none / it follows the target
