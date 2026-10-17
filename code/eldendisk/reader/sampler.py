@@ -322,7 +322,8 @@ class Sampler(Layout):
 
     def _read_equipment(self, gd: int) -> dict | None:
         """`character.equipment` (1.7.2): {"magic": {"selected": {"slot", "id"}, "slots": {"1": id, ...}}}: the spells memorised in the
-        magic slots (numbered from 1, as the game shows them; empty slots left out) and the one that is selected. None when the profile
+        magic slots (numbered from 1, as the game shows them; empty slots left out) and the one that is selected (slot and id None when no
+        spell is memorised and the selected number points at no slot). None when the profile
         has no equipment block or the data cannot be read now (the rest of the sample is not held back by it)."""
         lay = self.profile.equipment
         if lay is None:
@@ -342,6 +343,8 @@ class Sampler(Layout):
             if mid > 0:
                 slots[str(n + 1)] = mid
         if sel >= lay.magic_slot_count:
+            if not slots:      # no spell memorised (1.8.4, 2026-10-18 in the game: every slot emptied): none is selected
+                return {"magic": {"selected": {"slot": None, "id": None}, "slots": {}}}
             return None
         chosen = slots.get(str(sel + 1))
         return {"magic": {"selected": {"slot": sel + 1, "id": chosen}, "slots": slots}}

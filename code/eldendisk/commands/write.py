@@ -382,9 +382,9 @@ def check_places(places: dict) -> list[str]:
     is not one of its colours. Empty when they can all be painted."""
     out = []
     for eid, d in places.items():
-        if eid not in wfxr.spark_ids() + wfxr.effect_ids() + wfxr.eyes_ids() + wfxr.ring_ids():
+        if eid not in wfxr.spark_ids() + wfxr.effect_ids() + wfxr.eyes_ids() + wfxr.ring_ids() + wfxr.hit_ids():
             out.append(f"colors.{d['key']}: the effect {eid} has no colour plan (these have one: "
-                       f"{', '.join(wfxr.effect_ids() + wfxr.eyes_ids() + wfxr.ring_ids() + wfxr.spark_ids())})")
+                       f"{', '.join(wfxr.effect_ids() + wfxr.eyes_ids() + wfxr.ring_ids() + wfxr.spark_ids() + wfxr.hit_ids())})")
             continue
         known = wfxr.places_of(eid)
         bad = sorted(at for at in d["values"] if at not in known)
@@ -415,7 +415,7 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=Fal
                **{e: None for e in places}}
     label = {**{e: "flame colour" for e in wfxr.effect_ids()}, **{e: "eyes colour" for e in wfxr.eyes_ids()},
              **{e: "ring colour" for e in wfxr.ring_ids()}, **{e: f"colours {d['key']}" for e, d in places.items()}}
-    optional = set(wfxr.ring_ids()) | (set(wfxr.spark_ids()) & set(places))   # the game may hold no ring, no sparks: painted when there
+    optional = set(wfxr.ring_ids()) | ((set(wfxr.spark_ids()) | set(wfxr.hit_ids())) & set(places))   # the game may hold no ring, no sparks, no claw marks: painted when there
     what = ("flame colour" if eyes is None and colour is not None else "eyes colour" if colour is None and eyes is not None
             else "flame and eyes colour" if colour is not None else "colours")
     todo, done = list(targets), {}
@@ -449,7 +449,8 @@ def _put_flame(mem, gate, colour, passes=ONCE, eyes=None, accent=None, fresh=Fal
         if not [e for e in todo if e not in optional]:
             break
     for e in [e for e in todo if e in optional]:
-        book.d("write", f"{label[e]}: the game does not hold {e} ({'the sparks' if e in wfxr.spark_ids() else 'the ring of runes'}) "
+        what_e = "the sparks" if e in wfxr.spark_ids() else "the claw marks" if e in wfxr.hit_ids() else "the ring of runes"
+        book.d("write", f"{label[e]}: the game does not hold {e} ({what_e}) "
                         "now; left as it is")
     todo = [e for e in todo if e not in optional]
     if todo:

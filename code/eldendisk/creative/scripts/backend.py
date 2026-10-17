@@ -542,10 +542,19 @@ class CreativeLive:
             _n, bases = wfxr.repaint_places(self.mem, self.gate, eid, known["bases"], before, want)
         except wfxr.Stale:
             full = {**now, **want}
-            got, _found = wfxr.paint_many(self.mem, self.gate, [eid], {eid: None}, everything=True, painted=False, required=[],
-                                          states={eid: [(at, own[at], full[at]) for at in own]})
-            p = got.get(eid)
-            bases = list(p.bases) if p is not None else []
+            if all(full[at] == own[at] for at in own):
+                # the game loaded the file again (a loading screen): it holds its own colours, which is what is asked; nothing to
+                # look for (a look for "no change" has nothing to find: it was an error that ended the script, 2026-10-18). The copies
+                # are kept: a copy loaded where it was holds the game's own, so the next paint finds it there (elsewhere: Stale, a look)
+                bases = list(known["bases"])
+            else:
+                try:
+                    got, _found = wfxr.paint_many(self.mem, self.gate, [eid], {eid: None}, everything=True, painted=False,
+                                                  required=[], states={eid: [(at, own[at], full[at]) for at in own]})
+                except wfxr.FlameError as exc:
+                    raise Refused(str(exc)) from None
+                p = got.get(eid)
+                bases = list(p.bases) if p is not None else []
         except wfxr.FlameError as exc:
             raise Refused(str(exc)) from None
         places = {at: b for at, b in {**now, **want}.items() if b != own[at]}

@@ -93,7 +93,7 @@
               "required": ["selected", "slots"],
               "properties": {
                 "selected": { "type": "object", "required": ["slot", "id"],
-                              "properties": { "slot": { "type": "integer", "minimum": 1 }, "id": { "type": ["integer", "null"] } } },
+                              "properties": { "slot": { "type": ["integer", "null"], "minimum": 1 }, "id": { "type": ["integer", "null"] } } },
                 "slots": { "type": "object", "propertyNames": { "pattern": "^[1-9][0-9]*$" }, "additionalProperties": { "type": "integer" } }
               }
             }

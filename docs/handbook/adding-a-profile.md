@@ -481,8 +481,9 @@ To fill them in for a new build or language: `tools/dump_msgbnd.py` writes the o
 Where PlayerGameData keeps the spells memorised in the magic slots: the pointer at `PlayerGameData + game_data_to_magic` leads to a block
 whose `magic_slot_count` slots start at `magic_slots`, `magic_slot_size` bytes each, the Magic id first as a 32-bit number (`-1` for an empty
 slot); the slot that is selected (0 = the first) is a 32-bit number at `magic_selected`. `read` shows it as `character.equipment.magic`
-(`selected.slot` and `selected.id`, `slots` numbered from 1 as the game shows them). Without the block there is no
-`character.equipment`; a block that is there must be complete.
+(`selected.slot` and `selected.id`, `slots` numbered from 1 as the game shows them). With no spell memorised and the selected number at
+no slot, `selected` is `{"slot": null, "id": null}` (1.8.4). Without the block there is no `character.equipment`; a block that is there
+must be complete.
 
 How the 1.17.1 values were found (2026-10-13, read-only, the game running): with a spell of the design (Magic 2230000) memorised in the
 first slot, a look for that number in PlayerGameData and one pointer away from it found it at `[PlayerGameData+0x530]+0x10`, followed by the

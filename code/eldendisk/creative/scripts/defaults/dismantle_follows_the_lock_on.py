@@ -1,7 +1,7 @@
 """Dismantle follows the lock-on (1.8.4 parts 2-4): locked on, ONE cut flies at the target, slower and turning hard, and circles it,
 cutting it again every 0.05 s while it lasts (part 4), cast with the motion of O, Flame!; not locked on, the fan of part 1, cast with
 Catch Flame's motion (the build's). Locked on costs 2.5 times the FP. On the ones hit, next to the blood: Beast Claw's claw marks
-(locked on, the charged Beast Claw's, bigger), played by the game's unused SpEffectVfx row 999999999. The game reads these rows at
+(530172 in both modes; their colours: the design's Sfx.530172), played by the game's unused SpEffectVfx row 999999999. The game reads these rows at
 every cast, so the script writes the fields of the other mode into the running game when the lock-on changes, and nothing while it
 stays. `teardown()` puts the build's values back. A cast within `every` seconds of locking on or off may still be in the mode before."""
 
@@ -49,7 +49,7 @@ MODES = {
     ("Bullet", "dmgHitRecordLifeTime"): (None, REHIT),       # a target once a cast (999) / again every REHIT seconds
     ("SpEffectParam", "effectEndurance"): (None, 0.04),      # the blood lasts 0.5 s / 0.04: it bursts again with each cut
     ("SpEffectParam", "vfxId1"): (MARKS, MARKS),             # the blood's SpEffect also shows the row of the claw marks
-    ("SpEffectVfxParam", "midstSfxId"): (530172, 530177),    # Beast Claw's claw marks / the charged Beast Claw's, bigger
+    ("SpEffectVfxParam", "midstSfxId"): (530172, 530172),    # Beast Claw's claw marks, in both modes (part 6; its colours: Sfx.530172)
     ("SpEffectVfxParam", "midstDmyId"): (220, 220),          # at the middle of the body (as the blood)
     ("SpEffectVfxParam", "existEffectForLarge"): (1, 1),     # on big enemies and bosses too
     ("SpEffectVfxParam", "isVisibleDeadChr"): (1, 1),        # on the cut that kills, too
@@ -121,6 +121,8 @@ class DismantleFollowsTheLockOn(Interface):
         if self.ids is None or self.locked is None:
             return
         disk = tools.read()
+        if "Magic" not in disk.params:  # the game closed: its memory is gone, nothing to put back
+            return
         for (table, field), v in self.built.items():
             disk.params[table][self.ids[table]][field] = v
         tools.write(disk.params)

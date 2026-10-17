@@ -125,6 +125,7 @@ def part1(eid, main, accent=None, white=None):
 def test_the_shipped_design_gives_the_game_the_colours_of_part_1_to_half_a_step_of_hex(ci):  # noqa: F811
     write_spec(ci, design())
     places, note = ci.colours("all")
+    places.pop("530172", None)            # Dismantle's claw marks (1.8.4 part 6): the test below
     assert note is None and {e: d["key"] for e, d in places.items()} == {
         "524400": FIRE, "524401": "Magic.6421.fireSfxId", "515000": "Sfx.515000", "515001": "Sfx.515001",
         "4866": "SpEffectVfx.20090050.midstSfxId", "4271": KEY}
@@ -249,3 +250,120 @@ def test_a_place_is_shown_as_hex_when_a_hex_colour_gives_it():
     assert backend.shown_place(fxr.value_bytes(own, (0x90 / 255, 0xD5 / 255, 1.0)), own) == "#90D5FF"
     assert backend.shown_place(f4(3.0, 1.0, 0.5, 0.25), own) == [3.0, 1.0, 0.5, 0.25]          # brighter than the place
     assert backend.shown_place(f4(1.0, 1.0, 0.5, 1.0), own) == [1.0, 1.0, 0.5, 1.0]            # another alpha
+
+
+# ---- 1.8.4 part 6: the claw marks of Dismantle (Sfx.530172) ----------------------------------------------------------------------
+def test_the_claw_marks_have_a_plan_and_the_shipped_design_holds_their_own_colours_in_hex():
+    from eldendisk.commands.write import check_places
+    from eldendisk.creative.innovate_spells import spec as sp
+    from eldendisk.writer.fxr_plans import HIT_PLANS
+    assert fxr.hit_ids() == ("530172",) == tuple(HIT_PLANS) and len(fxr.places_of("530172")) == 130
+    raw = json.loads((service.CODE_DIR / "creative.json").read_text(encoding="utf-8"))
+    places = raw["innovate_spells"]["slots"]["dismantle"]["customs"]["advanced"]["colors"]["Sfx.530172"]
+    values = {int(k, 16): (sp.colour_of(v) if isinstance(v, str) else sp.place_value(v)) for k, v in places.items()}
+    assert check_places({"530172": {"key": "Sfx.530172", "values": values}}) == []
+    assert all(isinstance(v, str) for v in places.values())                               # as "#RRGGBB", as Reverse Cursed Technique's
+    cold = {"#E7E7E7": 19, "#F4F4F6": 18}                                                  # step 2: the warm whites made cold
+    assert {h: sum(1 for v in places.values() if v == h) for h in cold} == cold
+    for at, own, new in fxr.place_states("530172", values):                              # the others: the game's own, to half a step
+        if places["0x%x" % at] in cold:
+            continue
+        g, o = struct.unpack("<4f", new), struct.unpack("<4f", own)
+        v = max(o[:3]) or 1.0
+        assert g[3] == o[3] and all(abs(x - y) <= v * 0.5 / 255 + 1e-6 for x, y in zip(g[:3], o[:3]))
+
+
+def test_dismantles_claw_marks_follow_the_spell_that_is_selected():
+    """1.8.4 part 6: the white cut only while Dismantle is selected; Beast Claw's own hit is the game's again otherwise."""
+    from eldendisk.creative.scripts import edstdlib as ed
+    from eldendisk.creative.scripts import host
+    from tests.fake_tools import DOC, FakeBackend
+    path = service.CODE_DIR / "eldendisk" / "creative" / "scripts" / "defaults" / "dismantle_colours_follow_the_spell.py"
+    found = host.load_file(path)
+    assert found.error is None, found.error
+    s = found.scripts[0]
+    marks = {"0x1159c": "#FFFFFF", "0x115ac": "#E7E7E7"}
+    doc = copy.deepcopy(DOC)
+    doc["character"]["equipment"]["magic"] = {"selected": {"slot": 2, "id": 2230001}, "slots": {"1": 2230000, "2": 2230001}}
+    doc["creative"]["innovate_spells"]["2230001"] = {"id": "dismantle", "slot": 2, "rows": {"goods": 2230001, "magic": 2230001},
+                                                    "design": {"customs": {"advanced": {"colors": {"Sfx.530172": dict(marks)}}}}}
+    key = "creative.innovate_spells.2230001.design.customs.advanced.colors.Sfx.530172"
+    with FakeBackend(doc) as b:
+        ed._set_current(s)
+        s.setup()
+        s.loop()                                                                      # selected: as `run` painted them
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 1, "id": 2230000}
+        s.loop()
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 2, "id": 2230001}
+        s.loop()
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 1, "id": 2230000}
+        s.loop()
+        s.teardown()                                                                  # the design's again, as `run` left them
+        ed._set_current(None)
+    assert b.writes == [(key, None), (key, marks), (key, None), (key, marks)]
+    s = host.load_file(path).scripts[0]                                              # every spell taken out of the slots (2026-10-18)
+    with FakeBackend(copy.deepcopy(doc)) as b:
+        ed._set_current(s)
+        s.setup()
+        b.doc["character"]["equipment"]["magic"] = {"selected": {"slot": None, "id": None}, "slots": {}}
+        s.loop()                                                                      # no spell selected: the game's own
+        del b.doc["character"]["equipment"]                                           # the slots not readable now: it waits
+        s.loop()
+        b.doc["character"]["equipment"] = {"magic": {"selected": {"slot": 2, "id": 2230001}, "slots": {"2": 2230001}}}
+        s.loop()
+        ed._set_current(None)
+    assert b.writes == [(key, None), (key, marks)]
+    s = host.load_file(path).scripts[0]                                              # the game closed while another spell was selected
+    with FakeBackend(copy.deepcopy(doc)) as b:
+        ed._set_current(s)
+        s.setup()
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 1, "id": 2230000}
+        s.loop()
+        b.writes.clear()
+        b.doc["character"] = {}                                                       # its memory is gone: nothing to put back
+        s.teardown()
+        ed._set_current(None)
+    assert b.writes == []
+    doc2 = copy.deepcopy(doc)
+    del doc2["creative"]["innovate_spells"]["2230001"]
+    s = host.load_file(path).scripts[0]                                              # no Dismantle in the build: it ends
+    with FakeBackend(doc2) as b:
+        ed._set_current(s)
+        with pytest.raises(ed._Dead):
+            s.setup()
+        s.teardown()
+        ed._set_current(None)
+    assert b.writes == []
+
+
+def test_after_a_loading_screen_the_game_s_own_colours_are_had_without_a_look_and_the_design_s_are_painted_again(tmp_path):
+    """2026-10-18 in the game: the game loaded the effect file again (its own colours, the cache's copy gone); putting the game's own
+    colours back was a look for "no change" that raised and ended RctColoursFollowTheSpell. Now: nothing to do; the design's: a look."""
+    g = Game(effects=("4271",))                                                        # the game's own colours: the file loaded again
+    ext = live_on(g, tmp_path, lambda c: c.set_effect("4271", [BASES["4271"]], places={0x55cc: f4(0.1, 0.2, 0.3, 1.0)}))
+    path = "design.customs.advanced.colors.Bullet.10642101.sfxId_Bullet"
+    assert ext.apply("2230000", path.split("."), None) == {f"colour.{KEY}": "the game's own"}
+    assert bytes(g.mem[BASES["4271"]]) == bytes(Game(effects=("4271",)).mem[BASES["4271"]])
+    assert ext.apply("2230000", path.split("."), {"0x55cc": "#90D5FF"}) == {f"colour.{KEY}": "1 of 39 places the design's"}
+    assert bytes(g.mem[BASES["4271"]]) != bytes(Game(effects=("4271",)).mem[BASES["4271"]])  # found again and painted
+
+
+def test_the_cache_is_saved_even_when_a_reader_holds_it_open_for_a_moment(tmp_path, monkeypatch):
+    import eldendisk.writer.cache as cachemod
+    real, calls = cachemod.os.replace, []
+
+    def busy(a, b):
+        calls.append(1)
+        if len(calls) < 3:
+            raise PermissionError(5, "Access is denied")
+        real(a, b)
+    monkeypatch.setattr(cachemod.os, "replace", busy)
+    monkeypatch.setattr(cachemod, "REPLACE_PAUSE", 0.0)
+    c = MemoryCache(tmp_path / CACHE_NAME, 10, 20)
+    c.set_effect("4271", [BASES["4271"]], places={0x55cc: f4(0.1, 0.2, 0.3, 1.0)})
+    c.save()
+    assert len(calls) == 3 and (tmp_path / CACHE_NAME).is_file() and not list(tmp_path.glob("*.tmp"))
+    monkeypatch.setattr(cachemod.os, "replace", lambda a, b: (_ for _ in ()).throw(PermissionError(5, "Access is denied")))
+    with pytest.raises(PermissionError):
+        c.save()
+    assert not list(tmp_path.glob("*.tmp"))                                            # never left behind

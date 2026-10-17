@@ -94,8 +94,29 @@ class MemoryCache:
             doc = {"game_pid": self.pid, "game_started": self.started, "text": text, "fxr": fxr}
             tmp = self.path.with_name(f"{self.path.name}.{os.getpid()}.tmp")
             tmp.write_text(json.dumps(doc, indent=1), encoding="utf-8")
-            os.replace(tmp, self.path)
+            _replace(tmp, self.path)
         self.text, self.fxr = text, fxr
+
+
+REPLACE_TRIES = 10            # a reader may hold the file open for a moment (Windows refuses to replace it then: WinError 5)
+REPLACE_PAUSE = 0.05
+
+
+def _replace(tmp: Path, path: Path) -> None:
+    """os.replace, tried again while another process holds `path` open (PermissionError on Windows); the temporary file is removed when
+    it never succeeds (the OSError is raised: the caller says the cache was not saved)."""
+    for n in range(REPLACE_TRIES):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if n == REPLACE_TRIES - 1:
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+                raise
+            time.sleep(REPLACE_PAUSE)
 
 
 class _Lock:

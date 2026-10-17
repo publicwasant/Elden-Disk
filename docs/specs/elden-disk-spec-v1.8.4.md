@@ -3,7 +3,7 @@
 > **Status:** Part 1 IMPLEMENTED (closed). Dismantle passed in the game and its design is locked (2026-10-17). Part 2 IMPLEMENTED
 > (closed): Dismantle follows the lock-on, passed in the game (2026-10-17). Part 3 IMPLEMENTED (closed): the claw marks on the ones
 > hit, passed in the game (2026-10-18). Part 4 IMPLEMENTED (closed): locked on, one cut circling the
-> target, passed in the game (2026-10-18). Part 5 IMPLEMENTED (closed): the fan 120°, passed in the game (2026-10-18).  
+> target, passed in the game (2026-10-18). Part 5 IMPLEMENTED (closed): the fan 120°, passed in the game (2026-10-18). Part 6 (colour): steps 1-3 IMPLEMENTED; the palette passed in the game.  
 > **Last Updated:** _2026-10-18_
 
 # Elden-Disk spec 1.8.4: Dismantle
@@ -18,6 +18,7 @@ Reads on top of [spec 1.8.3](elden-disk-spec-v1.8.3.md). Only what changes is wr
 - **Part 3:** Beast Claw's claw marks next to the blood on the ones hit (the script), comments in `customs.basic`: sections C1 to C7.
 - **Part 4:** locked on, cut after cut: one cut circles the target and cuts it again and again: sections S1 to S8.
 - **Part 5:** the fan 120° wide, the field of binocular vision: sections B1 to B3.
+- **Part 6:** the colour of the claw marks: sections P1 to P5.
 
 # Part 1: Dismantle (2026-10-17)
 
@@ -478,3 +479,96 @@ Decided by the author: **31 cuts, 4° apart**. `creative.json`: `Bullet.10680000
 The test with the game's file: the fan 31 / -60 / 4, its width 1.5 m to 3.5 m. The whole suite passes (1888).
 
 **Passed in the game (2026-10-18).**
+
+# Part 6: the colour of the claw marks (2026-10-18)
+
+## P1. Step 1 (asked by the author)
+
+1. **One claw mark:** no more Beast Claw's two (530172 not locked on, 530177 locked on): **530172**, the small one, in both modes (the
+   script: `("SpEffectVfxParam", "midstSfxId"): (530172, 530172)`).
+2. **Its colours in `customs.advanced.colors`**, as the game's file holds them, nothing changed yet; no script for them yet.
+
+## P2. The colours of 530172
+
+- The file: `f000530172.fxr` of the common effect archive (`tools/dump_sfx.py --sfx 530172`), 82,704 bytes; its colour places found by
+  `tools/fxr_places.py`: **130** (10 of them bloom colours).
+- **The plan** goes into `writer/fxr_plans.py` as `HIT_PLANS` (the effects a spell shows on the ones it hits), known to the writer
+  (`fxr._ALL`, `fxr.hit_ids()`) and to `write` / `run` (`check_places`; optional, as the sparks: painted when the game holds it).
+- **`creative.json`**: `customs.advanced.colors."Sfx.530172"` (no param of the build names the effect: the script's SpEffectVfx row
+  999999999 plays it), every place by its offset with the game's own colour **as `"#RRGGBB"`** (asked by the author, as Reverse Cursed
+  Technique's): the place keeps its own brightness and alpha, so a hex is the game's colour to half a step of 1/255 (`run` then paints
+  colours that look the same; the first version had the exact numbers and painted nothing).
+- What the file holds (by the share of places): white #FFFFFF (84: the brighter ones, x1.5 to x50, are white too), #FFDFBF (20),
+  #FFECDB (13), black (8), #FFEEDE (4), #FFD6BF (1).
+- The file is the game's own and shared: Beast Claw's own hit takes the same colours while the game runs.
+
+## P3. Tests
+
+`test_write_sparks.py`: the plan (130 places, `hit_ids`), the shipped design's places all of the plan, all hex, the game's own colour to half a step;
+the RCT test leaves Dismantle's effect out. `test_lock_on.py`: 530172 in both modes. The whole suite passes (1889).
+
+## P4. Step 2: a white cut (2026-10-18)
+
+The author made a palette of the file's colours (#FFFFFF, #808080, #FFDFBF, #FEEBDA, #000000, as the file holds them) and a cold one
+for a white cut: **#FFDFBF -> #E7E7E7** (19 places) and **#FEEBDA -> #F4F4F6** (13 places), now in `"Sfx.530172"` (the places by the
+colour the game's file holds; each keeps its own brightness and alpha). Then **#FFEEDE -> #F4F4F6** (4 places) and **#FFD6BF ->
+#F4F4F6** (1). Left as the game has it: the dim warm #807060 (1 place, written #FFDFBF at its own brightness). `run` paints them once the game holds the file (it lasts until the
+game closes); Beast Claw's own hit is white too then.
+
+The palette passed in the game (2026-10-18).
+
+## P5. Step 3: the colours follow the spell (2026-10-18)
+
+The effect file 530172 is the game's own and shared: while the white cut is painted, Beast Claw's own hit is white too. As Reverse
+Cursed Technique's colours (1.8.3), the claw marks now follow the spell in time: a new default script,
+`code/eldendisk/creative/scripts/defaults/dismantle_colours_follow_the_spell.py` (`DismantleColoursFollowTheSpell`, every 0.2 s):
+
+- **Dismantle selected** in the magic slots (before the cast, so the cuts show them): every key of the design's `colors` with all its
+  places (now `Sfx.530172`), as `run` painted them.
+- **Another spell selected:** each key `None`, the game's own colours (Beast Claw's hit as the game made it).
+- `teardown()`: the design's again, as `run` left them; no Dismantle in the build, or no colours in its design: it says so and ends.
+- The exe carries it from its next build (every default script).
+
+Tests: `test_write_sparks.py` (the writes when the spell is chosen and not, `teardown()`, no Dismantle).
+
+## P6. Found in the game: a script ended (2026-10-18)
+
+The author's second log (`eldendisk.log`, testing the palette) showed three faults, none of the new script's:
+
+1. **RctColoursFollowTheSpell ended** (the thread down). After a loading screen the game had loaded the effect file again: the copy
+   `run` painted held the game's own colours (the cache's record Stale). Putting the game's own colours back looked for the copy to
+   paint with nothing to change, the look raised a FlameError, and it was not caught: the script died. Now (`backend.py`, `_places`):
+   when every place asked is the game's own, a Stale copy is already what is asked, so nothing is written or looked for, and the
+   copies are kept (a copy loaded where it was is found there by the next paint; elsewhere: Stale, and a look). A look that fails is a
+   refusal the script can log, not a death.
+2. **teardown() at the game's close** (KeyError `params.Magic`, `character.level`): the scripts are stopped after the game's memory is
+   gone. `DismantleFollowsTheLockOn`, `RctColoursFollowTheSpell` and `DismantleColoursFollowTheSpell` now put nothing back then.
+3. **The memory cache was not saved** (`PermissionError` on `os.replace`, Windows: a reader held the file for a moment). `cache.save()`
+   tries 10 times, 0.05 s apart, and never leaves its `.tmp` behind.
+
+Not a script fault, in the same log: the vault's restore at the game's close failed (`ER0000.sl2: [WinError 112] There is not enough
+space on the disk`, RESTORE_PENDING). The save was archived to the session's `contaminated`; `regulation.bin` was put back. The author
+frees space and runs `eldendisk vault restore`.
+
+Tests: `test_write_sparks.py` (the game's own after a Stale copy, then the design's painted; the cache saved through a busy file; the
+colours script's teardown with no character), `test_lock_on.py` (teardown with no tables).
+
+## P7. Closed (2026-10-18)
+
+Part 6 passed in the game: the white claw marks only while Dismantle is selected, and the fixes of P6 (built into the exe). P8 was found after and passed in the game too (every spell taken out of the slots, 2026-10-18).
+
+## P8. Found in the game: every spell taken out of the slots (2026-10-18)
+
+With every spell taken out of the memory slots, `character.equipment` was left out of the sample, and `RctColoursFollowTheSpell` and
+`DismantleColoursFollowTheSpell` died (`AttributeError: character.equipment: no such value`). The sampler gave nothing when the selected
+number points at no slot (it is read as "cannot be read now").
+
+- **The sampler** (`reader/sampler.py`, `_read_equipment`): no spell memorised and the selected number at no slot is
+  `{"selected": {"slot": null, "id": null}, "slots": {}}`, no spell selected (`disk.schema.json`: `slot` may be null). Spells memorised
+  and the number at no slot: still left out (unknown). A guess, not read in the game: the number the game holds then (the log only
+  shows the block missing); the reading of an empty slot list is what the fix rests on.
+- **The two colour scripts:** without `character.equipment` they wait and change nothing (the slots unreadable for a moment).
+  With no spell selected: the game's own colours.
+
+Tests: `test_disk.py` (every slot empty; spells and the number at no slot), `test_write_sparks.py` (no spell selected, the slots
+unreadable, then Dismantle again).

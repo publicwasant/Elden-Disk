@@ -36,9 +36,9 @@ import struct
 from dataclasses import dataclass
 
 from . import scan
-from .fxr_plans import ACCENT_PLANS, EYES_PLANS, PLANS, SPARK_PLANS
+from .fxr_plans import ACCENT_PLANS, EYES_PLANS, HIT_PLANS, PLANS, SPARK_PLANS
 
-_ALL = {**PLANS, **EYES_PLANS, **ACCENT_PLANS, **SPARK_PLANS}
+_ALL = {**PLANS, **EYES_PLANS, **ACCENT_PLANS, **SPARK_PLANS, **HIT_PLANS}
 WHITE = (1.0, 1.0, 1.0)
 
 
@@ -228,6 +228,11 @@ def ring_ids() -> tuple[str, ...]:
 def spark_ids() -> tuple[str, ...]:
     """The sparks a design may put on its spell (1.8.3; the game may not hold them)."""
     return tuple(SPARK_PLANS)
+
+
+def hit_ids() -> tuple[str, ...]:
+    """The effects a spell shows on the ones it hits (1.8.4 part 6: Dismantle's claw marks; the game may not hold them)."""
+    return tuple(HIT_PLANS)
 
 
 # ---- writing ------------------------------------------------------------------------------------------------------

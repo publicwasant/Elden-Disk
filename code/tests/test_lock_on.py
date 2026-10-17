@@ -119,7 +119,7 @@ LOCKED = {f"params.Magic.{MAGIC}.refType": 25, f"params.Magic.{MAGIC}.mp": LOCKE
           f"params.SpEffectParam.{BLOOD}.effectEndurance": 0.04}
 MARKS_ON = {f"params.SpEffectParam.{BLOOD}.vfxId1": MARKS, f"params.SpEffectVfxParam.{MARKS}.midstDmyId": 220,
             f"params.SpEffectVfxParam.{MARKS}.existEffectForLarge": 1, f"params.SpEffectVfxParam.{MARKS}.isVisibleDeadChr": 1}
-LOCKED.update(MARKS_ON, **{f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530177})      # the charged Beast Claw's marks
+LOCKED.update(MARKS_ON, **{f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530172})      # the same claw marks (part 6)
 FAN = {f"params.Magic.{MAGIC}.refType": 106, f"params.Magic.{MAGIC}.mp": 60, f"params.SpEffectParam.{BLOOD}.effectEndurance": 0.5, **MARKS_ON, f"params.SpEffectVfxParam.{MARKS}.midstSfxId": 530172, **{f"params.Bullet.{BULLET}.{k}": v for k, v in GAME_BULLET.items()}}
 AS_BUILT = {**FAN, f"params.SpEffectParam.{BLOOD}.vfxId1": -1, f"params.SpEffectVfxParam.{MARKS}.midstSfxId": -1,
             f"params.SpEffectVfxParam.{MARKS}.midstDmyId": -1, f"params.SpEffectVfxParam.{MARKS}.existEffectForLarge": 0,
@@ -249,3 +249,16 @@ def test_the_fan_comes_back_as_built_even_when_the_game_holds_the_locked_on_cut(
         s.loop()
         ed._set_current(None)
     assert _written(b) == FAN
+
+
+def test_teardown_after_the_game_closed_puts_nothing_back_and_raises_nothing():
+    """2026-10-18 in the game: at the game's close the scripts are stopped; the tables are gone (KeyError: params.Magic)."""
+    s = _script()
+    with FakeBackend(_doc(lock_on=True)) as b:
+        ed._set_current(s)
+        s.setup()
+        b.writes.clear()
+        b.doc["params"] = {}                                                            # the game closed
+        s.teardown()
+        ed._set_current(None)
+    assert b.writes == []

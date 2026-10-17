@@ -40,6 +40,8 @@ class RctColoursFollowTheSpell(Interface):
 
     def loop(self):
         disk = tools.read()
+        if "equipment" not in disk.character:      # the magic slots cannot be read now: wait, change nothing
+            return
         chosen = disk.character.equipment.magic.selected.id == self.magic
         if chosen == self.on:
             return
@@ -53,5 +55,7 @@ class RctColoursFollowTheSpell(Interface):
         # leave the design's colors as `run` left them
         if self.on is False:            # None: setup() ended before anything was painted
             disk = tools.read()
+            if "level" not in disk.character:      # the game closed (or no character): its memory is gone, nothing to put back
+                return
             self.put(disk, True)
             tools.write(disk)

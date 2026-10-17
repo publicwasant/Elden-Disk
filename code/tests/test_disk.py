@@ -492,6 +492,14 @@ def test_the_magic_slots_and_the_selected_one_are_in_the_character():
     assert r.character["equipment"] == {"magic": {"selected": {"slot": 2, "id": 6420},
                                                   "slots": {"1": 2230000, "2": 6420, "4": 6210}}}
     valid(doc_for(s, r))
+    m.put(magic + 0x10, b"".join(struct.pack("<ii", -1, 0) for _ in range(14)))      # every spell taken out (2026-10-18 in the game)
+    m.u32(magic + 0x80, 0xFFFFFFFF)
+    r1 = s.sample(NOW)
+    assert r1.character["equipment"] == {"magic": {"selected": {"slot": None, "id": None}, "slots": {}}}
+    valid(doc_for(s, r1))
+    m.put(magic + 0x10, b"".join(struct.pack("<ii", x, -1 if x > 0 else 0) for x in slots))
+    r1 = s.sample(NOW)                                                                # spells there, the number at no slot: unknown
+    assert "equipment" not in r1.character
     m.u64(GD + 0x530, 0)                                                              # unreadable: left out, the sample still holds
     r2 = s.sample(NOW)
     assert r2.state == "CONNECTED" and "equipment" not in r2.character
