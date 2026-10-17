@@ -271,3 +271,10 @@ them has a `castSfxId`); the author tried them live (`write params.Magic.2230001
 
 Passed in the game: `character.lock_on` true / false, the script switching the modes, the motions of L11. Locked on, the 38 cuts all
 hit: 38 x 380 before the seal ("can order anything in this world to die", the author).
+
+## L13. Locked on costs 2.5 times the FP (2026-10-17)
+
+Asked by the author: locked on, a cast costs the build's FP x 2.5 (`creative.json` 60 now: 150). The script writes `Magic.mp` with the
+other fields of L3: `round(built x LOCKED_FP)`, LOCKED_FP 2.5; not locked on (and at `teardown()`), the build's. The build's FP is the
+design's `requires.cost.focus_point` (so a script started again while locked on does not take the locked value for the build's), else
+what the game holds at `setup()`. Tests: `test_lock_on.py` (60 / 150, a start while locked on, a design without a cost).

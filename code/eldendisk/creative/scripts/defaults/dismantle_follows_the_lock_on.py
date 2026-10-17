@@ -1,5 +1,5 @@
 """Dismantle follows the lock-on (1.8.4 part 2): locked on, all 38 cuts go at the one target, cast with the motion of O, Flame!; not
-locked on, the fan of part 1, cast with Catch Flame's motion (the build's). The game reads its Magic and Bullet rows at every cast,
+locked on, the fan of part 1, cast with Catch Flame's motion (the build's). Locked on costs 2.5 times the FP. The game reads its Magic and Bullet rows at every cast,
 so the script writes the fields of the other mode into the running game when the lock-on changes, and nothing while it stays.
 `teardown()` puts the build's values back. A cast within `every` seconds of locking on or off may still be in the mode before."""
 
@@ -8,8 +8,11 @@ from eldendisk.creative.scripts.edstdlib import tools, Interface
 # the template's rows (Bestial Sling): the script finds their copies in the last build
 MAGIC, FAN = "6800", "10680000"
 
-# field -> (not locked on, locked on); None: the value the build gave it (the design's, or the template's)
+LOCKED_FP = 2.5          # locked on, the FP a cast costs: the build's x this
+
+# field -> (not locked on, locked on); None: the value the build gave it (the design's, or the template's); a function: of it
 MODES = {
+    ("Magic", "mp"): (None, lambda built: round(built * LOCKED_FP)),     # the FP of a cast (the design's requires.cost.focus_point)
     ("Magic", "refType"): (None, 25),                        # Catch Flame's motion (the build's, 106) / O, Flame!'s
     ("Bullet", "shootAngle"): (None, 0),                     # the fan's first cut / straight at the target
     ("Bullet", "shootAngleInterval"): (None, 0),             # 5 degrees between two / all on one line
@@ -41,16 +44,20 @@ class DismantleFollowsTheLockOn(Interface):
 
         # the build's values: the design's where it names the field, else what the game holds now (the template's)
         basic = rec.design.customs.basic
+        cost = rec.design.get("requires", {}).get("cost", {}).get("focus_point")
         self.built = {}
         for table, field in MODES:
             key = f"{table}.{MAGIC if table == 'Magic' else FAN}.{field}"
-            self.built[(table, field)] = basic[key] if key in basic else disk.params[table][self.ids[table]][field]
+            if (table, field) == ("Magic", "mp") and cost is not None:
+                self.built[(table, field)] = cost
+            else:
+                self.built[(table, field)] = basic[key] if key in basic else disk.params[table][self.ids[table]][field]
         self.follow(disk)
 
     def put(self, disk, locked):
         for (table, field), values in MODES.items():
-            v = values[1 if locked else 0]
-            disk.params[table][self.ids[table]][field] = self.built[(table, field)] if v is None else v
+            v, built = values[1 if locked else 0], self.built[(table, field)]
+            disk.params[table][self.ids[table]][field] = built if v is None else v(built) if callable(v) else v
 
     def follow(self, disk):
         ch = disk.character

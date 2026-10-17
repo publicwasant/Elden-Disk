@@ -80,13 +80,14 @@ GAME_BULLET = {"shootAngle": -92, "shootAngleInterval": 5, "homingAngle": 0, "lo
 def _doc(lock_on=False, with_spell=True):
     doc = copy.deepcopy(DOC)
     doc["character"]["lock_on"] = lock_on
-    doc["params"] = {"Magic": {str(MAGIC): {"refType": 106}}, "Bullet": {str(BULLET): dict(GAME_BULLET)}}
+    doc["params"] = {"Magic": {str(MAGIC): {"refType": 106, "mp": 60}}, "Bullet": {str(BULLET): dict(GAME_BULLET)}}
     if with_spell:
         doc["creative"]["innovate_spells"]["2230001"] = {
             "id": "dismantle", "slot": 2,
             "rows": {"goods": MAGIC, "magic": MAGIC, "sp_effect": [21951008, 21951009], "bullet": [BULLET, BULLET + 1],
                      "atk": [710000008], "shop": 100509, "copies": {"Bullet": {"10680000": BULLET, "10680001": BULLET + 1}}},
-            "design": {"kind": "projectile", "from": 6800, "customs": {"basic": dict(BUILT)}}}
+            "design": {"kind": "projectile", "from": 6800, "requires": {"cost": {"focus_point": 60}},
+                       "customs": {"basic": dict(BUILT)}}}
     return doc
 
 
@@ -100,10 +101,11 @@ def _written(b):
     return {k: v for k, v in b.writes}
 
 
-LOCKED = {f"params.Magic.{MAGIC}.refType": 25, **{f"params.Bullet.{BULLET}.{k}": v for k, v in
+# locked on: O, Flame!'s motion, 60 FP x 2.5, the 38 cuts at the target
+LOCKED = {f"params.Magic.{MAGIC}.refType": 25, f"params.Magic.{MAGIC}.mp": 150, **{f"params.Bullet.{BULLET}.{k}": v for k, v in
           {"shootAngle": 0, "shootAngleInterval": 0, "homingAngle": 720, "lockShootLimitAng": 180, "hitRadius": 0.5,
            "hitRadiusMax": 0.5, "isUseSharedHitList": 0}.items()}}
-FAN = {f"params.Magic.{MAGIC}.refType": 106, **{f"params.Bullet.{BULLET}.{k}": v for k, v in GAME_BULLET.items()}}
+FAN = {f"params.Magic.{MAGIC}.refType": 106, f"params.Magic.{MAGIC}.mp": 60, **{f"params.Bullet.{BULLET}.{k}": v for k, v in GAME_BULLET.items()}}
 AS_BUILT = FAN                         # not locked on is the build: Catch Flame's motion and the fan
 
 
@@ -176,4 +178,26 @@ def test_out_of_the_world_the_loop_waits():
         with pytest.raises(ed._NotInWorld):
             s.loop()
         assert len(b.writes) == n
+        ed._set_current(None)
+
+
+def test_the_fp_locked_on_comes_from_the_design_even_when_the_game_holds_the_locked_one():
+    doc = _doc(lock_on=True)
+    doc["params"]["Magic"][str(MAGIC)]["mp"] = 150          # the script stopped while locked on, and started again
+    s = _script()
+    with FakeBackend(doc) as b:
+        ed._set_current(s)
+        s.setup()
+        assert _written(b)[f"params.Magic.{MAGIC}.mp"] == 150 and s.built[("Magic", "mp")] == 60
+        b.doc["character"]["lock_on"] = False
+        s.loop()
+        assert _written(b)[f"params.Magic.{MAGIC}.mp"] == 60
+        ed._set_current(None)
+    doc = _doc()
+    del doc["creative"]["innovate_spells"]["2230001"]["design"]["requires"]      # no cost in the design: the game's, as built
+    s = _script()
+    with FakeBackend(doc) as b:
+        ed._set_current(s)
+        s.setup()
+        assert s.built[("Magic", "mp")] == 60
         ed._set_current(None)
