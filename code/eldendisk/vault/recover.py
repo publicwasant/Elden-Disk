@@ -33,7 +33,13 @@ def restore_from_record(vault: SaveVault, record: SessionRecord, *, archive: boo
 
     try:
         files = vault.load_manifest(snap_dir)["files"]
-        if archive and vault.verify_live(live, files):   # only a save that differs holds anything worth keeping
+        archive = archive and bool(vault.verify_live(live, files))   # only a save that differs holds anything worth keeping
+        need, free, drive = vault.restore_space(snap_dir, live, archive=archive)
+        if free is not None and free < need:   # 1.8.5: before anything is touched (a full disk stopped a restore half way, 2026-10-18)
+            mib = 2**20
+            return pending(f"restore needs {-(-need // mib)} MiB free on {drive}, only {free // mib} MiB available: free "
+                           f"{-(-(need - free) // mib)} MiB, then run `{vault.restore_hint()}` (the save was not touched)")
+        if archive:
             log.ok("vault", f"modified {names_of(files)} archived to {vault.archive_contaminated(live, snap_dir)}")
         vault.restore(snap_dir, live)
         log.d("vault", f"restored {snap_dir} -> {live}")

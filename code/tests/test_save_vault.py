@@ -343,3 +343,63 @@ def test_log_messages_name_the_save_files(tmp_path):
     (live / "ER0000.sl2.bak").write_bytes(b"y")
     assert save_names(live) == "`ER0000.sl2`, `ER0000.sl2.bak`"
     assert save_names(tmp_path / "missing") == "save"
+
+
+# ---- 1.8.5 part 1: a full disk ----
+def test_the_archive_is_links_on_the_same_drive_and_keeps_the_old_files_after_the_restore(env):
+    _, live, vault = env
+    snap = vault.snapshot(live)
+    contaminate(live)
+    arch = vault.archive_contaminated(live, snap.dir)
+    if not os.path.samefile(arch / "ER0000.sl2", live / "ER0000.sl2"):
+        pytest.skip("this file system makes no hard links")
+    vault.restore(snap.dir, live)
+    assert (arch / "ER0000.sl2").read_bytes().startswith(b"LEVEL 713") and (arch / "sub" / "deep.dat").exists()
+    assert (live / "ER0000.sl2").read_bytes() == b"SAVE-DATA" * 1000 and not (live / "stray.tmp").exists()
+
+
+def test_a_file_that_cannot_be_linked_is_copied(env, monkeypatch):
+    _, live, vault = env
+    snap = vault.snapshot(live)
+    contaminate(live)
+    monkeypatch.setattr(sv.os, "link", lambda a, b: (_ for _ in ()).throw(OSError(18, "not the same device")))
+    arch = vault.archive_contaminated(live, snap.dir)
+    assert not os.path.samefile(arch / "ER0000.sl2", live / "ER0000.sl2")
+    assert tree(arch) == tree(live)
+
+
+def test_a_copy_cut_short_by_a_full_disk_leaves_no_temporary_file(env, monkeypatch):
+    import errno
+    _, live, vault = env
+    snap = vault.snapshot(live)
+    contaminate(live)
+    real = shutil.copy2
+
+    def full(src, dst, *a, **k):
+        if Path(dst).name == "ER0000.sl2" + sv.TMP_SUFFIX:
+            Path(dst).write_bytes(b"half")
+            raise OSError(errno.ENOSPC, "There is not enough space on the disk")
+        return real(src, dst, *a, **k)
+    monkeypatch.setattr(sv.shutil, "copy2", full)
+    with pytest.raises(VaultError, match="not enough space"):
+        vault.restore(snap.dir, live)
+    assert not list(live.rglob("*" + sv.TMP_SUFFIX))
+    assert (live / "ER0000.sl2").read_bytes().startswith(b"LEVEL 713")            # the session's file, whole
+
+
+def test_the_space_the_restore_needs_counts_the_files_that_differ_and_the_margin(env):
+    _, live, vault = env
+    snap = vault.snapshot(live)
+    need, free, _drive = vault.restore_space(snap.dir, live, archive=True)
+    assert need == sv.RESTORE_MARGIN and free is not None                          # nothing differs
+    contaminate(live)
+    need, _free, _drive = vault.restore_space(snap.dir, live, archive=True)
+    assert need == sv.RESTORE_MARGIN + len(b"SAVE-DATA" * 1000) + len(b"BACKUP" * 500)   # the vault on the same drive: links, no copy
+
+
+def test_the_space_watch_names_a_short_drive(env):
+    _, live, vault = env
+    size = sv.dir_size(live)
+    assert vault.space_short(live, lambda p: size + sv.RESTORE_MARGIN) == []
+    short = vault.space_short(live, lambda p: 10)
+    assert len(short) == 1 and short[0][1:] == (10, size + sv.RESTORE_MARGIN)

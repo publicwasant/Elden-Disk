@@ -423,6 +423,8 @@ class Supervisor:
         while not self._stopping.is_set():
             if not self.alive():
                 book.i(TAG, "the game closed: stopping every script")
+                if ed._backend is not None:     # 1.8.5: the teardowns' writes would go into a game going away ("did not stick")
+                    ed._backend.game_closed = True
                 break
             if until is not None and until():
                 break

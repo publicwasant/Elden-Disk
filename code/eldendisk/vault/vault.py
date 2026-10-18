@@ -34,6 +34,7 @@ REGULATION_NAME = "regulation.bin"
 CONTAMINATED_SUBDIR = "contaminated"
 TMP_SUFFIX = ".eldendisk-tmp"
 SPACE_FACTOR = 3                      # free space >= 3x the save folder
+RESTORE_MARGIN = 64 * 2**20           # 1.8.5: what the restore wants free beyond the files it writes (the disk is not filled to the byte)
 RESTORE_TIMEOUT_S = 30.0              # bounded retry on file locks
 SNAPSHOT_NAME = re.compile(r"^\d{8}-\d{6}(-\d+)?(-pre-restore|-kept)?$")
 
@@ -387,22 +388,82 @@ class SaveVault:
             tmp = dst.with_name(dst.name + TMP_SUFFIX)
 
             def _copy(src=save_dir / rel, dst=dst, tmp=tmp):
-                shutil.copy2(src, tmp)
-                os.replace(tmp, dst)
+                try:
+                    shutil.copy2(src, tmp)
+                    os.replace(tmp, dst)
+                except BaseException:
+                    try:                        # a copy cut short (a full disk) leaves no temporary file behind (1.8.5)
+                        tmp.unlink()
+                    except OSError:
+                        pass
+                    raise
 
             self._retry(_copy, f"restore {rel}")
 
     def verify_live(self, live_dir: Path, files: dict[str, dict]) -> list[str]:
         return _compare(scan(Path(live_dir)) if Path(live_dir).is_dir() else {}, files)
 
+    def restore_space(self, snap_dir: Path, live_dir: Path, *, archive: bool) -> tuple[int, int | None, Path]:
+        """1.8.5: (bytes the restore needs free, bytes free or None when unknown, the drive) on the save folder's drive: each file that
+        differs from the snapshot (written next to it before it takes its place), the archive's copies when the vault is on another
+        drive (on the same one it is links), and RESTORE_MARGIN."""
+        snap_dir, live = Path(snap_dir), Path(live_dir)
+        files = self.load_manifest(snap_dir)["files"]
+        need = RESTORE_MARGIN
+        for rel, info in files.items():
+            dst = live / rel
+            if not (dst.is_file() and sha256_of(dst) == info["sha256"]):
+                need += int(info["size"])
+        drive = Path(live.anchor or live)
+        try:
+            if archive and live.is_dir() and os.stat(live).st_dev != os.stat(snap_dir).st_dev:
+                need += dir_size(live)
+            free = shutil.disk_usage(live if live.is_dir() else drive).free
+        except OSError:
+            free = None
+        return need, free, drive
+
+    def space_short(self, live_dir: Path, free_of: Callable[[Path], int] | None = None) -> list[tuple[str, int, int]]:
+        """1.8.5, while the game runs: [(drive, bytes free, bytes the restore will need)] for each drive that is short: the save
+        folder's (the save folder's size + RESTORE_MARGIN) and the vault's when it is another drive (the archive's copies). [] when
+        both have enough or the space cannot be read."""
+        free_of = free_of or (lambda p: shutil.disk_usage(p).free)
+        live = Path(live_dir)
+        try:
+            size = dir_size(live)
+            wants = [(live, size + RESTORE_MARGIN)]
+            root = next((q for q in (self.root, *self.root.parents) if q.exists()), self.root)   # the vault may not be made yet
+            if os.stat(live).st_dev != os.stat(root).st_dev:
+                wants.append((root, size))
+            out = []
+            for where, need in wants:
+                free = free_of(where)
+                if free < need:
+                    out.append((where.anchor or str(where), free, need))
+            return out
+        except OSError:
+            return []
+
     def archive_contaminated(self, live_dir: Path, snap_dir: Path) -> Path:
-        """FR-13: keep the contaminated save for inspection. It is never restored."""
+        """FR-13: keep the contaminated save for inspection. It is never restored. 1.8.5: hard links to the session's files (the same
+        drive, NTFS: no space taken; the restore then puts new files in their place and the archive keeps the old ones); a copy of a
+        file that cannot be linked (another drive, a file system without links)."""
         dest = Path(snap_dir) / CONTAMINATED_SUBDIR
         n = 1
         while dest.exists():
             n += 1
             dest = Path(snap_dir) / f"{CONTAMINATED_SUBDIR}-{n}"
-        shutil.copytree(live_dir, dest)
+        live = Path(live_dir)
+        dest.mkdir(parents=True)
+        for dirpath, _dirs, names in os.walk(live):
+            for name in names:
+                src = Path(dirpath) / name
+                out = dest / src.relative_to(live)
+                out.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    os.link(src, out)
+                except OSError:
+                    shutil.copy2(src, out)
         return dest
 
 

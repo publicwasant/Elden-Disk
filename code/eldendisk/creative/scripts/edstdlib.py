@@ -148,6 +148,9 @@ class Node:
         if isinstance(k, _Prefix):
             return k
         v = self._data[k]
+        if getattr(v, "_lazy_part", False):                 # a part of the shared document built when first touched (1.8.5)
+            v = v.value()
+            self._data[k] = v
         if isinstance(v, (dict, list)) or v is None:
             if isinstance(v, list):
                 return copy.deepcopy(v)                    # a list is a value: the script's own (buffs, slots: short)

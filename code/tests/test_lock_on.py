@@ -84,6 +84,7 @@ GAME_BULLET = {"numShoot": 38, "shootAngle": -92, "shootAngleInterval": 5, "lock
 def _doc(lock_on=False, with_spell=True):
     doc = copy.deepcopy(DOC)
     doc["character"]["lock_on"] = lock_on
+    doc["character"]["equipment"] = {"magic": {"selected": {"slot": 2, "id": MAGIC}, "slots": {"1": 2230000, "2": MAGIC}}}
     doc["params"] = {"Magic": {str(MAGIC): {"refType": 106, "mp": 60}}, "Bullet": {str(BULLET): dict(GAME_BULLET)},
                      "SpEffectParam": {str(BLOOD): {"vfxId1": -1, "effectEndurance": 0.5}},
                      "SpEffectVfxParam": {str(MARKS): {"midstSfxId": -1, "midstDmyId": -1, "existEffectForLarge": 0, "isVisibleDeadChr": 0}}}
@@ -262,3 +263,39 @@ def test_teardown_after_the_game_closed_puts_nothing_back_and_raises_nothing():
         s.teardown()
         ed._set_current(None)
     assert b.writes == []
+
+
+def test_with_another_spell_selected_a_lock_on_writes_nothing_and_selecting_dismantle_writes_its_mode():
+    """1.8.5: the author's log (2026-10-18): every lock-on wrote 22 fields though Dismantle was not in hand. Now only while it is
+    selected, as its colours; the equipment is read with the character already (nothing more read for it)."""
+    s = _script()
+    doc = _doc(lock_on=False)
+    rct = {"slot": 1, "id": 2230000}
+    doc["character"]["equipment"]["magic"]["selected"] = dict(rct)
+    with FakeBackend(doc) as b:
+        ed._set_current(s)
+        s.setup()                                                                       # another spell in hand: nothing written
+        assert b.writes == [] and s.locked is None
+        b.doc["character"]["lock_on"] = True
+        s.loop()
+        b.doc["character"]["lock_on"] = False
+        s.loop()
+        assert b.writes == []                                                           # lock on / off with RCT: nothing
+        b.doc["character"]["lock_on"] = True
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 2, "id": MAGIC}
+        s.loop()                                                                        # Dismantle selected while locked on
+        assert _written(b)[f"params.Bullet.{BULLET}.numShoot"] == 1 and s.locked is True
+        b.writes.clear()
+        b.doc["character"]["equipment"]["magic"]["selected"] = dict(rct)
+        b.doc["character"]["lock_on"] = False
+        s.loop()
+        assert b.writes == [] and s.locked is True                                     # RCT again: the locked mode stays, unused
+        b.doc["character"]["equipment"]["magic"]["selected"] = {"slot": 2, "id": MAGIC}
+        s.loop()                                                                        # Dismantle again, not locked: the fan
+        assert _written(b)[f"params.Bullet.{BULLET}.numShoot"] == BUILT["Bullet.10680000.numShoot"] and s.locked is False
+        del b.doc["character"]["equipment"]                                             # the slots unreadable: follows as before
+        b.writes.clear()
+        b.doc["character"]["lock_on"] = True
+        s.loop()
+        assert _written(b)[f"params.Bullet.{BULLET}.numShoot"] == 1
+        ed._set_current(None)

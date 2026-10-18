@@ -52,6 +52,8 @@ class Hooks:
     launch_timeout: float = 120.0                  # seconds to wait for the game process to appear
     exit_settle: float = 1.0                       # let the game release its save files before the restore
     poll: float = 0.5
+    space_every: float = 60.0                      # 1.8.5: seconds between two looks at the free space while the game runs
+    disk_free: Callable[[Path], int] | None = None   # bytes free on the drive of a path (None: shutil.disk_usage)
     install_close_handler: Callable[[Callable[[], None]], Callable[[], None]] = interrupts.install
 
 
@@ -76,6 +78,8 @@ class Session:
         self.state = State.IDLE
         self.history: list[State] = [State.IDLE]
         self._interrupts = 0
+        self._space_at: float | None = None       # 1.8.5: when the free space was last looked at
+        self._space_short = False                 # a warning was given and the space has not come back since
 
     def _to(self, state: State) -> None:
         self.state = state
@@ -250,11 +254,14 @@ class Session:
                     else:
                         self.log.ok("game", f"running, pid {cur}; `read` allowed, `write` not allowed")
                     self._to(State.RUNNING)   # from here `write` may edit; the record is what authorises it
+                    self._space_at = None
                     if self.protect:
                         try:
                             h.on_running(cur)
                         except Exception as exc:   # whatever the caller starts here must never end the session
                             self.log.w("host", f"the step after launch failed: {exc!r}")
+                if pid is not None and self.protect:
+                    self._watch_space()
                 h.sleep(h.poll)
             except KeyboardInterrupt:
                 self._absorb_interrupt()
@@ -264,6 +271,24 @@ class Session:
                 return code
             except KeyboardInterrupt:
                 self._absorb_interrupt()
+
+    def _watch_space(self) -> None:
+        """1.8.5: every `space_every` s while the game runs, the free space the restore after it will need; one warning while it is
+        short (the game still open, so space can be freed before the restore), said again only after it came back and ran short again."""
+        h = self.hooks
+        now = h.clock()
+        if self._space_at is not None and now - self._space_at < h.space_every:
+            return
+        self._space_at = now
+        short = self.vault.space_short(self.live, h.disk_free)
+        if short and not self._space_short:
+            mib = 2**20
+            for drive, free, need in short:
+                self.log.w("vault", f"{drive} has {free // mib} MiB free; the restore after the game needs {-(-need // mib)} MiB: "
+                                    "free some space before you quit the game")
+        elif not short and self._space_short:
+            self.log.i("vault", "there is enough free space for the restore again")
+        self._space_short = bool(short)
 
     def _absorb_interrupt(self) -> None:
         if not self.protect:

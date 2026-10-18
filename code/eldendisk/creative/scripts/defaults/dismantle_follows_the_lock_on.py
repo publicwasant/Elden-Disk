@@ -1,6 +1,6 @@
 """Dismantle follows the lock-on (1.8.4 parts 2-4): locked on, ONE cut flies at the target, slower and turning hard, and circles it,
 cutting it again every 0.05 s while it lasts (part 4), cast with the motion of O, Flame!; not locked on, the fan of part 1, cast with
-Catch Flame's motion (the build's). Locked on costs LOCKED_FP times the FP. On the ones hit, next to the blood: Beast Claw's claw marks
+Catch Flame's motion (the build's). Locked on costs LOCKED_FP times the FP. Only while Dismantle is selected (1.8.5). On the ones hit, next to the blood: Beast Claw's claw marks
 (530172 in both modes; their colours: the design's Sfx.530172), played by the game's unused SpEffectVfx row 999999999. The game reads these rows at
 every cast, so the script writes the fields of the other mode into the running game when the lock-on changes, and nothing while it
 stays. `teardown()` puts the build's values back. A cast within `every` seconds of locking on or off may still be in the mode before."""
@@ -106,6 +106,11 @@ class DismantleFollowsTheLockOn(Interface):
             ch.level                    # no character in the world: this call is skipped (the script waits)
             tools.log("this game version has no character.lock_on (offsets.json player_to_lock_on): nothing to follow", "warn")
             tools.dead()
+        # 1.8.5: only while Dismantle is the spell selected (as its colours): a lock-on with another spell in hand writes nothing,
+        # and selecting Dismantle writes the mode of the lock-on then (within `every`, before a cast). The equipment is in every read
+        # of the character already: nothing more is read for it. Without it (unreadable now, or a game version without it): as before.
+        if "equipment" in ch and ch.equipment.magic.selected.id != self.ids["Magic"]:
+            return
         locked = bool(ch.lock_on)
         if locked == self.locked:
             return

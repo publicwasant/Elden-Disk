@@ -507,3 +507,38 @@ def test_on_running_is_not_called_with_the_vault_off(env):
     s, _ = make(env, World(), protect=False)
     s.hooks.on_running = lambda pid: seen.append(pid)
     assert s.run() == 0 and seen == []
+
+
+# ---- 1.8.5 part 1: a full disk ----
+def test_a_restore_without_the_space_touches_nothing_and_says_how_much_to_free(env, monkeypatch):
+    import shutil
+    _, live, game, vault = env
+
+    def on_tick(w, n):
+        if n == 1:
+            contaminate(live)
+            monkeypatch.setattr(shutil, "disk_usage", lambda p: shutil._ntuple_diskusage(10**9, 10**9 - 2**20, 2**20))   # 1 MiB
+    s, _ = make(env, World(on_tick=on_tick))
+    s.hooks.space_every = 0.5
+    session = vault.read_session
+    assert s.run() == EXIT_RESTORE_PENDING
+    assert (live / "ER0000.sl2").read_bytes().startswith(b"LEVEL 713")             # the save was not touched
+    snap = vault.root / vault.list_snapshots()[0]["name"]
+    assert not (snap / "contaminated").exists() and session().state == SessionState.RESTORE_PENDING
+    text = (snap / "session.log").read_text()
+    assert "MiB free on" in text and "only 1 MiB available" in text and "vault restore" in text
+    assert "free some space before you quit the game" in text                        # said while the game ran
+    monkeypatch.undo()
+    assert recover(vault, game_running=lambda: False, log=SessionLog()) == 0        # space again: the restore goes through
+
+
+def test_the_free_space_is_watched_while_the_game_runs_and_a_warning_is_given_once(env):
+    _, live, game, vault = env
+    frees = iter([10, 10, 10**12, 10] + [10**12] * 20)
+    s, _ = make(env, World(lifetime=12))
+    s.hooks.space_every, s.hooks.disk_free = 1.0, lambda p: next(frees)
+    lines = []
+    s.log = SessionLog(emit=lambda *a, **k: lines.append(" ".join(map(str, a))))
+    assert s.run() == 0
+    warned = [x for x in lines if "free some space before you quit the game" in x]
+    assert len(warned) == 2 and sum("enough free space for the restore again" in x for x in lines) == 2

@@ -67,6 +67,29 @@ def _index_of(tables) -> dict:
         return {}
 
 
+class LazyPart:
+    """1.8.5 part 2: a part of the document the scripts share, built when a script first touches it, once for that document (the
+    scripts that touch it within SHARE get the same), not at all while none does: the default scripts read the character only, and
+    the tables (4.9 ms), the spells (3.3 ms) and the great enemies (3.3 ms) were 11 of the 12 ms of each read (2026-10-18 in the game).
+    edstdlib's Node takes its value at the touch; `value()` is it for anything else."""
+    _lazy_part = True
+
+    def __init__(self, build):
+        self._build, self._lock, self._done, self._value = build, threading.Lock(), False, None
+
+    def value(self):
+        with self._lock:
+            if not self._done:
+                self._value, self._done = self._build(), True
+            return self._value
+
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(self.value(), memo)
+
+    def __repr__(self) -> str:
+        return f"<built when touched{': ' + repr(self._value)[:60] if self._done else ''}>"
+
+
 class LazyRows(dict):
     """A table of the game in a script's document (1.8.0 part 4): its rows are read from the game when one is touched
     (`x.params.NpcParam[10000000].hp`), not when the document is built: all the tables are hundreds of MB. `read_row(id)` and `ids()`
@@ -253,20 +276,25 @@ class CreativeLive:
         return got[1][1].get(goods, {}) if got else {}
 
     # ---- reading
-    def block(self) -> dict | None:
+    def block(self, times: dict | None = None) -> dict | None:
         """The `creative` block (spec 1.8.0 part 2): {"scripts": {host, defaults, added}, "innovate_spells": {goods id: node},
         "resurrect": {"great_enemies": {id: node of a defeated one}}} with what the game holds now; a part without data is left out,
-        None when all are."""
+        None when all are. `times` (1.8.5 part 2): gets the seconds each part took ("scripts", "spells", "enemies")."""
         out = {}
+        t0 = time.perf_counter()
         scripts = self.scripts_block()
         if scripts is not None:
             out["scripts"] = scripts
+        t1 = time.perf_counter()
         spells = self._spells_block()
         if spells is not None:
             out["innovate_spells"] = spells
+        t2 = time.perf_counter()
         enemies = self.enemies_block()
         if enemies is not None:
             out["resurrect"] = {"great_enemies": enemies}
+        if times is not None:
+            times.update(scripts=t1 - t0, spells=t2 - t1, enemies=time.perf_counter() - t2)
         return out or None
 
     # ---- the scripts (1.8.0 part 2): what the host says of itself
@@ -626,12 +654,50 @@ def open_live(target, state_ids, vault_root: Path, resolved_path: Path | None, s
     return LiveBackend(WritableProcessMemory(target.pid), target, state_ids, vault_root, resolved_path, say=say, status_path=status_path)
 
 
+TIMES_EVERY = 60.0                   # 1.8.5 part 2: seconds between two lines of how long the reads of the game took
+READ_PARTS = ("character", "scripts", "spells", "enemies", "tables")
+
+
+class ReadTimes:
+    """1.8.5 part 2: how long each part of the backend's read of the game took (the document the scripts share): one line in the
+    log every TIMES_EVERY seconds, the reads counted, each part's mean and the slowest read, in milliseconds."""
+
+    def __init__(self, at: float):
+        self._reset(at)
+
+    def _reset(self, at: float) -> None:
+        self.at, self.n, self.sums, self.worst = at, 0, dict.fromkeys(READ_PARTS, 0.0), 0.0
+
+    def add_part(self, part: str, seconds: float) -> None:
+        """A part built when touched (LazyPart): its time counts in the minute's line, the read it belongs to already counted."""
+        self.sums[part] = self.sums.get(part, 0.0) + seconds
+
+    def add(self, parts: dict, now: float, say) -> None:
+        self.n += 1
+        for k in READ_PARTS:
+            self.sums[k] += parts.get(k, 0.0)
+        self.worst = max(self.worst, sum(parts.values()))
+        if now - self.at >= TIMES_EVERY:
+            say("D", self.line(now))
+            self._reset(now)
+
+    def line(self, now: float) -> str:
+        def ms(v: float) -> str:
+            return f"{v * 1000 / self.n:.1f}"
+        return (f"{self.n} reads of the game in the last {now - self.at:.0f} s, {ms(sum(self.sums.values()))} ms each ("
+                + ", ".join(f"{k} {ms(v)}" for k, v in self.sums.items()) + f"), the slowest {self.worst * 1000:.1f} ms")
+
+
 class LiveBackend:
     """What edstdlib's `tools` talks to. `mem`: the writable handle opened after the session check."""
+    game_closed = False                 # 1.8.5: the host sets it when the game has closed (the scripts' teardowns write nothing then)
+    _said_closed = False
 
     def __init__(self, mem, target, state_ids, vault_root: Path, resolved_path: Path | None = None, *,
-                 say=lambda level, msg: None, clock=time.monotonic, status_path: Path | None = None):
+                 say=lambda level, msg: None, clock=time.monotonic, status_path: Path | None = None, timer=time.perf_counter):
         self.mem, self.target, self.vault_root, self.say = mem, target, Path(vault_root), say
+        self._timer = timer
+        self.times = ReadTimes(clock())
         self.sampler = Sampler(mem, target.profile, state_ids, target.base)
         self.sampler.game = (target.pid, target.started)          # the array of the text tables is remembered for this game
         self.gate = WriteGate()
@@ -661,20 +727,52 @@ class LiveBackend:
             now = self._clock()
             if self._doc is not None and now - self._doc_at < SHARE:
                 return self._doc
+            t0 = self._timer()
             s = self.sampler.sample()
             p = self.target.profile
             doc = build_document(state="CONNECTED" if s.state == "CONNECTED" else "IDLE", pid=self.target.pid,
                                  anti_cheat="DISABLED_OFFLINE", exe_sha256=self.target.sha256, profile_label=p.label,
                                  buffs_supported=p.sp_effect is not None, animations_supported=p.anim is not None, sample=s,
                                  mode="creative", read_only=False, creative=True)
-            doc["creative"] = self.creative.block()
+            times = {"character": self._timer() - t0}
+            t1 = self._timer()
+            doc["creative"] = self._creative_part()
+            times["scripts"] = self._timer() - t1
             tables = self.creative.table_index()
-            index = _index_of(tables)
-            if index:      # every table of the game, its rows read when touched (not disk.json's: the scripts' own, 1.8.0 part 4)
-                params = {t: LazyRows(t, v["rows"], tables.read_row, tables.ids) for t, v in index.items()}
-                doc = {**{k: v for k, v in doc.items() if k != "creative"}, "params": params, "creative": doc.get("creative")}
+            if tables is not None:   # every table of the game, its rows read when touched (not disk.json's: the scripts' own, 1.8.0 part 4)
+                def params(tables=tables):
+                    return {t: LazyRows(t, v["rows"], tables.read_row, tables.ids) for t, v in _index_of(tables).items()}
+                doc = {**{k: v for k, v in doc.items() if k != "creative"}, "params": self._timed("tables", params),
+                       "creative": doc.get("creative")}
+            self.times.add(times, now, self.say)
             self._doc, self._doc_at = doc, now
             return doc
+
+    def _timed(self, part: str, build) -> LazyPart:
+        def run():
+            with self._read_lock:              # one read of the game at a time, as the document's own (the caches are not shared safely)
+                t = self._timer()
+                try:
+                    return build()
+                finally:
+                    self.times.add_part(part, self._timer() - t)
+        return LazyPart(run)
+
+    def _creative_part(self) -> dict | None:
+        """The `creative` block (CreativeLive.block's parts), the spells and the great enemies built when touched (1.8.5 part 2)."""
+        c = self.creative
+        out = {}
+        scripts = c.scripts_block()
+        if scripts is not None:
+            out["scripts"] = scripts
+        if c.spells():
+            out["innovate_spells"] = self._timed("spells", c._spells_block)
+        if c.enemy_table() is not None and c.event_flags() is not None:
+            def enemies():
+                got = c.enemies_block()
+                return None if got is None else {"great_enemies": got}
+            out["resurrect"] = self._timed("enemies", enemies)
+        return out or None
 
     def _authorised(self) -> None:
         if not self.gate.allowed:
@@ -696,6 +794,11 @@ class LiveBackend:
     def write(self, changes: dict) -> tuple[dict, list]:
         """{path in the document (a tuple of keys): value} -> ({name: value} written, [why each that was not])."""
         done, problems = {}, []
+        if self.game_closed:                # 1.8.5: the game closed (the host says so): nothing to put back in it, nothing refused
+            if not self._said_closed:
+                self._said_closed = True
+                self.say("D", "the game closed: the scripts' last writes are not made (its memory is going away)")
+            return {}, []
         with self._write_lock:
             try:
                 self._authorised()

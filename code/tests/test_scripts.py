@@ -288,6 +288,7 @@ def test_when_the_game_closes_every_script_stops(tmp_path, lines):
     threading.Thread(target=close_soon, daemon=True).start()
     sup = supervise(tmp_path, b, [f], seconds=3)
     assert sup.runners[0].state == "stopped" and ("I", "the game closed: stopping every script") in lines
+    assert b.game_closed is True                         # 1.8.5: the teardowns' writes are not made into a game going away
 
 
 def test_no_character_in_the_world_skips_a_loop_and_is_not_an_error(tmp_path, lines):

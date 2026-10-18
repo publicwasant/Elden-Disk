@@ -309,6 +309,112 @@ def test_a_scripts_document_has_every_table_though_disk_json_has_none(tmp_path):
                              exe_path=tmp_path / "eldenring.exe")
     doc = LiveBackend(m, target, state_ids(), tmp_path / "vault").document()
     assert list(doc)[:3] == ["systems", "character", "params"] and list(doc)[-1] == "creative"
-    rows = doc["params"]["SpEffectParam"]
+    rows = doc["params"].value()["SpEffectParam"]                    # built when touched (1.8.5 part 2)
     assert isinstance(rows, LazyRows) and len(rows) == len(pf.small_ids())
     assert rows[1621000]["effectEndurance"] == 2.0
+
+
+def test_the_reads_of_the_game_are_timed_and_said_once_a_minute(tmp_path):
+    """1.8.5 part 2: how long each part of the shared read takes, one line a minute (the numbers that decide step 2)."""
+    from eldendisk.creative.scripts import backend as bk
+    from tests.test_disk import full_world, state_ids
+    m = full_world()
+    pf.build_file(m, pf.small_ids())
+    pf.wire(m, 2)
+    target = SimpleNamespace(profile=pf.params_profile(), base=BASE, pid=1, started=1.0, sha256="ab" * 32,
+                             exe_path=tmp_path / "eldenring.exe")
+    clock, said = [0.0], []
+    b = bk.LiveBackend(m, target, state_ids(), tmp_path / "vault", clock=lambda: clock[0],
+                       say=lambda level, msg: said.append((level, msg)))
+    for n in range(5):                          # a read every 15 s: the line after the minute
+        clock[0] = n * 15.0
+        b.document()
+    assert len(said) == 1 and said[0][0] == "D"
+    line = said[0][1]
+    assert line.startswith("5 reads of the game in the last 60 s, ") and "the slowest" in line
+    assert all(f"{k} " in line for k in bk.READ_PARTS)
+    clock[0] = 61.0
+    b.document()
+    assert len(said) == 1                       # the next minute has begun
+
+
+def test_a_line_of_read_times_gives_each_parts_mean_and_the_slowest():
+    from eldendisk.creative.scripts.backend import ReadTimes
+    t, said = ReadTimes(0.0), []
+    t.add({"character": 0.001, "spells": 0.003}, 10.0, lambda lv, m: said.append(m))
+    t.add({"character": 0.003, "spells": 0.001, "enemies": 0.002}, 60.0, lambda lv, m: said.append(m))
+    assert said == ["2 reads of the game in the last 60 s, 5.0 ms each (character 2.0, scripts 0.0, spells 2.0, enemies 1.0, "
+                    "tables 0.0), the slowest 6.0 ms"]
+
+
+def test_the_tables_spells_and_enemies_are_built_only_when_a_script_touches_them(tmp_path, monkeypatch):
+    """1.8.5 part 2: the default scripts read the character only; the tables, the spells and the great enemies were 11 of the 12 ms
+    of each shared read in the game. Now built at the first touch, once for the document, shared by the snapshots that touch it."""
+    from eldendisk.creative.scripts import backend as bk
+    from eldendisk.creative.scripts import edstdlib as ed
+    from tests.test_disk import full_world, state_ids
+    m = full_world()
+    pf.build_file(m, pf.small_ids())
+    pf.wire(m, 2)
+    target = SimpleNamespace(profile=pf.params_profile(), base=BASE, pid=1, started=1.0, sha256="ab" * 32,
+                             exe_path=tmp_path / "eldenring.exe")
+    built = []
+    real = bk._index_of
+    monkeypatch.setattr(bk, "_index_of", lambda t: built.append("tables") or real(t))
+    b = bk.LiveBackend(m, target, state_ids(), tmp_path / "vault", clock=lambda: 0.0)
+    old = ed._backend
+    ed._backend = b
+    try:
+        x = ed.tools.read()
+        x.character.level
+        assert built == []                                              # the character only: no table looked at
+        y = ed.tools.read()                                             # the same document (within SHARE)
+        assert x.params.SpEffectParam[1621000].effectEndurance == 2.0 and y.params.SpEffectParam[1621000].effectEndurance == 2.0
+        assert built == ["tables"]                                      # once, for both
+        assert b.times.sums["tables"] > 0.0
+    finally:
+        ed._backend = old
+
+
+def test_the_spells_and_the_great_enemies_are_built_when_touched_and_a_script_sees_them_as_before(tmp_path):
+    from eldendisk.creative.scripts import backend as bk
+    from eldendisk.creative.scripts import edstdlib as ed
+    from tests.test_disk import full_world, state_ids
+    target = SimpleNamespace(profile=pf.params_profile(), base=BASE, pid=1, started=1.0, sha256="ab" * 32,
+                             exe_path=tmp_path / "eldenring.exe")
+    b = bk.LiveBackend(full_world(), target, state_ids(), tmp_path / "vault", clock=lambda: 0.0)
+    built = []
+
+    class Creative:
+        def scripts_block(self): return None
+        def spells(self): return {"2230001": {}}
+        def _spells_block(self): return built.append("spells") or {"2230001": {"id": "dismantle", "slot": 2}}
+        def enemy_table(self): return object()
+        def event_flags(self): return object()
+        def enemies_block(self): return built.append("enemies") or {"10000800": {"name": "Margit", "defeated": True}}
+        def table_index(self): return None
+    b.creative = Creative()
+    old = ed._backend
+    ed._backend = b
+    try:
+        x = ed.tools.read()
+        assert "innovate_spells" in x.creative and "resurrect" in x.creative and built == []
+        assert x.creative.innovate_spells.dismantle.slot == 2 and built == ["spells"]
+        assert x.creative.resurrect.great_enemies[10000800].name == "Margit" and built == ["spells", "enemies"]
+        assert "params" not in x                                        # a game version without tables: none, as before
+    finally:
+        ed._backend = old
+
+
+def test_after_the_game_closed_a_write_is_not_made_and_not_refused(tmp_path):
+    """1.8.5: the host says the game closed before the teardowns; their writes went into a game going away ("did not stick")."""
+    from eldendisk.creative.scripts import backend as bk
+    from tests.test_disk import full_world, state_ids
+    target = SimpleNamespace(profile=pf.params_profile(), base=BASE, pid=1, started=1.0, sha256="ab" * 32,
+                             exe_path=tmp_path / "eldenring.exe")
+    said = []
+    b = bk.LiveBackend(full_world(), target, state_ids(), tmp_path / "vault", say=lambda lv, m: said.append((lv, m)))
+    b.game_closed = True
+    assert b.write({("params", "Magic", "2230001", "mp"): 60}) == ({}, [])
+    assert b.write({("params", "Magic", "2230001", "mp"): 89}) == ({}, [])
+    assert said == [("D", "the game closed: the scripts' last writes are not made (its memory is going away)")]
